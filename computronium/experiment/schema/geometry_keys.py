@@ -33,6 +33,7 @@ TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
     "spatial_lattice": frozenset({"lattice_dims", "connectivity_radius"}),
     "nca": frozenset({"grid_hw", "delta_scale", "mask_prob"}),
     "ntm": frozenset({"mem_slots", "mem_width"}),
+    "routing": frozenset({"num_experts", "top_k", "routing_temperature"}),
     "conv": frozenset({
         "conv_channels",
         "kernel_size",

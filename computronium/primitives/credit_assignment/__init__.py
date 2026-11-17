@@ -11,6 +11,7 @@ from . import (
     pc_alm,  # ruff: ignore[unused-import]
     random_projections,  # ruff: ignore[unused-import]
     score_function,  # ruff: ignore[unused-import]
+    surrogate,  # ruff: ignore[unused-import]
     temporal_trace,  # ruff: ignore[unused-import]
     zeroth_order,  # ruff: ignore[unused-import]
 )
@@ -22,6 +23,7 @@ __all__ = [
     "pc_alm",
     "random_projections",
     "score_function",
+    "surrogate",
     "temporal_trace",
     "zeroth_order",
 ]

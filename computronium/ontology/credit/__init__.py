@@ -602,6 +602,23 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
+    def surrogate(
+        cls,
+        *,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Straight-through surrogate for a hard top-k selection."""
+        return cls(
+            credit_type="surrogate",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+        )
+
+    @classmethod
     def pc_alm(
         cls,
         *,
@@ -3251,4 +3268,7 @@ from computronium.ontology.credit._estimators import (  # ruff: ignore[module-im
 )
 from computronium.ontology.credit._estimators import (  # ruff: ignore[module-import-not-at-top-of-file]
     ZerothOrderCredit as ZerothOrderCredit,
+)
+from computronium.ontology.credit._surrogate import (  # ruff: ignore[module-import-not-at-top-of-file]
+    SurrogateCredit as SurrogateCredit,
 )

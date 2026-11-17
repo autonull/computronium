@@ -20,6 +20,7 @@ from computronium.ontology import (
     ScoreFunctionCredit,
     StateDynamicsConfig,
     SubstrateConfig,
+    SurrogateCredit,
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
@@ -113,6 +114,8 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return ScoreFunctionCredit(config)
         case "zeroth_order":
             return ZerothOrderCredit(config)
+        case "surrogate":
+            return SurrogateCredit(config)
         case other:
             raise ValueError(f"Unknown credit_type: {other!r}")
 

@@ -158,6 +158,11 @@ _GEOMETRY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
         "Neural Turing Machine tape",
         ("input_dim", "output_dim", "mem_slots", "mem_width"),
     ),
+    (
+        "routing",
+        "Hard top-k mixture of experts",
+        ("input_dim", "output_dim", "num_experts", "top_k"),
+    ),
 ]
 
 # Dynamics primitives: settling-specific params become topology of the primitive
@@ -224,6 +229,7 @@ _CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
         "Gradient-free SPSA finite-difference estimator",
         ("estimator_samples", "fd_step"),
     ),
+    ("surrogate", "Straight-through surrogate for hard top-k routing", ()),
 ]
 
 # Update primitives: rule-specific optimizer params are structural
@@ -1213,6 +1219,24 @@ CONSTRAINTS = [
         predicate=or_(
             not_in(var("dynamics"), const(sorted(SETTLING_DYNAMICS))),
             not_(in_(var("geometry"), const(sorted(NONLAYERED_GEOMETRIES)))),
+        ),
+        proof_kind=ProofKind.TYPE_MISMATCH,
+        origin="DECLARED",
+    ),
+    # Credit-Geometry: the surrogate differentiates a selection, so it needs
+    # the geometry that has one. Without the gate the credit would reach a
+    # forward with no surrogate target (measured: a feedforward cell crashes
+    # in the credit, not in the planner).
+    ConstraintSpec(
+        name="surrogate_credit_requires_routing_geometry",
+        kind=ConstraintKind.VOID,
+        description=(
+            "A surrogate credit differentiates a hard top-k gate; only the "
+            "routing geometry carries one"
+        ),
+        predicate=or_(
+            not_(eq(var("credit"), const("surrogate"))),
+            eq(var("geometry"), const("routing")),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

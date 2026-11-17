@@ -170,7 +170,10 @@ class ForwardTangentCredit(_EstimatorCredit):
         loss_fn, params, names = self._closure(geometry, x, y)
         samples = max(1, int(self.config.estimator_samples))
         grads = [torch.zeros_like(p) for p in params]
-        with torch.no_grad():
+        # The fused oneDNN LSTM kernel has no forward-AD rule; a recurrent
+        # geometry (NTM) would abort the tangent pass. The differentiable
+        # ATen path is the tangent's contract, not a different mechanism.
+        with torch.no_grad(), torch.backends.mkldnn.flags(enabled=False):
             for _ in range(samples):
                 tangents = tuple(
                     torch.randint_like(p, 0, 2, dtype=p.dtype) * 2 - 1 for p in params

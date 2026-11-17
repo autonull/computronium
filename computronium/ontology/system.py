@@ -60,6 +60,8 @@ NCA_CELL_MODE_CREDITS: Final[tuple[str, ...]] = ("homeostatic", "pc_alm")
 # source: ``SystemConfig.validate`` refuses these coordinates and the
 # constraint registry projects the same names into its rows. ``graph`` is
 # deliberately absent — measured, graph + energy_minimization settles.
+# ``routing`` joins them: a hard top-k selection is a discrete mixture, not
+# a layer the settle math can iterate.
 NONLAYERED_GEOMETRIES: Final[frozenset[str]] = frozenset({
     "attention",
     "spatial_lattice",
@@ -69,6 +71,7 @@ NONLAYERED_GEOMETRIES: Final[frozenset[str]] = frozenset({
     "tile_mesh",
     "conv",
     "causal_transformer",
+    "routing",
 })
 
 # Dynamics that need a layer stack to settle.

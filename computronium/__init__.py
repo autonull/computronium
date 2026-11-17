@@ -165,6 +165,7 @@ if TYPE_CHECKING:
         PepitaCredit,
         RandomProjectionsCredit,
         ScoreFunctionCredit,
+        SurrogateCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
         ThermodynamicContrast,
@@ -197,6 +198,7 @@ if TYPE_CHECKING:
         NcaGeometry,
         NtmGeometry,
         RecurrentGeometry,
+        RoutingGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
         TransformerGeometry,
@@ -267,6 +269,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "ZerothOrderCredit": (
         "computronium.ontology.credit",
         "ZerothOrderCredit",
+    ),
+    "SurrogateCredit": (
+        "computronium.ontology.credit",
+        "SurrogateCredit",
     ),
     "PCALMCredit": ("computronium.ontology.credit", "PCALMCredit"),
     "CreditAssignmentConfig": (
@@ -365,6 +371,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "RandomProjectionsCredit",
     ),
     "RecurrentGeometry": ("computronium.ontology.geometry", "RecurrentGeometry"),
+    "RoutingGeometry": ("computronium.ontology.geometry", "RoutingGeometry"),
     "RiemannianOrthogonalUpdate": (
         "computronium.ontology.update",
         "RiemannianOrthogonalUpdate",
@@ -622,6 +629,7 @@ __all__ = [
     "RecurrentGeometry",
     "RiemannianOrthogonalUpdate",
     "RoleSplitUpdate",
+    "RoutingGeometry",
     "RoutingPlasticity",
     "RuleStatePlasticity",
     "ScoreFunctionCredit",
@@ -634,6 +642,7 @@ __all__ = [
     "SubstrateConfig",
     "SubstrateCoupledPlasticity",
     "SubstrateSpec",
+    "SurrogateCredit",
     "System",
     "SystemConfig",
     "SystemContext",

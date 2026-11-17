@@ -30,6 +30,7 @@ _TOPOLOGY_REQUIRED_INPUT: dict[str, str] = {
     "conv": "image",
     "graph": "image",
     "causal_transformer": "token",
+    "routing": "image",
 }
 
 _TILE_TOPOLOGIES: frozenset[str] = frozenset({"tile", "tile_mesh"})
@@ -177,6 +178,9 @@ def _auto_size_geometry(
         num_nodes = 32
         return h * h * num_nodes
 
+    def _estimate_routing(h: int, d: int) -> int:
+        return input_dim * h + 4 * h + 4 * h * h + h * output_dim
+
     estimator_map = {
         "feedforward": _estimate_ff_recurrent,
         "recurrent": _estimate_ff_recurrent,
@@ -188,6 +192,7 @@ def _auto_size_geometry(
         "nca": _estimate_nca,
         "conv": _estimate_conv,
         "graph": _estimate_graph,
+        "routing": _estimate_routing,
     }
     estimate_params = estimator_map.get(topology, _estimate_ff_recurrent)
 
@@ -404,6 +409,39 @@ def build_feedforward_config(
         init_scale=init_scale,
         init_scheme=init_scheme,  # type: ignore[arg-type]
         residual=residual,
+    )
+
+
+def build_routing_config(  # ruff: ignore[too-many-arguments]
+    *,
+    input_dim: int,
+    output_dim: int,
+    param_budget: int,
+    explicit_hidden: bool,
+    depth: int,
+    hidden: int,
+    init_scheme: str,
+    init_scale: float,
+    geometry: dict[str, object],
+) -> GeometryConfig:
+    derived_dims, _derived_depth = _auto_size_geometry(
+        "routing", param_budget, input_dim, output_dim, depth
+    )
+    if not explicit_hidden and derived_dims:
+        hidden = derived_dims[-1]
+    num_experts = max(_as_int(geometry.get("num_experts"), 4), 2)
+    top_k = min(max(_as_int(geometry.get("top_k"), 1), 1), num_experts)
+    return GeometryConfig.routing(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dims=(hidden,),
+        num_experts=num_experts,
+        top_k=top_k,
+        routing_temperature=max(
+            _as_float(geometry.get("routing_temperature"), 1.0), 1e-2
+        ),
+        init_scale=init_scale,
+        init_scheme=init_scheme,  # type: ignore[arg-type]
     )
 
 
@@ -729,6 +767,7 @@ _GEOMETRY_BUILDERS: dict[str, Any] = {
     "conv": build_conv_config,
     "graph": build_graph_config,
     "causal_transformer": build_causal_transformer_config,
+    "routing": build_routing_config,
 }
 
 
@@ -931,6 +970,18 @@ def build_geometry_config_dispatch(
                 output_dim=output_dim,
                 hidden=hidden,
                 depth=depth,
+                geometry=geometry,
+            )
+        case "routing":
+            return build_routing_config(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                param_budget=param_budget,
+                explicit_hidden=explicit_hidden,
+                depth=depth,
+                hidden=hidden,
+                init_scheme=init_scheme,
+                init_scale=init_scale,
                 geometry=geometry,
             )
         case _:

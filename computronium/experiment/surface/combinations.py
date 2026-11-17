@@ -93,8 +93,12 @@ def _seeded() -> None:
 def _axis_names() -> dict[str, list[str]]:
     from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 
+    # ``Registry.keys()`` is a frozenset: iterating it directly would order
+    # the cells (and therefore the seeded cover) differently in every process.
+    # The registry is a set; the coordinate list is sorted so a seed's cover
+    # reproduces from a separate process.
     return {
-        axis: list(AXES_REGISTRIES[StructuralAxis[axis.upper()]].keys())
+        axis: sorted(AXES_REGISTRIES[StructuralAxis[axis.upper()]].keys())
         for axis in AXIS_ORDER
     }
 

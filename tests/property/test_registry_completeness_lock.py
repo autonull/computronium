@@ -145,6 +145,7 @@ _GEOMETRY_ONTOLOGY_CLASSES: dict[str, str] = {
     "spatial_lattice": "SpatialLattice3DGeometry",
     "nca": "NcaGeometry",
     "ntm": "NtmGeometry",
+    "routing": "RoutingGeometry",
 }
 
 
@@ -180,6 +181,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
         NcaGeometry,
         NtmGeometry,
         RecurrentGeometry,
+        RoutingGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
         TransformerGeometry,
@@ -197,6 +199,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
         "primitive.geometry.attention": AttentionGeometry,
         "primitive.geometry.causal_transformer": TransformerGeometry,
         "primitive.geometry.tile": TileGeometry,
+        "primitive.geometry.routing": RoutingGeometry,
     }
 
     # Config methods with their specific required arguments
@@ -233,6 +236,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
             "output_dim": 5,
             "lattice_dims": (2, 2, 2),
         },
+        "routing": {"input_dim": 10, "output_dim": 5, "hidden_dims": (8,)},
     }
 
     for spec in primitives():
@@ -357,6 +361,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
         PepitaCredit,
         RandomProjectionsCredit,
         ScoreFunctionCredit,
+        SurrogateCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
         ThermodynamicContrast,
@@ -378,6 +383,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
         "primitive.credit_assignment.forward_tangent": ForwardTangentCredit,
         "primitive.credit_assignment.score_function": ScoreFunctionCredit,
         "primitive.credit_assignment.zeroth_order": ZerothOrderCredit,
+        "primitive.credit_assignment.surrogate": SurrogateCredit,
     }
 
     for spec in primitives():
@@ -675,6 +681,7 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.geometry.attention": "AttentionGeometry",
         "primitive.geometry.causal_transformer": "TransformerGeometry",
         "primitive.geometry.tile": "TileGeometry",
+        "primitive.geometry.routing": "RoutingGeometry",
     },
     "state_dynamics": {
         "primitive.state_dynamics.diffusion": "DiffusionDynamics",
@@ -703,6 +710,7 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.credit_assignment.forward_tangent": "ForwardTangentCredit",
         "primitive.credit_assignment.score_function": "ScoreFunctionCredit",
         "primitive.credit_assignment.zeroth_order": "ZerothOrderCredit",
+        "primitive.credit_assignment.surrogate": "SurrogateCredit",
     },
     "parameter_update": {
         "primitive.parameter_update.euclidean": "EuclideanUpdate",

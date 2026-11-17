@@ -52,6 +52,7 @@ _DEFAULT_INIT_SCALE = 0.1
 
 type InitScheme = Literal["default", "mupc", "innocenti"]
 type RequiredInput = Literal["image", "token", "sequence"]
+type SurrogateMode = Literal["ste", "soft"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,6 +303,10 @@ class GeometryConfig:
     # Tile-mesh topology (single source for geometry_from_config dispatch)
     neurons_per_tile: int = 8
     tiles_per_layer: int = 2
+    # Routing topology (hard top-k mixture of experts)
+    num_experts: int = 4
+    top_k: int = 1
+    routing_temperature: float = 1.0
     # Input compatibility
     required_input: RequiredInput = "image"
 
@@ -329,6 +334,35 @@ class GeometryConfig:
             init_scheme=init_scheme,
             residual=residual,
             stream_norm=stream_norm,
+        )
+
+    @classmethod
+    def routing(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        hidden_dims: tuple[int, ...],
+        num_experts: int = 4,
+        top_k: int = 1,
+        routing_temperature: float = 1.0,
+        init_scale: float = 0.1,
+        init_scheme: InitScheme = "default",
+    ) -> GeometryConfig:
+        """Hard top-k mixture of experts over a trunk and a gate."""
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=hidden_dims,
+            num_layers=len(hidden_dims),
+            topology_type="routing",
+            connectivity=None,
+            recurrent_weight=None,
+            init_scale=init_scale,
+            init_scheme=init_scheme,
+            num_experts=num_experts,
+            top_k=top_k,
+            routing_temperature=routing_temperature,
         )
 
     @classmethod
@@ -723,6 +757,18 @@ class GeometryConfig:
             "init_scale": {"domain": (1e-3, 10.0, "log")},
             "init_scheme": {"domain": ["default", "mupc", "innocenti"]},
             "residual": {"domain": [True, False]},
+            "num_experts": {
+                "domain": (2, 32, "int"),
+                "availability": expr_from_string('geometry == "routing"'),
+            },
+            "top_k": {
+                "domain": (1, 8, "int"),
+                "availability": expr_from_string('geometry == "routing"'),
+            },
+            "routing_temperature": {
+                "domain": (1e-2, 10.0, "log"),
+                "availability": expr_from_string('geometry == "routing"'),
+            },
             "neurons_per_tile": {
                 "domain": (2, 64, "int"),
                 "availability": expr_from_string('geometry in ["tile", "tile_mesh"]'),
@@ -1216,6 +1262,178 @@ class FeedforwardGeometry(nn.Module):
             )
         )
         return ActivationLayout(layers=tuple(layers), batch_size=batch_size)
+
+
+def routing_weights(
+    logits: Tensor,
+    *,
+    top_k: int,
+    temperature: float,
+    surrogate: SurrogateMode | None = None,
+) -> Tensor:
+    """Selection weights for a hard top-k gate, with an optional relaxation.
+
+    ``None`` is the hard forward: one-hot over the top-k logits, renormalized
+    by k. ``"soft"`` is the temperature-smoothed reference (no hard
+    selection). ``"ste"`` keeps the hard forward and routes the gradient
+    through the soft one: ``hard + soft − soft.detach()``.
+    """
+    scaled = logits / temperature
+    soft = torch.softmax(scaled, dim=-1)
+    k = min(max(top_k, 1), logits.shape[-1])
+    top = scaled.topk(k, dim=-1).indices
+    hard = torch.zeros_like(soft).scatter_(-1, top, 1.0)
+    hard = hard / hard.sum(dim=-1, keepdim=True)
+    match surrogate:
+        case "soft":
+            return soft
+        case "ste":
+            return hard + soft - soft.detach()
+        case _:
+            return hard
+
+
+@geometry_backend("routing")
+class RoutingGeometry(nn.Module):
+    """Hard top-k mixture-of-experts topology.
+
+    A trunk maps the input to expert width; a gate scores ``num_experts``
+    experts; only the top-k receive each sample (hard, renormalized); a readout
+    maps the mixture to the output. The gate's selection is the one operation
+    with no useful derivative, so the geometry also owns the relaxation
+    (``routing_temperature``) its surrogate credit differentiates.
+    """
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        widths = set(config.hidden_dims)
+        if len(widths) != 1:
+            raise ValueError(
+                f"RoutingGeometry needs one expert width, got hidden_dims="
+                f"{config.hidden_dims}"
+            )
+        if config.num_experts < 2:
+            raise ValueError(
+                f"RoutingGeometry needs at least two experts, got {config.num_experts}"
+            )
+        if not 1 <= config.top_k <= config.num_experts:
+            raise ValueError(
+                f"RoutingGeometry top_k={config.top_k} is outside "
+                f"[1, {config.num_experts}]"
+            )
+        hidden = config.hidden_dims[0]
+        self._trunk = nn.Sequential(
+            *_linear_stack(
+                (config.input_dim, hidden), config.init_scale, config.init_scheme
+            )
+        )
+        self._gate = nn.Linear(hidden, config.num_experts)
+        self._experts = nn.ModuleList([
+            nn.Sequential(
+                *_linear_stack((hidden, hidden), config.init_scale, config.init_scheme)
+            )
+            for _ in range(config.num_experts)
+        ])
+        self._readout = nn.Sequential(
+            *_linear_stack(
+                (hidden, config.output_dim), config.init_scale, config.init_scheme
+            )
+        )
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        return dict(self.named_parameters())  # type: ignore[return-value]
+
+    def selection_weights(
+        self,
+        logits: Tensor,
+        *,
+        surrogate: SurrogateMode | None = None,
+    ) -> Tensor:
+        """The gate's selection weights at this geometry's declared box."""
+        return routing_weights(
+            logits,
+            top_k=self.config.top_k,
+            temperature=self.config.routing_temperature,
+            surrogate=surrogate,
+        )
+
+    def _mix(
+        self,
+        h: Tensor,
+        *,
+        surrogate: SurrogateMode | None,
+    ) -> Tensor:
+        """Mixed expert output for one batch."""
+        logits = self._gate(h)
+        weights = self.selection_weights(logits, surrogate=surrogate)
+        expert_out = torch.stack([expert(h) for expert in self._experts], dim=1)
+        return (weights.unsqueeze(-1) * expert_out).sum(dim=1)
+
+    def forward(
+        self,
+        x: Tensor,
+        substrate: Substrate | None = None,
+        *,
+        surrogate: SurrogateMode | None = None,
+    ) -> Tensor:
+        """Hard top-k forward; ``surrogate`` relaxes only the credit's pass."""
+        h = x.flatten(1) if x.dim() > 2 else x
+        h = self._trunk(h)
+        return self._readout(self._mix(h, surrogate=surrogate))
+
+    def route(self, activations: Tensor) -> Tensor:
+        """Single-step routing through the trunk, gate, mixture, and readout."""
+        return self.forward(activations)
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        own = dict(self.named_parameters())
+        for name, param in new_params.items():
+            if name in own:
+                own[name].data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [
+            self._trunk,
+            self._gate,
+            *self._experts,
+            self._readout,
+        ]
+
+    def activation_layout(self, batch_size: int) -> ActivationLayout:
+        """Sample-mode trunk, expert width, and readout layouts."""
+        hidden = self.config.hidden_dims[0]
+        return ActivationLayout(
+            layers=(
+                LayerLayout(
+                    name="input",
+                    batch_mode="sample",
+                    feature_shape=(self.config.input_dim,),
+                ),
+                LayerLayout(
+                    name="hidden",
+                    batch_mode="sample",
+                    feature_shape=(hidden,),
+                ),
+                LayerLayout(
+                    name="output",
+                    batch_mode="sample",
+                    feature_shape=(self.config.output_dim,),
+                    is_readout=True,
+                ),
+            ),
+            batch_size=batch_size,
+        )
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None, *args, **kwargs
+    ) -> list[Tensor]:
+        """Trunk activations, the mixture, and the readout."""
+        h = x.flatten(1) if x.dim() > 2 else x
+        h = self._trunk(h)
+        mixed = self._mix(h, surrogate=None)
+        return [h, mixed, self._readout(mixed)]
 
 
 def _sinusoidal_pe(seq_len: int, d_model: int) -> Tensor:

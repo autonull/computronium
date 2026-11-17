@@ -40,6 +40,7 @@ CREDIT_PRIMITIVES: dict[str, type[Any]] = {
     "forward_tangent": CreditAssignmentConfig,
     "score_function": CreditAssignmentConfig,
     "zeroth_order": CreditAssignmentConfig,
+    "surrogate": CreditAssignmentConfig,
 }
 
 # Update primitives
@@ -75,6 +76,7 @@ GEOMETRY_PRIMITIVES: dict[str, type[Any]] = {
     "spatial_lattice": GeometryConfig,
     "nca": GeometryConfig,
     "ntm": GeometryConfig,
+    "routing": GeometryConfig,
 }
 
 # Substrate primitives

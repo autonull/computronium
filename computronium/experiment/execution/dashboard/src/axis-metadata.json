@@ -109,6 +109,11 @@
           "name": "ntm",
           "summary": "Neural Turing Machine tape",
           "available": true
+        },
+        {
+          "name": "routing",
+          "summary": "Hard top-k mixture of experts",
+          "available": true
         }
       ]
     },
@@ -271,6 +276,11 @@
         {
           "name": "zeroth_order",
           "summary": "Gradient-free SPSA finite-difference estimator",
+          "available": true
+        },
+        {
+          "name": "surrogate",
+          "summary": "Straight-through surrogate for hard top-k routing",
           "available": true
         }
       ]
