@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.losses import accuracy_tensor, compute_loss, perplexity
+from computronium.core.losses import (
+    accuracy_tensor,
+    compute_loss,
+    fold_time,
+    perplexity,
+)
 from computronium.core.system_trainer._early_stopping import (
     EarlyStoppingConfig,
     EarlyStoppingState,
@@ -25,6 +30,7 @@ from computronium.core.system_trainer._resume import (
     fold_in,
 )
 from computronium.ontology._utils import _align_target_rows
+from computronium.ontology.geometry import is_sequence_geometry
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -234,6 +240,9 @@ class SystemTrainer:
         """
         self.system.geometry.train()
         self._begin_epoch()
+        # A sequence geometry (TODO93 §19) reads a time-major batch: the
+        # trainer must keep the axis and count time*batch samples.
+        sequence = is_sequence_geometry(self.system.geometry)
 
         epoch_loss = 0.0
         epoch_acc = 0.0
@@ -330,7 +339,7 @@ class SystemTrainer:
             # Exception: causal_transformer with patch embedding needs 4D input.
             if x.dim() > 2:
                 geometry = getattr(self.system, "geometry", None)
-                if not (
+                if not sequence and not (
                     hasattr(geometry, "patch_size")
                     and getattr(geometry, "patch_size", 0) > 0
                 ):
@@ -350,7 +359,7 @@ class SystemTrainer:
             else:
                 metrics = _train_step()
 
-            batch = x.size(0)
+            batch = x.size(0) * x.size(1) if sequence else x.size(0)
             self._resources.note_step(batch)
             epoch_loss += metrics.get("loss", 0.0) * batch
             epoch_acc += (
@@ -462,6 +471,7 @@ class SystemTrainer:
         # The system's declared loss is the task's own (composition attaches
         # ``DomainTask.compute_loss``); ``None`` keeps the CE fallback.
         loss_fn = getattr(self.system, "loss_fn", None)
+        sequence = is_sequence_geometry(self.system.geometry)
         val_loss_sum = 0.0
         val_correct = 0
         num_samples = 0
@@ -497,13 +507,17 @@ class SystemTrainer:
 
                 if x.dim() > 2:
                     geometry = getattr(self.system, "geometry", None)
-                    if not (
+                    if not sequence and not (
                         hasattr(geometry, "patch_size")
                         and getattr(geometry, "patch_size", 0) > 0
                     ):
                         x = x.reshape(x.size(0), -1)
 
                 logits = self.system.forward(x, **graph_kwargs)
+                if sequence:
+                    # A time-major head: every step is supervised, so the
+                    # loss and accuracy read T*B rows (TODO93 §19).
+                    logits, y = fold_time(logits, y)
                 y = _align_target_rows(logits, y)
                 batch_loss = compute_loss(loss_fn, logits, y)
                 val_loss_sum += batch_loss.item() * logits.shape[0]

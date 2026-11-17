@@ -475,6 +475,7 @@ class SystemConfig:
         self._validate_hybrid_geometry()
         self._validate_attention_geometry_compatibility()
         self._validate_transformer_pairing_credit()
+        self._validate_temporal_credit_sequence()
 
         # Credit-Dynamics compatibility
         self._validate_thermodynamic_contrast_dynamics()
@@ -925,6 +926,25 @@ class SystemConfig:
                 "activation chain pairs each weight with the act it produces; "
                 "the causal_transformer chain carries inputs only"
             )
+
+    def _validate_temporal_credit_sequence(self) -> None:
+        """A temporal credit reads a time-major state; the geometry owns the axis.
+
+        The credit's contract is ``x (time, batch, input)`` and
+        ``y (time, batch)`` (TODO93 §19). A geometry that folds the time
+        axis into features has no time axis, so the credit would fail loud
+        inside the cell; refuse the composition here, by name, instead.
+        """
+        if not self.credit.requires_sequence:
+            return
+        if self.geometry.topology_type == "recurrent" and self.geometry.sequence:
+            return
+        raise ValueError(
+            f"{self.credit.credit_type!r} credit reads a sequence "
+            "(time, batch, input); a recurrent geometry with sequence=True "
+            f"owns that axis, got geometry={self.geometry.topology_type!r} "
+            f"with sequence={self.geometry.sequence}"
+        )
 
     # --- Geometry-Substrate Validation Methods ---
 

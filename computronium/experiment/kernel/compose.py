@@ -618,6 +618,11 @@ def _compose_configs_cached(
         # unit-scale features and applied to unbounded ones (G20 — free CE
         # 223 -> 1121 over 10 epochs while accuracy stalled at 0.52).
         gcfg = replace(gcfg, stream_norm=True)
+    if ccfg.requires_sequence:
+        # The credit reads x (time, batch, input), so the geometry owns the
+        # time axis; validate refuses a topology that cannot unroll it
+        # (TODO93 §19, the temporal axis).
+        gcfg = replace(gcfg, sequence=True)
 
     dcfg = _build_dynamics_config(active, dynamics_name, coordinate)
     ucfg = _build_update_config(active, coordinate)

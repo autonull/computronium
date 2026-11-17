@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Protocol, TypeIs
 import torch
 from torch import Tensor
 
-from computronium.core.losses import accuracy_tensor, compute_loss
+from computronium.core.losses import accuracy_tensor, compute_loss, fold_time
 from computronium.ontology import (
     Geometry,
     ParameterUpdate,
@@ -35,6 +35,7 @@ from computronium.ontology.dynamics import (
     set_state_field,
     state_energy,
 )
+from computronium.ontology.geometry import is_sequence_geometry
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
@@ -180,7 +181,13 @@ def _owned_free_state(
     return state
 
 
-def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) -> Tensor:
+def task_loss(
+    state: SettableState,
+    y: Tensor,
+    loss_fn: LossFn | None = None,
+    *,
+    sequence: bool = False,
+) -> Tensor:
     """Loss on the state's output activations, through the task's own ``loss_fn``.
 
     ``loss_fn`` is the task's declared loss (``DomainTask.compute_loss``): the
@@ -188,12 +195,18 @@ def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) ->
     cross-entropy, which is only correct for classification — a regression
     task's float targets are not class indices and must arrive with their loss.
 
+    ``sequence`` declares a time-major head ``(time, batch, classes)`` whose
+    targets are ``(time, batch)``: every step is supervised, so the loss folds
+    the time axis into rows (a sequence geometry's contract, TODO93 §19).
+
     Writes accuracy into ``state.metrics`` (pre-aggregated float contract).
     """
     acts = state.activations
     if acts is None:
         return torch.tensor(0.0, device=y.device)
     logits = acts[-1] if isinstance(acts, list) else acts
+    if sequence:
+        logits, y = fold_time(logits, y)
     y = _align_target_rows(logits, y)
     loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
@@ -203,18 +216,25 @@ def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) ->
 
 
 def _task_loss_tensor(
-    state: SettableState, y: Tensor, loss_fn: LossFn | None = None
+    state: SettableState,
+    y: Tensor,
+    loss_fn: LossFn | None = None,
+    *,
+    sequence: bool = False,
 ) -> tuple[Tensor, Tensor]:
     """Loss on the state's output activations (tensor-returning variant).
 
     Returns (loss, accuracy_tensor) where accuracy_tensor is a scalar tensor.
-    Writes accuracy tensor into ``state.metrics`` for downstream use.
+    Writes accuracy tensor into ``state.metrics`` for downstream use; the
+    ``sequence`` flag is ``task_loss``'s time-axis fold.
     """
     acts = state.activations
     if acts is None:
         zero = torch.tensor(0.0, device=y.device)
         return zero, zero
     logits = acts[-1] if isinstance(acts, list) else acts
+    if sequence:
+        logits, y = fold_time(logits, y)
     y = _align_target_rows(logits, y)
     loss = compute_loss(loss_fn, logits, y)
     with torch.no_grad():
@@ -363,7 +383,12 @@ def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
                     )
 
             if phase is Phase.NUDGED:
-                loss_tensor, _ = _task_loss_tensor(settled, ctx.y, ctx.loss_fn)
+                loss_tensor, _ = _task_loss_tensor(
+                    settled,
+                    ctx.y,
+                    ctx.loss_fn,
+                    sequence=is_sequence_geometry(ctx.geometry),
+                )
                 set_state_field(settled, "loss", loss_tensor)
             set_state_field(
                 settled, "energy", ctx.dynamics.compute_energy(settled, ctx.geometry)
@@ -389,7 +414,9 @@ def _prepare_output_state(
         output.activations = initial_activations
     loss = output.loss
     if loss is None:
-        loss, _ = _task_loss_tensor(output, y, loss_fn)
+        loss, _ = _task_loss_tensor(
+            output, y, loss_fn, sequence=is_sequence_geometry(geometry)
+        )
         set_state_field(output, "loss", loss)
     elif not isinstance(loss, Tensor):
         loss = torch.as_tensor(loss)
@@ -458,7 +485,9 @@ def _compute_free_metrics(
             settled = dynamics.settle(
                 free_state, geometry, substrate, target=None, **graph_kwargs
             )
-        free_loss, _ = _task_loss_tensor(settled, y, loss_fn)
+        free_loss, _ = _task_loss_tensor(
+            settled, y, loss_fn, sequence=is_sequence_geometry(geometry)
+        )
         free_energy = dynamics.compute_energy(settled, geometry)
         free_accuracy = (settled.metrics or {}).get("accuracy", torch.tensor(0.0))
         if not isinstance(free_accuracy, Tensor):

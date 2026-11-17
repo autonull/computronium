@@ -252,6 +252,7 @@ class CreditAssignmentConfig:
     aux_head_scale: float = 0.1  # Local-supervision aux head scale
     trace_decay: float = 0.9  # e-prop eligibility-trace decay α
     uoro_seed: int = 0  # UORO's sign/row draw sequence
+    requires_sequence: bool = False  # The credit reads x (time, batch, input)
 
     @classmethod
     def local_contrastive(
@@ -713,6 +714,7 @@ class CreditAssignmentConfig:
             feedback_scale=0.01,
             credit_norm=credit_norm,
             trace_decay=trace_decay,
+            requires_sequence=True,
         )
 
     @classmethod
@@ -732,6 +734,7 @@ class CreditAssignmentConfig:
             feedback_scale=0.01,
             credit_norm=credit_norm,
             uoro_seed=uoro_seed,
+            requires_sequence=True,
         )
 
     @classmethod
@@ -749,6 +752,7 @@ class CreditAssignmentConfig:
             orthogonal_init=False,
             feedback_scale=0.01,
             credit_norm=credit_norm,
+            requires_sequence=True,
         )
 
     @classmethod

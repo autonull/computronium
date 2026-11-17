@@ -83,20 +83,15 @@ class _TemporalCredit:
             raise ValueError(f"{type(self).__name__}: a config is required")
         self.config = config
 
-    def _unroll(self, linear_in: nn.Linear, recurrent: Tensor, x: Tensor) -> Tensor:
-        """The hidden states of one detached chain, ``(time, batch, hidden)``."""
-        time, batch, _ = x.shape
-        hidden = recurrent.shape[0]
-        h = torch.zeros((batch, hidden), device=x.device, dtype=x.dtype)
-        states = []
+    def _unroll(self, geometry: RecurrentGeometry, x: Tensor) -> Tensor:
+        """The hidden states of one detached chain, ``(time, batch, hidden)``.
+
+        The geometry owns the unroll (``RecurrentGeometry.sequence_states``):
+        the credit and the forward are one implementation of the equations,
+        so the parity lock cannot drift from a second copy (TODO93 §19).
+        """
         with torch.no_grad():
-            for step in range(time):
-                pre = x[step] @ linear_in.weight.T + h @ recurrent.T
-                if linear_in.bias is not None:
-                    pre += linear_in.bias
-                h = torch.tanh(pre)
-                states.append(h)
-        return torch.stack(states)
+            return geometry.sequence_states(x)[0]
 
     def _readout(
         self, states: Tensor, linear_out: nn.Linear, y: Tensor
@@ -127,12 +122,12 @@ class _TemporalCredit:
         if state is None:
             return []
         x, y = _sequence(state)
-        linear_in, linear_out, recurrent = _recurrent(geometry)
-        hidden = self._unroll(linear_in, recurrent, x)
+        _, linear_out, recurrent = _recurrent(geometry)
+        stack = cast("RecurrentGeometry", geometry)
+        hidden = self._unroll(stack, x)
         signal, out_grad = self._readout(hidden, linear_out, y)
         grads = self._gradients(hidden, x, signal, recurrent)
 
-        stack = cast("RecurrentGeometry", geometry)
         positions = [
             index
             for index, layer in enumerate(stack._layers)
@@ -201,8 +196,10 @@ class EligibilityPropCredit(_TemporalCredit):
         previous = _shift(hidden)
         trace_in = torch.zeros((batch, width, inputs), device=x.device, dtype=x.dtype)
         trace_rec = torch.zeros((batch, width, width), device=x.device, dtype=x.dtype)
-        grad_in = torch.zeros_like(trace_in)
-        grad_rec = torch.zeros_like(trace_rec)
+        # The gradients are summed over time and batch: the per-sample trace's
+        # shape is the accumulator of the trace, not of its gradient.
+        grad_in = torch.zeros((width, inputs), device=x.device, dtype=x.dtype)
+        grad_rec = torch.zeros((width, width), device=x.device, dtype=x.dtype)
         for step in range(time):
             trace_in = decay * trace_in + states[step][:, :, None] * x[step][:, None, :]
             trace_rec = (

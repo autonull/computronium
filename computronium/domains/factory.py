@@ -771,6 +771,15 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
                 quick_mode=quick_mode,
                 **kwargs,
             )
+        case "delayed_cue":
+            from computronium.domains.sequence import SequenceTask
+
+            return SequenceTask(
+                name=task_name,
+                device=str(device),
+                quick_mode=quick_mode,
+                **kwargs,
+            )
         case "pendulum_state" | "lorenz_state":
             from computronium.domains.scientific import ScientificTask
 

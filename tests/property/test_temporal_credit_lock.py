@@ -45,9 +45,7 @@ def _sequence(geometry: RecurrentGeometry) -> tuple[torch.Tensor, torch.Tensor]:
 
 def _states(x: torch.Tensor, y: torch.Tensor) -> dict[Phase, CompositeState]:
     return {
-        Phase.FREE: CompositeState(
-            activity={"x": x, "y": y}, plastic={}, substrate={}
-        )
+        Phase.FREE: CompositeState(activity={"x": x, "y": y}, plastic={}, substrate={})
     }
 
 
@@ -69,9 +67,7 @@ def _bptt(
     for step in range(_TIME):
         h = torch.tanh(x[step] @ weight_in.T + h @ recurrent.T + bias)
         logits.append(h @ weight_out.T + bias_out)
-    loss = cross_entropy(
-        torch.stack(logits).reshape(-1, _CLASSES), y.reshape(-1)
-    )
+    loss = cross_entropy(torch.stack(logits).reshape(-1, _CLASSES), y.reshape(-1))
     grads = torch.autograd.grad(loss, (weight_in, weight_out, recurrent))
     return list(grads)
 
@@ -91,6 +87,12 @@ def test_the_recurrent_reference_is_backpropagation_through_time() -> None:
         _states(x, y),
     )
     for measured, expected in zip(exact, reference, strict=True):
+        # A broadcast could hide a per-sample accumulator; the shape is the
+        # contract (measured: the e-prop trace returned (batch, hidden, input)
+        # and allclose broadcast it into a pass).
+        assert measured.shape == expected.shape, (
+            f"RTRL shape {tuple(measured.shape)} != BPTT {tuple(expected.shape)}"
+        )
         assert torch.allclose(measured, expected, atol=1e-6), (
             f"RTRL {measured} != BPTT {expected}"
         )
@@ -108,13 +110,14 @@ def test_e_prop_is_exact_on_a_one_step_fixture() -> None:
         _states(x, y),
     )
     traced = _grads(
-        EligibilityPropCredit(
-            CreditAssignmentConfig.eligibility_prop(trace_decay=0.0)
-        ),
+        EligibilityPropCredit(CreditAssignmentConfig.eligibility_prop(trace_decay=0.0)),
         geometry,
         _states(x, y),
     )
     for measured, expected in zip(traced, exact, strict=True):
+        assert measured.shape == expected.shape, (
+            f"e-prop shape {tuple(measured.shape)} != exact {tuple(expected.shape)}"
+        )
         assert torch.allclose(measured, expected, atol=1e-6)
 
 
@@ -138,6 +141,11 @@ def test_uoro_is_unbiased_over_its_draws() -> None:
         for seed in range(128)
     ]
     for index, expected in enumerate(exact):
+        for draw in draws:
+            assert draw[index].shape == expected.shape, (
+                f"UORO draw shape {tuple(draw[index].shape)} != exact "
+                f"{tuple(expected.shape)}"
+            )
         estimate = torch.stack([draw[index] for draw in draws]).mean(dim=0)
         cosine = torch.nn.functional.cosine_similarity(
             estimate.flatten(), expected.flatten(), dim=0
@@ -151,9 +159,7 @@ def test_the_temporal_credits_refuse_a_seqenceless_state() -> None:
     x = torch.randn((_BATCH, _IN))
     y = torch.randint(0, _CLASSES, (_BATCH,))
     states = {
-        Phase.FREE: CompositeState(
-            activity={"x": x, "y": y}, plastic={}, substrate={}
-        )
+        Phase.FREE: CompositeState(activity={"x": x, "y": y}, plastic={}, substrate={})
     }
     with pytest.raises(RuntimeError, match="sequence"):
         _grads(

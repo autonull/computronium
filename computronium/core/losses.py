@@ -26,6 +26,7 @@ __all__ = [
     "compute_accuracy",
     "compute_loss",
     "cross_entropy",
+    "fold_time",
     "mean_squared_error",
     "perplexity",
     "reshape_for_cross_entropy",
@@ -114,6 +115,19 @@ def reshape_for_cross_entropy(
     if y.dtype != torch.long:
         y = y.long()
     return logits, y
+
+
+def fold_time(
+    logits: torch.Tensor, y: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Fold a time-major head to per-step rows: ``(T, B, C)/(T, B)`` → ``(T·B, C)/(T·B)``.
+
+    A temporal geometry keeps the time axis in its output (TODO93 §19), so
+    every step's prediction is supervised. The LM head's ``(B, L, V)`` is a
+    different layout and never passes through here: the caller declares the
+    sequence geometry, it does not infer the layout from the rank.
+    """
+    return logits.reshape(-1, logits.shape[-1]), y.reshape(-1)
 
 
 def compute_loss(

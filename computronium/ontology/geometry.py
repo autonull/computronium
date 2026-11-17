@@ -49,6 +49,8 @@ if TYPE_CHECKING:
     from computronium.ontology.substrate import Substrate
 
 _DEFAULT_INIT_SCALE = 0.1
+#: The time-major contract's stack: input Linear + readout Linear.
+_SEQUENCE_LINEARS = 2
 
 type InitScheme = Literal["default", "mupc", "innocenti"]
 type RequiredInput = Literal["image", "token", "sequence"]
@@ -236,6 +238,12 @@ class GeometryConfig:
             normalizes the stream it recomputes requires this: without it
             the head is trained on unit-scale features and applied to
             unbounded ones (TODO88 G20)
+        sequence: Keep the time axis: a recurrent geometry unrolls
+            ``x (time, batch, input)`` to ``logits (time, batch, classes)``
+            instead of folding every batch dim into features. Set by the
+            credit that reads a time-major state (the temporal family,
+            TODO93 §19), never swept: with it off, landed cells stay
+            bit-identical
         conv_channels: Output channels per convolution layer (conv topology)
         kernel_size: Convolution kernel edge length (conv topology)
         in_channels: Input channel count (conv topology)
@@ -272,6 +280,7 @@ class GeometryConfig:
     init_scheme: InitScheme = "default"
     residual: bool = False
     stream_norm: bool = False
+    sequence: bool = False
     conv_channels: tuple[int, ...] = ()
     kernel_size: int = 3
     in_channels: int = 1
@@ -430,6 +439,7 @@ class GeometryConfig:
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
         init_scheme: InitScheme = "default",
+        sequence: bool = False,
     ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
@@ -441,6 +451,7 @@ class GeometryConfig:
             recurrent_weight=None,
             init_scale=init_scale,
             init_scheme=init_scheme,
+            sequence=sequence,
         )
 
     @classmethod
@@ -953,6 +964,22 @@ def is_tile_block_geometry(geometry: object) -> TypeIs[TileBlockGeometry]:
         and callable(getattr(geometry, "assemble_blocks", None))
         and callable(getattr(geometry, "scatter_block_grads", None))
     )
+
+
+class SequenceOutputGeometry(Geometry, Protocol):
+    """A geometry whose output keeps the time axis (declared, not inferred).
+
+    The forward reads ``x (time, batch, input)`` and returns
+    ``logits (time, batch, classes)``; the harness must not flatten the
+    input and the loss must fold the time axis (TODO93 §19).
+    """
+
+    sequence_output: bool
+
+
+def is_sequence_geometry(geometry: object) -> TypeIs[SequenceOutputGeometry]:
+    """Whether the geometry declares a time-major output contract."""
+    return getattr(geometry, "sequence_output", False) is True
 
 
 # ============================================================
@@ -1878,12 +1905,69 @@ class RecurrentGeometry(nn.Module):
             params["recurrent_weight"] = self._recurrent_weight
         return params  # type: ignore[return-value]
 
+    @property
+    def sequence_output(self) -> bool:
+        """Whether ``forward`` keeps the time axis (the run setting, declared)."""
+        return self.config.sequence
+
+    def _sequence_linears(self) -> tuple[nn.Linear, nn.Linear, Tensor]:
+        """The time-major contract: one hidden Linear, a readout, one recurrent weight."""
+        linears = [layer for layer in self._layers if isinstance(layer, nn.Linear)]
+        recurrent = self._recurrent_weight
+        if recurrent is None or len(linears) != _SEQUENCE_LINEARS:
+            raise ValueError(
+                "a sequence geometry unrolls one hidden layer: expected two "
+                f"Linears and a recurrent weight, got {len(linears)} Linear(s) "
+                f"and {recurrent!r}"
+            )
+        return linears[0], linears[1], recurrent
+
+    def sequence_states(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> tuple[Tensor, Tensor]:
+        """Unroll ``x (time, batch, input)`` into hidden states and logits.
+
+        The chain is ``h_t = tanh(W_in x_t + W_rec h_{t-1} + b)`` with
+        ``h_{-1} = 0`` and ``logits_t = W_out h_t + b_out``. The temporal
+        credits read this same unroll (``_TemporalCredit._unroll``), so the
+        forward and the credit share one implementation of the equations
+        (TODO93 §19); a second copy would drift from the parity lock.
+        """
+        if x.dim() != 3:
+            raise ValueError(
+                "a sequence geometry reads x (time, batch, input) and returns "
+                f"logits (time, batch, classes); got x {tuple(x.shape)}"
+            )
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        linear_in, linear_out, recurrent = self._sequence_linears()
+        time, batch = x.shape[0], x.shape[1]
+        h = torch.zeros((batch, recurrent.shape[0]), device=x.device, dtype=x.dtype)
+        states: list[Tensor] = []
+        for step in range(time):
+            pre = op(x[step], linear_in.weight)
+            if linear_in.bias is not None:
+                pre = pre + linear_in.bias
+            pre = pre + op(h, recurrent)
+            h = torch.tanh(pre)
+            states.append(h)
+        hidden = torch.stack(states)
+        logits = op(hidden, linear_out.weight)
+        if linear_out.bias is not None:
+            logits = logits + linear_out.bias
+        return hidden, logits
+
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         """Full forward pass with recurrence (single step)."""
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
 
             substrate = DigitalSubstrate()
+        if self.config.sequence:
+            return self.sequence_states(x, substrate)[1]
         op = substrate.get_forward_operator()
         h = x.flatten(1) if x.dim() > 2 else x
         for i, layer in enumerate(self._layers):
@@ -1980,6 +2064,9 @@ class RecurrentGeometry(nn.Module):
             from computronium.ontology.substrate import DigitalSubstrate
 
             substrate = DigitalSubstrate()
+        if self.config.sequence:
+            hidden, logits = self.sequence_states(x, substrate)
+            return [x, hidden, logits]
         op = substrate.get_forward_operator()
         h = x.flatten(1) if x.dim() > 2 else x
         acts = [h]
