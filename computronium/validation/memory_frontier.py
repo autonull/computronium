@@ -478,6 +478,7 @@ def build_arm(  # ruff: ignore[too-many-arguments]
     trunk_lr: float = 1.0,
     orthogonal_init: bool = False,
     learned_feedback: bool = False,
+    residual: bool = False,
 ) -> System:
     """One arm at one point; the geometry, init, and update are shared.
 
@@ -491,6 +492,8 @@ def build_arm(  # ruff: ignore[too-many-arguments]
     decoupled trunk step (T6e); ``-1``/``1.0`` read the registered arm.
     ``orthogonal_init`` and ``learned_feedback`` are the trunk's direction
     (T6f): the registered Gaussian draw, or its orthogonal/ridge fit.
+    ``residual`` is the stack's geometry (T6g): equal-width hidden layers
+    carry a skip, so a stack's identity passes through the split.
     """
     if arm not in ARMS:
         msg = f"unknown arm {arm!r}; expected one of {ARMS}"
@@ -503,6 +506,7 @@ def build_arm(  # ruff: ignore[too-many-arguments]
             output_dim=point.classes,
             hidden_dims=point.hidden_dims,
             stream_norm=point.stream_norm,
+            residual=residual,
         ),
         dynamics=StateDynamicsConfig.instantaneous(),
         credit=_credit(
@@ -1061,6 +1065,7 @@ def measure_cell(  # ruff: ignore[too-many-arguments]
     trunk_lr: float = 1.0,
     orthogonal_init: bool = False,
     learned_feedback: bool = False,
+    residual: bool = False,
 ) -> ArmCell:
     """Train one (arm, seed) cell and return its measured cost and accuracy."""
     torch.cuda.empty_cache()
@@ -1075,6 +1080,7 @@ def measure_cell(  # ruff: ignore[too-many-arguments]
         trunk_lr=trunk_lr,
         orthogonal_init=orthogonal_init,
         learned_feedback=learned_feedback,
+        residual=residual,
     )
     trainer = SystemTrainer(
         system=system,

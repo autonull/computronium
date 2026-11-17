@@ -270,3 +270,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The fix queue is the trunk's **geometry**: the hybrid's stack has one width and no residual on the projection's path, so the next variable is a residual or a wider trunk (12f), and the temporal axis is the next primitive. "The direction" is retired as the trigger; it is priced at the pilot box. |
 | Status | corrected — T6f priced the direction; the fix queue is the trunk's geometry |
 | Commit | this commit |
+
+| Field | Correction 28 — the geometry is priced; the skip is the gain, the depth is the fix queue |
+|---|---|
+| Original claim | T6f localized the gap at the trunk's direction without pricing the geometry behind it, and its gate named the fix queue as "a residual trunk or a wider trunk" (CORRECTION 27). |
+| Original metric | Two knobs named as candidate fixes, at one width and no residual, so "the geometry" could not be distinguished from the missing skip, and width was untested at its own price. |
+| Audited procedure | T6g at L=8/B=8192, 200 steps, LR 0.3, seeds 21/22, confirmation 23: reference `backprop+ckpt` 0.419/0.416 (floor 0.408); registered hybrid 0.163/0.169; **residual skip 0.312/0.336 (+15.8 pp, sd 1.6 pp) at 1.06× activation bytes and 1.00× the weights**, confirmation 0.272; **wide trunk 0.199/0.210 (+3.9 pp) at 1.72× bytes and 3.33× weights**; **residual+wide 0.290/0.329 (+14.4 pp) at 1.72×**. |
+| Affected conclusions | The geometry is priced: the skip is the mechanism's first real gain, width adds nothing, and the confirmation's seed spread (3.2σ) is wider than the screen's. The remaining 8.4 pp to the floor is the stack's **depth**, not another width. T6d/T6e/T6f stand as measurements. |
+| Replacement metric | The fix queue is the trunk's **depth** (12g): a deeper residual stack (L=16, W=1024) and a third screen seed at the residual arm. "A wider trunk" is retired as the trigger; width is priced at the pilot box. |
+| Status | corrected — T6g priced the geometry; the depth is the fix queue |
+| Commit | this commit |

@@ -41,6 +41,9 @@ def _cell(  # ruff: ignore[too-many-arguments]
     trunk_lr: float = 1.0,
     orthogonal_init: bool = False,
     learned_feedback: bool = False,
+    width: int = diagnostic.BOX.width,
+    batch: int = diagnostic.BOX.batch,
+    residual: bool = False,
 ) -> diagnostic.DiagnosticCell:
     return diagnostic.DiagnosticCell(
         arm=arm,
@@ -55,6 +58,9 @@ def _cell(  # ruff: ignore[too-many-arguments]
         trunk_lr=trunk_lr,
         orthogonal_init=orthogonal_init,
         learned_feedback=learned_feedback,
+        width=width,
+        batch=batch,
+        residual=residual,
     )
 
 
@@ -130,6 +136,9 @@ def _key(arm: str, gamma: float, train_biases: bool, seed: int) -> diagnostic.Ce
         diagnostic.REGISTERED_SPLIT,
         1.0,
         False,
+        False,
+        diagnostic.BOX.width,
+        diagnostic.BOX.batch,
         False,
     )
 
@@ -412,6 +421,7 @@ def test_the_cell_log_reuses_a_measured_cell(
         trunk_lr: float,
         orthogonal_init: bool = False,
         learned_feedback: bool = False,
+        residual: bool = False,
     ) -> frontier.ArmCell:
         calls.append((gamma, train_biases, seed))
         return frontier.ArmCell(
@@ -465,7 +475,19 @@ def test_the_cell_log_reuses_a_measured_cell(
 def _split_key(
     arm: str, gamma: float, seed: int, *, split_layer: int, trunk_lr: float = 1.0
 ) -> diagnostic.CellKey:
-    return (arm, gamma, False, seed, split_layer, trunk_lr, False, False)
+    return (
+        arm,
+        gamma,
+        False,
+        seed,
+        split_layer,
+        trunk_lr,
+        False,
+        False,
+        diagnostic.BOX.width,
+        diagnostic.BOX.batch,
+        False,
+    )
 
 
 def _split_row(
@@ -579,7 +601,17 @@ def _read_split(
         if split_layer == diagnostic.REGISTERED_SPLIT:
             return cells[_key(arm, gamma, train_biases, seed)]
         return cells[
-            arm, gamma, train_biases, seed, split_layer, trunk_lr, False, False
+            arm,
+            gamma,
+            train_biases,
+            seed,
+            split_layer,
+            trunk_lr,
+            False,
+            False,
+            diagnostic.BOX.width,
+            diagnostic.BOX.batch,
+            False,
         ]
 
     return cell
@@ -721,6 +753,9 @@ def _direction_key(
         1.0,
         orthogonal_init,
         learned_feedback,
+        diagnostic.BOX.width,
+        diagnostic.BOX.batch,
+        False,
     )
 
 
@@ -957,6 +992,359 @@ def test_the_direction_json_carries_the_outcome_and_its_rulers(
     assert "orthogonal" in markdown
 
 
+def _geometry_key(
+    arm: str,
+    gamma: float,
+    seed: int,
+    *,
+    want_wide: bool = False,
+    residual: bool = False,
+) -> diagnostic.CellKey:
+    point = diagnostic.WIDE_POINT if want_wide else diagnostic.BOX
+    return (
+        arm,
+        gamma,
+        False,
+        seed,
+        diagnostic.REGISTERED_SPLIT,
+        1.0,
+        False,
+        False,
+        point.width,
+        point.batch,
+        residual,
+    )
+
+
+def _geometry_row(
+    mechanism: str,
+    *,
+    wide: bool = False,
+    residual: bool = False,
+    acc: float = BASELINE,
+    n: int = 2,
+) -> diagnostic.GeometryRow:
+    point = diagnostic.WIDE_POINT if wide else diagnostic.BOX
+    return diagnostic.GeometryRow(
+        mechanism=mechanism,
+        depth=point.depth,
+        width=point.width,
+        batch=point.batch,
+        residual=residual,
+        n=n,
+        val_acc=acc,
+        val_acc_sd=0.0,
+        gain=acc - BASELINE,
+        activations_mb=210.0 if not wide else 430.0,
+        activation_ratio=1.06 if not wide else 2.12,
+        params=point.weight_count(),
+        params_over_registered=point.weight_count() / diagnostic.BOX.weight_count(),
+        floor=FLOOR,
+    )
+
+
+def _geometry_gate(
+    *,
+    reference_acc: float = 0.364,
+    rows: tuple[diagnostic.GeometryRow, ...] | None = None,
+) -> diagnostic.UpdateVerdict:
+    return diagnostic.geometry_gate(
+        reference_acc=reference_acc,
+        baseline_acc=BASELINE,
+        rows=rows
+        if rows is not None
+        else (
+            _geometry_row("residual", residual=True, acc=0.190),
+            _geometry_row("wide", wide=True, acc=0.190),
+        ),
+        floor=FLOOR,
+    )
+
+
+def _geometry_plan(
+    *,
+    reference_acc: float = 0.364,
+    residual_acc: float = 0.190,
+    wide_acc: float = 0.190,
+    combined_acc: float = 0.190,
+) -> dict[diagnostic.CellKey, diagnostic.DiagnosticCell]:
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell] = {}
+    for seed in diagnostic.DIAGNOSTIC_SEEDS:
+        cells[_geometry_key("backprop+ckpt", 0.05, seed)] = _cell(
+            "backprop+ckpt", 0.05, seed=seed, acc=reference_acc, activations_mb=453.0
+        )
+        cells[_geometry_key("hybrid", 0.05, seed)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=BASELINE
+        )
+        cells[_geometry_key("hybrid", 0.05, seed, residual=True)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=residual_acc, residual=True
+        )
+        cells[_geometry_key("hybrid", 0.05, seed, want_wide=True)] = _cell(
+            "hybrid",
+            0.05,
+            seed=seed,
+            acc=wide_acc,
+            width=diagnostic.WIDE_POINT.width,
+            activations_mb=430.0,
+        )
+        cells[_geometry_key("hybrid", 0.05, seed, want_wide=True, residual=True)] = (
+            _cell(
+                "hybrid",
+                0.05,
+                seed=seed,
+                acc=combined_acc,
+                width=diagnostic.WIDE_POINT.width,
+                residual=True,
+                activations_mb=430.0,
+            )
+        )
+    best_label = max(
+        (
+            ("residual", residual_acc),
+            ("wide", wide_acc),
+            ("residual+wide", combined_acc),
+        ),
+        key=lambda row: row[1],
+    )[0]
+    best_wide = best_label != "residual"
+    cells[
+        _geometry_key(
+            "hybrid",
+            0.05,
+            diagnostic.CONFIRMATION_SEED,
+            want_wide=best_wide,
+            residual=best_label != "wide",
+        )
+    ] = _cell(
+        "hybrid",
+        0.05,
+        seed=diagnostic.CONFIRMATION_SEED,
+        acc=max(residual_acc, wide_acc, combined_acc),
+        width=diagnostic.WIDE_POINT.width if best_wide else diagnostic.BOX.width,
+        residual=best_label != "wide",
+        activations_mb=430.0 if best_wide else 210.0,
+    )
+    return cells
+
+
+def _read_geometry(
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell],
+) -> Callable[..., diagnostic.DiagnosticCell]:
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        point: diagnostic.PilotPoint,
+        residual: bool = False,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        return cells[
+            _geometry_key(
+                arm,
+                gamma,
+                seed,
+                want_wide=point.width == diagnostic.WIDE_POINT.width,
+                residual=residual,
+            )
+        ]
+
+    return cell
+
+
+def test_the_geometry_ladder_is_a_residual_stack_and_twice_the_width() -> None:
+    labels = [label for label, _, _ in diagnostic.GEOMETRY_LADDER]
+    assert labels == ["residual", "wide", "residual+wide"]
+    residual, wide, combined = diagnostic.GEOMETRY_LADDER
+    assert residual[1] is diagnostic.BOX
+    assert residual[2] is True
+    assert wide[1].width == 2 * diagnostic.BOX.width
+    assert wide[1].depth == diagnostic.BOX.depth
+    assert wide[2] is False
+    assert combined[1] is wide[1]
+    assert combined[2] is True
+    assert diagnostic.CONFIRMATION_SEED not in diagnostic.DIAGNOSTIC_SEEDS
+
+
+def test_the_geometry_gate_promotes_a_residual_stack_that_reaches_the_floor() -> None:
+    gate = _geometry_gate(
+        rows=(
+            _geometry_row("residual", residual=True, acc=0.362),
+            _geometry_row("wide", wide=True, acc=0.190),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "residual trunk" in gate.mechanism
+    assert "0.354" in gate.reason
+    assert "claim run" in gate.trigger
+
+
+def test_the_geometry_gate_promotes_a_wider_trunk_that_reaches_the_floor() -> None:
+    gate = _geometry_gate(
+        rows=(
+            _geometry_row("residual", residual=True, acc=0.190),
+            _geometry_row("wide", wide=True, acc=0.360),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "wide trunk" in gate.mechanism
+    assert "x the registered weights" in gate.reason
+
+
+def test_a_geometry_gain_without_the_floor_is_a_coordinate() -> None:
+    gate = _geometry_gate(
+        rows=(
+            _geometry_row("residual", residual=True, acc=0.205),
+            _geometry_row("wide", wide=True, acc=0.190),
+        )
+    )
+    assert gate.verdict == "coordinate"
+    assert "residual trunk" in gate.mechanism
+    assert "deeper residual" in gate.trigger
+
+
+def test_a_geometry_that_moves_nothing_sends_the_claim_to_its_box() -> None:
+    gate = _geometry_gate(
+        rows=(
+            _geometry_row("residual", residual=True, acc=0.188),
+            _geometry_row("wide", wide=True, acc=0.186),
+        )
+    )
+    assert gate.verdict == "refuse"
+    assert "the box" in gate.mechanism
+    assert "0.188/0.186" in gate.reason
+    assert "task whose readout" in gate.trigger
+
+
+def test_the_geometry_gate_invalidates_a_reference_below_the_floor() -> None:
+    gate = _geometry_gate(reference_acc=0.200)
+    assert gate.verdict == "invalid"
+    assert "reference" in gate.mechanism
+
+
+def test_the_geometry_assembly_prices_the_cells_at_their_own_point() -> None:
+    plan = _geometry_plan(combined_acc=0.361)
+    seen: list[diagnostic.CellKey] = []
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        point: diagnostic.PilotPoint,
+        residual: bool = False,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        seen.append(
+            _geometry_key(
+                arm,
+                gamma,
+                seed,
+                want_wide=point.width == diagnostic.WIDE_POINT.width,
+                residual=residual,
+            )
+        )
+        return _read_geometry(plan)(
+            arm, gamma=gamma, point=point, residual=residual, seed=seed
+        )
+
+    report = diagnostic._assemble_geometry(cell, point=diagnostic.BOX)
+    assert len(seen) == 11
+    assert len(set(seen)) == 11
+    assert len(report.cells) == 11
+    assert report.verdict == "promote"
+    assert [row.n for row in report.rows] == [2, 2, 2]
+    assert [row.width for row in report.rows] == [
+        diagnostic.BOX.width,
+        diagnostic.WIDE_POINT.width,
+        diagnostic.WIDE_POINT.width,
+    ]
+    assert [row.residual for row in report.rows] == [True, False, True]
+    assert report.rows[1].params_over_registered == pytest.approx(
+        diagnostic.WIDE_POINT.weight_count() / diagnostic.BOX.weight_count()
+    )
+    assert report.confirmation.width == diagnostic.WIDE_POINT.width
+    assert report.confirmation.residual
+    assert report.confirmation.seed == diagnostic.CONFIRMATION_SEED
+
+
+def test_a_cell_log_separates_residual_and_wide_cells(tmp_path: Path) -> None:
+    """The geometry is the cell's identity: a rerun must not reuse a stack."""
+    log_path = tmp_path / "cells.jsonl"
+    log = diagnostic._CellLog(log_path)
+    point = diagnostic.BOX
+    data = (
+        torch.zeros(1, 1),
+        torch.zeros(1, dtype=torch.long),
+        torch.zeros(1, 1),
+        torch.zeros(1, dtype=torch.long),
+    )
+    measured = {
+        (False, diagnostic.BOX.width): 0.10,
+        (True, diagnostic.BOX.width): 0.20,
+        (False, diagnostic.WIDE_POINT.width): 0.30,
+    }
+    calls: list[tuple[bool, int]] = []
+
+    def fake_measure(arm: str, point: object, **kwargs: object) -> object:
+        residual = bool(kwargs["residual"])
+        calls.append((residual, point.width))  # type: ignore[union-attr]
+        return type(
+            "Measured",
+            (),
+            {
+                "val_acc": measured[residual, point.width],  # type: ignore[union-attr]
+                "walltime_s": 1.0,
+                "activations_mb": 210.0,
+                "peak_mb": 282.0,
+            },
+        )()
+
+    monkeypatched = diagnostic.measure_cell
+    diagnostic.measure_cell = fake_measure  # type: ignore[assignment]
+    try:
+        for row_point, residual in (
+            (point, False),
+            (point, True),
+            (diagnostic.WIDE_POINT, False),
+        ):
+            log.measure(
+                "hybrid",
+                gamma=0.05,
+                residual=residual,
+                seed=21,
+                point=row_point,
+                device="cpu",
+                data=data,
+            )
+    finally:
+        diagnostic.measure_cell = monkeypatched  # type: ignore[assignment]
+    assert len(set(calls)) == 3
+    logged = diagnostic.read_cells(log_path)
+    assert len(logged) == 3
+    assert [cell.val_acc for cell in logged.values()] == [0.10, 0.20, 0.30]
+
+
+def test_the_geometry_json_carries_the_outcome_and_its_rulers(
+    tmp_path: Path,
+) -> None:
+    report = diagnostic._assemble_geometry(
+        _read_geometry(_geometry_plan(residual_acc=0.361)), point=diagnostic.BOX
+    )
+    path = diagnostic.write_geometry_report(report, tmp_path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["triage"].startswith("defect probe")
+    assert raw["verdict"] == "promote"
+    assert "residual" in raw["mechanism"]
+    assert raw["point"]["lr"] == diagnostic.LR
+    assert len(raw["rows"]) == 3
+    assert {"mechanism", "reason", "trigger", "cells"} <= set(raw)
+    widths = {cell["width"] for cell in raw["cells"]}
+    assert widths == {diagnostic.BOX.width, diagnostic.WIDE_POINT.width}
+    markdown = (tmp_path / "geometry.md").read_text(encoding="utf-8")
+    assert "T6g" in markdown
+    assert "0.354" in markdown
+    assert "residual" in markdown
+
+
 def test_no_report_prints_a_verdict(tmp_path: Path) -> None:
     """The triage is mandatory: a report states a box, never a verdict."""
     reports = {
@@ -969,6 +1357,11 @@ def test_no_report_prints_a_verdict(tmp_path: Path) -> None:
         "direction.md": diagnostic._direction_markdown(
             diagnostic._assemble_direction(
                 _read_direction(_direction_plan()), point=diagnostic.BOX
+            )
+        ),
+        "geometry.md": diagnostic._geometry_markdown(
+            diagnostic._assemble_geometry(
+                _read_geometry(_geometry_plan()), point=diagnostic.BOX
             )
         ),
     }

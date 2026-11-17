@@ -870,6 +870,44 @@ axis. The measurement is a defect probe; the projection stays open.
 Artifacts: `results/t93_a_stream/direction.{json,md}`; replay
 `uv run python -m computronium.validation.hybrid_update --direction --replay`.
 
+### 2.17 The trunk's geometry (T6g) — the skip is the gain, width is priced
+
+**Question.** T6f priced the direction and queued the trunk's geometry. Does a
+residual stack (the skip the split keeps, a path identity the composed update can
+use), a trunk twice as wide, or both reach the checkpointed arm's floor at the
+pilot box?
+
+**Box.** CIFAR-10 fixed 10k-image train subset / full 10k test, L=8, B=8192, 200
+steps, LR 0.3, fp32, seeds 21/22 plus confirmation 23; the registered stack is
+W=1024, the wide rows W=2048 (the same depth, batch, steps). The cell identity
+carries `width`, `batch`, and `residual`, so one log separates all three
+geometries at one seed.
+
+| geometry | L | W | residual | val_acc | sd | gain | act MB | ratio | weights | time s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `backprop+ckpt` reference | 8 | 1024 | no | **0.419 / 0.416** | — | — | 485 | 1.00× | 1.00× | 11.3 |
+| `hybrid` (registered) | 8 | 1024 | no | 0.163 / 0.169 | — | — | 516 | 1.06× | 1.00× | 10.2 / 10.3 |
+| `hybrid` | 8 | 1024 | **yes** | **0.312 / 0.336** | 1.6 pp | **+15.8 pp** | 516 | 1.06× | 1.00× | 11.5 / 11.4 |
+| `hybrid` | 8 | 2048 | no | 0.199 / 0.210 | 0.8 pp | +3.9 pp | 836 | 1.72× | 3.33× | 28.6 / 28.8 |
+| `hybrid` | 8 | 2048 | **yes** | 0.290 / 0.329 | 2.8 pp | +14.4 pp | 836 | 1.72× | 3.33× | 30.9 / 31.2 |
+| `hybrid` | 8 | 1024 | yes (seed 23) | 0.272 | — | — | 516 | 1.06× | 1.00× | 11.6 |
+
+The reference trains, so the floor is **0.408**. **No geometry reaches it**, but
+**the skip is a real gain**: +15.8 pp for 6 % more activation bytes, and the
+residual+wide arm buys 1.4 pp *less* than the skip alone at 1.72× the bytes and
+3.33× the weights. **Width is priced; the depth is the next edge.** The
+confirmation seed sits 3.2σ below the residual screen's mean, so the arm's seed
+spread is priced before any claim.
+
+**Gate outcome: coordinate (a box statement).** The skip is the mechanism's first
+real gain at its declared price; the residual's remaining 8.4 pp to the floor is
+the stack's depth and the arm's seed spread, not another width (**CORRECTION
+28**). The next variable is a deeper residual stack (12g). The measurement is a
+defect probe; the geometry stays open.
+
+Artifacts: `results/t93_a_stream/geometry.{json,md}`; replay
+`uv run python -m computronium.validation.hybrid_update --geometry --replay`.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -894,6 +932,7 @@ Artifacts: `results/t93_a_stream/direction.{json,md}`; replay
 | Readout-only split ≡ store-all hybrid; `trunk_lr` scales the trunk only | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Trunk direction: orthogonal keeps the draw's norm; ridge step moves B at that norm; state round-trips | `tests/property/test_hybrid_parity.py` | 16 s |
 | T6f gate: both directions promote at the floor, a real gain is a coordinate, no movement queues the geometry; no report prints a verdict | `tests/unit/validation/test_hybrid_update.py` | 17 s |
+| T6g gate: the three geometries at their own points, promote/coordinate/refuse/invalid, 11-cell assembly, residual/width/batch in the cell identity | `tests/unit/validation/test_hybrid_update.py` | 18 s |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | T6a box: the ratio is depth-declared (1.22 / 0.75 / 0.53 at L=8/16/32) and the claim's two bars never meet | `scripts/probes/t93_t6a_box_triage.py` | 90 s (CUDA, ~600 MB) |

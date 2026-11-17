@@ -43,6 +43,8 @@ Run it with::
     uv run python -m computronium.validation.hybrid_update --split --replay
     uv run python -m computronium.validation.hybrid_update --direction
     uv run python -m computronium.validation.hybrid_update --direction --replay
+    uv run python -m computronium.validation.hybrid_update --geometry
+    uv run python -m computronium.validation.hybrid_update --geometry --replay
 
 T6e refused the position and the step, so T6f (``--direction``) prices the
 trunk's **direction**: ``orthogonal_init`` (an orthonormalized draw) and
@@ -51,6 +53,16 @@ at the registered draw's Frobenius norm so the ladder compares direction at
 one scale. A direction that reaches the floor is a promote; a real gain is a
 coordinate; no movement refuses the direction and names the trunk's
 geometry (a residual or a wider trunk) as the next variable.
+
+T6f priced both directions without movement, so T6g (``--geometry``) prices
+the trunk's **geometry**, the queue it named: a residual stack at the
+registered depth and width (the skip the split keeps, a path identity the
+composed update can use), a trunk twice as wide at the same depth (the
+head's exact gradient over more features), and both together. Each row is
+read against the registered stack at the same seeds, floor, and activation
+ruler. A geometry that reaches the floor earns the claim box; a real gain
+is a coordinate with its next edge; no movement refuses the geometry too,
+and the box (not the mechanism) becomes the claim's variable.
 """
 
 from __future__ import annotations
@@ -89,6 +101,7 @@ __all__ = [
     "DIAGNOSTIC_SEEDS",
     "DIRECTION_LADDER",
     "GAMMA_LADDER",
+    "GEOMETRY_LADDER",
     "HEAD_ONLY_GAMMA",
     "LR",
     "READOUT_SPLIT",
@@ -101,22 +114,28 @@ __all__ = [
     "DiagnosticCell",
     "DirectionReport",
     "DirectionRow",
+    "GeometryReport",
+    "GeometryRow",
     "HybridUpdateReport",
     "MechanismRow",
     "SplitPositionReport",
     "SplitRow",
     "UpdateVerdict",
     "direction_gate",
+    "geometry_gate",
     "read_cells",
     "replay_diagnostic",
     "replay_direction_diagnostic",
+    "replay_geometry_diagnostic",
     "replay_split_diagnostic",
     "run_diagnostic",
     "run_direction_diagnostic",
+    "run_geometry_diagnostic",
     "run_split_diagnostic",
     "split_gate",
     "update_gate",
     "write_direction_report",
+    "write_geometry_report",
     "write_report",
     "write_split_report",
 ]
@@ -159,8 +178,23 @@ DIRECTION_LADDER: tuple[tuple[str, bool, bool], ...] = (
     ("orthogonal", True, False),
     ("learned", False, True),
 )
+#: The trunk's geometry ladder (T6g): the registered stack, a residual stack
+#: at the same depth and width, and a trunk twice as wide at the same depth.
+#: Each row carries its own point, because width is the row's variable.
+WIDE_WIDTH = 2 * BOX.width
+WIDE_POINT = PilotPoint(
+    depth=BOX.depth,
+    width=WIDE_WIDTH,
+    batch=BOX.batch,
+    steps=BOX.steps,
+)
+GEOMETRY_LADDER: tuple[tuple[str, PilotPoint, bool], ...] = (
+    ("residual", BOX, True),
+    ("wide", WIDE_POINT, False),
+    ("residual+wide", WIDE_POINT, True),
+)
 
-type CellKey = tuple[str, float, bool, int, int, float, bool, bool]
+type CellKey = tuple[str, float, bool, int, int, float, bool, bool, int, int, bool]
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +206,8 @@ class DiagnosticCell:
     retraining anything. ``split_layer`` and ``trunk_lr`` default to the
     registered arm, so a T6d log line still names its cell; the direction
     flags default to the registered draw, so a T6e log line does too.
+    ``width``, ``batch``, and ``residual`` default to the registered stack,
+    so a T6g log line names its geometry and the earlier lines keep theirs.
     """
 
     arm: str
@@ -186,6 +222,9 @@ class DiagnosticCell:
     trunk_lr: float = 1.0
     orthogonal_init: bool = False
     learned_feedback: bool = False
+    width: int = BOX.width
+    batch: int = BOX.batch
+    residual: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -651,6 +690,9 @@ def _key(cell: DiagnosticCell) -> CellKey:
         cell.trunk_lr,
         cell.orthogonal_init,
         cell.learned_feedback,
+        cell.width,
+        cell.batch,
+        cell.residual,
     )
 
 
@@ -687,6 +729,7 @@ class _CellLog:
         trunk_lr: float = 1.0,
         orthogonal_init: bool = False,
         learned_feedback: bool = False,
+        residual: bool = False,
     ) -> DiagnosticCell:
         key = (
             arm,
@@ -697,6 +740,9 @@ class _CellLog:
             trunk_lr,
             orthogonal_init,
             learned_feedback,
+            point.width,
+            point.batch,
+            residual,
         )
         if key not in self.cells:
             measured = measure_cell(
@@ -715,6 +761,7 @@ class _CellLog:
                 trunk_lr=trunk_lr,
                 orthogonal_init=orthogonal_init,
                 learned_feedback=learned_feedback,
+                residual=residual,
             )
             cell = DiagnosticCell(
                 arm=arm,
@@ -729,6 +776,9 @@ class _CellLog:
                 trunk_lr=trunk_lr,
                 orthogonal_init=orthogonal_init,
                 learned_feedback=learned_feedback,
+                width=point.width,
+                batch=point.batch,
+                residual=residual,
             )
             self.cells[key] = cell
             if self.path is not None:
@@ -800,7 +850,19 @@ def replay_diagnostic(*, log_path: Path, point: PilotPoint = BOX) -> HybridUpdat
         train_biases: bool = False,
         seed: int,
     ) -> DiagnosticCell:
-        key = (arm, gamma, train_biases, seed, REGISTERED_SPLIT, 1.0, False, False)
+        key = (
+            arm,
+            gamma,
+            train_biases,
+            seed,
+            REGISTERED_SPLIT,
+            1.0,
+            False,
+            False,
+            BOX.width,
+            BOX.batch,
+            False,
+        )
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
         return cells[key]
@@ -1327,7 +1389,19 @@ def replay_split_diagnostic(
         trunk_lr: float = 1.0,
         seed: int,
     ) -> DiagnosticCell:
-        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr, False, False)
+        key = (
+            arm,
+            gamma,
+            train_biases,
+            seed,
+            split_layer,
+            trunk_lr,
+            False,
+            False,
+            BOX.width,
+            BOX.batch,
+            False,
+        )
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
         return cells[key]
@@ -1787,6 +1861,9 @@ def replay_direction_diagnostic(
             1.0,
             orthogonal_init,
             learned_feedback,
+            BOX.width,
+            BOX.batch,
+            False,
         )
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
@@ -1884,6 +1961,502 @@ def write_direction_report(report: DirectionReport, output_dir: str | Path) -> P
     return path
 
 
+@dataclass(frozen=True, slots=True)
+class GeometryRow:
+    """One trunk geometry's mean over its seeds, against the reference's floor.
+
+    ``activation_ratio`` is the row's measured activation set over the
+    reference's; ``params_over_registered`` is its weight count over the
+    registered stack's -- both are the geometry's price, so a capability row
+    never hides what it cost.
+    """
+
+    mechanism: str
+    depth: int
+    width: int
+    batch: int
+    residual: bool
+    n: int
+    val_acc: float
+    val_acc_sd: float
+    gain: float
+    activations_mb: float | None
+    activation_ratio: float | None
+    params: int
+    params_over_registered: float
+    floor: float
+
+    @property
+    def reaches_floor(self) -> bool:
+        return self.val_acc >= self.floor
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryReport:
+    """T6g's measured cells, its geometry rows, and the verdict."""
+
+    point: PilotPoint
+    lr: float
+    reference: tuple[DiagnosticCell, ...]
+    baseline: tuple[DiagnosticCell, ...]
+    residual: tuple[DiagnosticCell, ...]
+    wide: tuple[DiagnosticCell, ...]
+    wide_residual: tuple[DiagnosticCell, ...]
+    confirmation: DiagnosticCell
+    rows: tuple[GeometryRow, ...]
+    floor: float
+    verdict: str
+    mechanism: str
+    reason: str
+    trigger: str
+    triage: str = "defect probe (a box statement; the measurement stands)"
+    date: str = DATE
+
+    @property
+    def reference_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.reference)
+
+    @property
+    def baseline_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.baseline)
+
+    @property
+    def cells(self) -> tuple[DiagnosticCell, ...]:
+        """Every measured cell once, keyed by its identity."""
+        unique: dict[CellKey, DiagnosticCell] = {}
+        for cell in (
+            *self.reference,
+            *self.baseline,
+            *self.residual,
+            *self.wide,
+            *self.wide_residual,
+            self.confirmation,
+        ):
+            unique.setdefault(_key(cell), cell)
+        return tuple(unique.values())
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "date": self.date,
+            "point": asdict(self.point) | {"lr": self.lr},
+            "reference_acc": round(self.reference_acc, 4),
+            "baseline_acc": round(self.baseline_acc, 4),
+            "floor": round(self.floor, 4),
+            "verdict": self.verdict,
+            "triage": self.triage,
+            "mechanism": self.mechanism,
+            "reason": self.reason,
+            "trigger": self.trigger,
+            "rows": [asdict(row) for row in self.rows],
+            "cells": [asdict(cell) for cell in self.cells],
+        }
+
+
+def _geometry_row(
+    mechanism: str,
+    point: PilotPoint,
+    residual: bool,
+    cells: tuple[DiagnosticCell, ...],
+    *,
+    baseline_acc: float,
+    reference: tuple[DiagnosticCell, ...],
+    floor: float,
+) -> GeometryRow:
+    """One geometry's mean, its gain, and its two prices."""
+    acc, spread = _mean_acc(cells)
+    return GeometryRow(
+        mechanism=mechanism,
+        depth=point.depth,
+        width=point.width,
+        batch=point.batch,
+        residual=residual,
+        n=len(cells),
+        val_acc=acc,
+        val_acc_sd=spread,
+        gain=acc - baseline_acc,
+        activations_mb=_mean_mb(cells),
+        activation_ratio=_ratio(cells, reference),
+        params=point.weight_count(),
+        params_over_registered=point.weight_count() / BOX.weight_count(),
+        floor=floor,
+    )
+
+
+def geometry_gate(  # ruff: ignore[too-many-arguments]
+    *,
+    reference_acc: float,
+    baseline_acc: float,
+    rows: tuple[GeometryRow, ...],
+    floor: float,
+    delta: float = DELTA,
+    learning_floor: float = LEARNING_FLOOR,
+) -> UpdateVerdict:
+    """Control, promote a geometry that reaches the floor, then price the rest.
+
+    The direction, the position, and the step are already priced at this
+    box (T6e/T6f), so a geometry that moves nothing prices the last
+    trunk variable and sends the claim to a box its head can carry. A
+    geometry that reaches the floor is the fix those probes queued.
+    """
+    if reference_acc < max(floor, learning_floor):
+        return UpdateVerdict(
+            "invalid",
+            "the checkpointed reference",
+            (
+                f"the reference reads {reference_acc:.3f} against the floor "
+                f"{floor:.3f} at the pilot box; a reference that does not "
+                "train cannot decide the trunk's geometry"
+            ),
+            "re-measure the reference at the pilot box; the diagnostic is "
+            "read on the next run",
+        )
+    promoted = [row for row in rows if row.reaches_floor]
+    if promoted:
+        best = max(promoted, key=lambda row: row.val_acc)
+        return UpdateVerdict(
+            "promote",
+            f"the trunk's geometry: a {best.mechanism} trunk",
+            (
+                f"the {best.mechanism} trunk reads {best.val_acc:.3f} (sd "
+                f"{best.val_acc_sd:.3f} over {best.n} seeds) against the floor "
+                f"{floor:.3f} = checkpoint {reference_acc:.3f} - "
+                f"{delta * 100:.0f} pp, up {best.gain * 100:+.1f} pp from the "
+                f"registered stack's {baseline_acc:.3f} at "
+                f"{_ratio_text(best.activation_ratio)} and "
+                f"{best.params_over_registered:.2f}x the registered weights"
+            ),
+            (
+                "the claim run re-registers at the pilot box with this "
+                "geometry frozen: the accuracy bar is demonstrated at L=8, so "
+                "the claim box's L=8->32 rung prices it next; the memory half "
+                "is measured at this box"
+            ),
+        )
+    best = max(rows, key=lambda row: row.val_acc)
+    if best.gain >= delta:
+        return UpdateVerdict(
+            "coordinate",
+            f"the {best.mechanism} trunk is a real gain, not the mechanism",
+            (
+                f"the {best.mechanism} trunk moves the hybrid "
+                f"{best.gain * 100:+.1f} pp to {best.val_acc:.3f} (sd "
+                f"{best.val_acc_sd:.3f} over {best.n} seeds) but the floor is "
+                f"{floor:.3f} = checkpoint {reference_acc:.3f} - "
+                f"{delta * 100:.0f} pp; the gap narrows and does not close, at "
+                f"{_ratio_text(best.activation_ratio)} and "
+                f"{best.params_over_registered:.2f}x the registered weights"
+            ),
+            (
+                "a deeper residual stack (the skip's gain compounds with depth) "
+                "or a third seed at the residual arm (its confirmation reads "
+                "below its screen); a claim run is not scheduled on a coordinate"
+            ),
+        )
+    readings = "/".join(f"{row.val_acc:.3f}" for row in rows)
+    return UpdateVerdict(
+        "refuse",
+        "the box: A's claim re-registers where the head's exact gradient carries it",
+        (
+            f"the geometries read {readings} "
+            f"({'/'.join(f'{row.gain * 100:+.1f} pp' for row in rows)} from "
+            f"the registered stack {baseline_acc:.3f}, sd "
+            f"{'/'.join(f'{row.val_acc_sd:.3f}' for row in rows)} over "
+            f"{'/'.join(str(row.n) for row in rows)} seeds) at gamma="
+            f"{HYBRID_GAMMA:g}, the registered split and direction, so a "
+            "residual stack and twice the width both move the cell; with the "
+            "position, the step, and the direction priced, the trunk's "
+            "variables are all priced at this box"
+        ),
+        (
+            "the box: a claim at a task whose readout fits the head's exact "
+            "gradient (a smaller input, fewer classes) or a wider readout head; "
+            "the trunk's variables are priced, so the claim's next variable is "
+            "the task, not another pass over the same box"
+        ),
+    )
+
+
+def _geometry_report(
+    *,
+    point: PilotPoint,
+    reference: tuple[DiagnosticCell, ...],
+    baseline: tuple[DiagnosticCell, ...],
+    residual: tuple[DiagnosticCell, ...],
+    wide: tuple[DiagnosticCell, ...],
+    wide_residual: tuple[DiagnosticCell, ...],
+    confirmation: DiagnosticCell,
+) -> GeometryReport:
+    """Assemble the rows and the gate from the measured cells."""
+    floor = _floor(reference)
+    baseline_acc, _ = _mean_acc(baseline)
+    measured = {
+        "residual": residual,
+        "wide": wide,
+        "residual+wide": wide_residual,
+    }
+    rows = tuple(
+        _geometry_row(
+            label,
+            row_point,
+            row_residual,
+            measured[label],
+            baseline_acc=baseline_acc,
+            reference=reference,
+            floor=floor,
+        )
+        for label, row_point, row_residual in GEOMETRY_LADDER
+    )
+    reference_acc, _ = _mean_acc(reference)
+    gate = geometry_gate(
+        reference_acc=reference_acc,
+        baseline_acc=baseline_acc,
+        rows=rows,
+        floor=floor,
+    )
+    return GeometryReport(
+        point=point,
+        lr=LR,
+        reference=reference,
+        baseline=baseline,
+        residual=residual,
+        wide=wide,
+        wide_residual=wide_residual,
+        confirmation=confirmation,
+        rows=rows,
+        floor=floor,
+        verdict=gate.verdict,
+        mechanism=gate.mechanism,
+        reason=gate.reason,
+        trigger=gate.trigger,
+    )
+
+
+def _assemble_geometry(
+    cell: Callable[..., DiagnosticCell], *, point: PilotPoint
+) -> GeometryReport:
+    """T6g's cell plan: reference, baseline, both geometries, confirmation.
+
+    The reference and the baseline are the T6d cells at the registered
+    stack, so the shared log retrains only the geometry rows: two seeds
+    per geometry plus the best geometry's third seed.
+    """
+    reference = tuple(
+        cell(REFERENCE_ARM, gamma=HYBRID_GAMMA, point=point, seed=seed)
+        for seed in DIAGNOSTIC_SEEDS
+    )
+    baseline = tuple(
+        cell("hybrid", gamma=HYBRID_GAMMA, point=point, seed=seed)
+        for seed in DIAGNOSTIC_SEEDS
+    )
+    ladder = {
+        label: tuple(
+            cell(
+                "hybrid",
+                gamma=HYBRID_GAMMA,
+                point=row_point,
+                residual=row_residual,
+                seed=seed,
+            )
+            for seed in DIAGNOSTIC_SEEDS
+        )
+        for label, row_point, row_residual in GEOMETRY_LADDER
+    }
+    best_label = max(
+        ladder,
+        key=lambda label: fmean(measured.val_acc for measured in ladder[label]),
+    )
+    best_point, best_residual = next(
+        (row_point, row_residual)
+        for label, row_point, row_residual in GEOMETRY_LADDER
+        if label == best_label
+    )
+    return _geometry_report(
+        point=point,
+        reference=reference,
+        baseline=baseline,
+        residual=ladder["residual"],
+        wide=ladder["wide"],
+        wide_residual=ladder["residual+wide"],
+        confirmation=cell(
+            "hybrid",
+            gamma=HYBRID_GAMMA,
+            point=best_point,
+            residual=best_residual,
+            seed=CONFIRMATION_SEED,
+        ),
+    )
+
+
+def run_geometry_diagnostic(
+    point: PilotPoint = BOX,
+    *,
+    device: str = "cuda",
+    log_path: Path | None = None,
+) -> GeometryReport:
+    """Measure the trunk's three geometries (T6g) at the pilot box.
+
+    A residual stack, a trunk twice as wide, and both together, each read
+    against the registered stack and the checkpointed arm's floor.
+
+    Args:
+        point: The pilot box the T6a2 trigger names.
+        device: ``"cuda"`` is required -- the cells need a measured peak.
+        log_path: Where each measured cell is appended; a rerun reuses it.
+
+    Raises:
+        RuntimeError: On a non-CUDA device.
+    """
+    _require_cuda(device)
+    log = _CellLog(log_path)
+    data = cifar_splits()
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        point: PilotPoint,
+        residual: bool = False,
+        seed: int,
+    ) -> DiagnosticCell:
+        return log.measure(
+            arm,
+            gamma=gamma,
+            residual=residual,
+            seed=seed,
+            point=point,
+            device=device,
+            data=data,
+        )
+
+    return _assemble_geometry(cell, point=point)
+
+
+def replay_geometry_diagnostic(
+    *, log_path: Path, point: PilotPoint = BOX
+) -> GeometryReport:
+    """Rebuild T6g's report from the cell log, without training a cell.
+
+    Raises:
+        RuntimeError: When a cell the report needs is missing from the log.
+    """
+    cells = read_cells(log_path)
+    if not cells:
+        raise RuntimeError(f"no cells in {log_path}; run the diagnostic first")
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        point: PilotPoint,
+        residual: bool = False,
+        seed: int,
+    ) -> DiagnosticCell:
+        key = (
+            arm,
+            gamma,
+            False,
+            seed,
+            REGISTERED_SPLIT,
+            1.0,
+            False,
+            False,
+            point.width,
+            point.batch,
+            residual,
+        )
+        if key not in cells:
+            raise RuntimeError(f"no measured cell for {key} in {log_path}")
+        return cells[key]
+
+    return _assemble_geometry(cell, point=point)
+
+
+def _geometry_markdown(report: GeometryReport) -> str:
+    """The table a third party can read, with its rulers and its command."""
+    lines = [
+        "# T6g -- the trunk's geometry (TODO93 track A)",
+        "",
+        f"**Box.** CIFAR-10 10k/10k, L={BOX.depth}, B={BOX.batch}, "
+        f"{BOX.steps} steps, LR {report.lr:g}, seeds "
+        f"{', '.join(str(seed) for seed in DIAGNOSTIC_SEEDS)}, fp32. "
+        f"Reference `{REFERENCE_ARM}`; registered stack `hybrid` at "
+        f"W={BOX.width}; `{'`, `'.join(label for label, _, _ in GEOMETRY_LADDER)}` "
+        f"at gamma={HYBRID_GAMMA:g}, registered split and direction "
+        f"(the wide rows read W={WIDE_POINT.width}).",
+        "",
+        f"Reference {report.reference_acc:.3f}; registered stack "
+        f"{report.baseline_acc:.3f}; floor {report.floor:.3f} (reference - "
+        f"{DELTA * 100:.0f} pp).",
+        "",
+        "| geometry | L | W | B | residual | seeds | val acc | sd | gain | "
+        "floor | reaches | activations MB | ratio | weights x |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in report.rows:
+        activations = (
+            f"{row.activations_mb:.0f}" if row.activations_mb is not None else "—"
+        )
+        ratio = (
+            f"{row.activation_ratio:.2f}x" if row.activation_ratio is not None else "—"
+        )
+        lines.append(
+            f"| {row.mechanism} | {row.depth} | {row.width} | {row.batch} | "
+            f"{'yes' if row.residual else 'no'} | {row.n} | {row.val_acc:.3f} | "
+            f"{row.val_acc_sd:.3f} | {row.gain * 100:+.1f} pp | "
+            f"{row.floor:.3f} | {'yes' if row.reaches_floor else 'no'} | "
+            f"{activations} | {ratio} | {row.params_over_registered:.2f}x |"
+        )
+    lines.extend([
+        "",
+        "| arm | gamma | W | B | residual | seed | val acc | s | "
+        "activations MB | peak MB |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ])
+    for cell in report.cells:
+        activations = (
+            f"{cell.activations_mb:.0f}" if cell.activations_mb is not None else "—"
+        )
+        peak = f"{cell.peak_mb:.0f}" if cell.peak_mb is not None else "—"
+        lines.append(
+            f"| `{cell.arm}` | {cell.gamma:g} | {cell.width} | {cell.batch} | "
+            f"{'yes' if cell.residual else 'no'} | {cell.seed} | "
+            f"{cell.val_acc:.3f} | {cell.walltime_s:.1f} | {activations} | {peak} |"
+        )
+    lines.extend([
+        "",
+        f"**Gate outcome: {report.verdict}** -- a box statement at the pilot "
+        "box; the measurement stands and the mechanism stays open.",
+        "",
+        f"**Triage.** {report.triage}; the fix queue is {report.trigger}",
+        "",
+        f"**Reason.** {report.reason}",
+        "",
+        "**Rulers.** val acc on the full 10k test split (1 sigma ~ 0.3 pp); "
+        "activation bytes (peak - params - optimizer - auxiliary); weight count "
+        "at 4 B/weight; walltime per cell; the floor is the checkpointed arm's "
+        "mean minus delta, and the baseline is the registered stack at the same "
+        "box.",
+        "",
+        "Command: `uv run python -m computronium.validation.hybrid_update "
+        "--geometry`; replay the gate from the cell log with `... --geometry "
+        "--replay`.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def write_geometry_report(report: GeometryReport, output_dir: str | Path) -> Path:
+    """Write ``geometry.json`` and ``geometry.md``; return the JSON."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "geometry.json"
+    path.write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+    (output_dir / "geometry.md").write_text(
+        _geometry_markdown(report), encoding="utf-8"
+    )
+    return path
+
+
 def _main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1908,9 +2481,46 @@ def _main() -> None:
         action="store_true",
         help="run T6f (the trunk's orthogonal and learned direction) instead of T6d",
     )
+    parser.add_argument(
+        "--geometry",
+        action="store_true",
+        help="run T6g (the trunk's residual and wide stacks) instead of T6d",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
     log_path = args.out / "hybrid_update.cells.jsonl"
+    if args.geometry:
+        geometry = (
+            replay_geometry_diagnostic(log_path=log_path)
+            if args.replay
+            else run_geometry_diagnostic(device=args.device, log_path=log_path)
+        )
+        logger.info(
+            "T6g: reference=%.3f baseline=%.3f floor=%.3f rows=%s",
+            geometry.reference_acc,
+            geometry.baseline_acc,
+            geometry.floor,
+            json.dumps([
+                {
+                    "mechanism": row.mechanism,
+                    "width": row.width,
+                    "residual": row.residual,
+                    "val_acc": round(row.val_acc, 3),
+                    "n": row.n,
+                    "gain": round(row.gain, 3),
+                    "reaches_floor": row.reaches_floor,
+                }
+                for row in geometry.rows
+            ]),
+        )
+        path = write_geometry_report(geometry, args.out)
+        logger.info("wrote %s", path)
+        logger.info(
+            "gate outcome: %s -- a box statement; %s",
+            geometry.verdict,
+            geometry.mechanism,
+        )
+        return
     if args.direction:
         direction = (
             replay_direction_diagnostic(log_path=log_path)
@@ -1935,7 +2545,11 @@ def _main() -> None:
         )
         path = write_direction_report(direction, args.out)
         logger.info("wrote %s", path)
-        logger.info("gate outcome: %s -- a box statement; %s", direction.verdict, direction.mechanism)
+        logger.info(
+            "gate outcome: %s -- a box statement; %s",
+            direction.verdict,
+            direction.mechanism,
+        )
         return
     if args.split:
         splits = (
@@ -1963,7 +2577,9 @@ def _main() -> None:
         )
         path = write_split_report(splits, args.out)
         logger.info("wrote %s", path)
-        logger.info("gate outcome: %s -- a box statement; %s", splits.verdict, splits.mechanism)
+        logger.info(
+            "gate outcome: %s -- a box statement; %s", splits.verdict, splits.mechanism
+        )
         return
     report = (
         replay_diagnostic(log_path=log_path)
@@ -1990,7 +2606,9 @@ def _main() -> None:
     logger.info("head-only: %.3f", report.head_only.val_acc)
     path = write_report(report, args.out)
     logger.info("wrote %s", path)
-    logger.info("gate outcome: %s -- a box statement; %s", report.verdict, report.mechanism)
+    logger.info(
+        "gate outcome: %s -- a box statement; %s", report.verdict, report.mechanism
+    )
 
 
 if __name__ == "__main__":

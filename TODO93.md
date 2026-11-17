@@ -1,14 +1,14 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-17 · **v30 — capability program; the trunk's direction is priced at the pilot box (a defect probe: neither fix moves the cell). T6f priced both named fixes at the pilot box: the orthogonal rotation reads 0.160/0.170 (−0.1 pp from the draw) and the ridge-fitted B reads 0.145/0.144 (−2.1 pp, 1.17× walltime) against the floor 0.408, so the fix queue is **the trunk's geometry** (a residual or a wider trunk) inside A, not a verdict on the direction. Every verdict the plan recorded as a refusal is a defect probe with a fix queue (CORRECTION 25/CORRECTION 27); the work program is the new primitives, in capability order: the temporal axis (a sequence geometry + loader, then `EligibilityPropCredit`/`UnbiasedOnlineRTRLCredit`/`RTRLReference`), the streaming lifts, and the trunk's geometry as track A's defect fix. The estimator family, routing, and the split's position/step and direction are landed (4 identity cards, 4 credit primitive rows, 1 geometry row, 11 parity/mechanism locks, 8 capability cards; §18/§19). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell: T6c/T6a/T6a₂/T6d/T6e/T6f/F1/D2/B1 are defect probes with named fixes. Next session: the temporal axis (§19 row 6).**
+**Status:** 2026-11-17 · **v31 — the trunk's geometry is priced at the pilot box: the residual skip is the first real gain, a coordinate, not the claim. T6g read three geometries at L=8/B=8192 against floor 0.408: the residual stack 0.312/0.336 (+15.8 pp from the registered 0.166 at 1.06× activation bytes and 1.00× the weights; its third seed 0.272), the wide trunk 0.199/0.210 (+3.9 pp at 1.72× bytes and 3.33× weights), and both together 0.290/0.329 (+14.4 pp at the same 1.72×), so **width is priced and the skip is the mechanism's first gain**: the next edge is a deeper residual stack (the skip's gain compounds with depth) or a third seed at the residual arm (its confirmation reads 3.2σ below the screen). The split's position, the trunk's step, its direction, and now its geometry are all priced, so A's claim is blocked on the trunk's depth, not on another knob at this box. Every verdict the plan recorded as a refusal is a defect probe with a fix queue (CORRECTION 25/27); the work program is the new primitives, in capability order: **the temporal axis's sequence geometry + loader** (`EligibilityPropCredit`/`UnbiasedOnlineRTRLCredit`/`RTRLReference` are landed and lock at cos 0.979; the loader is the gap), the streaming lifts, and the deeper residual trunk as track A's fix. The estimator family, routing, and the split's position/step/direction/geometry are landed (4 identity cards, 4 credit primitive rows, 1 geometry row, 11 parity/mechanism locks, 8 capability cards; §18/§19). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell: T6c/T6a/T6a₂/T6d/T6e/T6f/T6g/F1/D2/B1 are defect probes with named fixes. Next session: the temporal axis's loader (§8.1 order 1).**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
-+ T6a₂ + T6d + T6e + T6f + estimator family + routing
++ T6a₂ + T6d + T6e + T6f + T6g + estimator family + routing
 landed: the truth pass, the memory decomposition, the ladder runner, the
 checkpointed baseline, the lockstep two-pass rung, the hybrid, the composed
 pilot, the routing refusal, the plasticity ladder, the retention ladder, the
 estimator atlas, the substrate ladder, its matched comparison, the
 composition screen, the memory-frontier registration, its re-registration, the
-hybrid's update diagnostic, the three unbiased estimators, the straight-through
-surrogate, and the hard top-k geometry.
+hybrid's update diagnostic, the trunk's geometry, the three unbiased estimators,
+the straight-through surrogate, and the hard top-k geometry.
 **Reading the narrative below.** Entries written before v26 say "refused" or
 "closed"; those words are historical — every one is a defect probe or a
 capability map in §0.6 (CORRECTION 25). The measurements stand.
@@ -38,9 +38,12 @@ priced the split's position and the trunk's step, and T6f priced the trunk's
 direction: none of the three moves the cell** (the readout-only head loses 3.4 pp; the
 trunk's step 0.3/1/3 buys none; the orthogonal rotation −0.1 pp and the
 ridge-fitted B −2.1 pp at 1.17× walltime), so **the trunk's geometry is the
-defect fix inside A**, and F2 remains a five-seed trigger. The estimator
-family and routing landed (§19 rows 1–4); the session order is §8.1 row 12f
-(the trunk's geometry) inside A, then the temporal axis.
+defect fix inside A**, and F2 remains a five-seed trigger. **T6g then priced the
+geometry: the residual skip is the first real gain (+15.8 pp at 1.06× activation
+bytes), width adds nothing (wide 0.204; wide+residual 0.309 at 1.72×), and the
+confirmation seed reads 0.272 against the screen 0.324.** The estimator family
+and routing landed (§19 rows 1–4); the session order is the temporal axis's
+sequence geometry + loader, then the deeper residual trunk inside A.
 
 **Routing landed (2026-11-17).** `SurrogateCredit` differentiates a hard top-k
 selection through its straight-through forward: `w = topk(softmax(g/τ))/k`;
@@ -146,6 +149,19 @@ floor, so the mechanism is the **trunk's geometry** (one width, no residual
 on the projection's path), not the projection (**CORRECTION 27**). Artifacts:
 `results/t93_a_stream/direction.{json,md}`; replay `uv run python -m
 computronium.validation.hybrid_update --direction --replay`.
+
+**T6g priced the trunk's geometry (2026-11-17).** One run at the pilot box,
+11 cells (~200 s of training): reference 0.419/0.416 (floor 0.408), registered
+0.163/0.169. **The residual skip reads 0.312/0.336 (+15.8 pp)** at 1.06× the
+reference's activation bytes and 1.00× its weights, and its third seed reads
+0.272; **the wide trunk reads 0.199/0.210 (+3.9 pp)** at 1.72× bytes and 3.33×
+weights; **both together read 0.290/0.329 (+14.4 pp)** at the same 1.72×. So the
+skip is the mechanism's first real gain and **width is priced** (it adds nothing
+at 1.7× the cost); the remaining 8.4 pp to the floor is the stack's depth and
+the arm's seed spread, not another width (**CORRECTION 28**). Artifacts:
+`results/t93_a_stream/geometry.{json,md}`; replay `uv run python -m
+computronium.validation.hybrid_update --geometry --replay`. Next for A: **the
+trunk's depth** (12g), with a third seed at the residual arm.
 
 **D1 landed and promoted the memristive arm (2026-11-16).** The substrate
 ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
@@ -302,7 +318,7 @@ mechanism. Memory columns are instruments.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** + **T6e ⛔: the readout-only head loses 3.4 pp (0.132 vs 0.166) and the trunk's step 0.3/1/3 buys none (0.105/0.132/0.103)** + **T6f ⛔: the direction moves nothing (orthogonal −0.1 pp) or backwards (learned −2.1 pp, 1.17× walltime) — the geometry is the mechanism** | 1 session (12f) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the update, the position, the step, and the direction are priced and refused, so the trunk's geometry (12f) is the defect fix, not another knob** |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** + **T6e ⛔: the readout-only head loses 3.4 pp (0.132 vs 0.166) and the trunk's step 0.3/1/3 buys none (0.105/0.132/0.103)** + **T6f ⛔: the direction moves nothing (orthogonal −0.1 pp) or backwards (learned −2.1 pp, 1.17× walltime)** + **T6g: the residual skip gains 15.8 pp at 1.06× bytes (coordinate), width 3.9 pp at 1.72×/3.33× and both 14.4 pp at 1.72× — the depth is the next edge** | 1 session (12g) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the update, the position, the step, the direction, and the geometry are priced; the trunk's depth (12g) is the defect fix, not another width** |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → the missing surrogate is the defect; B's claim narrows (§19 row 4) — **the surrogate primitive landed 2026-11-17**, so the next rung is the B1 STE-gap screen at its best temperature/LR |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → the label channel or step scale is the defect; retention is not yet tested |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
@@ -317,9 +333,10 @@ composition screen and refused at its box, so **F2 does not fire on one seed**.
 estimator family landed (`ForwardTangentCredit`, `ScoreFunctionCredit`,
 `ZerothOrderCredit`, §19 rows 1–3) and so did routing (`SurrogateCredit` + the
 hard top-k `RoutingGeometry`, row 4), and the split's position, the trunk's
-step, and the trunk's direction are priced (T6e/T6f); the next
-session is the **temporal axis** (§19 row 6), then the streaming lifts, with
-the trunk's geometry (12f) as track A's defect fix. The rows above are
+step, the trunk's direction, and its geometry are priced (T6e/T6f/T6g: the
+residual skip gains 15.8 pp at 1.06× bytes, width is priced); the next
+session is the **temporal axis's sequence loader**, then the deeper residual
+trunk (12g), then the streaming lifts. The rows above are
 measurements, not conclusions: each ⛔ row is a defect probe with the fix that
 widens the system (§0.6). F2 and D3 are defect fixes inside their tracks, not
 gates on the program.
@@ -372,6 +389,10 @@ unexpected cell in the last run. Rules:
 
 - a cell that beats its declared expectation by ≥2σ, or a rule that trains where
   the plan said it cannot, gets a ticket **in the same session**;
+- **landed surprise (2026-11-17):** the residual skip reads +15.8 pp at 1.06×
+  bytes while width reads −1.4 pp against it at 1.7× the cost, and the residual's
+  third seed sits 3.2σ below its screen — ticket **12g** (a deeper residual
+  stack; a third residual seed);
 - an unexplained chance-level cell is a defect probe (§14), never a table row;
 - the surprise and its follow-up are recorded in §14 under "surprise", so the
   next session starts from the new question, not from the old DAG.
@@ -502,6 +523,7 @@ retags every refusal as a defect probe.
 | T6d | no trunk knob reaches 0.408; sibling 0.405 | defect probe (mechanism localized) | the split's position and the head/trunk LR coupling; head capacity | the trunk rule at parity |
 | T6e | readout head 0.132 (−3.4 pp); trunk step 0.3/1/3 → 0.105/0.132/0.103 | defect probe (position and step priced) | the trunk's direction (its feedback matrix or its geometry) | the hybrid at parity at the readout split |
 | T6f | orthogonal 0.165 (−0.1 pp); learned ridge 0.144 (−2.1 pp, 1.17× walltime) | defect probe (direction priced at the box) | the trunk's geometry: no residual and one width; the single input-level projection cannot carry the deep error | a residual or wider trunk, and the temporal axis |
+| T6g | residual 0.324 (+15.8 pp at 1.06× bytes; confirmation 0.272); wide 0.204 (+3.9 pp at 1.72×); both 0.309 (+14.4 pp at 1.72×) | defect probe (geometry priced: the skip is a coordinate) | the stack's depth (the skip's gain compounds with depth); the residual arm's seed spread (3.2σ) | the hybrid at parity at 1.06× bytes, or A's claim re-posed where the head's exact gradient carries it |
 | D2 | memristive −0.31 pp at 2.09× walltime | defect probe | no programming-budget model; per-step host↔device conductance writes | substrate-native training with a priced budget |
 | B1 | STE gap 0.819 → 0.660 over depth | defect probe | no load-balance term; the B1 ladder is unrun | hard top-k training at variable k (`SurrogateCredit` + `RoutingGeometry` landed; §19 row 4) |
 | F1 | screen 0.669 / ladder 0.783 vs bar 0.807 | defect probe | the composition is measured on an untrainable deep box; the axis space lacks the temporal and routing primitives | a real multi-axis search |
@@ -1200,16 +1222,17 @@ is the only one that needs five paired seeds on a real task.
 | 12c ✅ | **A — T6d: the hybrid's update diagnostic** | `computronium/validation/hybrid_update.py` (new); 12 measured cells (14 planned), ~200 s; cell log + `--replay`; landed 2026-11-17 | **priced at the pilot box** (defect probe): no trunk knob reaches the floor (bias flag +0.5 pp, `feedback_scale` 0.163/0.100/0.100, head-only 0.149) while the same trunk rule as a whole stack reads 0.400/0.405/0.384 and does not collapse; the mechanism is the **split at the boundary**, and the hybrid's activation set is 1.06× the reference's at L=8; CORRECTION 24; artifacts `results/t93_a_stream/hybrid_update.{json,md}` |
 | 12d ✅ | **A — T6e: the split's position** (defect fix) | `validation/hybrid_update.py --split` at the pilot box with `split_layer` on the last Linear (7 trunk layers + a readout-only head), then `trunk_lr` (the decoupled trunk LR as one box); landed 2026-11-17 (~160 s, 9 cells) | **priced at the pilot box** (defect probe): the readout-only head 0.126/0.138 vs the registered 0.163/0.169 (−3.4 pp), the trunk's step 0.3/1/3 → 0.105/0.126/0.103, floor 0.408, reference 0.419/0.416, 1.06× memory; CORRECTION 26; artifacts `results/t93_a_stream/split_position.{json,md}` |
 | 12e | **A — T6f: the trunk's direction** (priced 2026-11-17) | `ontology/credit/_hybrid.py`: `feedback_kind` from `orthogonal_init`/`learned_feedback`, both norm-matched; `validation/hybrid_update.py --direction`; the lock prices the direction | **priced at the pilot box** (defect probe): orthogonal 0.160/0.170 (−0.1 pp) and learned 0.145/0.144 (−2.1 pp, 1.17× walltime) against floor 0.408, at 1.06× activation bytes; the fix queue is **the trunk's geometry** (a residual or a wider trunk) |
-| 12f | **A — the trunk's geometry** (defect fix) | a residual trunk (the skip the split keeps) or a wider trunk at the pilot box; the gate already prices direction, position, and step | the hybrid reaches the ckpt's floor with the geometry fix, or the geometry is refused and A's claim re-registers at a different box; no claim run before a mechanism reaches the floor |
+| 12f ✅ | **A — the trunk's geometry** (priced 2026-11-17, T6g) | `validation/hybrid_update.py --geometry`; `build_arm(residual=...)` and `measure_cell(residual=...)` in `memory_frontier.py`; 11 measured cells (~200 s of training) | **priced at the pilot box** (defect probe): residual 0.312/0.336 (+15.8 pp at 1.06× bytes, 1.00× weights; confirmation 0.272), wide 0.199/0.210 (+3.9 pp at 1.72×/3.33×), residual+wide 0.290/0.329 (+14.4 pp at 1.72×) against floor 0.408 → **width is priced, the skip is the gain**; artifacts `results/t93_a_stream/geometry.{json,md}`; the cell log adds `residual`/`width`/`batch` to the identity |
+| 12g | **A — the trunk's depth** (next edge) | `validation/hybrid_update.py --geometry` with a deeper residual stack (L=16, W=1024) and a third screen seed at the residual arm; the split's position, step, direction, and geometry are priced | the deeper residual stack reaches the floor, or the residual's seed spread is priced and A's claim re-registers at a box the head's exact gradient carries; no claim run before a mechanism reaches the floor |
 | 13 | **A — T6c re-open** (trigger only) | `validation/memory_frontier.py::depth_rung`; LayerNorm (c≈2) or the Innocenti init at L=16/32 | the pass already trains at L=32/B=4096 (0.364, 1.1 pp below the old floor), so this is a side track: only the stack's last pp of trainability, not the hybrid's 17 pp gap |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
-**Rows 5, 9b, 10, 11 and 12a–12e are defect probes (CORRECTION 25).** The
+**Rows 5, 9b, 10, 11 and 12a–12f are defect probes (CORRECTION 25).** The
 numbers stand as measurements; the verdict words do not. Each carries its named
 defect and the capability the fix unlocks (§0.6). Rows 0a–0c are the new order:
-primitives first; row 12f (the trunk's geometry) is the fix queue T6f's
-measured cell names, and the temporal axis is the next primitive.
+primitives first; row 12g (the trunk's depth) is the edge T6g's coordinate
+names, and the temporal axis's sequence loader is the next primitive.
 
 **What the next session must not re-derive:** the decomposition API
 (`EpochResource.{params,optimizer,activations,auxiliary,cpu_rss}_mb`,
@@ -1502,9 +1525,9 @@ is a side track.
 | 2026-11-17 | A | T6e: the split's position (a readout-only head) and the trunk's step (a decoupled trunk LR) | 9 measured cells in 8 calls (2 split + 3 step + reference/baseline) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, `split_layer` 14, `trunk_lr` 0.3/1/3, seeds 21/22, RTX 3080 10 GiB (516-589 MB) | **priced (defect probe)**: reference 0.419/0.416; baseline 0.163/0.169; readout-only head 0.126/0.138 (−3.4 pp); trunk step 0.3/1/3 → 0.105/0.132/0.103; 1.06× activation bytes → T6f measured the direction next (CORRECTION 26) | T6e |
 | 2026-11-17 | A | T6a re-registration at the pass-carrying box: the memory bar is met, the accuracy bar is not | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the ckpt's minus δ at the same box (floor 0.354); activation ratio vs 0.5×; c vs 4.1 (10%) | CIFAR-10 10k/10k, L=8→32, W=512, B=4096, stream-norm, 200 steps, seed 21/22, RTX 3080 10 GiB | **refused**: hybrid 0.184 / 210 MB vs ckpt 0.364 / 453 MB (**0.46×**, memory met), confirmation 0.201 vs 0.357; controls PASS (c=4.125; learning 0.409 vs 0.399); 30 priced cells; the hybrid's own update binds → T6d | T6a₂ ⛔ |
 | 2026-11-17 | A | T6f: the trunk's direction (orthogonal rotation, ridge-fitted B) at the pilot box | 9 measured cells in 5 calls (2 directions × 2 seeds + reference/baseline + 1 confirmation) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0; walltime per cell | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, norm-matched B, seeds 21/22 + 23, RTX 3080 10 GiB (515-589 MB) | **priced (defect probe)**: reference 0.419/0.416; draw 0.163/0.169; orthogonal 0.160/0.170 (−0.1 pp; sd 0.7 pp), learned 0.145/0.144 (−2.1 pp; sd 0.03 pp) at 1.17× walltime, confirmation 0.164; 1.06× activation bytes → **the fix queue is the trunk's geometry** (CORRECTION 27); the temporal axis is next | T6f |
-| 2026-11-17 | A | T6g geometry probe (12f's lead): residual and wide trunks at the pilot box | 12 cells (2 boxes × reference/registered/residual, seeds 21/22) | val acc vs the ckpt floor (ref − 1 pp); activation bytes | CIFAR-10 10k/10k, L=8, B=8192/W=1024 and W=2048/B=4096, 200 steps, LR 0.3, seeds 21/22, RTX 3080 | **priced (defect probe)**: residual 0.215 (+5.2 pp, sd 9.6 pp across init draws), wide 0.202 (+3.9 pp), wide+residual 0.247 (+4.5 pp) vs the registered 0.163 — all miss the floor; the init draw alone moves the cell more than δ, so the diagnostic must seed; the trunk's geometry is the fix queue | 12f |
+| 2026-11-17 | A | T6g geometry probe (12f's lead): residual, wide, and both together at the pilot box | 11 measured cells (2 reference + 2 baseline + 3 geometries × 2 seeds + 1 confirmation) | val acc on the full 10k test split (1σ ≈ 0.3 pp); activation bytes vs the reference's; weight count at 4 B/weight; floor = reference − 1 pp | CIFAR-10 10k/10k, L=8, B=8192, W=1024 and W=2048, 200 steps, LR 0.3, seeds 21/22 + 23, RTX 3080 10 GiB (516–1077 MB) | **priced (defect probe)**: residual 0.312/0.336 (+15.8 pp; sd 1.6 pp; confirmation 0.272) at 1.06× bytes and 1.00× weights; wide 0.199/0.210 (+3.9 pp) at 1.72×/3.33×; residual+wide 0.290/0.329 (+14.4 pp) at 1.72×; reference 0.418/0.416; registered 0.163/0.169 → **the skip is the mechanism's first real gain, width is priced**, the confirmation's spread is wider than the screen | 12f ✅ |
 | 2026-11-17 | — | primitive program: all ten §19 rows (4 credits, 6 updates) | 10 rows, 7 new locks, 44 targeted tests | capability: each primitive instantiates, trains a fixture, and carries its lock | one session | **landed** (capability program, CORRECTION 25): a plan-wide capability row, no verdict | §19 rows 5–8 ✅ |
-| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d/T6e/T6f priced the update, the position, the step, and the direction; the trunk's geometry (12f) is track A's defect fix; T6c's re-open is a side track | the trunk's geometry |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d/T6e/T6f/T6g priced the update, the position, the step, the direction, and the geometry; the trunk's depth (12g) is track A's next edge; T6c's re-open is a side track | the trunk's depth |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D2 refused the path at its walltime box (2.09×); D3's drift rung is a trigger | — | D3 |
 | — | F | composition vs the best single-axis default | 41 arms + 50 screen + 3 ladder + 1 confirmation (96 cells) | ≥δ at matched forward-equivalents; δ=1 pp | F1 refused (0.669 / 0.783 vs 0.797; bar 0.807; confirmation 0.814 > δ as seed spread) | F2's five seeds; no run | F2 |
@@ -1519,7 +1542,7 @@ swept to pass, a verdict that closes a mechanism.
 
 | Rank | Track | Capability at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **P0b** the hybrid's geometry | does the hybrid train with a residual or a wider trunk? | 1 session (12f) | T6c/T6d/T6e/T6f are defect probes (T6d localized the split; T6e priced the position and the step; T6f priced the direction: all refused); the geometry is the fix |
+| 1 | **P0b** the hybrid's depth | does the hybrid reach parity with a deeper residual stack? | 1 session (12g) | T6g priced the geometry: the residual skip gains +15.8 pp at 1.06× bytes and the confirmation reads 0.272; width is priced (+3.9 pp at 1.72×); the depth is the next edge |
 | 2 ✅ | **Temporal** | does the system have a sequence axis at all? | landed 2026-11-17 (§19 row 6) | e-prop, UORO and the exact RTRL reference landed; one shared unroll/readout, RTRL ≡ BPTT, and the axis' four locks pass. The sequence geometry existed (`RecurrentGeometry`); the loader is next |
 | 3 | **P1** routing | can the system train a hard top-k selection without a soft relaxation? | 1 session (the B1 ladder) | **landed** — `SurrogateCredit` + `RoutingGeometry` (§19 row 4); the B1 STE-gap screen is the next measurement |
 | 4 | **A/F/D** defect rows | the geometry, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
@@ -1527,8 +1550,9 @@ swept to pass, a verdict that closes a mechanism.
 **Portfolio position, 2026-11-17 (after the primitive program).** The plan's
 capability program landed: §19 rows 1–8 are ✅, ten primitives with identity
 cards, registry rows, primitive rows, dispatch, and seven class-level locks.
-What remains is measurement, not primitive work: the hybrid's geometry (12f)
-is track A's defect fix, and every probe row stands as a defect probe. The
+What remains is measurement, not primitive work: the hybrid's geometry is
+priced (T6g: the residual skip is a coordinate, width adds nothing), its depth
+(12g) is track A's next edge, and every probe row stands as a defect probe. The
 capability ledger is now append-only state — a new row starts from "is it
 wired?" (rung 0) again.
 
@@ -1549,6 +1573,7 @@ stand, their verdict words do not.
 | T6d | no trunk knob reaches 0.408; sibling 0.405 | the split's position and the head/trunk LR coupling | a readout-only head; a decoupled trunk LR | the trunk rule at parity | `... hybrid_update --replay` |
 | T6e | the readout head 0.132 (−3.4 pp); the trunk step 0.3/1/3 → 0.105/0.132/0.103 vs floor 0.408 | the trunk's direction: a first-order B and the trunk's geometry | `learned_feedback` (ridge-regressed B) or an orthogonal init at the readout split; a residual/wider trunk | the trunk rule at parity | `... hybrid_update --split --replay` |
 | T6f | orthogonal 0.165 (−0.1 pp); learned ridge 0.144 (−2.1 pp, 1.17× walltime) vs floor 0.408 | the trunk's geometry: one width, no residual on the projection's path | a residual trunk (the skip the split keeps) or a wider trunk | the hybrid at parity, or a new box | `... hybrid_update --direction --replay` |
+| T6g | residual 0.324 (+15.8 pp at 1.06× bytes); wide 0.204 (+3.9 pp at 1.72×); residual+wide 0.309 (+14.4 pp at 1.72×) vs floor 0.408; confirmation 0.272 | the split's composed path needs a skip, not width; the residual's seed spread is wider than its screen | a deeper residual stack (L=16); a third residual seed | the hybrid at parity, or A's claim re-posed where the head's exact gradient carries it | `... hybrid_update --geometry --replay` |
 | D2 | memristive −0.31 pp at 2.09× walltime | no programming-budget model; per-step conductance writes | a device-level or compiled quantisation of the pair | substrate-native training with a priced budget | `... matched_substrate --replay` |
 | B1 | STE gap 0.819 → 0.660 over depth | no load-balance term; the B1 ladder is unrun | z-loss at the best temperature/LR | hard top-k training at variable k | §19 row 4 — **the surrogate primitive landed 2026-11-17** (`SurrogateCredit`; locks in `test_surrogate_credit_lock.py`); the ladder is the next measurement |
 | F1 | screen 0.669 / ladder 0.783 vs bar 0.807 | the composition is measured on an untrainable deep box; the axis space is narrow | the depth fix + the routing and temporal axes | a real multi-axis search | §19 rows 4–6 |
@@ -1609,8 +1634,9 @@ per session.
   `RoutingGeometry`); the split's position, the trunk's step, and the trunk's
   direction were priced 2026-11-17 (T6e/T6f). The **temporal axis** landed
   2026-11-17 (§19 row 6), and the primitive program landed every §19 row
-  (5–8 included), so the next session is measurement only: the trunk's
-  geometry (12f) as track A's defect fix, then the SEC ladder per probe. The prior measurements are defect probes, not
+  (5–8 included), and T6g priced the trunk's geometry (the residual skip is a
+  coordinate), so the next session is the temporal axis's sequence loader, then
+  the trunk's depth (12g); then the SEC ladder per probe. The prior measurements are defect probes, not
   gates: T6c/T6d localized the split, T6e priced its position and the step,
   T6f priced the direction, B1 the missing surrogate (now landed), D2 the
   unpriced programming budget, F1 the untrainable deep box.
@@ -1646,9 +1672,11 @@ per session.
   so the defect fix was **T6e (the split's position)**, which landed and
   priced; the session order moved to **T6f (the trunk's direction)**, which
   priced the direction too (orthogonal −0.1 pp, learned −2.1 pp at 1.17×
-  walltime against floor 0.408, no movement at the box), so the **trunk's
-  geometry** (12f) is track A's fix queue and the **temporal axis** is the
-  next session. **Routing landed
+  walltime against floor 0.408, no movement at the box), and **T6g priced the
+  trunk's geometry** (the residual skip gains 15.8 pp at 1.06× bytes,
+  confirmation 0.272; width adds nothing at 1.72×), so **the trunk's depth**
+  (12g) is track A's next edge and the **temporal axis's loader** is the next
+  session. **Routing landed
   2026-11-17:**
   `SurrogateCredit` (STE) + `RoutingGeometry` (hard top-k), 7 locks, one
   capability card (0.6875, 1 epoch); the forward-tangent × recurrent-LSTM and
@@ -1656,8 +1684,10 @@ per session.
   split's position and the trunk's step** (the readout-only head loses 3.4 pp;
   the trunk's step 0.3/1/3 buys none), so the trunk's **direction** is the
   mechanism; T6f then priced the direction (orthogonal −0.1 pp, learned −2.1 pp
-  at 1.17× walltime) and refused it, so the **geometry** (12f) is the defect
-  fix and the **temporal axis** is the session order. Open:
+  at 1.17× walltime) and refused it; T6g then priced the geometry (the
+  residual skip gains 15.8 pp, width is priced), so the **trunk's depth**
+  (12g) is the defect fix and the **temporal axis's loader** is the session
+  order. Open:
   the 1-batch causal-transformer smoke cell is below the 0.1 ruler (pre-existing;
   §14 fix queue).
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
@@ -1666,7 +1696,7 @@ per session.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v30 start: the **temporal axis** (§19 row 6, a sequence geometry + loader), then the streaming lifts, with the trunk's geometry (12f) as track A's defect fix. The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3), routing (`SurrogateCredit` + `RoutingGeometry`, row 4), and the hybrid's split position, trunk step, and direction (§8.1 rows 12d–12e) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, T6e priced the position and the step, T6f the direction (all priced; none moves the cell, so the geometry is the fix queue), B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6e's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
+| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v31 start: the **temporal axis's sequence loader**, then the trunk's depth (12g: a deeper residual stack), then the streaming lifts. The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3), routing (`SurrogateCredit` + `RoutingGeometry`, row 4), and the hybrid's split position, trunk step, and direction (§8.1 rows 12d–12e) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, T6e priced the position and the step, T6f the direction (all priced; none moves the cell, so the geometry is the fix queue), B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6e's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables first, then any credit the new primitives add. The complexity-audit column is part of every row; reproduce the published protocol and record σ. |
@@ -1865,8 +1895,9 @@ per session.
   `results.json` + `appendix.md`); the Pareto aggregation reads its `arms` rows,
   so no second ladder exists. T6b has landed and T6a₂ priced the pass-carrying
   box; the hybrid's update (T6d) and the split's position (T6e) have landed and
-  priced, and T6f priced the direction too, so the figure's points are the
-  pilot box's until the trunk's geometry (12f) is measured.
+  priced, and T6f priced the direction too; T6g then priced the geometry
+  (residual 0.324, wide 0.204, both 0.309), so the figure's points are the
+  pilot box's until the trunk's depth (12g) is measured.
 **T1 (cont.) — estimator coordinate.**
 - `experiment/schema/axis.py:116` — add
   `estimator_kind: Literal["exact","surrogate","gradient_approx","objective_local","local_supervised","score_function","forward_mode","zeroth_order","temporal_local","hybrid"]`
@@ -2598,12 +2629,45 @@ dispatcher entry and exports.
   0.17 rejects, so the repo's lint gate cannot run at all. Lint was checked
   with `ruff check --isolated`; the config mapping is a hygiene-pass ticket.
 
+### Landed 2026-11-17 (T6g — what the code actually did)
+
+`validation/hybrid_update.py --geometry` prices the trunk's geometry, and
+`memory_frontier.build_arm`/`measure_cell` take `residual` through to
+`GeometryConfig.feedforward(residual=...)`.
+
+- **The cell identity grew**: `DiagnosticCell.{width, batch, residual}` and
+  `CellKey` carry them, so a cell log separates a registered cell, a residual
+  cell, and a wide cell at the same seed. Old log lines parse on the defaults
+  (`BOX.width`, `BOX.batch`, `False`), so T6d/T6e/T6f replay unchanged.
+- **The ladder** (`GEOMETRY_LADDER`): `residual` at `BOX`, `wide` at
+  `WIDE_POINT` (W=2048, the same L/B/steps), and `residual+wide` at the same
+  wide point; two screen seeds, then the best arm's third seed. The gate reads
+  the reference's floor (reference − 1 pp), promotes a geometry that reaches
+  it, records a real gain as a coordinate, and refuses otherwise.
+- **The measurement** (11 cells, ~200 s of training, RTX 3080): reference
+  0.418; registered 0.166; residual 0.324 (+15.8 pp, 1.06× activation bytes,
+  1.00× weights; confirmation 0.272); wide 0.204 (+3.9 pp, 1.72×/3.33×);
+  residual+wide 0.309 (+14.4 pp, 1.72×/3.33×). **Verdict: coordinate** — the
+  skip is the mechanism's first real gain; width is priced.
+- **Artifacts**: `results/t93_a_stream/geometry.{json,md}`; replay
+  `uv run python -m computronium.validation.hybrid_update --geometry --replay`.
+- **Locks** (`tests/unit/validation/test_hybrid_update.py`, +9 tests, 42):
+  the ladder's three rows and their points; promote/coordinate/refuse/invalid
+  gates; an 11-cell assembly whose every key is unique; the cell log
+  separates residual, registered, and wide cells at one seed; the JSON and
+  markdown carry the verdict and the rulers.
+- **Known limit**: the residual's confirmation seed reads 0.272 against a
+  0.324 screen (sd 0.016) — the seed spread is wider than the ladder's, so
+  12g prices it before any claim.
+
 ### Session wrap-up 2026-11-17 — state to resume from
 
 **Landed:** the primitive program (ten primitives, §19 rows 5–8), the surface
 inventory rows (axis primitives in `experiment/schema/seed_registries.py`),
-generated invariant tests, `docs/IDENTITY_CARDS.md`, and the repo-wide lint
-count back to 574 ≤ the 580 ratchet (60+ new findings fixed; ruff 0.17.5).
+generated invariant tests, `docs/IDENTITY_CARDS.md`, the repo-wide lint
+count back to 574 ≤ the 580 ratchet (60+ new findings fixed; ruff 0.17.5),
+and **T6g** (the trunk's geometry: `--geometry`, 9 new tests, 11 measured
+cells; §8.1 row 12f ✅).
 
 **Known pre-existing failures (30, not this session's):** 22
 `test_gallery_provenance_lock` env-hash rows, `readme_build_lock`,
@@ -2624,9 +2688,9 @@ uses pylint names (`line-too-long`, `magic-value-comparison`,
 
 | Order | Track | First command / file | Done when |
 |---|---|---|---|
-| 1 | A — the trunk's geometry (12f) | `validation/hybrid_update.py --geometry`; the residual/wide probe (defect probe: +5.2/+3.9/+4.5 pp, floor missed; the init draw moves the cell 9.6 pp, so the diagnostic must seed via `measure_cell`) | the geometry is fixed or refused at a declared box; the diagnostic's cell log adds `residual`/`width`/`batch` to the cell identity |
-| 2 | Temporal — the sequence loader | a loader that produces `x (time, batch, input)` / `y (time, batch)` for `RecurrentGeometry` (the credits are ready; e-prop/UORO/RTRL lock at cos 0.979) | one recurrent cell trains above its chance floor (rung 1, 1 seed), then the 3-point LR ladder (rung 2) |
-| 3 | Hygiene | the ruff ignore mapping; the 30 pre-existing locks; the `_hybrid.py` branch contrast (T6g's +2.5 pp paired, n=2 on one draw) at the declared seeds | the lint gate parses, the pre-existing set shrinks, or each row records its named fix |
+| 1 | Temporal — the sequence geometry + loader (§19, build spec below) | `ontology/geometry.py::RecurrentGeometry.forward`'s `sequence` path; a `SequenceBatches` loader (`x (time, batch, input)` / `y (time, batch)`); the trainer's per-step loss | one recurrent cell with `eligibility_prop` trains above chance (rung 1, 1 seed) at a declared box, then the 3-point LR ladder (rung 2) |
+| 2 | A — the trunk's depth (12g) | `validation/hybrid_update.py --geometry`, extended with L=16 at W=1024 (a deeper residual stack) and a third screen seed at the residual arm | the deeper residual stack reaches the floor, or the residual's seed spread is priced and A's claim re-registers at a box the head's exact gradient carries |
+| 3 | Hygiene | the ruff ignore mapping; the 30 pre-existing locks; the `_hybrid.py` branch contrast (the residual trunk's +15.8 pp paired, n=2 on one draw; its confirmation 0.272) at the declared seeds | the lint gate parses, the pre-existing set shrinks, or each row records its named fix |
 
 ## 19. Primitive work program (capability-first, ordered)
 **Framing.** The primitives are the work. Each row adds something the system
@@ -2638,7 +2702,37 @@ is not progress"* is retired: it was the rule that made capability work depend
 on negative measurements.
 
 **Inventory (2026-11-17, after the primitive program). Every §19 row landed;
-nothing is absent.** `LocalSupervisionCredit`; `EligibilityPropCredit`,
+nothing is absent.** The temporal credits are reachable only from their fixtures
+until the sequence geometry + loader lands (the build spec below).
+
+**Temporal axis — the remaining build (2026-11-17).** The three credits are
+landed and locked on the sequence contract, but no pipeline runs that contract
+end-to-end: `RecurrentGeometry.forward` flattens a 3-D input to
+`(batch·time, input)`, and every task loader yields 2-D batches, so a temporal
+credit is reachable only from its own fixture. The capability that closes it,
+in three parts:
+
+1. **The geometry's time axis** — `GeometryConfig.sequence` (a run setting,
+   default off, so landed cells stay bit-identical) makes
+   `RecurrentGeometry.forward` unroll `x (time, batch, input)` → `logits
+   (time, batch, classes)` with the same
+   `tanh(W_in x_t + W_rec h_{t-1} + b)` chain `_TemporalCredit._unroll` reads;
+   the parity lock is the two forwards' hidden states (`atol=0`).
+2. **The loader** — `SequenceBatches` yields `x (time, batch, input)` /
+   `y (time, batch)`; a synthetic sequence task (a delayed cue over a
+   permuted sMNIST stream) is the rung-1 fixture, so the axis has a task
+   family with a chance floor.
+3. **The trainer and evaluator** — per-step CE over `(time·batch)`; accuracy
+   and perplexity flatten the time axis; `SystemConfig.validate` refuses a 2-D
+   state for a temporal credit by name (the credit fails loud, but the config
+   gate should refuse earlier).
+
+Gates: rung 0 (dispatch, shapes, non-zero update, label channel), rung 1 (one
+seed above chance), rung 2 (the 3-point LR ladder at 1e-3/1e-2/1e-1 plus one
+confirmation seed). Cost: one session; the credits' fixtures price a cell at
+~1 s on CPU. Locks: the unroll parity (`atol=0`), a 2-D state refusal by
+`SystemConfig.validate`, and a capability card that trains the synthetic task
+above chance in one epoch. `LocalSupervisionCredit`; `EligibilityPropCredit`,
 `UnbiasedOnlineRTRLCredit`, `RTRLReference`; `SynapticIntelligenceUpdate`
 (the SI lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate`;
 `FactoredSecondMomentUpdate`, `QuantizedStateUpdate`, `ScheduleFreeUpdate`.
@@ -2656,7 +2750,7 @@ EP variants plus PC/pcalm; `ForwardTangentCredit`, `ScoreFunctionCredit`,
 | 3 ✅ | `ZerothOrderCredit` (C) | gradient-free update (SPSA, two forwards) | non-differentiable device paths | landed 2026-11-17 | none |
 | 4 ✅ | `SurrogateCredit` + a hard top-k geometry (C, G) | a hard selection trains without a soft relaxation | routing/MoE at variable k | landed 2026-11-17 | #1 or #2 for the baseline |
 | 5 ✅ | `LocalSupervisionCredit` (C) | deep local credit without a boundary bottleneck | layerwise deep training (greedy, DGL, InfoPro) | landed 2026-11-17 | `ontology/credit/_local.py`, row, 3 locks; the aux gradient descends its own loss, and the readout's weights never enter a hidden layer's signal |
-| 6 ✅ | `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference` (C, G) | **temporal credit**: a sequence axis the system has | sequence tasks | landed 2026-11-17 | `ontology/credit/_temporal.py` (shared unroll/readout), 3 rows, 4 locks: RTRL ≡ BPTT (`atol=1e-6`), e-prop exact at decay 0, UORO cos 0.979 at 128 draws vs the exact Jacobian |
+| 6 ✅ | `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference` (C, G) | **temporal credit**: a sequence axis the system has | sequence tasks | landed 2026-11-17 | `ontology/credit/_temporal.py` (shared unroll/readout), 3 rows, 4 locks: RTRL ≡ BPTT (`atol=1e-6`), e-prop exact at decay 0, UORO cos 0.979 at 128 draws vs the exact Jacobian; **the geometry + loader is the remaining build (above)** |
 | 7 ✅ | `SynapticIntelligenceUpdate` (lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate` (U, P) | long-stream consolidation without replay | ≥20-task streams | landed 2026-11-17 | the SI lift calls `core.continual.losses.SynapticIntelligence` (source of truth, now with `penalty_gradients`); the cascade and VON are update rules; 4 locks |
 | 8 ✅ | `FactoredSecondMomentUpdate` (Adafactor), `QuantizedStateUpdate` (8-bit Adam), `ScheduleFreeUpdate` (U) | optimizer-memory and schedule capability | any task at a lower optimizer footprint | landed 2026-11-17 | factored state < half the square, int8 blocks < half the fp32 state (measured 136 B vs 384 B per matrix), schedule-free averages to the sequence; 4 locks |
 
@@ -2825,8 +2919,9 @@ binding point) now has two registered boxes and two rung-2 refusals: L=4→8
 (0.167/103 MB vs 0.385/85 MB, 1.22×) and L=8→32/B=4096 (0.184/210 MB vs
 0.364/453 MB, **0.46×** — the memory bar is met and the baseline trains, so
 the accuracy gap is the split, not the trunk's rule or its scale). The next
-defect fix is the **trunk's geometry** (12f), not a claim run; the session
-order is the temporal axis (§19 row 6). T6/T6a is no longer the critical path to a
+defect fix is the **trunk's depth** (12g; T6g priced the geometry: the
+residual skip is a coordinate at 1.06× bytes), not a claim run; the session
+order is the temporal axis's sequence loader. T6/T6a is no longer the critical path to a
 positive result: the
 hybrid has a landed wrapper, measured parity, a store-all reference fixture,
 and a depth-flat peak, but its accuracy is 17 pp below the baseline at the
