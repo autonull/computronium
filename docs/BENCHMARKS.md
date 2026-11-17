@@ -833,15 +833,42 @@ registered two-layer head (0.163/0.169). **The trunk's step buys nothing**: the
 0.3/1/3 ladder reads 0.105/0.126/0.103 at its best. The hybrid's activation
 set is 1.06× the reference's, so the memory half is unchanged by either knob.
 
-**Verdict: refuse.** Neither the split's position nor the trunk's step reaches
-the floor, and the position moves the wrong way, so the mechanism is the trunk's
-**direction** — its first-order feedback matrix B or its geometry (**CORRECTION
-26**). The next rung is `learned_feedback` (a ridge-regressed B) or an
-orthogonal init at the readout split, or a residual/wider trunk.
+**Gate outcome: refuse (a box statement).** Neither the split's position nor
+the trunk's step reaches the floor, and the position moves the wrong way, so the
+fix queue is the trunk's **direction** — its first-order feedback matrix B or
+its geometry (**CORRECTION 26**). The next rung is `learned_feedback` (a
+ridge-regressed B) or an orthogonal init at the readout split, or a
+residual/wider trunk — T6f below.
 
 Artifacts: `results/t93_a_stream/split_position.{json,md}` plus the shared cell
 log `hybrid_update.cells.jsonl`; replay
 `uv run python -m computronium.validation.hybrid_update --split --replay`.
+
+**T6f — the trunk's direction (2026-11-17).** Both named fixes read at the
+registered gamma and split, norm-matched to the draw so the ladder prices
+direction, not scale.
+
+| Arm | direction | val_acc | sd | gain | activations MB | peak MB | s |
+|---|---|---|---|---|---|---|---|
+| `backprop+ckpt` | — | **0.419 / 0.416** | — | — | 485 | 557 | 11.3 |
+| `hybrid` (registered) | draw | 0.163 / 0.169 | — | — | 516 | 589 | 10.2 / 10.3 |
+| `hybrid` | orthogonal | **0.160 / 0.170** | 0.7 pp | −0.1 pp | 515 | 588 | 10.5 / 10.7 |
+| `hybrid` | learned (ridge) | **0.145 / 0.144** | 0.03 pp | −2.1 pp | 516 | 589 | 11.9 |
+| `hybrid` | orthogonal (seed 23) | 0.164 | — | — | 515 | 588 | 10.4 |
+
+The reference trains, so the floor is **0.408**. **Neither direction reaches
+it**: the orthogonal rotation is a no-op (−0.1 pp, inside the 1σ ruler) and the
+ridge-fitted B is **2.1 pp worse** than the draw at **1.17× walltime** (the
+1024² ridge solve). The activation set stays 1.06× the reference's.
+
+**Gate outcome: refuse (a box statement).** The projection's direction does not
+move the cell at this box, so the fix queue is the trunk's **geometry** — one
+width and no residual on the projection's path (**CORRECTION 27**). The next
+variable is a residual or a wider trunk (12f); the next session is the temporal
+axis. The measurement is a defect probe; the projection stays open.
+
+Artifacts: `results/t93_a_stream/direction.{json,md}`; replay
+`uv run python -m computronium.validation.hybrid_update --direction --replay`.
 
 ## 3. Open locks
 
@@ -865,6 +892,8 @@ log `hybrid_update.cells.jsonl`; replay
 | QDQ control quantises (256 levels, float forward, STE) and is not a cast | `tests/unit/validation/test_matched_substrate.py` | 5 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Readout-only split ≡ store-all hybrid; `trunk_lr` scales the trunk only | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
+| Trunk direction: orthogonal keeps the draw's norm; ridge step moves B at that norm; state round-trips | `tests/property/test_hybrid_parity.py` | 16 s |
+| T6f gate: both directions promote at the floor, a real gain is a coordinate, no movement queues the geometry; no report prints a verdict | `tests/unit/validation/test_hybrid_update.py` | 17 s |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | T6a box: the ratio is depth-declared (1.22 / 0.75 / 0.53 at L=8/16/32) and the claim's two bars never meet | `scripts/probes/t93_t6a_box_triage.py` | 90 s (CUDA, ~600 MB) |

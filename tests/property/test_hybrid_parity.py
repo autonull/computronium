@@ -466,3 +466,88 @@ def test_retaining_the_trunk_stream_bends_the_peak() -> None:
     lockstep = _peak_mb(geometry, x, y, store_all=False)
     retained = _peak_mb(geometry, x, y, store_all=True)
     assert retained > 2 * lockstep, (retained, lockstep)
+
+
+def _direction_credit(
+    *,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
+    feedback_lr: float = 1.0,
+    seed: int = 21,
+) -> HybridCredit:
+    torch.manual_seed(seed)
+    return HybridCredit(
+        CreditAssignmentConfig.hybrid(
+            gamma=0.05,
+            orthogonal_init=orthogonal_init,
+            learned_feedback=learned_feedback,
+            feedback_lr=feedback_lr,
+        )
+    )
+
+
+def test_the_orthogonal_direction_keeps_the_registered_draws_norm() -> None:
+    """The rotation is the knob: it changes direction, never the draw's scale."""
+    delta = torch.randn(_BATCH, _HIDDEN)
+    x = torch.randn(_BATCH, _IN)
+    draw = _direction_credit()._feedback_matrix(delta, x)
+    rotated = _direction_credit(orthogonal_init=True)._feedback_matrix(delta, x)
+
+    assert rotated.shape == draw.shape
+    torch.testing.assert_close(rotated.norm(), draw.norm(), rtol=1e-5, atol=0)
+    singular = torch.linalg.svdvals(rotated)[: min(rotated.shape)]
+    assert singular.std() < 1e-4 * singular.mean(), singular
+    assert not torch.allclose(rotated, draw)
+
+
+def test_the_learned_direction_moves_at_the_draws_norm() -> None:
+    """One ridge step changes B, keeps its norm, and advances its counter."""
+    torch.manual_seed(31)
+    geometry = _geometry()
+    x = torch.randn(_BATCH, _IN)
+    y = torch.randint(0, _OUT, (_BATCH,))
+    _trunk, _head, split = _parts(geometry)
+    credit = _direction_credit(learned_feedback=True)
+    draw = credit._feedback_matrix(torch.randn(_BATCH, _HIDDEN), x).clone()
+
+    credit.compute_pseudo_gradient({Phase.FREE: SystemState(x=x, y=y)}, None, geometry)
+
+    learned = credit._trunk_direction(torch.randn(_BATCH, _HIDDEN), x)
+    assert credit.feedback_kind == "learned"
+    assert credit._direction_step == 2
+    torch.testing.assert_close(learned.norm(), draw.norm(), rtol=1e-5, atol=0)
+    assert not torch.allclose(learned, draw)
+    assert split  # the fixture has a real trunk
+
+
+def test_the_learned_direction_state_round_trips() -> None:
+    """A snapshot restores the direction: the next step is bit-identical."""
+    torch.manual_seed(41)
+    geometry = _geometry()
+    x = torch.randn(_BATCH, _IN)
+    y = torch.randint(0, _OUT, (_BATCH,))
+    credit = _direction_credit(learned_feedback=True)
+    credit.compute_pseudo_gradient({Phase.FREE: SystemState(x=x, y=y)}, None, geometry)
+    snap = credit.get_state()
+    assert "learned_feedback" not in snap
+    assert snap["step"]["counter"].item() == 1
+    replay = _direction_credit(learned_feedback=True)
+    replay.load_state(snap)
+    assert replay._direction_step == credit._direction_step
+    delta = torch.randn(_BATCH, _HIDDEN)
+    torch.testing.assert_close(
+        replay._trunk_direction(delta, x),
+        credit._trunk_direction(delta, x),
+        rtol=0,
+        atol=0,
+    )
+
+
+def test_the_registered_direction_declares_no_learned_state() -> None:
+    """The draw and the rotation carry only the counter, so replay is exact."""
+    credit = _direction_credit()
+    assert credit.feedback_kind == "random"
+    assert set(credit.get_state()) == {"step"}
+    rotated = _direction_credit(orthogonal_init=True)
+    assert rotated.feedback_kind == "orthogonal"
+    assert set(rotated.get_state()) == {"step"}

@@ -34,7 +34,7 @@ acceptance; parity is.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -105,6 +105,15 @@ class HybridCredit:
     hidden layer), clamped so the trunk keeps at least one Linear.
     ``trunk_lr`` multiplies the trunk's pseudo-gradients only: the update
     rule shares one step size, so this is a decoupled trunk learning rate.
+
+    ``feedback_kind`` is the trunk's **direction** (TODO93 T6f), read from
+    the two knobs the fixed projection already declares: ``orthogonal``
+    (``orthogonal_init``) draws the registered Gaussian and orthonormalizes
+    it, and ``learned`` (``learned_feedback``) regresses B from the batch's
+    boundary error to its input activity, EMA-blended at ``feedback_lr``.
+    Both keep the registered draw's Frobenius norm, so the ladder compares
+    directions at one scale -- a norm change would be a ``feedback_scale``
+    point, and the gate already priced that knob (T6d).
     """
 
     phases: tuple[Phase, ...] = (Phase.FREE,)
@@ -134,12 +143,15 @@ class HybridCredit:
             "head: exact autograd ∂L/∂W_head; trunk: "
             "(mod_postᵀ mod_pre − std_postᵀ std_pre)/B per layer"
         ),
-        symmetry_requirements=("fixed random trunk B (boundary × input)",),
+        symmetry_requirements=(
+            "trunk B (boundary × input): fixed random, orthonormalized, or ridge-fitted",
+        ),
         approximation_parameters=(
             "feedback_scale γ",
             "split_layer",
             "trunk_lr",
             "feedback_matrix",
+            "feedback_kind",
         ),
         validated_limits=(
             "lockstep trunk ≡ store-all hybrid at atol=0 on a seeded fixture",
@@ -168,6 +180,16 @@ class HybridCredit:
         self._substrate: Substrate | None = None
         self._trunk_feedback: Tensor | None = None
         self._bias_cache: dict[str, Tensor] | None = None
+        self._direction_step = 0
+
+    @property
+    def feedback_kind(self) -> Literal["random", "orthogonal", "learned"]:
+        """The trunk's direction, from the knobs the projection declares."""
+        if self.config.learned_feedback:
+            return "learned"
+        if self.config.orthogonal_init:
+            return "orthogonal"
+        return "random"
 
     def set_substrate(self, substrate: Substrate) -> None:
         """Register the system's substrate (wired by ``compose_system``)."""
@@ -232,7 +254,12 @@ class HybridCredit:
             return stack.forward(x, substrate)
 
     def _feedback_matrix(self, delta: Tensor, x: Tensor) -> Tensor:
-        """The fixed random trunk B (boundary × input), drawn lazily once."""
+        """The trunk's feedback B (boundary × input), drawn lazily once.
+
+        The registered draw is Gaussian; ``orthogonal_init`` orthonormalizes
+        it and ``learned_feedback`` fits it per step, both at the same
+        Frobenius norm (the direction is the knob, not the scale).
+        """
         shape = (delta.shape[1], x.shape[1])
         configured = self.config.feedback_matrix
         if configured is not None:
@@ -244,8 +271,57 @@ class HybridCredit:
                 )
             return configured
         if self._trunk_feedback is None or tuple(self._trunk_feedback.shape) != shape:
-            self._trunk_feedback = torch.randn(*shape, device=x.device, dtype=x.dtype)
+            self._trunk_feedback = self._draw_feedback(shape, x)
         return self._trunk_feedback
+
+    def _draw_feedback(self, shape: tuple[int, int], x: Tensor) -> Tensor:
+        """The registered draw, or its orthogonal rotation at the same norm."""
+        draw = torch.randn(*shape, device=x.device, dtype=x.dtype)
+        if not self.config.orthogonal_init:
+            return draw
+        rotated = torch.empty_like(draw)
+        torch.nn.init.orthogonal_(rotated)
+        return rotated * (draw.norm() / rotated.norm().clamp_min(1e-12))
+
+    def _trunk_direction(self, delta: Tensor, x: Tensor) -> Tensor:
+        """The trunk's effective B: the draw, or its ridge fit on (x, δ)."""
+        feedback = self._feedback_matrix(delta, x)
+        if not self.config.learned_feedback:
+            return feedback
+        return self._learn_feedback(feedback, delta, x)
+
+    def _learn_feedback(self, feedback: Tensor, delta: Tensor, x: Tensor) -> Tensor:
+        """Ridge-fit B: map the boundary error back into the input activity.
+
+        Objective (the PEPITA learned-broadcast recipe, ported to the
+        hybrid's single input-level projection): ``B δ ≈ x`` with the
+        closed-form ridge solution ``B = xᵀδ (δᵀδ + λI)⁻¹``. It reads only
+        ``x`` and ``δ`` -- never a forward weight, so it is autograd-free
+        and the transport lock holds. The blend re-normalizes to the
+        registered draw's Frobenius norm, so the knob is the direction.
+        """
+        self._direction_step += 1
+        if (self._direction_step - 1) % max(1, self.config.feedback_update_every):
+            return feedback
+        error = delta.detach().float()
+        batch = x.detach().float()
+        if not (torch.isfinite(error).all() and torch.isfinite(batch).all()):
+            return feedback  # diverged head: skip, don't poison B
+        gram = error.T @ error
+        lam = 1e-3 * gram.diagonal().mean().clamp_min(1e-12)
+        solution = torch.linalg.solve(
+            gram + lam * torch.eye(gram.shape[0], device=gram.device),
+            error.T @ batch,
+        ).to(feedback.dtype)
+        if not torch.isfinite(solution).all():
+            return feedback
+        lr = self.config.feedback_lr
+        blended = ((1.0 - lr) * feedback.float() + lr * solution.float()).to(
+            feedback.dtype
+        )
+        blended *= feedback.norm() / blended.norm().clamp_min(1e-12)
+        self._trunk_feedback = blended
+        return blended
 
     def _head_loss(self, y: Tensor, logits: Tensor) -> Tensor:
         """The head's committed loss: CE for a class index, MSE otherwise."""
@@ -367,7 +443,7 @@ class HybridCredit:
         op = self._resolved_substrate().get_forward_operator()
         with torch.no_grad():
             modulated = x + self.config.feedback_scale * (
-                delta @ self._feedback_matrix(delta, x)
+                delta @ self._trunk_direction(delta, x)
             )
         return self._trunk_contrasts(geometry, trunk_layers, x, modulated, op)
 
@@ -423,6 +499,41 @@ class HybridCredit:
                 "pass; the cache holds the same pre-update weights."
             )
         return self._bias_cache
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        """The trunk's learned direction and its step counter.
+
+        A registered or orthogonal direction has no learned state, so only
+        the counter travels; a replay that loads either is bit-identical.
+        """
+        state: dict[str, dict[str, Tensor]] = {
+            "step": {"counter": torch.tensor(self._direction_step)}
+        }
+        if self.config.learned_feedback and self._trunk_feedback is not None:
+            state["feedback"] = {"trunk": self._trunk_feedback.detach().clone()}
+        return state
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        """Restore the learned direction; a shape mismatch fails loud."""
+        counter = state.get("step", {}).get("counter")
+        if not isinstance(counter, Tensor):
+            raise TypeError(
+                "HybridCredit: credit state is missing the direction's step counter"
+            )
+        self._direction_step = int(counter.item())
+        stored = state.get("feedback", {}).get("trunk")
+        if stored is None:
+            return
+        if (
+            self._trunk_feedback is not None
+            and self._trunk_feedback.shape != stored.shape
+        ):
+            raise ValueError(
+                "HybridCredit: direction state shape "
+                f"{tuple(stored.shape)} does not match (boundary, input) "
+                f"{tuple(self._trunk_feedback.shape)}"
+            )
+        self._trunk_feedback = stored.detach().clone()
 
 
 def _stack_index(name: str) -> int:

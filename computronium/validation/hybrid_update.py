@@ -41,6 +41,16 @@ Run it with::
     uv run python -m computronium.validation.hybrid_update --replay
     uv run python -m computronium.validation.hybrid_update --split
     uv run python -m computronium.validation.hybrid_update --split --replay
+    uv run python -m computronium.validation.hybrid_update --direction
+    uv run python -m computronium.validation.hybrid_update --direction --replay
+
+T6e refused the position and the step, so T6f (``--direction``) prices the
+trunk's **direction**: ``orthogonal_init`` (an orthonormalized draw) and
+``learned_feedback`` (a ridge fit of B to the batch's boundary error), both
+at the registered draw's Frobenius norm so the ladder compares direction at
+one scale. A direction that reaches the floor is a promote; a real gain is a
+coordinate; no movement refuses the direction and names the trunk's
+geometry (a residual or a wider trunk) as the next variable.
 """
 
 from __future__ import annotations
@@ -74,8 +84,10 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "BOX",
     "CHANCE",
+    "CONFIRMATION_SEED",
     "DATE",
     "DIAGNOSTIC_SEEDS",
+    "DIRECTION_LADDER",
     "GAMMA_LADDER",
     "HEAD_ONLY_GAMMA",
     "LR",
@@ -87,18 +99,24 @@ __all__ = [
     "TRUNK_LR_LADDER",
     "CellKey",
     "DiagnosticCell",
+    "DirectionReport",
+    "DirectionRow",
     "HybridUpdateReport",
     "MechanismRow",
     "SplitPositionReport",
     "SplitRow",
     "UpdateVerdict",
+    "direction_gate",
     "read_cells",
     "replay_diagnostic",
+    "replay_direction_diagnostic",
     "replay_split_diagnostic",
     "run_diagnostic",
+    "run_direction_diagnostic",
     "run_split_diagnostic",
     "split_gate",
     "update_gate",
+    "write_direction_report",
     "write_report",
     "write_split_report",
 ]
@@ -129,10 +147,20 @@ SIBLING_ARM = "local"
 CHANCE = 1 / BOX.classes
 #: Two screen seeds, both disjoint from :data:`CLAIM_SEEDS`.
 DIAGNOSTIC_SEEDS = LADDER_SEEDS[:2]
+#: The confirmation seed (T6f): disjoint from the direction ladder's screen
+#: seeds, so the promoted direction's second reading is not its own screen.
+CONFIRMATION_SEED = LADDER_SEEDS[2]
 DATE = "2026-11-17"
 DEFAULT_OUT = Path("results/t93_a_stream")
+#: The trunk's direction ladder (T6f): the two named fixes as
+#: ``(label, orthogonal_init, learned_feedback)``. The registered draw is
+#: the baseline cell, so the ladder prices direction at one scale.
+DIRECTION_LADDER: tuple[tuple[str, bool, bool], ...] = (
+    ("orthogonal", True, False),
+    ("learned", False, True),
+)
 
-type CellKey = tuple[str, float, bool, int, int, float]
+type CellKey = tuple[str, float, bool, int, int, float, bool, bool]
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +170,8 @@ class DiagnosticCell:
     The arm, gamma, bias flag, split position, and trunk step are the
     cell's identity: a cell log keyed on them replays a report without
     retraining anything. ``split_layer`` and ``trunk_lr`` default to the
-    registered arm, so a T6d log line still names its cell.
+    registered arm, so a T6d log line still names its cell; the direction
+    flags default to the registered draw, so a T6e log line does too.
     """
 
     arm: str
@@ -155,6 +184,8 @@ class DiagnosticCell:
     peak_mb: float | None
     split_layer: int = REGISTERED_SPLIT
     trunk_lr: float = 1.0
+    orthogonal_init: bool = False
+    learned_feedback: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -618,6 +649,8 @@ def _key(cell: DiagnosticCell) -> CellKey:
         cell.seed,
         cell.split_layer,
         cell.trunk_lr,
+        cell.orthogonal_init,
+        cell.learned_feedback,
     )
 
 
@@ -640,7 +673,7 @@ class _CellLog:
         self.path = path
         self.cells = read_cells(path) if path is not None else {}
 
-    def measure(
+    def measure(  # ruff: ignore[too-many-arguments]
         self,
         arm: str,
         *,
@@ -652,8 +685,19 @@ class _CellLog:
         data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
         split_layer: int = REGISTERED_SPLIT,
         trunk_lr: float = 1.0,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
     ) -> DiagnosticCell:
-        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr)
+        key = (
+            arm,
+            gamma,
+            train_biases,
+            seed,
+            split_layer,
+            trunk_lr,
+            orthogonal_init,
+            learned_feedback,
+        )
         if key not in self.cells:
             measured = measure_cell(
                 arm,
@@ -669,6 +713,8 @@ class _CellLog:
                 train_biases=train_biases,
                 split_layer=split_layer,
                 trunk_lr=trunk_lr,
+                orthogonal_init=orthogonal_init,
+                learned_feedback=learned_feedback,
             )
             cell = DiagnosticCell(
                 arm=arm,
@@ -681,6 +727,8 @@ class _CellLog:
                 peak_mb=measured.peak_mb,
                 split_layer=split_layer,
                 trunk_lr=trunk_lr,
+                orthogonal_init=orthogonal_init,
+                learned_feedback=learned_feedback,
             )
             self.cells[key] = cell
             if self.path is not None:
@@ -752,7 +800,7 @@ def replay_diagnostic(*, log_path: Path, point: PilotPoint = BOX) -> HybridUpdat
         train_biases: bool = False,
         seed: int,
     ) -> DiagnosticCell:
-        key = (arm, gamma, train_biases, seed, REGISTERED_SPLIT, 1.0)
+        key = (arm, gamma, train_biases, seed, REGISTERED_SPLIT, 1.0, False, False)
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
         return cells[key]
@@ -816,7 +864,8 @@ def _markdown(report: HybridUpdateReport) -> str:
         )
     lines.extend([
         "",
-        f"**Verdict: {report.verdict}** -- {report.reason}",
+        f"**Gate outcome: {report.verdict}** -- a box statement at the pilot "
+        "box; the measurement stands and the mechanism stays open.",
         "",
         f"**Trigger.** {report.trigger}",
         "",
@@ -1278,7 +1327,7 @@ def replay_split_diagnostic(
         trunk_lr: float = 1.0,
         seed: int,
     ) -> DiagnosticCell:
-        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr)
+        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr, False, False)
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
         return cells[key]
@@ -1340,7 +1389,8 @@ def _split_markdown(report: SplitPositionReport) -> str:
         )
     lines.extend([
         "",
-        f"**Verdict: {report.verdict}** -- {report.reason}",
+        f"**Gate outcome: {report.verdict}** -- a box statement at the pilot "
+        "box; the measurement stands and the mechanism stays open.",
         "",
         f"**Trigger.** {report.trigger}",
         "",
@@ -1368,6 +1418,472 @@ def write_split_report(report: SplitPositionReport, output_dir: str | Path) -> P
     return path
 
 
+@dataclass(frozen=True, slots=True)
+class DirectionRow:
+    """One direction's mean over its seeds, against the reference's floor.
+
+    ``mechanism`` is the ladder's label (``orthogonal`` or ``learned``);
+    both are read at the registered gamma and split, so the row prices
+    the trunk's direction alone.
+    """
+
+    mechanism: str
+    n: int
+    val_acc: float
+    val_acc_sd: float
+    gain: float
+    activations_mb: float | None
+    activation_ratio: float | None
+    floor: float
+
+    @property
+    def reaches_floor(self) -> bool:
+        return self.val_acc >= self.floor
+
+
+@dataclass(frozen=True, slots=True)
+class DirectionReport:
+    """T6f's measured cells, its direction rows, and the verdict."""
+
+    point: PilotPoint
+    lr: float
+    reference: tuple[DiagnosticCell, ...]
+    baseline: tuple[DiagnosticCell, ...]
+    orthogonal: tuple[DiagnosticCell, ...]
+    learned: tuple[DiagnosticCell, ...]
+    confirmation: DiagnosticCell
+    rows: tuple[DirectionRow, ...]
+    floor: float
+    verdict: str
+    mechanism: str
+    reason: str
+    trigger: str
+    triage: str = "defect probe (a box statement; the measurement stands)"
+    date: str = DATE
+
+    @property
+    def reference_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.reference)
+
+    @property
+    def baseline_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.baseline)
+
+    @property
+    def cells(self) -> tuple[DiagnosticCell, ...]:
+        """Every measured cell once, keyed by its identity."""
+        unique: dict[CellKey, DiagnosticCell] = {}
+        for cell in (
+            *self.reference,
+            *self.baseline,
+            *self.orthogonal,
+            *self.learned,
+            self.confirmation,
+        ):
+            unique.setdefault(_key(cell), cell)
+        return tuple(unique.values())
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "date": self.date,
+            "point": asdict(self.point) | {"lr": self.lr},
+            "reference_acc": round(self.reference_acc, 4),
+            "baseline_acc": round(self.baseline_acc, 4),
+            "floor": round(self.floor, 4),
+            "verdict": self.verdict,
+            "triage": self.triage,
+            "mechanism": self.mechanism,
+            "reason": self.reason,
+            "trigger": self.trigger,
+            "rows": [asdict(row) for row in self.rows],
+            "cells": [asdict(cell) for cell in self.cells],
+        }
+
+
+def _direction_row(
+    mechanism: str,
+    cells: tuple[DiagnosticCell, ...],
+    *,
+    baseline_acc: float,
+    reference: tuple[DiagnosticCell, ...],
+    floor: float,
+) -> DirectionRow:
+    """One direction's mean, its gain, and its memory half."""
+    acc, spread = _mean_acc(cells)
+    return DirectionRow(
+        mechanism=mechanism,
+        n=len(cells),
+        val_acc=acc,
+        val_acc_sd=spread,
+        gain=acc - baseline_acc,
+        activations_mb=_mean_mb(cells),
+        activation_ratio=_ratio(cells, reference),
+        floor=floor,
+    )
+
+
+def direction_gate(  # ruff: ignore[too-many-arguments]
+    *,
+    reference_acc: float,
+    baseline_acc: float,
+    rows: tuple[DirectionRow, ...],
+    floor: float,
+    delta: float = DELTA,
+    learning_floor: float = LEARNING_FLOOR,
+) -> UpdateVerdict:
+    """Control, promote a direction that reaches the floor, then refuse.
+
+    Both directions are read at the registered gamma and split, so a
+    reading that moves nothing refuses the direction itself -- not the
+    scale (T6d) and not the position or the step (T6e). The next
+    variable is then the trunk's *geometry*: a residual or a wider
+    trunk, never another pass over the same box.
+    """
+    if reference_acc < max(floor, learning_floor):
+        return UpdateVerdict(
+            "invalid",
+            "the checkpointed reference",
+            (
+                f"the reference reads {reference_acc:.3f} against the floor "
+                f"{floor:.3f} at the pilot box; a reference that does not "
+                "train cannot decide the trunk's direction"
+            ),
+            "re-measure the reference at the pilot box; the diagnostic is "
+            "read on the next run",
+        )
+    promoted = [row for row in rows if row.reaches_floor]
+    if promoted:
+        best = max(promoted, key=lambda row: row.val_acc)
+        return UpdateVerdict(
+            "promote",
+            f"the trunk's direction: a {best.mechanism} feedback matrix",
+            (
+                f"the {best.mechanism} direction reads {best.val_acc:.3f} (sd "
+                f"{best.val_acc_sd:.3f} over {best.n} seeds) against the floor "
+                f"{floor:.3f} = checkpoint {reference_acc:.3f} - "
+                f"{delta * 100:.0f} pp, up {best.gain * 100:+.1f} pp from the "
+                f"registered draw's {baseline_acc:.3f} at "
+                f"{_ratio_text(best.activation_ratio)}"
+            ),
+            (
+                "the claim run re-registers at the pilot box with this "
+                "direction frozen: the accuracy bar is demonstrated at L=8, so "
+                "the claim box's L=8->32 rung prices it next; the memory half "
+                "is measured at this box"
+            ),
+        )
+    best = max(rows, key=lambda row: row.val_acc)
+    if best.gain >= delta:
+        return UpdateVerdict(
+            "coordinate",
+            f"the {best.mechanism} direction is a real gain, not the mechanism",
+            (
+                f"the {best.mechanism} direction moves the hybrid "
+                f"{best.gain * 100:+.1f} pp to {best.val_acc:.3f} (sd "
+                f"{best.val_acc_sd:.3f} over {best.n} seeds) but the floor is "
+                f"{floor:.3f} = checkpoint {reference_acc:.3f} - "
+                f"{delta * 100:.0f} pp; the gap narrows and does not close"
+            ),
+            (
+                "the next edge on the same direction (its ridge rate or a "
+                "second rotation) or a residual/wider trunk; a claim run is not "
+                "scheduled on a coordinate"
+            ),
+        )
+    readings = "/".join(f"{row.val_acc:.3f}" for row in rows)
+    return UpdateVerdict(
+        "refuse",
+        "the trunk's geometry: a residual or a wider trunk (the fix queue)",
+        (
+            f"the directions read {readings} ({'/'.join(f'{row.gain * 100:+.1f} pp' for row in rows)} "
+            f"from the registered draw {baseline_acc:.3f}, sd "
+            f"{'/'.join(f'{row.val_acc_sd:.3f}' for row in rows)} over "
+            f"{'/'.join(str(row.n) for row in rows)} seeds) at gamma="
+            f"{HYBRID_GAMMA:g} and the registered split, so neither rotation "
+            f"nor the ridge fit moves the cell at this box, at "
+            f"{_ratio_text(rows[0].activation_ratio)}; the direction is a "
+            "defect probe, not a verdict on the mechanism"
+        ),
+        (
+            "the trunk's geometry: a residual trunk (the skip the split keeps) "
+            "or a wider trunk; the direction is priced at this box, so the "
+            "next variable is the stack the direction feeds, not another "
+            "projection"
+        ),
+    )
+
+
+def _direction_report(
+    *,
+    point: PilotPoint,
+    reference: tuple[DiagnosticCell, ...],
+    baseline: tuple[DiagnosticCell, ...],
+    orthogonal: tuple[DiagnosticCell, ...],
+    learned: tuple[DiagnosticCell, ...],
+    confirmation: DiagnosticCell,
+) -> DirectionReport:
+    """Assemble the rows and the gate from the measured cells."""
+    floor = _floor(reference)
+    baseline_acc, _ = _mean_acc(baseline)
+    rows = tuple(
+        _direction_row(
+            label,
+            cells,
+            baseline_acc=baseline_acc,
+            reference=reference,
+            floor=floor,
+        )
+        for label, cells in (("orthogonal", orthogonal), ("learned", learned))
+    )
+    reference_acc, _ = _mean_acc(reference)
+    gate = direction_gate(
+        reference_acc=reference_acc,
+        baseline_acc=baseline_acc,
+        rows=rows,
+        floor=floor,
+    )
+    return DirectionReport(
+        point=point,
+        lr=LR,
+        reference=reference,
+        baseline=baseline,
+        orthogonal=orthogonal,
+        learned=learned,
+        confirmation=confirmation,
+        rows=rows,
+        floor=floor,
+        verdict=gate.verdict,
+        mechanism=gate.mechanism,
+        reason=gate.reason,
+        trigger=gate.trigger,
+    )
+
+
+def _assemble_direction(
+    cell: Callable[..., DiagnosticCell], *, point: PilotPoint
+) -> DirectionReport:
+    """T6f's cell plan: reference, baseline, both directions, confirmation.
+
+    The registered arms are the T6d/T6e cells, so a run with the shared
+    log retrains only the direction's cells: two seeds per direction plus
+    the best direction's second seed. The registered draw is the
+    baseline cell, so the ladder prices the direction alone.
+    """
+    reference = tuple(
+        cell(REFERENCE_ARM, gamma=HYBRID_GAMMA, seed=seed) for seed in DIAGNOSTIC_SEEDS
+    )
+    baseline = tuple(
+        cell("hybrid", gamma=HYBRID_GAMMA, seed=seed) for seed in DIAGNOSTIC_SEEDS
+    )
+    ladder: dict[str, tuple[DiagnosticCell, ...]] = {
+        label: tuple(
+            cell(
+                "hybrid",
+                gamma=HYBRID_GAMMA,
+                orthogonal_init=orthogonal,
+                learned_feedback=learned,
+                seed=seed,
+            )
+            for seed in DIAGNOSTIC_SEEDS
+        )
+        for label, orthogonal, learned in DIRECTION_LADDER
+    }
+    best_label = max(
+        ladder,
+        key=lambda label: fmean(cell.val_acc for cell in ladder[label]),
+    )
+    orthogonal, learned = next(
+        (rotated, fitted)
+        for label, rotated, fitted in DIRECTION_LADDER
+        if label == best_label
+    )
+    return _direction_report(
+        point=point,
+        reference=reference,
+        baseline=baseline,
+        orthogonal=ladder["orthogonal"],
+        learned=ladder["learned"],
+        confirmation=cell(
+            "hybrid",
+            gamma=HYBRID_GAMMA,
+            orthogonal_init=orthogonal,
+            learned_feedback=learned,
+            seed=CONFIRMATION_SEED,
+        ),
+    )
+
+
+def run_direction_diagnostic(
+    point: PilotPoint = BOX,
+    *,
+    device: str = "cuda",
+    log_path: Path | None = None,
+) -> DirectionReport:
+    """Measure the trunk's two directions (T6f) at the pilot box.
+
+    Args:
+        point: The pilot box the T6a2 trigger names.
+        device: ``"cuda"`` is required -- the cells need a measured peak.
+        log_path: Where each measured cell is appended; a rerun reuses it.
+
+    Raises:
+        RuntimeError: On a non-CUDA device.
+    """
+    _require_cuda(device)
+    log = _CellLog(log_path)
+    data = cifar_splits()
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
+        seed: int,
+    ) -> DiagnosticCell:
+        return log.measure(
+            arm,
+            gamma=gamma,
+            train_biases=train_biases,
+            orthogonal_init=orthogonal_init,
+            learned_feedback=learned_feedback,
+            seed=seed,
+            point=point,
+            device=device,
+            data=data,
+        )
+
+    return _assemble_direction(cell, point=point)
+
+
+def replay_direction_diagnostic(
+    *, log_path: Path, point: PilotPoint = BOX
+) -> DirectionReport:
+    """Rebuild T6f's report from the cell log, without training a cell.
+
+    Raises:
+        RuntimeError: When a cell the report needs is missing from the log.
+    """
+    cells = read_cells(log_path)
+    if not cells:
+        raise RuntimeError(f"no cells in {log_path}; run the diagnostic first")
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
+        seed: int,
+    ) -> DiagnosticCell:
+        key = (
+            arm,
+            gamma,
+            train_biases,
+            seed,
+            REGISTERED_SPLIT,
+            1.0,
+            orthogonal_init,
+            learned_feedback,
+        )
+        if key not in cells:
+            raise RuntimeError(f"no measured cell for {key} in {log_path}")
+        return cells[key]
+
+    return _assemble_direction(cell, point=point)
+
+
+def _direction_markdown(report: DirectionReport) -> str:
+    """The table a third party can read, with its rulers and its command."""
+    point = report.point
+    lines = [
+        "# T6f -- the trunk's direction (TODO93 track A)",
+        "",
+        f"**Box.** CIFAR-10 10k/10k, L={point.depth}, W={point.width}, "
+        f"B={point.batch}, {point.steps} steps, LR {report.lr:g}, seeds "
+        f"{', '.join(str(seed) for seed in DIAGNOSTIC_SEEDS)}, fp32. "
+        f"Reference `{REFERENCE_ARM}`; registered draw `hybrid`; directions "
+        f"`{'`, `'.join(label for label, _, _ in DIRECTION_LADDER)}` at "
+        f"gamma={HYBRID_GAMMA:g}, split registered, norm-matched.",
+        "",
+        f"Reference {report.reference_acc:.3f}; registered draw "
+        f"{report.baseline_acc:.3f}; floor {report.floor:.3f} (reference - "
+        f"{DELTA * 100:.0f} pp).",
+        "",
+        "| direction | seeds | val acc | sd | gain | floor | reaches | "
+        "activations MB | ratio |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in report.rows:
+        activations = (
+            f"{row.activations_mb:.0f}" if row.activations_mb is not None else "—"
+        )
+        ratio = (
+            f"{row.activation_ratio:.2f}x" if row.activation_ratio is not None else "—"
+        )
+        lines.append(
+            f"| {row.mechanism} | {row.n} | {row.val_acc:.3f} | "
+            f"{row.val_acc_sd:.3f} | {row.gain * 100:+.1f} pp | "
+            f"{row.floor:.3f} | {'yes' if row.reaches_floor else 'no'} | "
+            f"{activations} | {ratio} |"
+        )
+    lines.extend([
+        "",
+        "| arm | gamma | direction | seed | val acc | s | activations MB | peak MB |",
+        "|---|---|---|---|---|---|---|---|",
+    ])
+    for cell in report.cells:
+        direction = (
+            "learned"
+            if cell.learned_feedback
+            else "orthogonal"
+            if cell.orthogonal_init
+            else "random"
+        )
+        activations = (
+            f"{cell.activations_mb:.0f}" if cell.activations_mb is not None else "—"
+        )
+        peak = f"{cell.peak_mb:.0f}" if cell.peak_mb is not None else "—"
+        lines.append(
+            f"| `{cell.arm}` | {cell.gamma:g} | {direction} | {cell.seed} | "
+            f"{cell.val_acc:.3f} | {cell.walltime_s:.1f} | {activations} | {peak} |"
+        )
+    lines.extend([
+        "",
+        f"**Gate outcome: {report.verdict}** -- a box statement at the pilot "
+        "box; the measurement stands and the mechanism stays open.",
+        "",
+        f"**Triage.** {report.triage}; the fix queue is {report.trigger}",
+        "",
+        f"**Reason.** {report.reason}",
+        "",
+        "**Rulers.** val acc on the full 10k test split (1 sigma ~ 0.3 pp); "
+        "activation bytes (peak - params - optimizer - auxiliary); walltime per "
+        "cell; the floor is the checkpointed arm's mean minus delta, and the "
+        "baseline is the registered draw at the same box.",
+        "",
+        "Command: `uv run python -m computronium.validation.hybrid_update "
+        "--direction`; replay the gate from the cell log with `... --direction "
+        "--replay`.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def write_direction_report(report: DirectionReport, output_dir: str | Path) -> Path:
+    """Write ``direction.json`` and ``direction.md``; return the JSON."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "direction.json"
+    path.write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+    (output_dir / "direction.md").write_text(
+        _direction_markdown(report), encoding="utf-8"
+    )
+    return path
+
+
 def _main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1387,9 +1903,40 @@ def _main() -> None:
         action="store_true",
         help="run T6e (the split's position and the trunk's step) instead of T6d",
     )
+    parser.add_argument(
+        "--direction",
+        action="store_true",
+        help="run T6f (the trunk's orthogonal and learned direction) instead of T6d",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
     log_path = args.out / "hybrid_update.cells.jsonl"
+    if args.direction:
+        direction = (
+            replay_direction_diagnostic(log_path=log_path)
+            if args.replay
+            else run_direction_diagnostic(device=args.device, log_path=log_path)
+        )
+        logger.info(
+            "T6f: reference=%.3f baseline=%.3f floor=%.3f rows=%s",
+            direction.reference_acc,
+            direction.baseline_acc,
+            direction.floor,
+            json.dumps([
+                {
+                    "mechanism": row.mechanism,
+                    "val_acc": round(row.val_acc, 3),
+                    "n": row.n,
+                    "gain": round(row.gain, 3),
+                    "reaches_floor": row.reaches_floor,
+                }
+                for row in direction.rows
+            ]),
+        )
+        path = write_direction_report(direction, args.out)
+        logger.info("wrote %s", path)
+        logger.info("gate outcome: %s -- a box statement; %s", direction.verdict, direction.mechanism)
+        return
     if args.split:
         splits = (
             replay_split_diagnostic(log_path=log_path)
@@ -1416,7 +1963,7 @@ def _main() -> None:
         )
         path = write_split_report(splits, args.out)
         logger.info("wrote %s", path)
-        logger.info("verdict: %s -- %s", splits.verdict, splits.mechanism)
+        logger.info("gate outcome: %s -- a box statement; %s", splits.verdict, splits.mechanism)
         return
     report = (
         replay_diagnostic(log_path=log_path)
@@ -1443,7 +1990,7 @@ def _main() -> None:
     logger.info("head-only: %.3f", report.head_only.val_acc)
     path = write_report(report, args.out)
     logger.info("wrote %s", path)
-    logger.info("verdict: %s -- %s", report.verdict, report.mechanism)
+    logger.info("gate outcome: %s -- a box statement; %s", report.verdict, report.mechanism)
 
 
 if __name__ == "__main__":

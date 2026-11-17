@@ -503,6 +503,9 @@ class CreditAssignmentConfig:
         train_biases: bool = False,
         trunk_lr: float = 1.0,
         grad_clip: float = 1.0,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
+        feedback_lr: float = 0.05,
     ) -> CreditAssignmentConfig:
         """Lockstep-local trunk + exact-gradient head (TODO93 T3b).
 
@@ -513,13 +516,19 @@ class CreditAssignmentConfig:
         trunk's pseudo-gradients only (T6e): under one Euclidean step size it
         is a decoupled trunk learning rate, so the trunk and the head do not
         share a scale.
+
+        ``orthogonal_init``/``learned_feedback`` are the trunk's direction
+        (T6f): an orthonormalized draw, or a ridge fit of B to the batch's
+        boundary error (``feedback_lr`` is its EMA rate).
         """
         return cls(
             credit_type="hybrid",
             beta=0.5,
             feedback_matrix=feedback_matrix,
             local_objective="ff",
-            orthogonal_init=False,
+            orthogonal_init=orthogonal_init,
+            learned_feedback=learned_feedback,
+            feedback_lr=feedback_lr,
             feedback_scale=gamma,
             split_layer=split_layer,
             trunk_lr=trunk_lr,

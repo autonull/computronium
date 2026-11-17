@@ -251,12 +251,22 @@ the audit that invalidated it, and the replacement metric.
 | Status | corrected — TODO93 is a capability program; no track is closed by a low cell |
 | Commit | this commit |
 
-| Field | Correction 26 — the split is priced; the trunk's direction is the mechanism |
+| Field | Correction 26 — the split is priced; the direction is the fix queue |
 |---|---|
 | Original claim | T6d localized the 17 pp gap at "the split at the boundary" and framed the next rung as the split's position (`split_layer` on the last Linear) or a decoupled trunk learning rate (CORRECTION 24). |
 | Original metric | A readout-only head and a trunk step were candidate mechanisms, but the refusal named "the split's position" without pricing it; a position that is never measured cannot be distinguished from a trunk whose update direction is wrong. |
 | Audited procedure | T6e at L=8/W=1024/B=8192, 200 steps, LR 0.3, seeds 21/22: reference `backprop+ckpt` 0.419/0.416 (floor 0.408); baseline hybrid 0.163/0.169; **readout-only head (`split_layer`=14) 0.126/0.138 (−3.4 pp)**; **`trunk_lr` 0.3/1/3 → 0.105/0.126/0.103**; activation set 1.06× the reference's at L=8. |
 | Affected conclusions | The split's position is no longer a candidate mechanism: moving the boundary to the last Linear **loses** 3.4 pp, and a decoupled trunk step buys nothing. The level is the trunk's **direction** (its first-order feedback matrix B and its geometry), not its step or its position. T6d's refusal stands; T6e's numbers stand as measurements. |
-| Replacement metric | The mechanism is the trunk's **direction**: the next rung is `learned_feedback` (a ridge-regressed B) or an orthogonal init at the readout split, or a residual/wider trunk. "The split's position" is retired as the trigger; the step and the position are priced at the pilot box. |
-| Status | corrected — T6e refused the position and the step with the direction as the mechanism |
+| Replacement metric | The fix queue is the trunk's **direction**: `learned_feedback` (a ridge-regressed B) or an orthogonal init at the readout split, or a residual/wider trunk. "The split's position" is retired as the trigger; the step and the position are priced at the pilot box. The measurement is a defect probe, not a verdict. |
+| Status | corrected — T6e priced the position and the step; the direction is the fix queue |
+| Commit | this commit |
+
+| Field | Correction 27 — the direction is priced; the fix queue is the trunk's geometry |
+|---|---|
+| Original claim | T6e localized the 17 pp gap at the trunk's **direction** — the feedback matrix B or the trunk's geometry — and framed the next rung as `learned_feedback`'s ridge-regressed B, an orthogonal init at the readout split, or a residual/wider trunk (CORRECTION 26). |
+| Original metric | The direction was named as the mechanism without pricing it, so "learned" and "orthogonal" were not distinguished from the geometry that the projection feeds. |
+| Audited procedure | T6f at L=8/W=1024/B=8192, 200 steps, LR 0.3, seeds 21/22, confirmation 23, both directions at the registered draw's Frobenius norm: reference `backprop+ckpt` 0.419/0.416 (floor 0.408); draw 0.163/0.169; **orthogonal rotation 0.160/0.170 (−0.1 pp, sd 0.7 pp)**; **ridge-fitted B 0.145/0.144 (−2.1 pp, sd 0.03 pp at 1.17× walltime)**; confirmation 0.164; activations 515/516 MB (1.06× the reference's 485 MB). |
+| Affected conclusions | The direction is priced at the box: the rotation is a no-op and the ridge fit is worse than the draw, so the input-level projection does not carry the head's δ into the trunk there. T6d's and T6e's numbers stand as measurements; nothing here closes the projection as a mechanism. |
+| Replacement metric | The fix queue is the trunk's **geometry**: the hybrid's stack has one width and no residual on the projection's path, so the next variable is a residual or a wider trunk (12f), and the temporal axis is the next primitive. "The direction" is retired as the trigger; it is priced at the pilot box. |
+| Status | corrected — T6f priced the direction; the fix queue is the trunk's geometry |
 | Commit | this commit |

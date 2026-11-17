@@ -29,7 +29,7 @@ FLOOR = 0.354
 BASELINE = 0.184
 
 
-def _cell(
+def _cell(  # ruff: ignore[too-many-arguments]
     arm: str,
     gamma: float,
     *,
@@ -39,6 +39,8 @@ def _cell(
     activations_mb: float | None = 210.0,
     split_layer: int = diagnostic.REGISTERED_SPLIT,
     trunk_lr: float = 1.0,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
 ) -> diagnostic.DiagnosticCell:
     return diagnostic.DiagnosticCell(
         arm=arm,
@@ -51,6 +53,8 @@ def _cell(
         peak_mb=282.3,
         split_layer=split_layer,
         trunk_lr=trunk_lr,
+        orthogonal_init=orthogonal_init,
+        learned_feedback=learned_feedback,
     )
 
 
@@ -118,7 +122,16 @@ def _gate(
 
 
 def _key(arm: str, gamma: float, train_biases: bool, seed: int) -> diagnostic.CellKey:
-    return (arm, gamma, train_biases, seed, diagnostic.REGISTERED_SPLIT, 1.0)
+    return (
+        arm,
+        gamma,
+        train_biases,
+        seed,
+        diagnostic.REGISTERED_SPLIT,
+        1.0,
+        False,
+        False,
+    )
 
 
 def _plan(
@@ -397,6 +410,8 @@ def test_the_cell_log_reuses_a_measured_cell(
         train_biases: bool,
         split_layer: int,
         trunk_lr: float,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
     ) -> frontier.ArmCell:
         calls.append((gamma, train_biases, seed))
         return frontier.ArmCell(
@@ -450,7 +465,7 @@ def test_the_cell_log_reuses_a_measured_cell(
 def _split_key(
     arm: str, gamma: float, seed: int, *, split_layer: int, trunk_lr: float = 1.0
 ) -> diagnostic.CellKey:
-    return (arm, gamma, False, seed, split_layer, trunk_lr)
+    return (arm, gamma, False, seed, split_layer, trunk_lr, False, False)
 
 
 def _split_row(
@@ -563,7 +578,9 @@ def _read_split(
     ) -> diagnostic.DiagnosticCell:
         if split_layer == diagnostic.REGISTERED_SPLIT:
             return cells[_key(arm, gamma, train_biases, seed)]
-        return cells[arm, gamma, train_biases, seed, split_layer, trunk_lr]
+        return cells[
+            arm, gamma, train_biases, seed, split_layer, trunk_lr, False, False
+        ]
 
     return cell
 
@@ -685,3 +702,283 @@ def test_the_split_json_carries_the_verdict_and_its_rulers(tmp_path: Path) -> No
     assert "T6e" in markdown
     assert "0.354" in markdown
     assert "trunk lr" in markdown
+
+
+def _direction_key(
+    arm: str,
+    gamma: float,
+    seed: int,
+    *,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
+) -> diagnostic.CellKey:
+    return (
+        arm,
+        gamma,
+        False,
+        seed,
+        diagnostic.REGISTERED_SPLIT,
+        1.0,
+        orthogonal_init,
+        learned_feedback,
+    )
+
+
+def _direction_row(
+    mechanism: str,
+    *,
+    acc: float = BASELINE,
+    n: int = 2,
+) -> diagnostic.DirectionRow:
+    return diagnostic.DirectionRow(
+        mechanism=mechanism,
+        n=n,
+        val_acc=acc,
+        val_acc_sd=0.0,
+        gain=acc - BASELINE,
+        activations_mb=210.0,
+        activation_ratio=1.06,
+        floor=FLOOR,
+    )
+
+
+def _direction_gate(
+    *,
+    reference_acc: float = 0.364,
+    rows: tuple[diagnostic.DirectionRow, ...] | None = None,
+) -> diagnostic.UpdateVerdict:
+    return diagnostic.direction_gate(
+        reference_acc=reference_acc,
+        baseline_acc=BASELINE,
+        rows=rows
+        if rows is not None
+        else (
+            _direction_row("orthogonal", acc=0.190),
+            _direction_row("learned", acc=0.190),
+        ),
+        floor=FLOOR,
+    )
+
+
+def _direction_plan(
+    *,
+    reference_acc: float = 0.364,
+    orthogonal_acc: float = 0.190,
+    learned_acc: float = 0.190,
+) -> dict[diagnostic.CellKey, diagnostic.DiagnosticCell]:
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell] = {}
+    for seed in diagnostic.DIAGNOSTIC_SEEDS:
+        cells[_direction_key("backprop+ckpt", 0.05, seed)] = _cell(
+            "backprop+ckpt", 0.05, seed=seed, acc=reference_acc, activations_mb=453.0
+        )
+        cells[_direction_key("hybrid", 0.05, seed)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=BASELINE
+        )
+    for seed in diagnostic.DIAGNOSTIC_SEEDS:
+        cells[_direction_key("hybrid", 0.05, seed, orthogonal_init=True)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=orthogonal_acc, orthogonal_init=True
+        )
+        cells[_direction_key("hybrid", 0.05, seed, learned_feedback=True)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=learned_acc, learned_feedback=True
+        )
+    best = "orthogonal" if orthogonal_acc >= learned_acc else "learned"
+    cells[
+        _direction_key(
+            "hybrid",
+            0.05,
+            diagnostic.CONFIRMATION_SEED,
+            orthogonal_init=best == "orthogonal",
+            learned_feedback=best == "learned",
+        )
+    ] = _cell(
+        "hybrid",
+        0.05,
+        seed=diagnostic.CONFIRMATION_SEED,
+        acc=max(orthogonal_acc, learned_acc),
+        orthogonal_init=best == "orthogonal",
+        learned_feedback=best == "learned",
+    )
+    return cells
+
+
+def _read_direction(
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell],
+) -> Callable[..., diagnostic.DiagnosticCell]:
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        return cells[
+            _direction_key(
+                arm,
+                gamma,
+                seed,
+                orthogonal_init=orthogonal_init,
+                learned_feedback=learned_feedback,
+            )
+        ]
+
+    return cell
+
+
+def test_the_direction_ladder_is_two_fixes_at_the_registered_scale() -> None:
+    assert diagnostic.DIRECTION_LADDER == (
+        ("orthogonal", True, False),
+        ("learned", False, True),
+    )
+    assert diagnostic.GAMMA_LADDER[0] == 0.05
+    first, last = diagnostic.DIAGNOSTIC_SEEDS
+    assert first != last
+
+
+def test_the_direction_gate_promotes_a_learned_fit_that_reaches_the_floor() -> None:
+    gate = _direction_gate(
+        rows=(
+            _direction_row("orthogonal", acc=0.190),
+            _direction_row("learned", acc=0.362),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "learned feedback matrix" in gate.mechanism
+    assert "0.354" in gate.reason
+    assert "claim run" in gate.trigger
+
+
+def test_the_direction_gate_promotes_an_orthogonal_rotation_that_reaches_the_floor() -> (
+    None
+):
+    gate = _direction_gate(
+        rows=(
+            _direction_row("orthogonal", acc=0.360),
+            _direction_row("learned", acc=0.190),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "orthogonal feedback matrix" in gate.mechanism
+
+
+def test_a_direction_gain_without_the_floor_is_a_coordinate() -> None:
+    gate = _direction_gate(
+        rows=(
+            _direction_row("orthogonal", acc=0.190),
+            _direction_row("learned", acc=0.205),
+        )
+    )
+    assert gate.verdict == "coordinate"
+    assert "learned direction" in gate.mechanism
+    assert "next edge" in gate.trigger
+
+
+def test_a_direction_that_moves_nothing_queues_the_geometry() -> None:
+    gate = _direction_gate(
+        rows=(
+            _direction_row("orthogonal", acc=0.188),
+            _direction_row("learned", acc=0.186),
+        )
+    )
+    assert gate.verdict == "refuse"
+    assert "trunk's geometry" in gate.mechanism
+    assert "0.188/0.186" in gate.reason
+    assert "residual trunk" in gate.trigger
+
+
+def test_the_direction_gate_invalidates_a_reference_below_the_floor() -> None:
+    gate = _direction_gate(reference_acc=0.200)
+    assert gate.verdict == "invalid"
+    assert "reference" in gate.mechanism
+
+
+def test_the_direction_assembly_prices_the_cells_at_the_pilot_box() -> None:
+    plan = _direction_plan(learned_acc=0.361)
+    seen: list[diagnostic.CellKey] = []
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        orthogonal_init: bool = False,
+        learned_feedback: bool = False,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        seen.append(
+            _direction_key(
+                arm,
+                gamma,
+                seed,
+                orthogonal_init=orthogonal_init,
+                learned_feedback=learned_feedback,
+            )
+        )
+        return _read_direction(plan)(
+            arm,
+            gamma=gamma,
+            train_biases=train_biases,
+            orthogonal_init=orthogonal_init,
+            learned_feedback=learned_feedback,
+            seed=seed,
+        )
+
+    report = diagnostic._assemble_direction(cell, point=diagnostic.BOX)
+    assert len(seen) == 9
+    assert len(set(seen)) == 9
+    assert len(report.cells) == 9
+    assert report.verdict == "promote"
+    assert [row.n for row in report.rows] == [2, 2]
+    assert report.confirmation.learned_feedback
+    assert report.confirmation.seed == diagnostic.CONFIRMATION_SEED
+    assert report.rows[0].activation_ratio == pytest.approx(210.0 / 453.0)
+
+
+def test_the_direction_json_carries_the_outcome_and_its_rulers(
+    tmp_path: Path,
+) -> None:
+    report = diagnostic._assemble_direction(
+        _read_direction(_direction_plan(orthogonal_acc=0.361)), point=diagnostic.BOX
+    )
+    path = diagnostic.write_direction_report(report, tmp_path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["triage"].startswith("defect probe")
+    assert raw["verdict"] == "promote"
+    assert "orthogonal" in raw["mechanism"]
+    assert raw["point"]["lr"] == diagnostic.LR
+    assert len(raw["rows"]) == 2
+    assert {"mechanism", "reason", "trigger", "cells"} <= set(raw)
+    directions = {cell["learned_feedback"] for cell in raw["cells"]}
+    assert directions == {True, False}
+    markdown = (tmp_path / "direction.md").read_text(encoding="utf-8")
+    assert "T6f" in markdown
+    assert "0.354" in markdown
+    assert "orthogonal" in markdown
+
+
+def test_no_report_prints_a_verdict(tmp_path: Path) -> None:
+    """The triage is mandatory: a report states a box, never a verdict."""
+    reports = {
+        "hybrid_update.md": diagnostic._markdown(
+            diagnostic._assemble(_read(_plan()), point=diagnostic.BOX)
+        ),
+        "split_position.md": diagnostic._split_markdown(
+            diagnostic._assemble_split(_read_split(_split_plan()), point=diagnostic.BOX)
+        ),
+        "direction.md": diagnostic._direction_markdown(
+            diagnostic._assemble_direction(
+                _read_direction(_direction_plan()), point=diagnostic.BOX
+            )
+        ),
+    }
+    for name, markdown in reports.items():
+        assert "Gate outcome" in markdown, name
+        assert "Verdict" not in markdown, name
+    direction = diagnostic._assemble_direction(
+        _read_direction(_direction_plan()), point=diagnostic.BOX
+    )
+    path = diagnostic.write_direction_report(direction, tmp_path / "dir")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["triage"].startswith("defect probe")
+    assert "Triage." in (tmp_path / "dir" / "direction.md").read_text(encoding="utf-8")

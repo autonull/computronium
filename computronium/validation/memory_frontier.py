@@ -444,6 +444,8 @@ def _credit(
     train_biases: bool = False,
     split_layer: int = -1,
     trunk_lr: float = 1.0,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
 ) -> CreditAssignmentConfig:
     match arm:
         case "backprop" | "backprop+ckpt":
@@ -454,6 +456,8 @@ def _credit(
                 train_biases=train_biases,
                 split_layer=split_layer,
                 trunk_lr=trunk_lr,
+                orthogonal_init=orthogonal_init,
+                learned_feedback=learned_feedback,
             )
         case "local":
             return CreditAssignmentConfig.pepita(gamma=gamma)
@@ -462,7 +466,7 @@ def _credit(
             raise ValueError(msg)
 
 
-def build_arm(
+def build_arm(  # ruff: ignore[too-many-arguments]
     arm: str,
     point: PilotPoint,
     *,
@@ -472,6 +476,8 @@ def build_arm(
     train_biases: bool = False,
     split_layer: int = -1,
     trunk_lr: float = 1.0,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
 ) -> System:
     """One arm at one point; the geometry, init, and update are shared.
 
@@ -483,6 +489,8 @@ def build_arm(
     a caller that leaves them unset reads the registered arm.
     ``split_layer`` and ``trunk_lr`` are the split's position and its
     decoupled trunk step (T6e); ``-1``/``1.0`` read the registered arm.
+    ``orthogonal_init`` and ``learned_feedback`` are the trunk's direction
+    (T6f): the registered Gaussian draw, or its orthogonal/ridge fit.
     """
     if arm not in ARMS:
         msg = f"unknown arm {arm!r}; expected one of {ARMS}"
@@ -503,6 +511,8 @@ def build_arm(
             train_biases=train_biases,
             split_layer=split_layer,
             trunk_lr=trunk_lr,
+            orthogonal_init=orthogonal_init,
+            learned_feedback=learned_feedback,
         ),
         update=ParameterUpdateConfig.euclidean(step_size=lr),
     )
@@ -1049,6 +1059,8 @@ def measure_cell(  # ruff: ignore[too-many-arguments]
     train_biases: bool = False,
     split_layer: int = -1,
     trunk_lr: float = 1.0,
+    orthogonal_init: bool = False,
+    learned_feedback: bool = False,
 ) -> ArmCell:
     """Train one (arm, seed) cell and return its measured cost and accuracy."""
     torch.cuda.empty_cache()
@@ -1061,6 +1073,8 @@ def measure_cell(  # ruff: ignore[too-many-arguments]
         train_biases=train_biases,
         split_layer=split_layer,
         trunk_lr=trunk_lr,
+        orthogonal_init=orthogonal_init,
+        learned_feedback=learned_feedback,
     )
     trainer = SystemTrainer(
         system=system,
