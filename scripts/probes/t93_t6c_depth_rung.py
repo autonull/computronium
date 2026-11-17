@@ -30,13 +30,13 @@ LRS = (3e-3, 1e-2, 3e-2)
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    x_train, y_train, x_test, y_test = frontier._cifar()
+    x_train, y_train, x_test, y_test = frontier.cifar_splits()
     point = frontier.PilotPoint()
     if not point.affordable():
         print(f"point unaffordable: {point.peak_mb():.0f} MB")
         return 1
     for depth in (8, 32):
-        plain = frontier._measure(
+        plain = frontier.measure_cell(
             "backprop",
             point.scaled(depth=depth),
             lr=frontier.FROZEN_LR["backprop"],
@@ -53,7 +53,7 @@ def main() -> int:
             flush=True,
         )
         for lr in LRS:
-            cell = frontier._measure(
+            cell = frontier.measure_cell(
                 "backprop",
                 point.scaled(depth=depth, stream_norm=True),
                 lr=lr,

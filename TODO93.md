@@ -1,12 +1,13 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-17 · **v24 — T6a's re-registration is refused at its pass-carrying box: the memory bar is met (0.46×) and the baseline trains (0.364 vs 0.354), but the hybrid reads 0.184 / 0.201, 17 pp below. The refusal is now the hybrid's own update, not the box. The next trigger is its diagnostic (bias-on, feedback scale, head-only), not another depth. Apparatus phase, not adjudication.**
+**Status:** 2026-11-17 · **v25 — T6d refused the hybrid's update diagnostic at the pilot box: neither trunk knob reaches the floor (bias flag +0.5 pp; feedback scale 0.163/0.100/0.100 — the ladder peaks at its registered scale and collapses above it) and head-only reads 0.149, while the sibling control shows the same trunk rule as a whole stack reading 0.400/0.405/0.384 and not collapsing. The mechanism is the split at the boundary, not the trunk's rule, its bias path, or its scale. Next trigger: the split's position (a readout-only head), not another knob. Apparatus phase, not adjudication.**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
-+ T6a₂
++ T6a₂ + T6d
 landed: the truth pass, the memory decomposition, the ladder runner, the
 checkpointed baseline, the lockstep two-pass rung, the hybrid, the composed
 pilot, the routing refusal, the plasticity ladder, the retention ladder, the
 estimator atlas, the substrate ladder, its matched comparison, the
-composition screen, the memory-frontier registration, and its re-registration.
+composition screen, the memory-frontier registration, its re-registration, and
+the hybrid's update diagnostic.
 Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
 PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
 spread 0.0 %; L=8 learns 0.419); the pilot's two blockers are decided:
@@ -28,8 +29,9 @@ landed and refused composition at its box** (screen 0.669, family ladder 0.783
 vs 0.797 reference), and **T6a has now registered the memory frontier and its
 rung-2 screen refused the claim** (hybrid 0.167 vs floor 0.375; 1.22× the
 checkpointed arm's activation set at L=8; confirmation 0.154 vs 0.363). The
-claim run is still not scheduled: **the hybrid's own update (T6d) is the next
-trigger**, and F2 remains a five-seed trigger.
+claim run is still not scheduled: **T6d localised the gap at the split, so the
+split's position (T6e) is the next trigger**, and F2 remains a five-seed
+trigger.
 
 **T6a's re-registration refused at the pass-carrying box (2026-11-17).** The
 claim moved to L=8→32, W=512/B=4096, stream-norm at the frozen per-arm LR,
@@ -48,9 +50,34 @@ claim is now decided at a **trained, memory-passing** box: the refusal is the
 hybrid's composed update, not the box. At L=8 the same arm reads 0.163 (plain,
 LR 0.3) and 0.184 (stream, LR 1e-2), while its parts read 0.354-0.409. Next:
 **T6d**, the hybrid's update diagnostic (`train_biases`, `feedback_scale`, a
-head-only control at the pilot box), not another depth. Artifacts:
+head-only control at the pilot box), not another depth — measured 2026-11-17:
+refused, the split is the mechanism (below). Artifacts:
 `results/t93_a_stream/memory_frontier.registered.{json,md}`, committed
 `configs/preregistrations/t93_memory_frontier_stream_registered.json`.
+
+**T6d landed and refused the hybrid's update diagnostic (2026-11-17).** One
+run at the pilot box its trigger names (L=8/W=1024/B=8192, 200 steps, LR 0.3,
+CIFAR-10 10k/10k, seeds 21/22): 12 measured cells (14 planned), ~200 s
+(10-15 s/cell, 516-1037 MB peak). The reference trains (0.419/0.416, floor
+0.408) and the baseline repeats T6a₂'s level (0.163/0.169), so the box is
+sound. **No trunk knob reaches the floor:** `train_biases` reads 0.167/0.175
+(+0.5 pp, the only gain the grid shows), the `feedback_scale` ladder reads
+0.163/0.100/0.100 --
+it peaks at the registered scale and **collapses to chance at 0.3 and 1.0** --
+and head-only (gamma=0) reads 0.149. **The sibling control names the
+mechanism:** the same trunk rule as a whole stack (`local`, no head) reads
+0.400/0.405/0.384 at the same box, LR, and seeds -- within 1.5 pp of the
+reference and 24 pp above the hybrid -- and it does not collapse where the
+hybrid does. So the gap is the **split at the boundary** (a 2-layer
+exact-gradient head over a slowly trained trunk), not the trunk's rule, its
+bias path, or its scale (CORRECTION 24). **The memory half does not hold at
+this box either:** the hybrid's activation set is 516 MB against the
+checkpointed arm's 485 MB (**1.06×**), so L=8 is an accuracy diagnostic box;
+the bar is met at L=32 under the stream-normalized pass (0.46×, §2.14).
+Artifacts: `results/t93_a_stream/hybrid_update.{json,md}` plus a kill-safe
+cell log; replay `uv run python -m computronium.validation.hybrid_update
+--replay`. Next: **T6e**, the split's position (`split_layer` on the last
+Linear, a 7-trunk/1-head hybrid) or a decoupled trunk learning rate.
 
 **D1 landed and promoted the memristive arm (2026-11-16).** The substrate
 ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
@@ -201,7 +228,7 @@ shrinks instead of accumulating.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** | 1 session (T6d) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at its own pass-carrying box; the mechanism is the hybrid's update, so T6d is the next rung, not another depth** |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** | 1 session (T6e) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the mechanism is the split's position, so T6e is the next rung, not another knob** |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
@@ -212,12 +239,14 @@ shrinks instead of accumulating.
 screen that could cancel it.* D1 promoted one arm; D2 spent the matched
 comparison and refused the path on cost, so **D3 does not fire**; F1 spent the
 composition screen and refused at its box, so **F2 does not fire on one seed**.
-**T6a₂ landed and refused the claim at its pass-carrying box.** B, C, and E
-have each spent their cheap screen: B refused its depth axis, C closed at its
-saturation point, and E closed as an atlas. **Session order is therefore T6d
-(the hybrid's update): A's memory blocker (T6b) is fixed, T6a₂'s screen meets
-the memory bar (0.46×) at a trained baseline (0.364 vs 0.354) but the hybrid
-reads 0.184/0.201 — 17 pp below — so the claim run stays parked. F2 is a
+**T6a₂ landed and refused the claim at its pass-carrying box, and T6d has
+now refused its diagnostic.** B, C, and E have each spent their cheap screen:
+B refused its depth axis, C closed at its saturation point, and E closed as an
+atlas. **Session order is therefore T6e (the split's position): A's memory
+blocker (T6b) is fixed and T6a₂ meets the memory bar (0.46×) at a trained
+baseline (0.364 vs 0.354), while T6d shows the accuracy gap is the split —
+the same trunk rule reads 0.405 as a whole stack and the hybrid reads 0.163,
+so the claim run stays parked until the split's position is priced. F2 is a
 five-seed trigger, and the closed tracks' triggers stay in §14.**
 
 **Ranking, recomputed every session (§14):** expected decision value ÷ measured
@@ -377,12 +406,14 @@ check, not a claim, and each fails when its mechanism is removed.
 | **D2 ⛔** | **Matched substrate comparison**: `validation/matched_substrate.py`; 784-64-10, settle 20/40 screen, 5 paired seeds, digital backprop control, int8 QDQ control | `test_matched_substrate.py` (13) | **refused at the walltime box**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime** (limit 1.2×); QDQ −0.01 pp (the width is harmless); the programming budget binds; D3's drift trigger stays parked. Correction: the QDQ control now quantises (it cast to int8 and did not) |
 **Next (three sessions, not a DAG).**
 
-1. **T6d (the hybrid's update) is now the cheapest rung that can change a
-   decision:** at the pilot box, does one named mechanism (`train_biases`, a
-   larger `feedback_scale`, or the head's own path) move the hybrid within δ
-   of the checkpointed arm while the activation set stays ≤0.5×? T6a₂ landed
-   and its rung-2 screen refused the claim at a trained, memory-passing box
-   (0.46×, hybrid 0.184/0.201 vs 0.364/0.357), so the claim run is parked.
+1. **T6e (the split's position) is now the cheapest rung that can change a
+   decision:** at the pilot box, does a readout-only head (`split_layer` on the
+   last Linear, 7 trunk layers + 1 exact-gradient layer) or a decoupled trunk
+   learning rate move the hybrid within δ of the checkpointed arm? T6d landed
+   and refused its diagnostic: no trunk knob reaches the floor, and the same
+   trunk rule as a whole stack reads 0.405 while the hybrid reads 0.163, so the
+   split — not the rule or its scale — is the mechanism. The claim run is
+   parked.
 2. **A's blockers are decided:** T6b landed (a credit owns its free pass),
    T6a₂'s re-registration refused at the pass-carrying box where the memory
    bar is met, and T6c's re-open is a side track (the pass trains within
@@ -946,7 +977,7 @@ record of what exists.
 | **T6c ⛔** | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | landed 2026-11-16 | **refused its cheap pass** (`stream_norm`): 0.314 / 0.326 vs floor 0.375, edge 1e-1 collapses, 3× steps 0.360, 1.45× bytes; trigger = LayerNorm (c≈2) or the Innocenti init |
 | **T6a ✅** | **Memory-frontier registration**: floor, budgets, `n_max=5`, binding appendix, stop rule | A | landed 2026-11-16 (~2 min) | **registered and its rung-2 screen refused the claim**: at the L=4→8 box (W=512/B=2048) hybrid 0.167/103 MB vs ckpt 0.385/85 MB (1.22×); confirmation 0.154 vs 0.363; controls pass (c=4.25, spread 0.0%; backprop 0.385 vs floor 0.375); 30 claim cells priced, none run |
 | **T6a₂ ⛔** | **Re-registration at the pass-carrying box**: L=8→32, W=512/B=4096, stream-norm, its own committed path | A | landed 2026-11-17 (21 cells, ~300 s) | **refused**: hybrid 0.184 / 210 MB vs ckpt 0.364 / 453 MB (**0.46×**, memory met); confirmation 0.201 vs 0.357; controls PASS (c=4.125; learning 0.409 vs 0.399); CORRECTIONS 21–22; 30 priced cells, none run |
-| **T6d** | **The hybrid's update**: `train_biases`, `feedback_scale`, a head-only control at the pilot box | A | 1 session | the hybrid moves within δ of the ckpt under one named mechanism, or a third refusal with the mechanism and its trigger |
+| **T6d ⛔** | **The hybrid's update**: `train_biases`, `feedback_scale`, a head-only control at the pilot box, plus the sibling whole-stack control | A | landed 2026-11-17 (~200 s) | **refused at the pilot box**: no trunk knob reaches the floor, and the sibling localizes the mechanism at the split; T6e is the next trigger |
 | T6c re-open | Depth rung: LayerNorm (c≈2) or the Innocenti init, appendix recomputed (side track) | A | trigger only | the pass already trains at L=32/B=4096 (0.364, 1.1 pp below the old floor), so only the stack's last pp of trainability, not the hybrid's 17 pp gap |
 | **B1 ⛔** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | landed 2026-11-16 | **refused at this box**: gap 0.819 → 0.660 (−0.159) at τ=0.25 and −0.037 on the confirmation seed vs δ=0.05; reference FD 0.013; both ends above the floor; B2 not run, trigger in §14 |
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
@@ -998,7 +1029,8 @@ is the only one that needs five paired seeds on a real task.
 | 11 ✅ | **F — composition ladder** | `validation/composition_ladder.py`; landed 2026-11-16 | **refused at this box**: 50/50 cells measured; screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814 (3.1 pp drift); replayable from `results/t93_f1/`; next is **F2** (5 seeds) or T6a |
 | 12 ⚠️ | **A — T6a registration** | `configs/preregistrations/t93_memory_frontier_registered.json`; replay `--register` | **`invalid-box` (CORRECTIONS 19–20)**: the ratio is depth-declared — 1.22× (L=8), 0.75× (L=16), 0.53× (L=32) at W=512/B=2048, and 0.48× at L=32/B=4096 (1.16 GB, fits); the accuracy bar ends at L=8 (0.385) while L=16/32 read 0.100 for **every** arm (both seeds, both batches), so no point satisfies both bars. The registration stands as measured; the claim re-registers at L=32/stream-norm 3e-2 or as the ratio curve |
 | 12b ✅ | **A — T6a re-registration** | `validation/memory_frontier.py::run_registration(STREAM_BOX)`; `--re-register`; landed 2026-11-17 | **refused at the pass-carrying box** (L=8→32, W=512/B=4096, stream-norm, 21 cells, ~300 s): controls PASS (c=4.125; learning 0.409 vs 0.399), memory bar **met** (0.46×), accuracy missed by 17 pp (hybrid 0.184/0.201 vs ckpt 0.364/0.357, floor 0.354); the mechanism is the hybrid's own update; CORRECTIONS 21–22; artifacts `results/t93_a_stream/` |
-| 12c | **A — T6d: the hybrid's update diagnostic** (next) | `validation/hybrid_update.py` (new) at the pilot box L=8/W=1024/B=8192, LR 0.3; the unit test compares `train_biases`, `feedback_scale`, and a head-only control | the hybrid moves within δ of the ckpt when one named mechanism is corrected, or a third refusal is recorded with the mechanism and a new trigger; no claim run is scheduled until the hybrid trains |
+| 12c ✅ | **A — T6d: the hybrid's update diagnostic** | `computronium/validation/hybrid_update.py` (new); 12 measured cells (14 planned), ~200 s; cell log + `--replay`; landed 2026-11-17 | **refused at the pilot box**: no trunk knob reaches the floor (bias flag +0.5 pp, `feedback_scale` 0.163/0.100/0.100, head-only 0.149) while the same trunk rule as a whole stack reads 0.400/0.405/0.384 and does not collapse; the mechanism is the **split at the boundary**, and the hybrid's activation set is 1.06× the reference's at L=8; CORRECTION 24; artifacts `results/t93_a_stream/hybrid_update.{json,md}` |
+| 12d | **A — T6e: the split's position** (next) | `validation/hybrid_update.py` at the pilot box with `split_layer` on the last Linear (7 trunk layers + a readout-only head), then a decoupled trunk learning rate (gamma × lr as one box); the unit test prices both | the hybrid reaches the ckpt's floor when the head is one layer, or the split's position is refused with the mechanism and a new trigger; no claim run is scheduled before a mechanism reaches the floor |
 | 13 | **A — T6c re-open** (trigger only) | `validation/memory_frontier.py::depth_rung`; LayerNorm (c≈2) or the Innocenti init at L=16/32 | the pass already trains at L=32/B=4096 (0.364, 1.1 pp below the old floor), so this is a side track: only the stack's last pp of trainability, not the hybrid's 17 pp gap |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
@@ -1283,8 +1315,9 @@ not scheduled, however cheap.
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | 2026-11-17 | A | T6a triage: the ratio is depth-declared and the claim's bars never meet | 18 cells (6 memory + 12 accuracy) | hybrid/ckpt ratio at L=8/16/32 × B=2048/4096; val_acc at L=16 (2 seeds, 2 batches); floor 0.375 | CIFAR-10 10k/10k, W=512, 200 steps where accuracy is read, RTX 3080 10 GiB (≤600 MB/cell) | **`invalid-box`**: ratio 1.22 / 0.75 / 0.53 and 0.48 at L=32; L=16/32 all arms 0.100 on both seeds → the refusal holds only at L=4→8, where the claim was never stated; re-registration at a pass-carrying box | T6a ⚠️ |
 | 2026-11-16 | A | memory-frontier registration and its rung-2 screen (reduced L=4→8 box per the OOM guard) | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the learning floor (0.375); activation ratio vs 0.5×; δ=1 pp; c vs 4.1 (10%) | CIFAR-10 10k/10k, W=512, B=2048, L=4/8/16, 200 steps, seed 11/21/22, RTX 3080 10 GiB | **registered; screen refused the claim**: hybrid 0.167 / 103 MB vs ckpt 0.385 / 85 MB (1.22×), confirmation 0.154 vs 0.363; controls PASS (c=4.25, spread 0.0%; 0.385 vs 0.375); 30 priced cells; trigger T6c | T6a ✅ |
+| 2026-11-17 | A | T6d update diagnostic at the pilot box: bias flag, gamma ladder, head-only, and the sibling whole-stack control | 12 measured cells (14 planned) (2 mechanism rows + 2 head-only/sibling ladders) | val_acc vs the ckpt's minus δ (floor 0.408 = 0.418 - 1 pp); the ladder's collapse to 1/classes; activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, seed 21/22, RTX 3080 10 GiB (516-1037 MB) | **refused**: baseline 0.163/0.169; `train_biases` 0.167/0.175 (+0.5 pp); gamma 0.05/0.3/1.0 → 0.163/0.100/0.100; head-only 0.149; sibling (`local`, same rule whole stack) 0.400/0.405/0.384; hybrid activations 1.06× the ckpt's → **the split is the mechanism** (CORRECTION 24); T6e next | T6d ⛔ |
 | 2026-11-17 | A | T6a re-registration at the pass-carrying box: the memory bar is met, the accuracy bar is not | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the ckpt's minus δ at the same box (floor 0.354); activation ratio vs 0.5×; c vs 4.1 (10%) | CIFAR-10 10k/10k, L=8→32, W=512, B=4096, stream-norm, 200 steps, seed 21/22, RTX 3080 10 GiB | **refused**: hybrid 0.184 / 210 MB vs ckpt 0.364 / 453 MB (**0.46×**, memory met), confirmation 0.201 vs 0.357; controls PASS (c=4.125; learning 0.409 vs 0.399); 30 priced cells; the hybrid's own update binds → T6d | T6a₂ ⛔ |
-| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6a₂ refused at the pass-carrying box; next trigger is **T6d** (the hybrid's update), T6c's re-open is a side track | T6d |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d refused the update at the pilot box and the mechanism is the split; T6e (the split's position) is the next trigger, T6c's re-open is a side track | T6e |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D2 refused the path at its walltime box (2.09×); D3's drift rung is a trigger | — | D3 |
 | — | F | composition vs the best single-axis default | 41 arms + 50 screen + 3 ladder + 1 confirmation (96 cells) | ≥δ at matched forward-equivalents; δ=1 pp | F1 refused (0.669 / 0.783 vs 0.797; bar 0.807; confirmation 0.814 > δ as seed spread) | F2's five seeds; no run | F2 |
@@ -1298,7 +1331,7 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 1 session (T6d) | **T6a₂ refused** (CORRECTIONS 21–22): at the pass-carrying box (L=8→32, B=4096, stream-norm) the memory bar is met (0.46×) and the baseline trains (0.364 vs floor 0.354), but the hybrid reads 0.184/0.201 — 17 pp below; **next is T6d**, the hybrid's update diagnostic |
+| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 1 session (T6e) | **T6a₂ refused** (CORRECTIONS 21–22): at the pass-carrying box the memory bar is met (0.46×) and the baseline trains (0.364 vs floor 0.354), but the hybrid reads 0.184/0.201 — 17 pp below; **T6d then refused the update diagnostic** (CORRECTION 24): no trunk knob reaches the floor (bias +0.5 pp, gamma collapses at 0.3/1.0, head alone 0.149) while the same rule as a whole stack reads 0.405; **next is T6e**, the split's position |
 | 2 | **F** composition | does any 6-axis composition beat the best single axis? | trigger only (F2 = 5 seeds) | **F1 refused**: screen 0.669, family ladder 0.783 vs 0.797 reference (bar 0.807); confirmation 0.814 (3.1 pp > δ); F2 is a trigger |
 | 3 | **D** substrate | does memristive parity survive a matched-budget comparison? | trigger only | **D2 refused**: −0.31 pp at **2.09× walltime**; QDQ −0.01 pp; D3's drift row is parked |
 
@@ -1419,15 +1452,17 @@ session.
   vs bar 0.807, confirmation 0.814 (3.1 pp > δ); F2's five seeds are the
   trigger. **T6a₂ landed and its rung-2 screen refused the claim** at the
   pass-carrying box (hybrid 0.184/210 MB vs ckpt 0.364/453 MB, 0.46× — memory
-  met, accuracy 17 pp below), so the next trigger is **T6d (the hybrid's
-  update)**, not a claim run.
+  met, accuracy 17 pp below). **T6d then landed and refused its update
+  diagnostic** (no trunk knob reaches the floor; the sibling shows the same
+  trunk rule as a whole stack reading 0.405, so the split is the mechanism),
+  so the next trigger is **T6e (the split's position)**, not a claim run.
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v24 start: **T6d, the hybrid's update**; **T6a₂ landed and its rung-2 screen refused the claim** at the pass-carrying L=8→32/B=4096 box (hybrid 0.184/210 MB vs ckpt 0.364/453 MB, 0.46× — memory met, accuracy 17 pp below), so no claim run is scheduled. F1 landed and refused composition at its box (screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814), so F2 is a five-seed trigger. T6b landed and T6c refused its cheap pass. D1 promoted memristive; **D2 landed and refused the path at its walltime box** (2.09×, the programming budget binds), so D3 is a trigger. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed. |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v25 start: **T6e, the split's position**; **T6d landed and refused the update diagnostic** at the pilot box (no trunk knob reaches the floor; the sibling shows the same rule as a whole stack reading 0.405, so the split is the mechanism) after **T6a₂ refused the claim** at the pass-carrying L=8→32/B=4096 box (hybrid 0.184/210 MB vs ckpt 0.364/453 MB, 0.46× — memory met, accuracy 17 pp below), so no claim run is scheduled. F1 landed and refused composition at its box (screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814), so F2 is a five-seed trigger. T6b landed and T6c refused its cheap pass. D1 promoted memristive; **D2 landed and refused the path at its walltime box** (2.09×, the programming budget binds), so D3 is a trigger. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1625,8 +1660,8 @@ session.
 - the cell loop is `validation/memory_frontier.py` (`run_pilot` writes
   `results.json` + `appendix.md`); the Pareto aggregation reads its `arms` rows,
   so no second ladder exists. T6b has landed and T6a₂ priced the pass-carrying
-  box; the hybrid's update (T6d) must land before the points on that figure
-  mean what the axes say.
+  box; the hybrid's update (T6d) has landed and refused, so the figure's points
+  are the pilot box's until T6e prices the split's position.
 **T1 (cont.) — estimator coordinate.**
 - `experiment/schema/axis.py:116` — add
   `estimator_kind: Literal["exact","surrogate","gradient_approx","objective_local","local_supervised","score_function","forward_mode","zeroth_order","temporal_local","hybrid"]`
@@ -1755,8 +1790,9 @@ session.
   re-registered at the pass-carrying L=8→32/B=4096 box and refused again: the
   memory bar is met (0.184/210 MB vs 0.364/453 MB, 0.46×) and the baseline
   trains (0.364 vs floor 0.354), so the refusal is the hybrid's own update.**
-  The trigger is **T6d** (`train_biases`, `feedback_scale`, a head-only
-  control at the pilot box); T6c's LayerNorm re-open is a side track.
+  The trigger was **T6d** (`train_biases`, `feedback_scale`, a head-only
+  control at the pilot box) — landed 2026-11-17 and refused; the split is the
+  mechanism (CORRECTION 24); T6c's LayerNorm re-open is a side track.
 - **Locks.** `tests/property/test_memory_frontier.py` (8 tests, 21 s CUDA) holds
   the coefficient, the gate, the checkpointed arm's 0.39× activation set, and
   the arm wiring; the hybrid's composed-path property is a **strict xfail**
@@ -2068,6 +2104,40 @@ permanent fix.
   because they are properties, not fields; `to_dict` now emits them explicitly
   and the screen test fails when that line is removed.
 
+### Landed 2026-11-17 (T6d — what the code actually did)
+- **One module, one box, two knobs, and the sibling control.**
+  `validation/hybrid_update.py` reuses `memory_frontier.measure_cell` (now
+  public, with `gamma`/`train_biases` keywords) at the trigger's box
+  (L=8/W=1024/B=8192, 200 steps, LR 0.3): 12 measured cells (14 planned), ~200 s, 516-1037 MB
+  peak, seeds 21/22 and the ladder seed 21. The cell log
+  (`hybrid_update.cells.jsonl`) is appended per cell, so a rerun reuses a
+  measured cell and `--replay` rebuilds the report without training.
+- **The knobs move nothing.** `train_biases=True` reads 0.167/0.175
+  (+0.5 pp over 0.163/0.169); `feedback_scale` 0.05/0.3/1.0 reads
+  0.163/0.100/0.100 -- the ladder peaks at the registered scale and
+  collapses to chance above it; head-only (gamma=0, zero trunk contrast)
+  reads 0.149. The floor is 0.408 (the checkpointed reference 0.419/0.416
+  minus 1 pp).
+- **The sibling control names the mechanism.** The same trunk rule as a whole
+  stack (`local`) reads 0.400/0.405/0.384 at the same box, LR, and seed --
+  within 1.5 pp of the reference and 24 pp above the hybrid -- and it does not
+  collapse where the hybrid does. The exact-gradient split, not the trunk's
+  rule, its bias path, or its scale, is the mechanism (CORRECTION 24). The
+  hybrid's activation set is 516 MB against the reference's 485 MB
+  (**1.06×**), so the pilot box cannot decide the memory half: L=32/stream is
+  the memory box (§2.14).
+- **One API change, no new primitive.** `memory_frontier._credit`,
+  `build_arm`, and `_measure` take `gamma`/`train_biases` (defaults keep the
+  registered arms bit-identical); `_measure` -> `measure_cell` and
+  `_cifar` -> `cifar_splits` are public for the diagnostic. No schema and no
+  registry row changed.
+- **Locks.** `tests/unit/validation/test_hybrid_update.py` (16 tests, 9 s, no
+  model trained): the gate's six branches, the floor from the reference, the
+  ladder's confirmation seed, the sibling branch, the head-only branches, the
+  assembly's 12 measured cells, the JSON's rulers, and the log's reuse/dedup. The
+  property suite's `frontier._cifar`/`_measure` calls moved to the public
+  names.
+
 ### Landed 2026-11-16 (D2 — what the code actually did)
 - **One runner, one box, one screen.** `validation/matched_substrate.py`
   reuses the D1 cell runner at **2×** D1's width (784-64-10; `_build_system`
@@ -2317,8 +2387,9 @@ sessions and is closed; the first **research** falsifier (hybrid vs ckpt at a
 binding point) now has two registered boxes and two rung-2 refusals: L=4→8
 (0.167/103 MB vs 0.385/85 MB, 1.22×) and L=8→32/B=4096 (0.184/210 MB vs
 0.364/453 MB, **0.46×** — the memory bar is met and the baseline trains, so
-the accuracy gap is the hybrid's own update). The next rung is **T6d**, not a
-claim run. T6/T6a is no longer the critical path to a positive result: the
+the accuracy gap is the split, not the trunk's rule or its scale). The next
+rung is **T6e**, not a claim run. T6/T6a is no longer the critical path to a
+positive result: the
 hybrid has a landed wrapper, measured parity, a store-all reference fixture,
 and a depth-flat peak, but its accuracy is 17 pp below the baseline at the
 pass-carrying box.

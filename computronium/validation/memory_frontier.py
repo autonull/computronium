@@ -73,6 +73,7 @@ __all__ = [
     "DEPTH_RUNG",
     "FLOOR_MARGIN",
     "FROZEN_LR",
+    "HYBRID_GAMMA",
     "INSTRUMENT_DEPTH",
     "LADDER_SEEDS",
     "LEARNING_FLOOR",
@@ -96,9 +97,11 @@ __all__ = [
     "RegistrationBox",
     "ScreenVerdict",
     "build_registration",
+    "cifar_splits",
     "claim_ladder",
     "depth_rung",
     "learning_control_gate",
+    "measure_cell",
     "run_learning_ladder",
     "run_pilot",
     "run_registration",
@@ -175,7 +178,8 @@ FROZEN_LR: Mapping[str, float] = MappingProxyType({
     "hybrid": 0.3,
     "local": 0.3,
 })
-_GAMMA = 0.05
+#: The registered hybrid's input-modulation scale (the trunk knob, T6d).
+HYBRID_GAMMA = 0.05
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,7 +416,7 @@ class _Batches:
         return len(self._pairs)
 
 
-def _cifar() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def cifar_splits() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """The fixed 10k-image train subset and the full test split, as tensors.
 
     The subset is shuffled once under :data:`DATA_SEED` so the fixed order is
@@ -433,26 +437,38 @@ def _cifar() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     return x_train, y_train, x_test, y_test
 
 
-def _credit(arm: str) -> CreditAssignmentConfig:
+def _credit(
+    arm: str, *, gamma: float = HYBRID_GAMMA, train_biases: bool = False
+) -> CreditAssignmentConfig:
     match arm:
         case "backprop" | "backprop+ckpt":
             return CreditAssignmentConfig.gradient()
         case "hybrid":
-            return CreditAssignmentConfig.hybrid(gamma=_GAMMA)
+            return CreditAssignmentConfig.hybrid(gamma=gamma, train_biases=train_biases)
         case "local":
-            return CreditAssignmentConfig.pepita(gamma=_GAMMA)
+            return CreditAssignmentConfig.pepita(gamma=gamma)
         case other:
             msg = f"unknown arm {other!r}; expected one of {ARMS}"
             raise ValueError(msg)
 
 
-def build_arm(arm: str, point: PilotPoint, *, lr: float, seed: int) -> System:
+def build_arm(
+    arm: str,
+    point: PilotPoint,
+    *,
+    lr: float,
+    seed: int,
+    gamma: float = HYBRID_GAMMA,
+    train_biases: bool = False,
+) -> System:
     """One arm at one point; the geometry, init, and update are shared.
 
     ``point.stream_norm`` is the depth rung's declared pass (TODO93 T6c): the
     stack's post-activations are rescaled to length sqrt(width) so the
     signal does not die with depth. It is a run setting, not a new
     primitive, and the plain arm's cells stay bit-identical.
+    ``gamma`` and ``train_biases`` are the hybrid's two update knobs (T6d);
+    a caller that leaves them unset reads the registered arm.
     """
     if arm not in ARMS:
         msg = f"unknown arm {arm!r}; expected one of {ARMS}"
@@ -467,7 +483,7 @@ def build_arm(arm: str, point: PilotPoint, *, lr: float, seed: int) -> System:
             stream_norm=point.stream_norm,
         ),
         dynamics=StateDynamicsConfig.instantaneous(),
-        credit=_credit(arm),
+        credit=_credit(arm, gamma=gamma, train_biases=train_biases),
         update=ParameterUpdateConfig.euclidean(step_size=lr),
     )
     if arm == "backprop+ckpt":
@@ -998,7 +1014,7 @@ class MemoryFrontierRegistration:
         return path
 
 
-def _measure(
+def measure_cell(  # ruff: ignore[too-many-arguments]
     arm: str,
     point: PilotPoint,
     *,
@@ -1009,10 +1025,14 @@ def _measure(
     y_train: torch.Tensor,
     x_test: torch.Tensor,
     y_test: torch.Tensor,
+    gamma: float = HYBRID_GAMMA,
+    train_biases: bool = False,
 ) -> ArmCell:
     """Train one (arm, seed) cell and return its measured cost and accuracy."""
     torch.cuda.empty_cache()
-    system = build_arm(arm, point, lr=lr, seed=seed)
+    system = build_arm(
+        arm, point, lr=lr, seed=seed, gamma=gamma, train_biases=train_biases
+    )
     trainer = SystemTrainer(
         system=system,
         config=SystemTrainerConfig(
@@ -1116,7 +1136,7 @@ def _calibrate(
     )
     activations: list[float] = []
     for depth in depths:
-        cell = _measure(
+        cell = measure_cell(
             "backprop",
             point.scaled(depth=depth),
             lr=FROZEN_LR["backprop"],
@@ -1195,7 +1215,7 @@ def _learning_control(
     """
     shallow = point.scaled(depth=8, stream_norm=stream_norm)
     measured = {
-        arm: _measure(
+        arm: measure_cell(
             arm,
             shallow,
             lr=lrs[arm],
@@ -1376,7 +1396,7 @@ def _screen(
     x_train, y_train, x_test, y_test = data
 
     def cell(arm: str, seed: int) -> ArmCell:
-        return _measure(
+        return measure_cell(
             arm,
             point,
             lr=lrs[arm],
@@ -1409,7 +1429,7 @@ def run_screen(
         lrs=lrs,
         seeds=seeds,
         device=device,
-        data=_cifar(),
+        data=cifar_splits(),
     )
 
 
@@ -1444,7 +1464,7 @@ def run_registration(
             f"box {box.label!r} needs {point.peak_mb():.0f} MB > budget "
             f"{ADMISSION_BUDGET_MB:.0f} MB"
         )
-    x_train, y_train, x_test, y_test = _cifar()
+    x_train, y_train, x_test, y_test = cifar_splits()
     ladder = _learning_ladder(
         point,
         seeds=LADDER_SEEDS[:1],
@@ -1539,7 +1559,7 @@ def run_pilot(
         )
     torch.manual_seed(DATA_SEED)
     torch.manual_seed(DATA_SEED)
-    x_train, y_train, x_test, y_test = _cifar()
+    x_train, y_train, x_test, y_test = cifar_splits()
     measured_c, spread, calibration = _calibrate(
         point,
         device=device,
@@ -1559,7 +1579,7 @@ def run_pilot(
         y_test=y_test,
     )
     cells = tuple(
-        _measure(
+        measure_cell(
             arm,
             point,
             lr=FROZEN_LR[arm],
@@ -1603,7 +1623,7 @@ def _learning_ladder(
         results[arm] = {}
         for lr in lr_ladder:
             cells = [
-                _measure(
+                measure_cell(
                     arm,
                     point,
                     lr=lr,
@@ -1635,7 +1655,7 @@ def run_learning_ladder(
         point or PilotPoint(depth=8),
         seeds=seeds,
         device=device,
-        data=_cifar(),
+        data=cifar_splits(),
     )
 
 
@@ -1730,12 +1750,12 @@ def depth_rung(
     point = point or PilotPoint()
     if device != "cuda" and not device.startswith("cuda:"):
         raise RuntimeError("the depth rung needs a CUDA peak measurement")
-    x_train, y_train, x_test, y_test = _cifar()
+    x_train, y_train, x_test, y_test = cifar_splits()
 
     def cell(
         depth: int, *, lr: float, seed: int, stream_norm: bool = False
     ) -> DepthCell:
-        measured = _measure(
+        measured = measure_cell(
             "backprop",
             point.scaled(depth=depth, stream_norm=stream_norm),
             lr=lr,

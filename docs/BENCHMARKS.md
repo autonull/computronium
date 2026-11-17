@@ -733,7 +733,9 @@ both parts at every measured box (CORRECTION 23).
 
 **Trigger.** T6d — the hybrid's update diagnostic at the pilot box
 (L=8/W=1024/B=8192, LR 0.3): `train_biases`, `feedback_scale`, and a head-only
-control; a mechanism that moves the hybrid within δ names the defect. T6c's
+control; a mechanism that moves the hybrid within δ names the defect. It has
+landed and refused (§2.15): no trunk knob reaches the floor, and the same
+trunk rule as a whole stack reads 0.405, so the split is the mechanism. T6c's
 LayerNorm re-open is a side track: the stack's pass is 1.1 pp below the old
 0.375 floor, not the 17 pp hybrid gap. No claim run is scheduled (30 priced
 cells, none measured).
@@ -741,6 +743,61 @@ cells, none measured).
 Artifacts: `results/t93_a_stream/memory_frontier.registered.{json,md}`;
 committed `configs/preregistrations/t93_memory_frontier_stream_registered.json`;
 replay `uv run python -m computronium.validation.memory_frontier --re-register`.
+
+### 2.15 The hybrid's update diagnostic (T6d) — refused; the split is the mechanism
+
+**Question.** At the pilot box — L=8, W=1024, B=8192, LR 0.3, 200 steps — which
+part of the hybrid's composed update binds the 17 pp gap T6a₂ refused: the
+trunk's bias path (`train_biases`), the trunk's modulation scale
+(`feedback_scale`), or the head's exact-gradient split?
+
+**Box.** CIFAR-10 fixed 10k-image train subset / full 10k test, L=8/W=1024/B=8192,
+200 steps (100 epochs × 2 batches), LR 0.3, fp32, seed 21 and confirmation 22,
+data-order seed 7. Twelve measured cells (14 planned), ~200 s (10-15 s/cell; 516-1037 MB peak) on
+the RTX 3080 10 GiB. Reference `backprop+ckpt`; sibling `local` — the same
+trunk rule as a whole stack, with no head.
+
+**Measured (seed 21 / 22 unless a ladder point).**
+
+| Arm | gamma | train biases | val_acc | activations MB | peak MB | s |
+|---|---|---|---|---|---|---|
+| `backprop+ckpt` | — | — | **0.419 / 0.416** | 485 | 557 | 11.3 |
+| `hybrid` | 0.05 | no | 0.163 / 0.169 | 516 | 589 | 10.2 / 10.3 |
+| `hybrid` | 0.05 | **yes** | **0.167 / 0.175** | 516 | 589 | 10.4 / 10.5 |
+| `hybrid` | 0.3 | no | **0.100** | 516 | 589 | 10.3 |
+| `hybrid` | 1.0 | no | **0.100** | 516 | 589 | 10.4 |
+| `hybrid` (head-only) | 0 | no | **0.149** | 516 | 589 | 10.4 |
+| `local` (sibling) | 0.05 | no | **0.400** | 965 | 1037 | 15.1 |
+| `local` (sibling) | 0.3 | no | **0.405** | 965 | 1037 | 15.1 |
+| `local` (sibling) | 1.0 | no | **0.384** | 965 | 1037 | 15.2 |
+
+The reference trains, so the floor is **0.408** (0.418 − 1 pp). The baseline
+repeats T6a₂'s level (0.163 / 0.169). **No trunk knob reaches the floor**:
+the bias flag adds **+0.5 pp** (the only gain the grid shows); the
+`feedback_scale` ladder peaks at the registered scale and **collapses to
+chance** (0.100, 10 classes) at 0.3 and 1.0; head-only (gamma=0, zero trunk
+contrast, so only the head trains) reads **0.149**.
+
+**The sibling control names the mechanism.** The same trunk rule as a whole
+stack (`local`) reads 0.400 / 0.405 / 0.384 — within 1.5 pp of the reference
+and **24 pp above the hybrid** — and it does not collapse where the hybrid
+does. So the gap is the **split at the boundary** (a 2-layer exact-gradient
+head over a slowly trained trunk), not the trunk's rule, its bias path, or its
+scale. **CORRECTION 24.**
+
+**The memory half does not hold at this box.** The hybrid's activation set is
+516 MB against the checkpointed arm's 485 MB (**1.06×**), so L=8 is an accuracy
+diagnostic box; the bar is met at L=32 under the stream-normalized pass
+(0.46×, §2.14). The pilot box cannot decide the memory claim.
+
+**Trigger.** T6e — the split's position at the pilot box: `split_layer` on the
+last Linear (a readout-only head: 7 trunk layers + 1 exact-gradient layer) at
+gamma 0.05, then a decoupled trunk learning rate (gamma × lr as one box). No
+claim run is scheduled (12 measured cells (14 planned), no claim cell).
+
+Artifacts: `results/t93_a_stream/hybrid_update.{json,md}` plus the kill-safe
+cell log `hybrid_update.cells.jsonl`; replay
+`uv run python -m computronium.validation.hybrid_update --replay`.
 
 ## 3. Open locks
 
@@ -758,6 +815,7 @@ replay `uv run python -m computronium.validation.memory_frontier --re-register`.
 | Kill-safe substrate cell log: resume/replay and dedup | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
 | D2 gate: paired interval, cost ruler, QDQ width, extension screen, replay | `tests/unit/validation/test_matched_substrate.py` | 10 s |
 | F1 gate: screen/ladder/confirmation, invalid reference/control, median family, 2/4/6 width ladder | `tests/unit/validation/test_composition_ladder.py` | 14 s |
+| T6d gate: floor from the reference, ladder confirmation, sibling/composition, head-only refusals, kill-safe cell log | `tests/unit/validation/test_hybrid_update.py` | 9 s |
 | Kill-safe composition cell log: replay recomputes the gate; registration precedes the first cell | `tests/unit/validation/test_composition_ladder.py` | 1 s |
 | QDQ control quantises (256 levels, float forward, STE) and is not a cast | `tests/unit/validation/test_matched_substrate.py` | 5 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |

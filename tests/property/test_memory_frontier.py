@@ -47,13 +47,13 @@ _SIGMA = 0.10
 
 @pytest.fixture(scope="module")
 def cifar() -> Iterator[tuple[torch.Tensor, ...]]:
-    yield frontier._cifar()
+    yield frontier.cifar_splits()
 
 
 def _cell(arm: str, depth: int = _POINT.depth, cifar=None) -> frontier.ArmCell:
-    x_train, y_train, x_test, y_test = cifar or frontier._cifar()
+    x_train, y_train, x_test, y_test = cifar or frontier.cifar_splits()
     point = _POINT.scaled(depth=depth)
-    return frontier._measure(
+    return frontier.measure_cell(
         arm,
         point,
         lr=frontier.FROZEN_LR[arm],

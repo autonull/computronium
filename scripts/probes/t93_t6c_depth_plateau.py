@@ -32,7 +32,7 @@ from computronium.validation import memory_frontier as frontier
 
 
 def curve(depth: int, lr: float, checkpoints: tuple[int, ...], seed: int) -> None:
-    x_train, y_train, x_test, y_test = frontier._cifar()
+    x_train, y_train, x_test, y_test = frontier.cifar_splits()
     point = frontier.PilotPoint(depth=depth, steps=max(checkpoints))
     system = frontier.build_arm("backprop", point, lr=lr, seed=seed)
     trainer = SystemTrainer(

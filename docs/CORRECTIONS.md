@@ -230,3 +230,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The suspicion is the **level gap**, not the box: the composition reads ~0.16 at every box while both parts read 0.35-0.42, so the hybrid's own update is the mechanism and the trigger (T6d). |
 | Status | corrected — the hybrid is box-insensitive; the gap is the update |
 | Commit | this commit |
+
+| Field | Correction 24 — the hybrid's gap is the split, not the trunk's update |
+|---|---|
+| Original claim | T6a₂'s refusal localized the 17 pp gap at "the hybrid's own update", and the trigger framed it as the trunk's knobs: `train_biases` and `feedback_scale` as the next rung (CORRECTION 23). |
+| Original metric | The hybrid's accuracy against the checkpointed arm at one box while the trunk's knobs move. A 17 pp gap is equally consistent with the trunk's step, the trunk's rule, or the head's split; the knob grid cannot separate them. |
+| Audited procedure | T6d at L=8/W=1024/B=8192, 200 steps, LR 0.3, seed 21 (confirmation 22): baseline 0.163/0.169; `train_biases` 0.167/0.175 (+0.5 pp); gamma 0.05/0.3/1.0 → 0.163/0.100/0.100; head-only (gamma=0) 0.149; **sibling `local`, the same trunk rule as a whole stack, 0.400/0.405/0.384**; reference `backprop+ckpt` 0.419/0.416 (floor 0.408). |
+| Affected conclusions | T6a₂'s **mechanism attribution** only; its refusal at the pass-carrying box (memory 0.46× met, accuracy 17 pp below) stands, and CORRECTION 23's box-insensitivity stands — the level is the split's. |
+| Replacement metric | The mechanism is the **split at the boundary**: the same rule trains as a whole stack and collapses only when a 2-layer exact-gradient head reads its boundary. The next rung is the split's position (`split_layer` on the last Linear, a readout-only head), not another trunk knob. The diagnostic also measures the hybrid's activation set at **1.06×** the reference's at L=8, so the pilot box cannot decide the memory half. |
+| Status | corrected — T6d refused with the sibling control and the split as the mechanism |
+| Commit | this commit |

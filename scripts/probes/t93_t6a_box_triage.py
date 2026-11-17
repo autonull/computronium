@@ -22,7 +22,11 @@ import json
 
 import torch
 
-from computronium.validation.memory_frontier import PilotPoint, _cifar, _measure
+from computronium.validation.memory_frontier import (
+    PilotPoint,
+    cifar_splits,
+    measure_cell,
+)
 
 __all__ = ["main"]
 
@@ -31,11 +35,11 @@ DEPTH = 16
 
 
 def main() -> None:
-    x_train, y_train, x_test, y_test = _cifar()
+    x_train, y_train, x_test, y_test = cifar_splits()
     point = PilotPoint(depth=DEPTH, width=512, batch=4096, steps=200)
     for seed in (21, 22):
         for arm in ARMS:
-            cell = _measure(
+            cell = measure_cell(
                 arm,
                 point,
                 lr=0.3,
