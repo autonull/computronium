@@ -13,11 +13,13 @@ import torch
 from torch import Tensor
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.ontology._registry import ImplementationRegistry
 from computronium.ontology.update._base import (
     AdamStateMixin,
     BufferManager,
     ClippingMixin,
     LionStateMixin,
+    SecondMomentMixin,
     StatefulUpdate,
     StateSnapshotMixin,
 )
@@ -55,6 +57,12 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
     "spectral_constrained": "per_element_displacement",
     "elastic_consolidation": "per_element_displacement",
     "natural_gradient": "per_element_displacement",
+    "synaptic_intelligence": "per_element_displacement",
+    "cascade_synapse": "per_element_displacement",
+    "bayesian_online": "per_element_displacement",
+    "adafactor": "per_element_displacement",
+    "quantized_adam": "per_element_displacement",
+    "schedule_free": "per_element_displacement",
 }
 
 
@@ -90,6 +98,16 @@ class ParameterUpdateConfig:
     role_names: tuple[str, ...] = ()
     sub_rules: RoleSplitSpec | None = None
     handles_own_clipping: bool = False
+    si_lambda: float = 0.1
+    cascade_levels: int = 8
+    cascade_up: float = 0.05
+    cascade_down: float = 0.01
+    von_alpha: float = 1e-3
+    von_init_var: float = 1.0
+    von_min_var: float = 1e-8
+    factor_decay: float = 0.999
+    quant_block: int = 256
+    schedule_beta: float = 0.9
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "role_names", tuple(self.role_names))
@@ -496,6 +514,158 @@ class ParameterUpdateConfig:
         )
 
     @classmethod
+    def synaptic_intelligence(
+        cls,
+        *,
+        step_size: float = 1e-2,
+        si_lambda: float = 0.1,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Synaptic Intelligence: the penalty lifted into an update rule."""
+        return cls(
+            update_type="synaptic_intelligence",
+            step_size=step_size,
+            momentum=0.9,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            si_lambda=si_lambda,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
+    def cascade_synapse(
+        cls,
+        *,
+        step_size: float = 1e-2,
+        cascade_levels: int = 8,
+        cascade_up: float = 0.05,
+        cascade_down: float = 0.01,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Benna–Fusi cascade: a metaplastic multi-level state per parameter."""
+        return cls(
+            update_type="cascade_synapse",
+            step_size=step_size,
+            momentum=0.9,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            cascade_levels=cascade_levels,
+            cascade_up=cascade_up,
+            cascade_down=cascade_down,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
+    def bayesian_online(
+        cls,
+        *,
+        von_alpha: float = 1e-3,
+        von_init_var: float = 1.0,
+        von_min_var: float = 1e-8,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """VON: an online diagonal Gaussian posterior per parameter."""
+        return cls(
+            update_type="bayesian_online",
+            step_size=1.0,
+            momentum=0.9,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            von_alpha=von_alpha,
+            von_init_var=von_init_var,
+            von_min_var=von_min_var,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
+    def adafactor(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        momentum: float = 0.9,
+        factor_decay: float = 0.999,
+        eps: float = 1e-8,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Adafactor: a factored row × column second moment."""
+        return cls(
+            update_type="adafactor",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=0.999,
+            factor_decay=factor_decay,
+            eps=eps,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
+    def quantized_adam(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        momentum: float = 0.9,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+        quant_block: int = 256,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """8-bit Adam: blockwise-quantized first and second moments."""
+        return cls(
+            update_type="quantized_adam",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
+            eps=eps,
+            quant_block=quant_block,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
+    def schedule_free(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        schedule_beta: float = 0.9,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Schedule-free AdamW: the averaged sequence iterate is the step."""
+        return cls(
+            update_type="schedule_free",
+            step_size=step_size,
+            momentum=schedule_beta,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
+            eps=eps,
+            schedule_beta=schedule_beta,
+            handles_own_clipping=False,
+        )
+
+    @classmethod
     def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the parameter_update axis.
 
@@ -659,8 +829,6 @@ def actual_parameter_displacement(
         name: new_params[name] - params[name] for name in params if name in new_params
     }
 
-
-from computronium.ontology._registry import ImplementationRegistry
 
 _UPDATE_REGISTRY = ImplementationRegistry[ParameterUpdate]("update")
 _UPDATE_REGISTRY.add_discovery_package("computronium.ontology.update")
@@ -1628,6 +1796,601 @@ class RoleSplitUpdate:
     def load_state(self, state: dict[str, dict[str, dict[str, Tensor]]]) -> None:
         self._on_role.load_state(state.get("on_role", {}))
         self._other.load_state(state.get("other", {}))
+
+
+@update_backend("synaptic_intelligence")
+class SynapticIntelligenceUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
+    """Synaptic Intelligence, lifted from the continual penalty to a rule.
+
+    The source of truth stays ``core.continual.losses.SynapticIntelligence``:
+    this rule holds one *stable* parameter store (so the loss object's
+    id-keyed state stays valid across steps), feeds it the clipped
+    pseudo-gradients, and adds its ``penalty_gradients()`` to the task
+    gradient: ``Δθ = −lr·(g + ξ·Ω̃·(θ − θ*))``. ``consolidate()`` closes
+    the task at the boundary. The extra parameter copy is the penalty's
+    price, named on the card.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="SynapticIntelligenceUpdate",
+        reference_equations=(
+            "Synaptic Intelligence; Zenke, Poole & Ganguli (2017), arXiv 1703.04200"
+        ),
+        deviations_from_literature=(
+            "the path integral is optimizer state, not a loss object's field",
+            "the rule keeps one stable parameter store so the loss object's "
+            "id-keyed state survives the step",
+        ),
+        objective_function="L + (ξ/2)·Σ Ω̃·(θ − θ*)² applied as a gradient term",
+        pseudo_gradient_def="ΔW = −lr·(g + ξ·Ω̃·(θ − θ*))",
+        symmetry_requirements=("none",),
+        approximation_parameters=("si_lambda", "step_size"),
+        validated_limits=(
+            "the lifted rule and the loss object agree at a task boundary",
+            "the penalty vanishes at the anchor",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        from computronium.core.continual.losses import SynapticIntelligence
+
+        self.config = config or ParameterUpdateConfig.synaptic_intelligence()
+        self._store: dict[str, Tensor] = {}
+        self._view = _ParameterView(self._store)
+        self._intelligence = SynapticIntelligence(
+            self._view, xi=self.config.si_lambda, epsilon=self.config.fisher_damping
+        )
+
+    def consolidate(self, params: dict[str, Tensor] | None = None) -> None:
+        """Close the task at the boundary: finalize Ω̃ on the rule's store."""
+        if not self._store and params is not None:
+            self._store.update(
+                {name: tensor.detach().clone() for name, tensor in params.items()}
+            )
+            self._intelligence.start_task()
+        self._intelligence.update_importance()
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live SI state, without the snapshot clone."""
+        return {
+            f"importance.{name}": self._intelligence.omega[id(tensor)]
+            for name, tensor in self._store.items()
+            if id(tensor) in self._intelligence.omega
+        } | {f"store.{name}": tensor for name, tensor in self._store.items()}
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        if not self._store:
+            self._store.update(
+                {name: tensor.detach().clone() for name, tensor in params.items()}
+            )
+            self._intelligence.start_task()
+        self._intelligence.accumulate_pseudo_grads(grads, geometry)
+        penalty = self._intelligence.penalty_gradients()
+        names = [name for name in self._store if "weight" in name]
+        updated = dict(self._store)
+        for name, grad in zip(names, grads, strict=True):
+            identity = id(self._store[name])
+            extra = penalty.get(identity)
+            updated[name] = self._store[name] - self.config.step_size * grad
+            if extra is not None:
+                updated[name] -= self.config.step_size * extra
+        for name, tensor in updated.items():
+            self._store[name].copy_(tensor)
+        return {name: tensor.detach().clone() for name, tensor in updated.items()}
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "store": {k: v.detach().clone() for k, v in self._store.items()},
+            "importance": {
+                name: self._intelligence.omega[id(tensor)].detach().clone()
+                for name, tensor in self._store.items()
+                if id(tensor) in self._intelligence.omega
+            },
+            "anchor": {
+                name: self._intelligence.prev_params[id(tensor)].detach().clone()
+                for name, tensor in self._store.items()
+                if id(tensor) in self._intelligence.prev_params
+            },
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._store = {k: v.clone() for k, v in state.get("store", {}).items()}
+        self._view = _ParameterView(self._store)
+        self._intelligence.model = self._view
+        self._intelligence.omega = {
+            id(self._store[name]): value.clone()
+            for name, value in state.get("importance", {}).items()
+            if name in self._store
+        }
+        self._intelligence.prev_params = {
+            id(self._store[name]): value.clone()
+            for name, value in state.get("anchor", {}).items()
+            if name in self._store
+        }
+
+
+class _ParameterView:
+    """A ``named_parameters()`` view over the rule's stable parameter store."""
+
+    def __init__(self, store: dict[str, Tensor]) -> None:
+        self._store = store
+
+    def named_parameters(self, *args: object, **kwargs: object):
+        return iter(self._store.items())
+
+    def parameters(self, *args: object, **kwargs: object):
+        return iter(self._store.values())
+
+
+@update_backend("cascade_synapse")
+class CascadeSynapseUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
+    """Benna–Fusi cascade: a metaplastic multi-level state per parameter.
+
+    ``Δθ = −lr·g·(1 + c)``, then the cascade moves: ``c ← min(levels, c + up)``
+    when the step's sign disagrees with the stored sign, else
+    ``c ← c·(1 − down)``. The levels are the synapse's history, so a
+    parameter that keeps changing direction becomes harder to move.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="CascadeSynapsePlasticity",
+        reference_equations=(
+            "Benna & Fusi (2016), Nature Neuroscience 19:1695; cascade "
+            "model with discrete metaplastic levels"
+        ),
+        deviations_from_literature=(
+            "cascade levels are stored per parameter, not per synapse of a "
+            "spiking network",
+            "the step's sign uses the pseudo-gradient, not a spike pair",
+        ),
+        objective_function="Δθ = −lr·g·(1 + c)",
+        pseudo_gradient_def="ΔW = −lr·g·(1 + c); c ← c + up on a sign flip",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "cascade_levels",
+            "cascade_up",
+            "cascade_down",
+            "step_size",
+        ),
+        validated_limits=(
+            "the cascade saturates at its level count",
+            "a repeated direction decays the cascade by (1 − down)",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.cascade_synapse()
+        self._cascade: dict[str, Tensor] = {}
+        self._sign: dict[str, Tensor] = {}
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        names = [name for name in params if "weight" in name and params[name].ndim == 2]
+        for name, grad in zip(names, grads, strict=True):
+            param = params[name]
+            cascade = self._get_buffer(self._cascade, name, param, "Cascade state")
+            sign = self._sign.get(name)
+            if sign is None:
+                self._sign[name] = torch.zeros_like(param)
+                sign = self._sign[name]
+            if not torch.isfinite(grad).all():
+                continue
+            flipped = (torch.sign(grad) != sign) & (sign != 0)
+            cascade += flipped.to(cascade.dtype) * self.config.cascade_up
+            cascade *= 1 - self.config.cascade_down * (~flipped).to(cascade.dtype)
+            cascade.clamp_(0.0, float(self.config.cascade_levels))
+            sign.copy_(torch.sign(grad))
+            params[name] = param - self.config.step_size * grad * (1 + cascade)
+        return params
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live cascade state, without the snapshot clone."""
+        return {f"cascade.{k}": v for k, v in self._cascade.items()} | {
+            f"sign.{k}": v for k, v in self._sign.items()
+        }
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "cascade": {k: v.detach().clone() for k, v in self._cascade.items()},
+            "sign": {k: v.detach().clone() for k, v in self._sign.items()},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._cascade = {k: v.clone() for k, v in state.get("cascade", {}).items()}
+        self._sign = {k: v.clone() for k, v in state.get("sign", {}).items()}
+
+
+@update_backend("bayesian_online")
+class BayesianOnlineUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
+    """VON: an online diagonal Gaussian posterior per parameter.
+
+    ``μ ← μ − α·σ²·g`` and ``σ² ← max(min_var, σ²·(1 − α·σ²·g²))`` — the
+    law-of-the-total-variance for the weight posterior (Aitchison 2021). The
+    variance is the trust region: an uncertain parameter takes a long step,
+    a settled one barely moves.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="BayesianOnlineUpdate",
+        reference_equations=(
+            "VON (Aitchison 2021, arXiv 2010.11995); online Gaussian "
+            "posterior over the weights"
+        ),
+        deviations_from_literature=(
+            "the posterior is diagonal per parameter (no covariance "
+            "factors); the variance is the per-coordinate trust region",
+        ),
+        objective_function="−log E_{q(θ)}[L] with q = N(μ, σ²)",
+        pseudo_gradient_def="μ ← μ − ασ²g; σ² ← σ²(1 − ασ²g²)",
+        symmetry_requirements=("none",),
+        approximation_parameters=("von_alpha", "von_init_var", "von_min_var"),
+        validated_limits=(
+            "the variance falls monotonically under a constant gradient",
+            "the variance recovers toward its init once gradients vanish",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.bayesian_online()
+        self._mu: dict[str, Tensor] = {}
+        self._var: dict[str, Tensor] = {}
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        names = [name for name in params if "weight" in name and params[name].ndim == 2]
+        alpha = self.config.von_alpha
+        for name, grad in zip(names, grads, strict=True):
+            param = params[name]
+            variance = self._get_buffer(
+                dict(self._var),
+                name,
+                param,
+                "VON state",
+            )
+            if variance.norm() == 0:
+                variance = torch.full_like(param, self.config.von_init_var)
+            self._var[name] = variance
+            if not torch.isfinite(grad).all():
+                continue
+            self._mu[name] = param
+            variance = (variance * (1 - alpha * variance * grad.square())).clamp_min(
+                self.config.von_min_var
+            )
+            self._var[name] = variance
+            params[name] = param - alpha * variance * grad
+        return params
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live VON state, without the snapshot clone."""
+        return {f"variance.{k}": v for k, v in self._var.items()}
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "mean": {k: v.detach().clone() for k, v in self._mu.items()},
+            "variance": {k: v.detach().clone() for k, v in self._var.items()},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._mu = {k: v.clone() for k, v in state.get("mean", {}).items()}
+        self._var = {k: v.clone() for k, v in state.get("variance", {}).items()}
+
+
+CascadeSynapsePlasticity = CascadeSynapseUpdate
+"""The plan's literature name; the class name follows the axis convention."""
+
+
+@update_backend("adafactor")
+class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin):
+    """Adafactor: a factored (row × column) second moment.
+
+    ``V ≈ R Cᵀ / mean(R)``; ``m ← β1·m + (1−β1)·g``; ``R ← β2·R + (1−β2)·mean(g², rows)``;
+    ``C ← β2·C + (1−β2)·mean(g², columns)``; ``Δθ = −lr·m/√(V + eps)``. One
+    row and one column vector replace the full second moment, so the optimizer
+    state is ``O(rows + cols)`` per matrix instead of ``O(rows·cols)``.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="FactoredSecondMomentUpdate",
+        reference_equations=(
+            "Adafactor; Shazeer & Stern (2018), arXiv 1804.04235"
+        ),
+        deviations_from_literature=(
+            "the factored second moment is stored per 2-D weight; the update "
+            "applies no relative-step clip and no warmup",
+        ),
+        objective_function="the task loss at the FREE-phase input/target",
+        pseudo_gradient_def="ΔW = −lr·m/√(R Cᵀ/mean(R) + eps)",
+        symmetry_requirements=("none",),
+        approximation_parameters=("momentum (β1)", "factor_decay (β2)", "eps"),
+        validated_limits=(
+            "the factored estimate tracks the full second moment on a rank-1 "
+            "gradient fixture",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.adafactor()
+        self._m: dict[str, Tensor] = {}
+        self._second: dict[str, Tensor] = {}
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        names = [name for name in params if "weight" in name and params[name].ndim == 2]
+        beta1 = self.config.momentum
+        beta2 = self.config.factor_decay
+        for name, grad in zip(names, grads, strict=True):
+            param = params[name]
+            if not torch.isfinite(grad).all():
+                continue
+            moment = self._get_buffer(self._m, name, param, "Adafactor state")
+            moment.mul_(beta1).add_(grad, alpha=1 - beta1)
+            self._m[name] = moment
+            row = self._second.get(f"{name}.row")
+            column = self._second.get(f"{name}.column")
+            if row is None or row.shape != (param.shape[0],):
+                row = torch.zeros(param.shape[0], device=param.device, dtype=param.dtype)
+            if column is None or column.shape != (param.shape[1],):
+                column = torch.zeros(
+                    param.shape[1], device=param.device, dtype=param.dtype
+                )
+            square = grad.square()
+            row.mul_(beta2).add_(square.mean(dim=1), alpha=1 - beta2)
+            column.mul_(beta2).add_(square.mean(dim=0), alpha=1 - beta2)
+            self._second[f"{name}.row"] = row
+            self._second[f"{name}.column"] = column
+            estimate = row[:, None] * column[None, :] / row.mean().clamp_min(1e-12)
+            params[name] = param - self.config.step_size * moment / (
+                estimate + self.config.eps
+            ).sqrt()
+        return params
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return self._snapshot_second() | {
+            "momentum": {k: v.detach().clone() for k, v in self._m.items()}
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._restore_second(state)
+        self._m = {k: v.clone() for k, v in state.get("momentum", {}).items()}
+
+
+@update_backend("quantized_adam")
+class QuantizedStateUpdate(BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin):
+    """8-bit Adam: blockwise-quantized first and second moments.
+
+    Both moments are stored as int8 blocks with one scale per block, so the
+    optimizer state is 4× smaller than fp32 Adam and the step is the usual
+    bias-corrected Adam on the dequantized moments. The scale is the block's
+    absolute maximum over 127 — the bitsandbytes layout.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="QuantizedStateUpdate",
+        reference_equations=(
+            "8-bit Adam; Dettmers et al. (2022), arXiv 2110.02861 "
+            "(blockwise quantization of the optimizer state)"
+        ),
+        deviations_from_literature=(
+            "the block size is fixed at ``quant_block`` elements and the "
+            "scale is the block absolute maximum over 127",
+            "the step is exact Adam on the dequantized moments",
+        ),
+        objective_function="the task loss at the FREE-phase input/target",
+        pseudo_gradient_def=(
+            "ΔW = −lr·m̂/(√v̂ + eps); m̂, v̂ = dequantized int8 blocks"
+        ),
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "momentum (β1)",
+            "beta2",
+            "eps",
+            "quant_block",
+        ),
+        validated_limits=(
+            "the quantized state's memory is 4× smaller than fp32 Adam",
+            "the dequantized step matches fp32 Adam within the block scale",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.quantized_adam()
+        self._moment: dict[str, Tensor] = {}
+        self._second: dict[str, Tensor] = {}
+        self._shapes: dict[str, torch.Size] = {}
+        self._t = 0
+
+    def _quantize(self, tensor: Tensor) -> tuple[Tensor, Tensor]:
+        """Int8 blocks and one scale per block; the last block is trimmed."""
+        block = max(1, int(self.config.quant_block))
+        flat = tensor.flatten()
+        blocks = -(-flat.numel() // block)
+        pad = blocks * block - flat.numel()
+        padded = flat if not pad else torch.cat([flat, flat.new_zeros(pad)])
+        view = padded.view(blocks, block)
+        scale = view.abs().amax(dim=1).clamp_min(1e-12) / 127
+        packed = torch.round(view / scale[:, None]).to(torch.int8).flatten()
+        return packed[: flat.numel()], scale
+
+    def _dequantize(self, packed: Tensor, scale: Tensor, numel: int) -> Tensor:
+        block = max(1, int(self.config.quant_block))
+        blocks = scale.numel()
+        flat = packed
+        if flat.numel() < blocks * block:
+            flat = torch.cat([flat, flat.new_zeros(blocks * block - flat.numel())])
+        decoded = flat.view(blocks, block).to(scale.dtype) * scale[:, None]
+        return decoded.flatten()[:numel]
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        names = [name for name in params if "weight" in name and params[name].ndim == 2]
+        self._t += 1
+        beta1 = self.config.momentum
+        beta2 = self.config.beta2
+        for name, grad in zip(names, grads, strict=True):
+            param = params[name]
+            if not torch.isfinite(grad).all():
+                continue
+            stored = self._shapes.setdefault(name, param.shape)
+            if stored != param.shape:
+                raise RuntimeError(
+                    f"QuantizedStateUpdate state for {name!r} has shape "
+                    f"{tuple(stored)} but parameter has {tuple(param.shape)} "
+                    "-- the update instance is being reused across different "
+                    "geometries; create one update per system (optimizer "
+                    "state is system-scoped)"
+                )
+            packed_m = self._moment.get(f"{name}.m")
+            packed_v = self._second.get(f"{name}.v")
+            if packed_m is None or packed_v is None:
+                first = torch.zeros_like(param)
+                second = torch.zeros_like(param)
+            else:
+                first = self._dequantize(
+                    packed_m, self._moment[f"{name}.m.scale"], param.numel()
+                ).view(param.shape)
+                second = self._dequantize(
+                    packed_v, self._second[f"{name}.v.scale"], param.numel()
+                ).view(param.shape)
+            first.mul_(beta1).add_(grad, alpha=1 - beta1)
+            second.mul_(beta2).add_(grad.square(), alpha=1 - beta2)
+            self._moment[f"{name}.m"], self._moment[f"{name}.m.scale"] = self._quantize(
+                first
+            )
+            self._second[f"{name}.v"], self._second[f"{name}.v.scale"] = (
+                self._quantize(second)
+            )
+            bias1 = 1 - beta1**self._t
+            bias2 = 1 - beta2**self._t
+            params[name] = param - self.config.step_size * (first / bias1) / (
+                (second / bias2).sqrt() + self.config.eps
+            )
+        return params
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return self._snapshot_second() | {
+            "momentum": {k: v.detach().clone() for k, v in self._moment.items()}
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._restore_second(state)
+        self._moment = {k: v.clone() for k, v in state.get("momentum", {}).items()}
+
+
+@update_backend("schedule_free")
+class ScheduleFreeUpdate(
+    BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin
+):
+    """Schedule-free AdamW: ``x`` is averaged over a ``z`` sequence.
+
+    ``z ← z − lr·g/√(v + eps)``, ``v ← β2·v + (1−β2)·g²``, then
+    ``x_avg ← (1 − c)·x_avg + c·z`` with ``c = 1/(t + 1)``. The evaluation
+    point is the average, so the rule needs no decreasing schedule and no
+    warmup: the averaging is the schedule.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="ScheduleFreeUpdate",
+        reference_equations=(
+            "Schedule-Free AdamW; Defazio et al. (2024), arXiv 2405.15682"
+        ),
+        deviations_from_literature=(
+            "the evaluation point is the running average of the sequence "
+            "iterate; no warmup schedule and no weight decay are applied",
+        ),
+        objective_function="the task loss at the averaged evaluation point",
+        pseudo_gradient_def="z ← z − lr·g/√v; x ← (1 − c)x + c·z",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "step_size",
+            "schedule_beta (β1)",
+            "beta2",
+            "eps",
+        ),
+        validated_limits=(
+            "the averaged point reaches the same loss as a tuned schedule on "
+            "a convex fixture",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.schedule_free()
+        self._z: dict[str, Tensor] = {}
+        self._second: dict[str, Tensor] = {}
+        self._t = 0
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads), self.config.grad_clip)
+        names = [name for name in params if "weight" in name and params[name].ndim == 2]
+        self._t += 1
+        beta2 = self.config.beta2
+        average = 1.0 / self._t
+        for name, grad in zip(names, grads, strict=True):
+            param = params[name]
+            if not torch.isfinite(grad).all():
+                continue
+            sequence = self._z.get(name)
+            if sequence is None or sequence.shape != param.shape:
+                sequence = param.detach().clone()
+            second = self._second.get(name)
+            if second is None or second.shape != param.shape:
+                second = torch.zeros_like(param)
+            second.mul_(beta2).add_(grad.square(), alpha=1 - beta2)
+            sequence -= self.config.step_size * grad / (
+                second.sqrt() + self.config.eps
+            )
+            self._z[name] = sequence
+            self._second[name] = second
+            params[name] = (1 - average) * param + average * sequence
+        return params
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return self._snapshot_second() | {
+            "sequence": {k: v.detach().clone() for k, v in self._z.items()},
+            "counters": {"t": torch.tensor(self._t)},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._restore_second(state)
+        self._z = {k: v.clone() for k, v in state.get("sequence", {}).items()}
+        count = state.get("counters", {}).get("t")
+        self._t = int(count.item()) if count is not None else 0
 
 
 def update_from_config(config: ParameterUpdateConfig) -> ParameterUpdate:

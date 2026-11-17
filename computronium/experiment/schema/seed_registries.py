@@ -230,6 +230,22 @@ _CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
         ("estimator_samples", "fd_step"),
     ),
     ("surrogate", "Straight-through surrogate for hard top-k routing", ()),
+    (
+        "local_supervision",
+        "Deep local supervision: one auxiliary head per hidden layer",
+        ("aux_head_scale",),
+    ),
+    (
+        "eligibility_prop",
+        "e-prop: a decaying eligibility trace",
+        ("trace_decay",),
+    ),
+    (
+        "unbiased_rtrl",
+        "UORO: an unbiased rank-1 factored Jacobian",
+        ("uoro_seed",),
+    ),
+    ("rtrl_reference", "Exact RTRL (temporal parity reference)", ()),
 ]
 
 # Update primitives: rule-specific optimizer params are structural
@@ -254,6 +270,36 @@ _UPDATE_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ),
     ("natural_gradient", "Natural gradient (Fisher)", ("fisher_damping",)),
     ("role_split", "Role-split update", ()),
+    (
+        "synaptic_intelligence",
+        "Synaptic Intelligence: the penalty lifted into a rule",
+        ("si_lambda",),
+    ),
+    (
+        "cascade_synapse",
+        "Benna-Fusi cascade: a metaplastic multi-level state",
+        ("cascade_levels", "cascade_up", "cascade_down"),
+    ),
+    (
+        "bayesian_online",
+        "VON: an online diagonal Gaussian posterior",
+        ("von_alpha", "von_init_var", "von_min_var"),
+    ),
+    (
+        "adafactor",
+        "Adafactor: a factored row x column second moment",
+        ("factor_decay", "eps"),
+    ),
+    (
+        "quantized_adam",
+        "8-bit Adam: blockwise-quantized moments",
+        ("quant_block", "beta2", "eps"),
+    ),
+    (
+        "schedule_free",
+        "Schedule-free AdamW: the averaged sequence iterate",
+        ("schedule_beta", "beta2", "eps"),
+    ),
 ]
 
 # Plasticity primitives: psi-specific dims are structural to the primitive

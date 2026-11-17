@@ -1117,6 +1117,42 @@ class FeedforwardGeometry(nn.Module):
             return h
         return self._apply_layers(h, self._layers, op, intermediates)
 
+    def branch_step_layer(
+        self,
+        h: Tensor,
+        layer: nn.Module,
+        h_in: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        """One layer's own output, before any residual skip or rescale.
+
+        ``h_in`` is the last Linear's *input*: the activation after a Linear
+        adds that tensor, not its own input. A caller that reads a block's
+        local activity (the hybrid trunk's contrast) wants this tensor, not
+        the skip sum: the skip is a path identity, not the layer's error.
+        Returns ``(branch output, h_in)``.
+        """
+        if isinstance(layer, nn.Linear):
+            h_in = h
+            branch = op(h, layer.weight)
+            if layer.bias is not None:
+                # Out-of-place add: in-place adds on grad-tracking tensors
+                # pin the whole downstream settle graph (CUDA leak)
+                branch = branch + layer.bias
+            return branch, h_in
+        return layer(h), h_in
+
+    def skip(self, branch: Tensor, h_in: Tensor) -> Tensor:
+        """The residual skip and the stream rescale over one branch output."""
+        h = branch
+        if self.residual and h.shape == h_in.shape:
+            # Out-of-place add: in-place adds on grad-tracking
+            # tensors pin the whole downstream settle graph
+            h = h + h_in  # ruff: ignore[non-augmented-assignment]
+        if self.stream_norm:
+            h = self._normalize_stream(h)
+        return h
+
     def step_layer(
         self,
         h: Tensor,
@@ -1132,22 +1168,8 @@ class FeedforwardGeometry(nn.Module):
         or a residual geometry adds the wrong tensor. Returns
         ``(output, h_in)``.
         """
-        if isinstance(layer, nn.Linear):
-            h_in = h
-            h = op(h, layer.weight)
-            if layer.bias is not None:
-                # Out-of-place add: in-place adds on grad-tracking tensors
-                # pin the whole downstream settle graph (CUDA leak)
-                h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
-            return h, h_in
-        h = layer(h)
-        if self.residual and h.shape == h_in.shape:
-            # Out-of-place add: in-place adds on grad-tracking
-            # tensors pin the whole downstream settle graph
-            h = h + h_in  # ruff: ignore[non-augmented-assignment]
-        if self.stream_norm:
-            h = self._normalize_stream(h)
-        return h, h_in
+        branch, h_in = self.branch_step_layer(h, layer, h_in, op)
+        return self.skip(branch, h_in), h_in
 
     def _apply_layers(
         self,

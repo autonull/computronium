@@ -7,16 +7,19 @@ from typing import TYPE_CHECKING
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
+    EligibilityPropCredit,
     ForwardTangentCredit,
     GeometryConfig,
     HomeostaticCredit,
     HybridCredit,
     LocalContrastiveCredit,
     LocalGoodnessCredit,
+    LocalSupervisionCredit,
     ParameterUpdateConfig,
     PCALMCredit,
     PepitaCredit,
     RandomProjectionsCredit,
+    RTRLReference,
     ScoreFunctionCredit,
     StateDynamicsConfig,
     SubstrateConfig,
@@ -24,6 +27,7 @@ from computronium.ontology import (
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
+    UnbiasedOnlineRTRLCredit,
     ZerothOrderCredit,
     geometry_from_config,
     substrate_from_config,
@@ -116,6 +120,14 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return ZerothOrderCredit(config)
         case "surrogate":
             return SurrogateCredit(config)
+        case "local_supervision":
+            return LocalSupervisionCredit(config)
+        case "eligibility_prop":
+            return EligibilityPropCredit(config)
+        case "unbiased_rtrl":
+            return UnbiasedOnlineRTRLCredit(config)
+        case "rtrl_reference":
+            return RTRLReference(config)
         case other:
             raise ValueError(f"Unknown credit_type: {other!r}")
 

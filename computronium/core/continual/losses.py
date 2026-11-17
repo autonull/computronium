@@ -2,11 +2,30 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.continual.constants import CL_CLASSES_PER_TASK
+
+
+class ParameterSource(Protocol):
+    """The model surface Synaptic Intelligence reads."""
+
+    def named_parameters(
+        self, *args: object, **kwargs: object
+    ) -> Iterator[tuple[str, Tensor]]:
+        """Every named parameter."""
+        ...
+
+    def parameters(self, *args: object, **kwargs: object) -> Iterator[Tensor]:
+        """Every parameter value."""
+        ...
 
 
 class LwFLoss(nn.Module):
@@ -89,7 +108,9 @@ class SynapticIntelligence:
     Works with pseudo-gradients from local credit assignment.
     """
 
-    def __init__(self, model: nn.Module, xi: float = 0.1, epsilon: float = 1e-3):
+    def __init__(
+        self, model: ParameterSource, xi: float = 0.1, epsilon: float = 1e-3
+    ):
         self.model = model
         self.xi = xi
         self.epsilon = epsilon
@@ -101,7 +122,7 @@ class SynapticIntelligence:
     def start_task(self) -> None:
         """Call at the start of each new task."""
         # Store current parameters as reference for this task
-        for name, param in self.model.named_parameters():
+        for _name, param in self.model.named_parameters():
             pid = id(param)
             self.prev_params[pid] = param.data.clone()
             if pid not in self.W:
@@ -118,13 +139,13 @@ class SynapticIntelligence:
 
         param_dict = dict(self.model.named_parameters())
         param_names = _learnable_weight_names(param_dict)
-        for name, grad in zip(param_names, pseudo_grads):
+        for name, grad in zip(param_names, pseudo_grads, strict=True):
             pid = id(param_dict[name])
             self._pseudo_grads_accum[pid] += grad.detach()
 
     def update_importance(self) -> None:
         """Update parameter importance (omega) at task boundary."""
-        for name, param in self.model.named_parameters():
+        for _name, param in self.model.named_parameters():
             pid = id(param)
             if pid in self.prev_params:
                 # Delta from task start
@@ -144,11 +165,23 @@ class SynapticIntelligence:
             return torch.tensor(0.0, device=next(self.model.parameters()).device)
 
         loss = torch.tensor(0.0, device=next(self.model.parameters()).device)
-        for name, param in self.model.named_parameters():
+        for _name, param in self.model.named_parameters():
             pid = id(param)
             if pid in self.omega and pid in self.prev_params:
                 loss += (self.omega[pid] * (param - self.prev_params[pid]) ** 2).sum()
         return self.xi * loss
+
+    def penalty_gradients(self) -> dict[int, Tensor]:
+        """Gradient of the regularization loss per parameter id.
+
+        The lifted update rule adds this to the task gradient; the formula
+        stays here (the source of truth), not in the rule.
+        """
+        return {
+            id(param): 2 * self.xi * self.omega[id(param)] * (param.data - self.prev_params[id(param)])
+            for _name, param in self.model.named_parameters()
+            if id(param) in self.omega and id(param) in self.prev_params
+        }
 
     def state_bytes(self) -> int:
         """Bytes of importance, anchor, path-integral and accumulator state."""
@@ -164,4 +197,4 @@ class SynapticIntelligence:
         )
 
 
-__all__ = ["LwFLoss", "SynapticIntelligence"]
+__all__ = ["LwFLoss", "ParameterSource", "SynapticIntelligence"]

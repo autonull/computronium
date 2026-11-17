@@ -35,6 +35,18 @@ from computronium.ontology.credit._base import (
     StatefulCredit as StatefulCredit,
 )
 from computronium.ontology.credit._hybrid import HybridCredit as HybridCredit
+from computronium.ontology.credit._local import (
+    LocalSupervisionCredit as LocalSupervisionCredit,
+)
+from computronium.ontology.credit._temporal import (
+    EligibilityPropCredit as EligibilityPropCredit,
+)
+from computronium.ontology.credit._temporal import (
+    RTRLReference as RTRLReference,
+)
+from computronium.ontology.credit._temporal import (
+    UnbiasedOnlineRTRLCredit as UnbiasedOnlineRTRLCredit,
+)
 from computronium.ontology.dynamics._state import state_dual_vars, state_energy
 
 if TYPE_CHECKING:
@@ -237,6 +249,9 @@ class CreditAssignmentConfig:
     trunk_lr: float = 1.0  # Hybrid: trunk step multiplier (decoupled trunk LR)
     estimator_samples: int = 8  # Forward tangents, score samples, or FD pairs
     fd_step: float = 1e-2  # Zeroth-order finite-difference step
+    aux_head_scale: float = 0.1  # Local-supervision aux head scale
+    trace_decay: float = 0.9  # e-prop eligibility-trace decay α
+    uoro_seed: int = 0  # UORO's sign/row draw sequence
 
     @classmethod
     def local_contrastive(
@@ -655,6 +670,80 @@ class CreditAssignmentConfig:
         return cls(
             credit_type="pc_alm",
             beta=beta,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+        )
+
+    @classmethod
+    def local_supervision(
+        cls,
+        *,
+        aux_head_scale: float = 0.1,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Deep local supervision: one auxiliary head per hidden layer."""
+        return cls(
+            credit_type="local_supervision",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            aux_head_scale=aux_head_scale,
+        )
+
+    @classmethod
+    def eligibility_prop(
+        cls,
+        *,
+        trace_decay: float = 0.9,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """e-prop: a decaying eligibility trace over a recurrent geometry."""
+        return cls(
+            credit_type="eligibility_prop",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            trace_decay=trace_decay,
+        )
+
+    @classmethod
+    def unbiased_rtrl(
+        cls,
+        *,
+        uoro_seed: int = 0,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """UORO: the unbiased rank-1 factored Jacobian over a recurrent cell."""
+        return cls(
+            credit_type="unbiased_rtrl",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            uoro_seed=uoro_seed,
+        )
+
+    @classmethod
+    def rtrl_reference(
+        cls,
+        *,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Exact RTRL: the parity reference for the temporal credits."""
+        return cls(
+            credit_type="rtrl_reference",
+            beta=0.5,
             feedback_matrix=None,
             local_objective="ff",
             orthogonal_init=False,

@@ -352,19 +352,23 @@ def test_credit_primitives_have_ontology_classes() -> None:
     """Every credit_assignment primitive has a corresponding ontology class."""
     from computronium.ontology.credit import (
         BackpropCredit,
+        EligibilityPropCredit,
         ForwardTangentCredit,
         HomeostaticCredit,
         HybridCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        LocalSupervisionCredit,
         PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
+        RTRLReference,
         ScoreFunctionCredit,
         SurrogateCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
         ThermodynamicContrast,
+        UnbiasedOnlineRTRLCredit,
         ZerothOrderCredit,
     )
 
@@ -384,6 +388,10 @@ def test_credit_primitives_have_ontology_classes() -> None:
         "primitive.credit_assignment.score_function": ScoreFunctionCredit,
         "primitive.credit_assignment.zeroth_order": ZerothOrderCredit,
         "primitive.credit_assignment.surrogate": SurrogateCredit,
+        "primitive.credit_assignment.local_supervision": LocalSupervisionCredit,
+        "primitive.credit_assignment.eligibility_prop": EligibilityPropCredit,
+        "primitive.credit_assignment.unbiased_rtrl": UnbiasedOnlineRTRLCredit,
+        "primitive.credit_assignment.rtrl_reference": RTRLReference,
     }
 
     for spec in primitives():
@@ -516,16 +524,22 @@ def test_update_primitives_have_ontology_classes() -> None:
     """Every parameter_update primitive has a corresponding ontology class."""
     from computronium.ontology.update import (
         AdamUpdate,
+        BayesianOnlineUpdate,
+        CascadeSynapsePlasticity,
         ElasticConsolidationUpdate,
         EuclideanUpdate,
+        FactoredSecondMomentUpdate,
         LionUpdate,
         LocalAdamUpdate,
         MeanNormUpdate,
         NaturalGradientUpdate,
         OrthoAdamUpdate,
+        QuantizedStateUpdate,
         RiemannianOrthogonalUpdate,
         RoleSplitUpdate,
+        ScheduleFreeUpdate,
         SpectralConstrainedUpdate,
+        SynapticIntelligenceUpdate,
     )
 
     ONTOLOGY_MAP: dict[str, type] = {
@@ -543,6 +557,14 @@ def test_update_primitives_have_ontology_classes() -> None:
             RiemannianOrthogonalUpdate
         ),
         "primitive.parameter_update.role_split": RoleSplitUpdate,
+        "primitive.parameter_update.synaptic_intelligence": (
+            SynapticIntelligenceUpdate
+        ),
+        "primitive.parameter_update.cascade_synapse": CascadeSynapsePlasticity,
+        "primitive.parameter_update.bayesian_online": BayesianOnlineUpdate,
+        "primitive.parameter_update.adafactor": FactoredSecondMomentUpdate,
+        "primitive.parameter_update.quantized_adam": QuantizedStateUpdate,
+        "primitive.parameter_update.schedule_free": ScheduleFreeUpdate,
     }
 
     for spec in primitives():
@@ -711,6 +733,10 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.credit_assignment.score_function": "ScoreFunctionCredit",
         "primitive.credit_assignment.zeroth_order": "ZerothOrderCredit",
         "primitive.credit_assignment.surrogate": "SurrogateCredit",
+        "primitive.credit_assignment.local_supervision": "LocalSupervisionCredit",
+        "primitive.credit_assignment.eligibility_prop": "EligibilityPropCredit",
+        "primitive.credit_assignment.unbiased_rtrl": "UnbiasedOnlineRTRLCredit",
+        "primitive.credit_assignment.rtrl_reference": "RTRLReference",
     },
     "parameter_update": {
         "primitive.parameter_update.euclidean": "EuclideanUpdate",
@@ -727,6 +753,14 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
             "RiemannianOrthogonalUpdate"
         ),
         "primitive.parameter_update.role_split": "RoleSplitUpdate",
+        "primitive.parameter_update.synaptic_intelligence": (
+            "SynapticIntelligenceUpdate"
+        ),
+        "primitive.parameter_update.cascade_synapse": "CascadeSynapseUpdate",
+        "primitive.parameter_update.bayesian_online": "BayesianOnlineUpdate",
+        "primitive.parameter_update.adafactor": "FactoredSecondMomentUpdate",
+        "primitive.parameter_update.quantized_adam": "QuantizedStateUpdate",
+        "primitive.parameter_update.schedule_free": "ScheduleFreeUpdate",
     },
     "plasticity": {
         "primitive.plasticity.null": "NullPlasticity",

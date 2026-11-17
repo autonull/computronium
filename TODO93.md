@@ -1275,7 +1275,10 @@ header or a learnable α per layer is its re-open trigger).
    (locked at `atol=1e-7`).**
 4. **Checkpoint parity** — checkpointed gradients ≡ plain backprop under dropout
    with RNG preservation.
-5. **Binding gate** — the **plain `backprop`** arm's activation share of peak
+5. **Optimizer-state scope** — a stateful update fails loud when a second
+   geometry reuses it (`BufferManager` shape guard). Landed for the three
+   memory-budget rules, the cascade, VON and SI.
+6. **Binding gate** — the **plain `backprop`** arm's activation share of peak
    ≥50%, else `[regime-mismatch]`, not evidence. The recovered
    `backprop+ckpt` share is reported, never gated. Enforced by a test over the
    claim table.
@@ -1499,6 +1502,8 @@ is a side track.
 | 2026-11-17 | A | T6e: the split's position (a readout-only head) and the trunk's step (a decoupled trunk LR) | 9 measured cells in 8 calls (2 split + 3 step + reference/baseline) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, `split_layer` 14, `trunk_lr` 0.3/1/3, seeds 21/22, RTX 3080 10 GiB (516-589 MB) | **priced (defect probe)**: reference 0.419/0.416; baseline 0.163/0.169; readout-only head 0.126/0.138 (−3.4 pp); trunk step 0.3/1/3 → 0.105/0.132/0.103; 1.06× activation bytes → T6f measured the direction next (CORRECTION 26) | T6e |
 | 2026-11-17 | A | T6a re-registration at the pass-carrying box: the memory bar is met, the accuracy bar is not | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the ckpt's minus δ at the same box (floor 0.354); activation ratio vs 0.5×; c vs 4.1 (10%) | CIFAR-10 10k/10k, L=8→32, W=512, B=4096, stream-norm, 200 steps, seed 21/22, RTX 3080 10 GiB | **refused**: hybrid 0.184 / 210 MB vs ckpt 0.364 / 453 MB (**0.46×**, memory met), confirmation 0.201 vs 0.357; controls PASS (c=4.125; learning 0.409 vs 0.399); 30 priced cells; the hybrid's own update binds → T6d | T6a₂ ⛔ |
 | 2026-11-17 | A | T6f: the trunk's direction (orthogonal rotation, ridge-fitted B) at the pilot box | 9 measured cells in 5 calls (2 directions × 2 seeds + reference/baseline + 1 confirmation) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0; walltime per cell | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, norm-matched B, seeds 21/22 + 23, RTX 3080 10 GiB (515-589 MB) | **priced (defect probe)**: reference 0.419/0.416; draw 0.163/0.169; orthogonal 0.160/0.170 (−0.1 pp; sd 0.7 pp), learned 0.145/0.144 (−2.1 pp; sd 0.03 pp) at 1.17× walltime, confirmation 0.164; 1.06× activation bytes → **the fix queue is the trunk's geometry** (CORRECTION 27); the temporal axis is next | T6f |
+| 2026-11-17 | A | T6g geometry probe (12f's lead): residual and wide trunks at the pilot box | 12 cells (2 boxes × reference/registered/residual, seeds 21/22) | val acc vs the ckpt floor (ref − 1 pp); activation bytes | CIFAR-10 10k/10k, L=8, B=8192/W=1024 and W=2048/B=4096, 200 steps, LR 0.3, seeds 21/22, RTX 3080 | **priced (defect probe)**: residual 0.215 (+5.2 pp, sd 9.6 pp across init draws), wide 0.202 (+3.9 pp), wide+residual 0.247 (+4.5 pp) vs the registered 0.163 — all miss the floor; the init draw alone moves the cell more than δ, so the diagnostic must seed; the trunk's geometry is the fix queue | 12f |
+| 2026-11-17 | — | primitive program: all ten §19 rows (4 credits, 6 updates) | 10 rows, 7 new locks, 44 targeted tests | capability: each primitive instantiates, trains a fixture, and carries its lock | one session | **landed** (capability program, CORRECTION 25): a plan-wide capability row, no verdict | §19 rows 5–8 ✅ |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d/T6e/T6f priced the update, the position, the step, and the direction; the trunk's geometry (12f) is track A's defect fix; T6c's re-open is a side track | the trunk's geometry |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D2 refused the path at its walltime box (2.09×); D3's drift rung is a trigger | — | D3 |
@@ -1515,9 +1520,17 @@ swept to pass, a verdict that closes a mechanism.
 | Rank | Track | Capability at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
 | 1 | **P0b** the hybrid's geometry | does the hybrid train with a residual or a wider trunk? | 1 session (12f) | T6c/T6d/T6e/T6f are defect probes (T6d localized the split; T6e priced the position and the step; T6f priced the direction: all refused); the geometry is the fix |
-| 2 | **Temporal** | does the system have a sequence axis at all? | 2–3 sessions (§19 row 6) | three unbiased credits landed; a sequence geometry + loader is the primitive that opens the axis |
+| 2 ✅ | **Temporal** | does the system have a sequence axis at all? | landed 2026-11-17 (§19 row 6) | e-prop, UORO and the exact RTRL reference landed; one shared unroll/readout, RTRL ≡ BPTT, and the axis' four locks pass. The sequence geometry existed (`RecurrentGeometry`); the loader is next |
 | 3 | **P1** routing | can the system train a hard top-k selection without a soft relaxation? | 1 session (the B1 ladder) | **landed** — `SurrogateCredit` + `RoutingGeometry` (§19 row 4); the B1 STE-gap screen is the next measurement |
 | 4 | **A/F/D** defect rows | the geometry, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
+
+**Portfolio position, 2026-11-17 (after the primitive program).** The plan's
+capability program landed: §19 rows 1–8 are ✅, ten primitives with identity
+cards, registry rows, primitive rows, dispatch, and seven class-level locks.
+What remains is measurement, not primitive work: the hybrid's geometry (12f)
+is track A's defect fix, and every probe row stands as a defect probe. The
+capability ledger is now append-only state — a new row starts from "is it
+wired?" (rung 0) again.
 
 **Why the track words change.** E1's atlas is a **capability map**: the three
 unbiased cells (score-function, forward-mode, zeroth order, §19 rows 1–3) are
@@ -1594,9 +1607,10 @@ per session.
   estimator family and routing landed (`ForwardTangentCredit`,
   `ScoreFunctionCredit`, `ZerothOrderCredit`, `SurrogateCredit` +
   `RoutingGeometry`); the split's position, the trunk's step, and the trunk's
-  direction were priced 2026-11-17 (T6e/T6f), so the next session
-  lands the **temporal axis** (§19 row 6), with the trunk's geometry (12f)
-  as track A's defect fix. The prior measurements are defect probes, not
+  direction were priced 2026-11-17 (T6e/T6f). The **temporal axis** landed
+  2026-11-17 (§19 row 6), and the primitive program landed every §19 row
+  (5–8 included), so the next session is measurement only: the trunk's
+  geometry (12f) as track A's defect fix, then the SEC ladder per probe. The prior measurements are defect probes, not
   gates: T6c/T6d localized the split, T6e priced its position and the step,
   T6f priced the direction, B1 the missing surrogate (now landed), D2 the
   unpriced programming budget, F1 the untrainable deep box.
@@ -2549,6 +2563,71 @@ for the causal-transformer smoke or a budget-viability rule. Also queued:
 `hybrid` 3-vs-4 shape mismatch (iris, feedforward, energy_minimization,
 fast_weights) and `thermodynamic_contrast` × cora.
 
+### Landed 2026-11-17 (primitive program — what the code actually did)
+
+Ten primitives, each with an identity card, a `CreditAssignmentConfig` /
+`ParameterUpdateConfig` factory, a registry row, a primitive row
+(`spec.py`/`kernel.py`/`reference.py`/`cases.py`/`__init__.py`), a
+dispatcher entry and exports.
+
+- **Credits**: `LocalSupervisionCredit` (`ontology/credit/_local.py`: one
+  fixed projection per hidden Linear; no cross-layer gradient),
+  `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference`
+  (`ontology/credit/_temporal.py`: one shared unroll, one readout-only
+  learning signal, one loss). The temporal trio runs on the sequence
+  contract `x (time, batch, input)` / `y (time, batch)` over
+  `RecurrentGeometry`; a 2-D state fails loud.
+- **Updates**: `SynapticIntelligenceUpdate` (a lift: it holds one stable
+  parameter store and calls `core.continual.losses.SynapticIntelligence`,
+  now with `penalty_gradients()`), `CascadeSynapsePlasticity`,
+  `BayesianOnlineUpdate`, `FactoredSecondMomentUpdate`,
+  `QuantizedStateUpdate`, `ScheduleFreeUpdate`; a `SecondMomentMixin`
+  shares the state surface.
+- **Locks** (7 test modules, 44 targeted tests): RTRL ≡ BPTT at
+  `atol=1e-6`; e-prop exact at decay 0; UORO unbiased (cos 0.979 at 128
+  draws); the aux gradient descends its own loss and the readout never enters
+  a hidden signal; factored state < ½ the square; int8 blocks 136 B vs 384 B
+  fp32 per matrix; the cascade saturates and decays; VON's variance falls
+  and floors; the SI penalty is the loss object's formula; schedule-free
+  averages to the sequence; a reused geometry fails loud.
+- **Regression**: `_hybrid.py`'s trunk contrast still reads the post-skip
+  chain (the branch out is a fix queue, not a defect claim); the parity lock
+  passes unchanged.
+- **Known tooling defect**: `pyproject.toml`'s ruff `ignore` list uses
+  pylint names (`line-too-long`, `magic-value-comparison`, ...) that ruff
+  0.17 rejects, so the repo's lint gate cannot run at all. Lint was checked
+  with `ruff check --isolated`; the config mapping is a hygiene-pass ticket.
+
+### Session wrap-up 2026-11-17 — state to resume from
+
+**Landed:** the primitive program (ten primitives, §19 rows 5–8), the surface
+inventory rows (axis primitives in `experiment/schema/seed_registries.py`),
+generated invariant tests, `docs/IDENTITY_CARDS.md`, and the repo-wide lint
+count back to 574 ≤ the 580 ratchet (60+ new findings fixed; ruff 0.17.5).
+
+**Known pre-existing failures (30, not this session's):** 22
+`test_gallery_provenance_lock` env-hash rows, `readme_build_lock`,
+`regression_target_lock`, `rng_seed_lock` (three older tests),
+`verification_labels`, `width_contract_lock`, `wp11_surface_lock` (redelivery
+dedup), `combination_smoke_lock`, `search_space_diverse_sampling_lock`. They
+were measured on a clean HEAD before this session and are the hygiene pass's
+queue.
+
+**Tooling defect found:** `pyproject.toml`'s `[tool.ruff.lint] ignore` list
+uses pylint names (`line-too-long`, `magic-value-comparison`,
+`no-self-use`, ...) that ruff 0.17 rejects as unknown selectors, so
+`ruff check <path>` from a shell fails to parse the config; the ratchet's
+`uv run ruff check .` still counts. Map those names to their ruff codes
+(`E501`, `PLR2004`, `PLR6301`, ...) in the hygiene pass.
+
+**Next session, ordered:**
+
+| Order | Track | First command / file | Done when |
+|---|---|---|---|
+| 1 | A — the trunk's geometry (12f) | `validation/hybrid_update.py --geometry`; the residual/wide probe (defect probe: +5.2/+3.9/+4.5 pp, floor missed; the init draw moves the cell 9.6 pp, so the diagnostic must seed via `measure_cell`) | the geometry is fixed or refused at a declared box; the diagnostic's cell log adds `residual`/`width`/`batch` to the cell identity |
+| 2 | Temporal — the sequence loader | a loader that produces `x (time, batch, input)` / `y (time, batch)` for `RecurrentGeometry` (the credits are ready; e-prop/UORO/RTRL lock at cos 0.979) | one recurrent cell trains above its chance floor (rung 1, 1 seed), then the 3-point LR ladder (rung 2) |
+| 3 | Hygiene | the ruff ignore mapping; the 30 pre-existing locks; the `_hybrid.py` branch contrast (T6g's +2.5 pp paired, n=2 on one draw) at the declared seeds | the lint gate parses, the pre-existing set shrinks, or each row records its named fix |
+
 ## 19. Primitive work program (capability-first, ordered)
 **Framing.** The primitives are the work. Each row adds something the system
 cannot do today, and every row pays the same price: spec, kernel, reference,
@@ -2558,14 +2637,15 @@ the ten credits that ship. No row is gated behind a measurement verdict
 is not progress"* is retired: it was the rule that made capability work depend
 on negative measurements.
 
-**Inventory (2026-11-17, read from the identity cards).** Absent:
-`LocalSupervisionCredit`, `CascadeSynapsePlasticity`,
-`BayesianOnlineUpdate`, `EligibilityPropCredit`, `UnbiasedOnlineRTRL`,
-`RTRLReference`. Present: `lion`, `adam`, `local_adam`, `ortho_adam`,
-`mean_norm`, `role_split`; STE utilities; REINFORCE; EWC; SI (an arm, to lift);
-replay; eight EP variants plus PC/pcalm; `ForwardTangentCredit`,
-`ScoreFunctionCredit`, `ZerothOrderCredit`, `SurrogateCredit`; one hard top-k
-`RoutingGeometry`.
+**Inventory (2026-11-17, after the primitive program). Every §19 row landed;
+nothing is absent.** `LocalSupervisionCredit`; `EligibilityPropCredit`,
+`UnbiasedOnlineRTRLCredit`, `RTRLReference`; `SynapticIntelligenceUpdate`
+(the SI lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate`;
+`FactoredSecondMomentUpdate`, `QuantizedStateUpdate`, `ScheduleFreeUpdate`.
+Present before: `lion`, `adam`, `local_adam`, `ortho_adam`, `mean_norm`,
+`role_split`; STE utilities; REINFORCE; EWC; SI (now lifted); replay; eight
+EP variants plus PC/pcalm; `ForwardTangentCredit`, `ScoreFunctionCredit`,
+`ZerothOrderCredit`, `SurrogateCredit`; one hard top-k `RoutingGeometry`.
 
 **The program, ordered by capability per session.**
 
@@ -2575,10 +2655,10 @@ replay; eight EP variants plus PC/pcalm; `ForwardTangentCredit`,
 | 2 ✅ | `ScoreFunctionCredit` (C) | unbiased gradient of an expected loss | sampled computation (Gumbel selection, RL tasks) | landed 2026-11-17 | none |
 | 3 ✅ | `ZerothOrderCredit` (C) | gradient-free update (SPSA, two forwards) | non-differentiable device paths | landed 2026-11-17 | none |
 | 4 ✅ | `SurrogateCredit` + a hard top-k geometry (C, G) | a hard selection trains without a soft relaxation | routing/MoE at variable k | landed 2026-11-17 | #1 or #2 for the baseline |
-| 5 | `LocalSupervisionCredit` (C) | deep local credit without a boundary bottleneck | layerwise deep training (greedy, DGL, InfoPro) | 1–2 sessions | none |
-| 6 | `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference` (C, G) | **temporal credit**: a sequence axis the system does not have | sequence tasks | 2–3 sessions | a sequence geometry + loader |
-| 7 | `SynapticIntelligenceUpdate` (lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate` (U, P) | long-stream consolidation without replay | ≥20-task streams | 1–2 sessions | #5 optional |
-| 8 | `FactoredSecondMomentUpdate` (Adafactor), `QuantizedStateUpdate` (8-bit Adam), `ScheduleFreeUpdate` (U) | optimizer-memory and schedule capability | any task at a lower optimizer footprint | 1 session each | none |
+| 5 ✅ | `LocalSupervisionCredit` (C) | deep local credit without a boundary bottleneck | layerwise deep training (greedy, DGL, InfoPro) | landed 2026-11-17 | `ontology/credit/_local.py`, row, 3 locks; the aux gradient descends its own loss, and the readout's weights never enter a hidden layer's signal |
+| 6 ✅ | `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference` (C, G) | **temporal credit**: a sequence axis the system has | sequence tasks | landed 2026-11-17 | `ontology/credit/_temporal.py` (shared unroll/readout), 3 rows, 4 locks: RTRL ≡ BPTT (`atol=1e-6`), e-prop exact at decay 0, UORO cos 0.979 at 128 draws vs the exact Jacobian |
+| 7 ✅ | `SynapticIntelligenceUpdate` (lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate` (U, P) | long-stream consolidation without replay | ≥20-task streams | landed 2026-11-17 | the SI lift calls `core.continual.losses.SynapticIntelligence` (source of truth, now with `penalty_gradients`); the cascade and VON are update rules; 4 locks |
+| 8 ✅ | `FactoredSecondMomentUpdate` (Adafactor), `QuantizedStateUpdate` (8-bit Adam), `ScheduleFreeUpdate` (U) | optimizer-memory and schedule capability | any task at a lower optimizer footprint | landed 2026-11-17 | factored state < half the square, int8 blocks < half the fp32 state (measured 136 B vs 384 B per matrix), schedule-free averages to the sequence; 4 locks |
 
 **Landed 2026-11-17 — the estimator family (build spec).**
 `ontology/credit/`: three classes with identity cards — `estimator_kind` =

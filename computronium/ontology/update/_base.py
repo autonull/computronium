@@ -170,6 +170,29 @@ class LionStateMixin:
         self._t = int(t.item()) if t is not None else 0
 
 
+class SecondMomentMixin:
+    """Mixin providing validated second-moment stores (factored or quantized).
+
+    The factored rule keeps one row and one column vector; the quantized rule
+    keeps int8 blocks plus per-block scales. Both are per-parameter state and
+    both are system-scoped, so the reuse guard is shared.
+    """
+
+    _second: dict[str, Tensor]
+
+    def state_tensors(self) -> dict[str, Tensor]:
+        """Live second-moment tensors, without the snapshot clone."""
+        return dict(self._second)
+
+    def _snapshot_second(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "second": {k: v.detach().clone() for k, v in self._second.items()}
+        }
+
+    def _restore_second(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._second = {k: v.clone() for k, v in state.get("second", {}).items()}
+
+
 class BaseParameterUpdate:
     """Abstract base class for ParameterUpdate implementations.
 
@@ -213,6 +236,7 @@ __all__ = [
     "BufferManager",
     "ClippingMixin",
     "LionStateMixin",
+    "SecondMomentMixin",
     "StateSnapshotMixin",
     "StatefulUpdate",
     "_fresh_buffer",
