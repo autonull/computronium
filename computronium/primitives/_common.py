@@ -367,6 +367,68 @@ def make_reference_step_with_loss(
     return step
 
 
+def make_estimator_case(
+    *,
+    geometry_factory: Callable[[], Geometry],
+    config: Mapping[str, Any],
+    device: str = "cpu",
+    dtype: torch.dtype = torch.float32,
+    seed: int = 0,
+    batch: int = 2,
+    width: int = 4,
+    num_classes: int = 4,
+) -> ActivationPrimitiveCase:
+    """A FREE-phase estimator case with a class target and no settle graph."""
+    case = make_activation_primitive_case(
+        geometry_factory=geometry_factory,
+        config=config,
+        device=device,
+        dtype=dtype,
+        seed=seed,
+        batch=batch,
+        width=width,
+        requires_grad=False,
+    )
+    generator = torch.Generator(device=device).manual_seed(seed + 2)
+    case.config["target"] = torch.randint(
+        0,
+        num_classes,
+        (batch,),
+        device=device,
+        generator=generator,
+    )
+    return case
+
+
+def make_estimator_reference_step(
+    credit_cls: type,
+    config_factory: Callable[[dict[str, Any]], Any],
+) -> Callable[[Any], list[torch.Tensor]]:
+    """Reference step for a FREE-phase estimator with a class target."""
+    from computronium.core.losses import cross_entropy
+    from computronium.ontology.credit import Phase
+    from computronium.state import CompositeState
+
+    def states(case: Any) -> dict[Any, Any]:
+        free = CompositeState(
+            activity={
+                "x": case.state,
+                "y": case.config["target"],
+                "activations": case.activations,
+            },
+            plastic={},
+            substrate={},
+        )
+        return {Phase.FREE: free}
+
+    return make_reference_step_with_loss(
+        credit_cls,
+        config_factory,
+        case_to_states_fn=states,
+        loss_fn=lambda case: cross_entropy(case.activations[-1], case.config["target"]),
+    )
+
+
 def kernel_availability(family: str) -> Callable[[], bool]:
     """Create an is_available function for a kernel module.
 

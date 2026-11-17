@@ -234,6 +234,8 @@ class CreditAssignmentConfig:
     sequential_lr: float = 0.0
     grad_clip: float = 1.0  # Per-parameter gradient clipping for pseudo-gradients
     split_layer: int = -1  # Hybrid: stack index where the head starts (-1 auto)
+    estimator_samples: int = 8  # Forward tangents, score samples, or FD pairs
+    fd_step: float = 1e-2  # Zeroth-order finite-difference step
 
     @classmethod
     def local_contrastive(
@@ -541,6 +543,65 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
+    def forward_tangent(
+        cls,
+        *,
+        estimator_samples: int = 8,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Unbiased pathwise estimate from random forward-mode tangents."""
+        return cls(
+            credit_type="forward_tangent",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            estimator_samples=estimator_samples,
+        )
+
+    @classmethod
+    def score_function(
+        cls,
+        *,
+        estimator_samples: int = 32,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Unbiased score-function estimate of an expected task loss."""
+        return cls(
+            credit_type="score_function",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            estimator_samples=estimator_samples,
+        )
+
+    @classmethod
+    def zeroth_order(
+        cls,
+        *,
+        estimator_samples: int = 8,
+        fd_step: float = 1e-2,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """Gradient-free SPSA estimate from two forward evaluations per pair."""
+        return cls(
+            credit_type="zeroth_order",
+            beta=0.5,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+            estimator_samples=estimator_samples,
+            fd_step=fd_step,
+        )
+
+    @classmethod
     def pc_alm(
         cls,
         *,
@@ -649,6 +710,16 @@ class CreditAssignmentConfig:
             "train_biases": {
                 "domain": [True, False],
                 "availability": expr_from_string('credit == "gradient"'),
+            },
+            "estimator_samples": {
+                "domain": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+                "availability": expr_from_string(
+                    'credit in ["forward_tangent", "score_function", "zeroth_order"]'
+                ),
+            },
+            "fd_step": {
+                "domain": (1e-4, 1.0, "log"),
+                "availability": expr_from_string('credit == "zeroth_order"'),
             },
         }
 
@@ -3171,3 +3242,13 @@ class GradientCredit:
 
 # Alias for backwards compatibility
 BackpropCredit = GradientCredit
+
+from computronium.ontology.credit._estimators import (  # ruff: ignore[module-import-not-at-top-of-file]
+    ForwardTangentCredit as ForwardTangentCredit,
+)
+from computronium.ontology.credit._estimators import (  # ruff: ignore[module-import-not-at-top-of-file]
+    ScoreFunctionCredit as ScoreFunctionCredit,
+)
+from computronium.ontology.credit._estimators import (  # ruff: ignore[module-import-not-at-top-of-file]
+    ZerothOrderCredit as ZerothOrderCredit,
+)

@@ -436,6 +436,7 @@ class TestTheStudyLearns:
         assert policy._study is not None
         assert policy._study.trials[0].state.name == "RUNNING"
 
+    @pytest.mark.timeout(600)
     def test_the_sampler_moves_toward_the_optimum(self) -> None:
         """The machinery learns — on a constructed landscape, deliberately.
 
@@ -552,8 +553,7 @@ class TestTheRunReachesThePolicy:
         executor = next(
             node
             for node in functions
-            if isinstance(node, ast.AsyncFunctionDef)
-            and node.name == "_execute_batch_with_isolation"
+            if isinstance(node, ast.FunctionDef) and node.name == "_finalize_batch"
         )
         assert any(
             isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "_observe"

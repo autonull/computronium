@@ -1,13 +1,13 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-17 · **v26 — capability program. Every verdict the plan recorded as a refusal is retagged a defect probe with a fix queue (CORRECTION 25); "more primitives is not progress" and the trigger-gated admission map are retired, because they made capability building a byproduct of negative measurements. The work program is the new primitives, in capability order: the estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`), routing (`SurrogateCredit` + a hard top-k task family), the depth fix (normalization + a decoupled trunk LR), temporal credits (a new axis), the streaming lifts. Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell; T6c/T6a/T6a₂/T6d/F1/D2/B1 are defect probes with named fixes. Next session: land the estimator family.**
+**Status:** 2026-11-17 · **v27 — capability program, estimator family landed. Every verdict the plan recorded as a refusal is retagged a defect probe with a fix queue (CORRECTION 25); "more primitives is not progress" and the trigger-gated admission map are retired, because they made capability building a byproduct of negative measurements. The work program is the new primitives, in capability order: the estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`), routing (`SurrogateCredit` + a hard top-k task family), the depth fix (normalization + a decoupled trunk LR), temporal credits (a new axis), the streaming lifts. The estimator family is landed (3 identity cards, 3 primitive rows, 3 parity locks, 3 capability cards; §18). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell; T6c/T6a/T6a₂/T6d/F1/D2/B1 are defect probes with named fixes. Next session: routing (`SurrogateCredit` + a hard top-k task family).**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
-+ T6a₂ + T6d
++ T6a₂ + T6d + estimator family
 landed: the truth pass, the memory decomposition, the ladder runner, the
 checkpointed baseline, the lockstep two-pass rung, the hybrid, the composed
 pilot, the routing refusal, the plasticity ladder, the retention ladder, the
 estimator atlas, the substrate ladder, its matched comparison, the
-composition screen, the memory-frontier registration, its re-registration, and
-the hybrid's update diagnostic.
+composition screen, the memory-frontier registration, its re-registration, the
+hybrid's update diagnostic, and the three unbiased estimators.
 **Reading the narrative below.** Entries written before v26 say "refused" or
 "closed"; those words are historical — every one is a defect probe or a
 capability map in §0.6 (CORRECTION 25). The measurements stand.
@@ -34,7 +34,8 @@ rung-2 screen refused the claim** (hybrid 0.167 vs floor 0.375; 1.22× the
 checkpointed arm's activation set at L=8; confirmation 0.154 vs 0.363). The
 claim run is still not scheduled: **T6d localised the gap at the split, so the
 split's position (T6e) is the defect fix inside A**, and F2 remains a
-five-seed trigger. The session order is §19 row 1 (the estimator family).
+five-seed trigger. The estimator family landed (§19 rows 1–3); the session
+order is §19 row 4 (routing).
 
 **T6a's re-registration refused at the pass-carrying box (2026-11-17).** The
 claim moved to L=8→32, W=512/B=4096, stream-norm at the frozen per-arm LR,
@@ -145,8 +146,9 @@ reads chance at 1e-3 (**0.105 ± 0.013**, one seed refused), a recorded
 regime-mismatch with a depth-100 trigger, not a verdict. One apparatus defect
 was found and fixed (CORRECTION 16): a shared LR collapsed FA at 1e-3 and
 diverged the hybrid at 1e-1, so the per-arm ladder is the fair chance.
-**E1 is closed as an atlas, not promoted or refused; the empty unbiased cells
-(score-function, forward-mode, zeroth order) are visible, not pulled.**
+**E1 is closed as an atlas, not promoted or refused; the unbiased cells
+(score-function, forward-mode, zeroth order) now have landed primitives, and
+the atlas protocol is the next measurement.**
 
 **B1 landed and refused (2026-11-16).** The routing ladder measured the STE
 gap's trend over 1/2/4/8 parallel averaged selections: **0.819 → 0.660
@@ -241,7 +243,7 @@ mechanism. Memory columns are instruments.
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → the missing surrogate is the defect; B's claim narrows (§19 row 4) |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → the label channel or step scale is the defect; retention is not yet tested |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
-| **E. Estimator atlas** ✅ | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | **closed as an atlas (2026-11-16)**: controls pass, table is the artifact; PC-ALM depth-100 trigger, empty unbiased cells visible but not pulled |
+| **E. Estimator atlas** ✅ | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | **closed as an atlas (2026-11-16)**: controls pass, table is the artifact; PC-ALM depth-100 trigger; the three unbiased primitives landed 2026-11-17, so the atlas protocol is the next measurement |
 | **F. Does composition matter? ⛔** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | **F1 landed**: 50 legal cells vs 41 legal single-axis arms on `digits`, then the family ladder | 1 session | **refused at this box**: reference 0.797, screen 0.669, family ladder 0.783 vs bar 0.807; confirmation 0.814 (3.1 pp seed spread > δ); F2 needs five seeds |
 
 **The rule that changes the plan.** *No ticket is scheduled ahead of a cheaper
@@ -249,11 +251,11 @@ screen that could cancel it.* D1 promoted one arm; D2 spent the matched
 comparison and refused the path on cost, so **D3 does not fire**; F1 spent the
 composition screen and refused at its box, so **F2 does not fire on one seed**.
 **The session order is the capability program (§19, CORRECTION 25).** The
-estimator family lands first (§19 row 1: `ForwardTangentCredit`,
-`ScoreFunctionCredit`, `ZerothOrderCredit`), then routing (`SurrogateCredit` +
-a hard top-k task family), then the **depth fix** (normalization + a decoupled
-trunk LR — the T6c/T6d defect, not a verdict), then the temporal axis, then the
-streaming lifts. The rows above are measurements, not conclusions: each ⛔ row is
+estimator family landed (`ForwardTangentCredit`, `ScoreFunctionCredit`,
+`ZerothOrderCredit`, §19 rows 1–3); the next session is routing
+(`SurrogateCredit` + a hard top-k task family, row 4), then the **depth fix**
+(normalization + a decoupled trunk LR — the T6c/T6d defect, not a verdict),
+then the temporal axis, then the streaming lifts. The rows above are measurements, not conclusions: each ⛔ row is
 a defect probe with the fix that widens the system (§0.6). F2, D3, and T6e are
 defect fixes inside their tracks, not gates on the program.
 
@@ -437,7 +439,7 @@ retags every refusal as a defect probe.
 | B1 | STE gap 0.819 → 0.660 over depth | defect probe | no `SurrogateCredit` (STE/Gumbel-ST with a baseline); no load-balance term | hard top-k training |
 | F1 | screen 0.669 / ladder 0.783 vs bar 0.807 | defect probe | the composition is measured on an untrainable deep box; the axis space lacks the temporal and routing primitives | a real multi-axis search |
 | C2 | EWC gain +0.005 < δ at λ=100 | closed capability (measured) | SI and cascade absent; no ≥20-task stream | replay-free long-horizon continual learning |
-| E1 | atlas | capability map | three empty estimator cells (forward-mode, score-function, zeroth order) | three new credits (§19) |
+| E1 | atlas | capability map | three unbiased primitives landed (forward-mode, score-function, zeroth order) | the atlas protocol over them (§19 rows 1–3) |
 
 No row above is a conclusion about an algorithm. Each is a defect to fix or a
 capability to build.
@@ -484,14 +486,18 @@ check, not a claim, and each fails when its mechanism is removed.
 | **C2 ✅** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; batch-1 SplitMNIST, 3-point EWC-strength ladder at the frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation; kill-safe resume/replay | `test_plasticity_ladder.py` (9), `test_cl_credit_arms.py` (6) | **close at the saturation point λ=100**: local 0.952 / 0.015 vs control 0.963 / 0.020 (gain +0.005 < δ 0.032; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost ratio 1.07×; λ ladder moves 0.6 pp (local) / 2.2 pp (control), both < δ. Defect fixed en route: task-start re-consolidation erased the Fisher importance (CORRECTION 12) |
 | **D1 ✅** | **Substrate ladder**: `validation/substrate_ladder.py`; ternary/memristive + `energy_min` at settle 5/10/20, per-arm LR ladder, 2 seeds, device state | `test_substrate_ladder.py` (9) | **promoted memristive** (0.9097 vs 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight); ternary refused at 0.861 vs 0.913 (2 bits/weight); CORRECTION 17 (per-arm LR) |
 | **D2 ⛔** | **Matched substrate comparison**: `validation/matched_substrate.py`; 784-64-10, settle 20/40 screen, 5 paired seeds, digital backprop control, int8 QDQ control | `test_matched_substrate.py` (13) | **refused at the walltime box**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime** (limit 1.2×); QDQ −0.01 pp (the width is harmless); the programming budget binds; D3's drift trigger stays parked. Correction: the QDQ control now quantises (it cast to int8 and did not) |
-**Next (three sessions, not a DAG).**
+**Next (two sessions, not a DAG).**
 
-1. **The estimator family is the next session (§19 row 1):**
+1. ✅ **The estimator family landed 2026-11-17 (§19 rows 1–3):**
    `ForwardTangentCredit`, `ScoreFunctionCredit`, and `ZerothOrderCredit` —
-   three credits the system does not have, each with an identity card, a
-   primitive row, and a parity lock. They need nothing from any track: they are
-   capability, and they turn E1's empty atlas cells into three honest kinds
-   (biased-pathwise, unbiased-pathwise, unbiased-for-expected-loss).
+   three credits with identity cards, primitive rows, parity locks, and
+   capability cards. They turned E1's empty atlas cells into three honest
+   kinds (unbiased-pathwise, unbiased-for-expected-loss, finite-difference);
+   the atlas protocol is the next measurement, not a capability gap.
+2. **Routing is the next session (§19 row 4):** `SurrogateCredit` + a hard
+   top-k task family, with the `#1` or `#2` baseline. It needs a task family
+   at variable k; the estimator baseline exists. It unlocks routing/MoE
+   training without a soft relaxation.
    The T6c/T6d split fix (§19 row 3) follows as a defect fix, not a verdict.
 2. **A's blockers are decided:** T6b landed (a credit owns its free pass),
    T6a₂'s re-registration refused at the pass-carrying box where the memory
@@ -501,10 +507,10 @@ check, not a claim, and each fails when its mechanism is removed.
    cells each, none run).
 3. **Triggers, not tickets:** D3's drift row (D2 held parity but missed the
    1.2× walltime), a device-level/compiled quantisation of the pair, PC-ALM at
-   its depth-100 box, the empty unbiased cells (score-function, forward-mode,
-   zeroth order), C's 5-seed retention protocol, ternary's wider-width/learnable-α
-   box, B's chained/Gumbel/k≥4 re-open, and F2's five-seed composition are
-   all in §14.
+   its depth-100 box, the atlas protocol for the three landed unbiased credits
+   (score-function, forward-mode, zeroth order), C's 5-seed retention protocol,
+   ternary's wider-width/learnable-α box, B's chained/Gumbel/k≥4 re-open, and
+   F2's five-seed composition are all in §14.
 
 T6a **is** registered before the claim, and the rung-2 screens refused the
 claim at both boxes: a threshold written while the treatment's accuracy is 17 pp
@@ -1073,7 +1079,7 @@ record of what exists.
 | **E1 ✅** | **Estimator atlas**: bias/variance/compute for 6 estimator kinds at matched compute | E | landed 2026-11-16 | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells; controls pass; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
 | **F1 ⛔** | **Composition ladder**: 50 legal cells vs 41 legal single-axis arms, then a 3-point ladder on the best-looking family | F | landed 2026-11-16 (~19 min) | **refused at this box**: reference 0.797 (`update`), screen best 0.669 (4 axes), family (`random_projections`) ladder 0.092/0.783/refused at w=6 vs bar 0.807; confirmation 0.814 is a 3.1 pp seed spread > δ; trigger = F2's five seeds, a matched-parameter composition, or a real task family |
 | T5 | P1 scoped: 3 publishables + the hybrid trunk rule | side | 1–2 sessions | rows with backend path, dtype, optimizer, σ |
-| T7 | The estimator family: `ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit` (§19 row 1) | C | 1 session | **next session**: three credits, each with an identity card, parity lock, and capability card |
+| T7 ✅ | The estimator family: `ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit` (§19 row 1) | C | landed 2026-11-17 | **next session (routing)**: three credits, each with an identity card, parity lock, and capability card |
 | T8 | Lift `SynapticIntelligence`; `CascadeSynapsePlasticity` (§19 row 7) | C | 1–2 sessions | C1 promoted; the lift is the capability |
 | T9 | Temporal taxonomy (`EligibilityProp`, UORO, RTRL ref; §19 row 6) | C, G | 2–3 sessions | the sequence axis is the capability |
 
@@ -1098,7 +1104,8 @@ is the only one that needs five paired seeds on a real task.
 
 | Order | Track | First command / file | Done when |
 |---|---|---|---|
-| 0a ⏳ | **P0 — estimator family** (next) | `ontology/credit/` + `primitives/credit_assignment/{forward_tangent,score_function,zeroth_order}/`; three identity cards, registry rows, parity locks (§19) | each primitive trains a tiny task above chance; the unbiased estimates match finite differences and their variance falls as 1/√n; dispatch and identity locks pass |
+| 0a ✅ | **P0 — estimator family** (landed 2026-11-17) | `ontology/credit/_estimators.py` + `primitives/credit_assignment/{forward_tangent,score_function,zeroth_order}/`; three identity cards, registry rows, parity locks (§19, §18) | each primitive trains a 128-sample separable task above chance (0.914/0.914/0.781 vs 0.5); parity 0.50/0.972/0.9995; variance falls ~21× from 1→16; dispatch and identity locks pass |
+| 0b ⏳ | **P1 — routing** (next) | `SurrogateCredit` + a hard top-k geometry; the `#1` or `#2` baseline | a hard selection trains without a soft relaxation; a routing/MoE cell at variable k |
 | 0b ⏳ | **P0b — routing** | `SurrogateCredit` + a hard top-k geometry and task family | hard top-k trains; the surrogate estimate tracks the smoothed reference within δ on the routing task |
 | 0c ⏳ | **P0c — depth fix** | normalization + a decoupled trunk LR (the T6c/T6d defect, not a verdict) | the plain stack trains at L=16/32 above the floor; the hybrid's split is priced |
 | 1 ✅ | A — `backprop+ckpt` | landed 2026-11-15 | checkpointed grads ≡ plain under dropout; segments=√L; epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192 |
@@ -1427,15 +1434,14 @@ swept to pass, a verdict that closes a mechanism.
 
 | Rank | Track | Capability at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **P0** estimator family | can the system train through forward-mode, sampling, and gradient-free paths? | 1 session (3 primitives) | none yet — the three credits do not exist (§19 row 1; E1's empty cells are the gap) |
-| 2 | **P0b** routing | does a hard top-k train without a soft relaxation? | 2 sessions | `SurrogateCredit` absent; B1's STE gap is the defect probe, not a verdict |
-| 3 | **P0c** depth fix | does the plain stack train at L≥16 with normalization and a decoupled LR? | 1 session | T6c/T6d are defect probes (T6d localized the split; the sibling rule reads 0.405) |
-| 4 | **P0d** temporal | does a sequence axis exist and train? | 2–3 sessions | the axis does not exist; three credits are absent |
-| 5 | **A/F/D** defect rows | the split, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
+| 1 | **P1** routing | can the system train a hard top-k selection without a soft relaxation? | 2 sessions | P0 landed — the estimator family exists; `SurrogateCredit` is the gap (§19 row 4) |
+| 2 | **P0b** depth fix | does the plain stack train at L≥16 with normalization and a decoupled LR? | 1 session | T6c/T6d are defect probes (T6d localized the split; the sibling rule reads 0.405) |
+| 3 | **P0c** temporal | does a sequence axis exist and train? | 2–3 sessions | the axis does not exist; three credits are absent |
+| 4 | **A/F/D** defect rows | the split, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
 
-**Why the track words change.** E1's atlas is a **capability map**: its three
-empty unbiased cells (score-function, forward-mode, zeroth order) are the first
-three rows of §19. C2's closure is a **measured capability**: local learning
+**Why the track words change.** E1's atlas is a **capability map**: the three
+unbiased cells (score-function, forward-mode, zeroth order, §19 rows 1–3) are
+landed primitives; the atlas protocol is the next measurement, not a gap. C2's closure is a **measured capability**: local learning
 holds at batch 1, and the missing SI lift and cascade are §19 row 7 — the
 long-stream protocol is the capability, not the verdict. B1's gap, D2's budget,
 and F1's screen are **defect probes** with named fixes (§0.6); their numbers
@@ -1452,7 +1458,7 @@ stand, their verdict words do not.
 | B1 | STE gap 0.819 → 0.660 over depth | `SurrogateCredit` absent; no load-balance term | the surrogate primitive + z-loss | hard top-k training at variable k | §19 row 4 |
 | F1 | screen 0.669 / ladder 0.783 vs bar 0.807 | the composition is measured on an untrainable deep box; the axis space is narrow | the depth fix + the routing and temporal axes | a real multi-axis search | §19 rows 4–6 |
 | C2 | EWC +0.005 < δ at λ=100 | SI lift and cascade absent; no ≥20-task stream | lift SI; a long-stream protocol | replay-free long-horizon CL | §19 row 7 |
-| E1 | atlas: 6 arms × 3 seeds | three estimator cells empty | the estimator family | three new credits | §19 row 1 |
+| E1 | atlas: 9 arms × 3 seeds | three estimator cells empty | the estimator family | three new credits landed; the atlas protocol is the next measurement | §19 row 1 |
 | ternary (D1) | 0.861 vs 0.913 at 2 bits/weight | the TWN threshold and a fixed α | a learnable α per layer or a delta-ternary scale | 16× less device state at parity | `... substrate_ladder --replay` |
 | PC-ALM (E1) | depth-2 regime mismatch | the card's depth is 100 | run at its declared box | a deep objective-local credit | `... estimator_atlas --full --replay` |
 
@@ -1502,10 +1508,11 @@ per session.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- **Start order is the capability program (§19 row 1), not a DAG.** The next
-  session lands the estimator family (`ForwardTangentCredit`,
-  `ScoreFunctionCredit`, `ZerothOrderCredit`). The prior measurements are
-  defect probes, not gates: T6c/T6d localized the split, B1 the missing
+- **Start order is the capability program (§19 row 4), not a DAG.** The
+  estimator family landed (`ForwardTangentCredit`, `ScoreFunctionCredit`,
+  `ZerothOrderCredit`); the next session lands routing (`SurrogateCredit` +
+  a hard top-k task family). The prior measurements are defect probes, not
+  gates: T6c/T6d localized the split, B1 the missing
   surrogate, D2 the unpriced programming budget, F1 the untrainable deep box.
   C1 promoted and C2 measured its saturation point; E1's atlas is the capability
   map; D1 promoted memristive. T5 runs in parallel as credibility work. No claim
@@ -1537,14 +1544,14 @@ per session.
   diagnostic** (no trunk knob reaches the floor; the sibling shows the same
   trunk rule as a whole stack reading 0.405, so the split is the mechanism),
   so the defect fix is **T6e (the split's position)**, not a claim run; the
-  session order is the estimator family (§19 row 1).
+  session order is routing (§19 row 4).
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v26 start: **the estimator family** (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 row 1), then routing (`SurrogateCredit` + hard top-k), then the depth fix (normalization + a decoupled trunk LR), then the temporal axis, then the streaming lifts. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, B1 the missing surrogate, D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6d's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
+| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v27 start: **routing** (`SurrogateCredit` + hard top-k, §19 row 4), then the depth fix (normalization + a decoupled trunk LR), then the temporal axis, then the streaming lifts. The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, B1 the missing surrogate, D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6d's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables first, then any credit the new primitives add. The complexity-audit column is part of every row; reproduce the published protocol and record σ. |
@@ -2289,6 +2296,54 @@ permanent fix.
   seeded deterministic screen sample, the reference sweep's six axes and legality,
   registration-before-first-cell ordering, the report's rulers, and replay.
 
+### Landed 2026-11-17 (estimator family — what the code actually did)
+**Capability.** Three credits the system did not have: `ForwardTangentCredit`
+(random `jvp` tangents, `torch.func.jvp` on a functional closure of the
+geometry), `ScoreFunctionCredit` (REINFORCE with `R(a)=1[a=y]` and a batch
+baseline, building its own reverse-mode graph through the logits), and
+`ZerothOrderCredit` (SPSA two forwards under `no_grad`). All three declare
+`phases=(FREE,)` and `requires_autograd=False`: the settle graph stays
+detached, and the estimator owns its functional closure. Code:
+`computronium/ontology/credit/_estimators.py`; config fields
+`estimator_samples` and `fd_step`; classmethods `.forward_tangent`,
+`.score_function`, `.zeroth_order`; three primitive rows under
+`primitives/credit_assignment/{forward_tangent,score_function,zeroth_order}/`;
+registry rows, root/ontology exports, and the `_credit_from_config` dispatcher
+entries. The three kernel paths are `reference_only` and fall back to the
+reference; a fused Triton path is a later lift, not a claim.
+
+**Identity cards.** `estimator_kind` = `forward_mode` / `score_function` /
+`zeroth_order`; `bias_reference` = `unbiased_pathwise` / `unbiased_expected` /
+`finite_difference`. `BiasReference` gained those three literals, so the axis
+row and the card share one declaration.
+
+**Parity locks** (`tests/property/test_estimator_credits_lock.py`, 8 tests):
+forward tangent cos **0.50** at 8 tangents and MSE **1.07 → 0.051** from 1 to
+16 tangents (~21×, the 1/√n fall); zeroth order cos **0.972** at 256 pairs on
+a linear MSE quadratic; score function cos **0.9995** at 1024 samples on a
+two-action fixture against the exact expected-reward gradient.
+
+**Capability cards** (same lock): each trains a 128-sample separable 8-16-2
+MLP in one epoch on CPU, 8 batches, batch 16, chance 0.5 — forward **0.914**,
+zeroth **0.914**, score **0.781**; the loss stays finite. These are
+capability cards, not claim runs.
+
+**Registry effects.** The credit axis went **11 → 14**; the planner's reachable
+runtime coordinates went **56 → 60**; `axis-metadata.json` and the generated
+property modules were regenerated. `estimator_samples` is a categorical
+ladder `[1,2,4,8,16,32,64,128,256,512,1024]` rather than a 1–1024 integer
+range: the axis-validity filter multiplies the credit axis, and the integer
+range made the sampler lock's search space scan 7.3M combinations.
+
+**Open defects exposed (not estimator verdicts).** The budget-8 combination
+cover now samples pre-existing flaky cells (`gradient`/causal_transformer,
+`hybrid` size mismatch on iris, `thermodynamic_contrast`/cora) — the smoke
+test's zero-failure lock is not stable under the widened space. The sampler
+lock's constructed-landscape test is now 128 s and carries a 600 s budget;
+the timeout census and dashboard preregistration rows were already stale
+before this session. These are defect probes to queue, not reasons to retag
+the estimators.
+
 ## 19. Primitive work program (capability-first, ordered)
 **Framing.** The primitives are the work. Each row adds something the system
 cannot do today, and every row pays the same price: spec, kernel, reference,
@@ -2310,16 +2365,16 @@ replay; eight EP variants plus PC/pcalm.
 
 | # | Primitive (axis) | Capability it adds | Task family it unlocks | Cost | Depends on |
 |---|---|---|---|---|---|
-| 1 | `ForwardTangentCredit` (C) | unbiased pathwise gradient at O(1) activation memory | supervised tasks at O(1) memory; the unbiased reference for every biased credit | 1 session | none |
-| 2 | `ScoreFunctionCredit` (C) | unbiased gradient of an expected loss | sampled computation (Gumbel selection, RL tasks) | 1 session | none |
-| 3 | `ZerothOrderCredit` (C) | gradient-free update (SPSA, two forwards) | non-differentiable device paths | 1 session | none |
+| 1 ✅ | `ForwardTangentCredit` (C) | unbiased pathwise gradient at O(1) activation memory | supervised tasks at O(1) memory; the unbiased reference for every biased credit | landed 2026-11-17 | none |
+| 2 ✅ | `ScoreFunctionCredit` (C) | unbiased gradient of an expected loss | sampled computation (Gumbel selection, RL tasks) | landed 2026-11-17 | none |
+| 3 ✅ | `ZerothOrderCredit` (C) | gradient-free update (SPSA, two forwards) | non-differentiable device paths | landed 2026-11-17 | none |
 | 4 | `SurrogateCredit` + a hard top-k geometry (C, G) | a hard selection trains without a soft relaxation | routing/MoE at variable k | 2 sessions | #1 or #2 for the baseline |
 | 5 | `LocalSupervisionCredit` (C) | deep local credit without a boundary bottleneck | layerwise deep training (greedy, DGL, InfoPro) | 1–2 sessions | none |
 | 6 | `EligibilityPropCredit`, `UnbiasedOnlineRTRLCredit`, `RTRLReference` (C, G) | **temporal credit**: a sequence axis the system does not have | sequence tasks | 2–3 sessions | a sequence geometry + loader |
 | 7 | `SynapticIntelligenceUpdate` (lift), `CascadeSynapsePlasticity`, `BayesianOnlineUpdate` (U, P) | long-stream consolidation without replay | ≥20-task streams | 1–2 sessions | #5 optional |
 | 8 | `FactoredSecondMomentUpdate` (Adafactor), `QuantizedStateUpdate` (8-bit Adam), `ScheduleFreeUpdate` (U) | optimizer-memory and schedule capability | any task at a lower optimizer footprint | 1 session each | none |
 
-**First session — the estimator family (build spec).**
+**Landed 2026-11-17 — the estimator family (build spec).**
 `ontology/credit/`: three classes with identity cards — `estimator_kind` =
 `forward_mode` / `score_function` / `zeroth_order`; `bias_reference` =
 `unbiased_pathwise` / `unbiased_expected` / `finite_difference`;
@@ -2337,8 +2392,9 @@ dispatcher entries.
 - **forward tangent**: `v ~ Rademacher(θ)`; `d = jvp(f, θ, v)`; `ĝ = d · v`
   (unbiased, since `E[vvᵀ] = I`); the variance falls as `1/√n` tangents.
 - **score function**: `a ~ Categorical(softmax(logits))`;
-  `ĝ = ∇_θ log π(a) · (R(a) − b)` with `R = −CE(a, y)` and `b = mean_batch R`
-  — the unbiased gradient of the expected loss, with a graph through the logits
+  `ĝ = −∇_θ log π(a) · (R(a) − b)` with `R(a) = 1[a = y]` (the finite form
+  of `−CE(a, y)` up to a baseline-shifted constant) and `b = mean R` — the
+  descent direction of the expected reward, with a graph through the logits
   only.
 - **zeroth order**: `Δ ~ Rademacher(θ)`;
   `ĝ = (L(θ + cΔ) − L(θ − cΔ)) / (2c) · Δ`; two forwards, no graph.
@@ -2348,14 +2404,16 @@ dispatcher entries.
 | Lock | What it proves |
 |---|---|
 | `test_credit_dispatch_lock` | each of the three builds through spec / factory / joint |
-| `test_estimator_lock` | each declares `estimator_kind` and `bias_reference`; the axis totality holds |
-| `test_forward_tangent_parity` | `ĝ · g / ‖ĝ‖‖g‖ > 0.3` at 8 tangents on a tiny fixture, and the variance falls as 1/√n |
-| `test_zeroth_order_parity` | cos > 0.9 at 256 pairs against the exact gradient on a quadratic fixture |
-| `test_score_function_parity` | cos > 0.9 at 1024 samples against the exact gradient of the expected loss on a two-action fixture |
+| `test_the_estimator_family_declares_its_coordinate` | each declares `estimator_kind` and `bias_reference`; the axis row agrees |
+| `test_every_estimator_settles_only_the_free_phase` | `phases=(FREE,)`, `requires_autograd=False`, `error_blind=False` |
+| `test_forward_tangent_parity_and_variance_fall` | cos **0.50** at 8 tangents, and MSE **1.07 → 0.051** from 1 to 16 tangents (~21×) |
+| `test_zeroth_order_parity_on_a_quadratic_fixture` | cos **0.972** at 256 pairs against the exact gradient |
+| `test_score_function_parity_on_a_two_action_fixture` | cos **0.9995** at 1024 samples against the exact expected-reward gradient |
 
-Each also trains a tiny task above chance (MNIST quick, one epoch) and carries a
-**capability card**: task, memory, steps, and what stops it. The capability
-cards are the deliverable, not a verdict.
+Each also trains a tiny task above chance (a 128-sample separable 8-16-2 MLP,
+one epoch on CPU; forward **0.914**, zeroth **0.914**, score **0.781** against
+chance 0.5) and carries a **capability card**: task, memory, steps, and what
+stops it. The capability cards are the deliverable, not a verdict.
 
 **Build notes per family** (mechanism variants and their prices).
 

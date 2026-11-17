@@ -21,6 +21,7 @@ from computronium.ontology.credit import (
     BackpropCredit,
     CreditAssignment,
     CreditAssignmentConfig,
+    ForwardTangentCredit,
     GradientCredit,
     HomeostaticCredit,
     HybridCredit,
@@ -31,9 +32,11 @@ from computronium.ontology.credit import (
     PepitaCredit,
     Phase,
     RandomProjectionsCredit,
+    ScoreFunctionCredit,
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
+    ZerothOrderCredit,
 )
 from computronium.ontology.depth import (
     DepthMetric,
@@ -209,6 +212,9 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "HomeostaticCredit",
     "GradientCredit",
     "BackpropCredit",
+    "ForwardTangentCredit",
+    "ScoreFunctionCredit",
+    "ZerothOrderCredit",
     # ParameterUpdate
     "ParameterUpdateConfig",
     "ParameterUpdate",

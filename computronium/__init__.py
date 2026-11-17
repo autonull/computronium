@@ -156,6 +156,7 @@ if TYPE_CHECKING:
     from computronium.ontology.credit import (
         BackpropCredit,
         CreditAssignmentConfig,
+        ForwardTangentCredit,
         HybridCredit,
         LemmaCredit,
         LocalContrastiveCredit,
@@ -163,10 +164,12 @@ if TYPE_CHECKING:
         PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
+        ScoreFunctionCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
         ThermodynamicContrast,
         ThermodynamicContrastCredit,
+        ZerothOrderCredit,
     )
     from computronium.ontology.depth import (
         DepthMetric,
@@ -253,6 +256,18 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     # Core 5-D Ontology (new decomposed modules)
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
     "BackpropCredit": ("computronium.ontology.credit", "BackpropCredit"),
+    "ForwardTangentCredit": (
+        "computronium.ontology.credit",
+        "ForwardTangentCredit",
+    ),
+    "ScoreFunctionCredit": (
+        "computronium.ontology.credit",
+        "ScoreFunctionCredit",
+    ),
+    "ZerothOrderCredit": (
+        "computronium.ontology.credit",
+        "ZerothOrderCredit",
+    ),
     "PCALMCredit": ("computronium.ontology.credit", "PCALMCredit"),
     "CreditAssignmentConfig": (
         "computronium.ontology.credit",
@@ -571,6 +586,7 @@ __all__ = [
     "FastWeightPlasticity",
     "FeedforwardGeometry",
     "FixedDepth",
+    "ForwardTangentCredit",
     "FrozenThetaAudit",
     "GeometryConfig",
     "GraphGeometry",
@@ -608,6 +624,7 @@ __all__ = [
     "RoleSplitUpdate",
     "RoutingPlasticity",
     "RuleStatePlasticity",
+    "ScoreFunctionCredit",
     "ShortestPathDepth",
     "SpatialLattice3DGeometry",
     "SpectralConstrainedUpdate",
@@ -634,6 +651,7 @@ __all__ = [
     "TransformerGeometry",
     "UnitRMSUpdate",
     "VerificationLevel",
+    "ZerothOrderCredit",
     "__version__",
     "compose_joint_system",
     "compose_joint_system_from_configs",

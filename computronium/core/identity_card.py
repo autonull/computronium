@@ -39,9 +39,17 @@ type EstimatorKind = Literal[
 # The reference an estimator's bias is measured against. ``exact_tractable``
 # means a tractable exact gradient exists for the fixture (backprop-shaped
 # nets); ``smoothed_objective`` means the reference is a temperature-smoothed
-# relaxation; ``none`` means the rule has no gradient to be biased about.
+# relaxation; ``unbiased_pathwise`` / ``unbiased_expected`` / ``finite_difference``
+# are the three estimator families' own reference points; ``none`` means the
+# rule has no gradient to be biased about.
 type BiasReference = Literal[
-    "none", "exact_tractable", "smoothed_objective", "unspecified"
+    "none",
+    "exact_tractable",
+    "smoothed_objective",
+    "unbiased_pathwise",
+    "unbiased_expected",
+    "finite_difference",
+    "unspecified",
 ]
 
 

@@ -180,12 +180,12 @@
         {
           "name": "substrate_coupled",
           "summary": "Physical substrate-coupled plasticity",
-          "available": true
+          "available": false
         },
         {
           "name": "rule_state",
           "summary": "Rule-state plasticity (Z3)",
-          "available": true
+          "available": false
         },
         {
           "name": "temporal_psi",
@@ -244,6 +244,11 @@
           "available": true
         },
         {
+          "name": "hybrid",
+          "summary": "Lockstep-local trunk + exact-gradient head",
+          "available": true
+        },
+        {
           "name": "gradient",
           "summary": "Backprop gradient credit (ruler reference)",
           "available": true
@@ -251,6 +256,21 @@
         {
           "name": "pc_alm",
           "summary": "PC-ALM primal-dual credit",
+          "available": true
+        },
+        {
+          "name": "forward_tangent",
+          "summary": "Unbiased forward-mode pathwise estimator",
+          "available": true
+        },
+        {
+          "name": "score_function",
+          "summary": "Unbiased score-function (REINFORCE) estimator",
+          "available": true
+        },
+        {
+          "name": "zeroth_order",
+          "summary": "Gradient-free SPSA finite-difference estimator",
           "available": true
         }
       ]

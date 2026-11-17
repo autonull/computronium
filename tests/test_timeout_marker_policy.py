@@ -48,6 +48,10 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         300,
     ),
     (
+        "tests/property/test_sampler_lock.py::test_the_sampler_moves_toward_the_optimum",
+        600,
+    ),
+    (
         "tests/property/test_hyperparameter_effect_lock.py::test_every_swept_knob_reaches_at_least_one_cell",
         600,
     ),

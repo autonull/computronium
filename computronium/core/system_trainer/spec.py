@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
+    ForwardTangentCredit,
     GeometryConfig,
     HomeostaticCredit,
     HybridCredit,
@@ -16,11 +17,13 @@ from computronium.ontology import (
     PCALMCredit,
     PepitaCredit,
     RandomProjectionsCredit,
+    ScoreFunctionCredit,
     StateDynamicsConfig,
     SubstrateConfig,
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
+    ZerothOrderCredit,
     geometry_from_config,
     substrate_from_config,
     update_from_config,
@@ -72,7 +75,7 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
     return dynamics_from_config(dynamics)
 
 
-def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-return-statements, complex-structure]
+def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-branches, too-many-return-statements, complex-structure]
     """Instantiate the credit implementation named by ``config.credit_type``.
 
     Single dispatcher for the whole trainer family: the axis registry
@@ -104,6 +107,12 @@ def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # 
             return HybridCredit(config)
         case "pc_alm":
             return PCALMCredit(config)
+        case "forward_tangent":
+            return ForwardTangentCredit(config)
+        case "score_function":
+            return ScoreFunctionCredit(config)
+        case "zeroth_order":
+            return ZerothOrderCredit(config)
         case other:
             raise ValueError(f"Unknown credit_type: {other!r}")
 

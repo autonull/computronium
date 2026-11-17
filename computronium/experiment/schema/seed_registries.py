@@ -209,6 +209,21 @@ _CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ),
     ("gradient", "Backprop gradient credit (ruler reference)", ()),
     ("pc_alm", "PC-ALM primal-dual credit", ()),
+    (
+        "forward_tangent",
+        "Unbiased forward-mode pathwise estimator",
+        ("estimator_samples",),
+    ),
+    (
+        "score_function",
+        "Unbiased score-function (REINFORCE) estimator",
+        ("estimator_samples",),
+    ),
+    (
+        "zeroth_order",
+        "Gradient-free SPSA finite-difference estimator",
+        ("estimator_samples", "fd_step"),
+    ),
 ]
 
 # Update primitives: rule-specific optimizer params are structural
@@ -257,6 +272,7 @@ _PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
 # regression cells failed on exactly these three rows (§8, regression lane).
 CLASS_TARGET_ONLY: frozenset[tuple[StructuralAxis, str]] = frozenset({
     (StructuralAxis.CREDIT, "local_contrastive"),
+    (StructuralAxis.CREDIT, "score_function"),
     (StructuralAxis.PLASTICITY, "temporal_psi"),
     (StructuralAxis.PLASTICITY, "conflict_adaptive"),
 })

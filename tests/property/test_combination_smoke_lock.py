@@ -57,8 +57,8 @@ def test_planner_covers_every_reachable_coordinate() -> None:
     covered = {key for cell in cover for key in cell.covers}
     reachable = set().union(*(space.reached for space in spaces))
     assert reachable <= covered
-    # 57 runtime coordinates; the complex substrate is declared unreachable.
-    assert len(reachable) == 56
+    # 60 runtime coordinates; the complex substrate is declared unreachable.
+    assert len(reachable) == 60
 
 
 def test_unreachable_coordinate_names_its_rule() -> None:

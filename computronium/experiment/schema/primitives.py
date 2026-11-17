@@ -37,6 +37,9 @@ CREDIT_PRIMITIVES: dict[str, type[Any]] = {
     "pepita": CreditAssignmentConfig,
     "gradient": CreditAssignmentConfig,
     "pc_alm": CreditAssignmentConfig,
+    "forward_tangent": CreditAssignmentConfig,
+    "score_function": CreditAssignmentConfig,
+    "zeroth_order": CreditAssignmentConfig,
 }
 
 # Update primitives

@@ -318,6 +318,9 @@ _CREDIT_ONTOLOGY_CLASSES: dict[str, str] = {
     "gradient": "BackpropCredit",
     "local_contrastive": "LocalContrastiveCredit",
     "pc_alm": "PCALMCredit",
+    "forward_tangent": "ForwardTangentCredit",
+    "score_function": "ScoreFunctionCredit",
+    "zeroth_order": "ZerothOrderCredit",
 }
 
 
@@ -345,6 +348,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
     """Every credit_assignment primitive has a corresponding ontology class."""
     from computronium.ontology.credit import (
         BackpropCredit,
+        ForwardTangentCredit,
         HomeostaticCredit,
         HybridCredit,
         LocalContrastiveCredit,
@@ -352,9 +356,11 @@ def test_credit_primitives_have_ontology_classes() -> None:
         PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
+        ScoreFunctionCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
         ThermodynamicContrast,
+        ZerothOrderCredit,
     )
 
     ONTOLOGY_MAP: dict[str, type] = {
@@ -369,6 +375,9 @@ def test_credit_primitives_have_ontology_classes() -> None:
         "primitive.credit_assignment.pc_alm": PCALMCredit,
         "primitive.credit_assignment.gradient": BackpropCredit,
         "primitive.credit_assignment.local_contrastive": LocalContrastiveCredit,
+        "primitive.credit_assignment.forward_tangent": ForwardTangentCredit,
+        "primitive.credit_assignment.score_function": ScoreFunctionCredit,
+        "primitive.credit_assignment.zeroth_order": ZerothOrderCredit,
     }
 
     for spec in primitives():
@@ -691,6 +700,9 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.credit_assignment.pc_alm": "PCALMCredit",
         "primitive.credit_assignment.gradient": "BackpropCredit",
         "primitive.credit_assignment.local_contrastive": "LocalContrastiveCredit",
+        "primitive.credit_assignment.forward_tangent": "ForwardTangentCredit",
+        "primitive.credit_assignment.score_function": "ScoreFunctionCredit",
+        "primitive.credit_assignment.zeroth_order": "ZerothOrderCredit",
     },
     "parameter_update": {
         "primitive.parameter_update.euclidean": "EuclideanUpdate",
