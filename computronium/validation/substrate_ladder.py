@@ -119,7 +119,8 @@ BATCHES_PER_EPOCH = 600
 EPOCHS = 1
 BETA = 0.5
 #: Bits per weight a device needs for each substrate (scales priced separately).
-DEVICE_BITS = {"digital": 32, "ternary": 2, "memristive": 16}
+#: ``qdq`` is the int8 quantise-dequantise control: 8 bits/weight, no device.
+DEVICE_BITS = {"digital": 32, "ternary": 2, "memristive": 16, "qdq": 8}
 #: A ternary device keeps one fp32 scale per layer beside its weights.
 TERNARY_SCALE_BYTES = 4
 
@@ -179,12 +180,19 @@ class _CappedLoader:
 
 def _substrate(arm: str, device: str):
     """The substrate instance for an arm (the ontology models, not adapters)."""
-    from computronium import DigitalSubstrate, MemristiveSubstrate, SubstrateConfig
+    from computronium import (
+        DigitalSubstrate,
+        MemristiveSubstrate,
+        QuantizedSubstrate,
+        SubstrateConfig,
+    )
     from computronium.ontology import TernarySubstrate
 
     match arm:
         case "digital":
             return DigitalSubstrate(SubstrateConfig.digital(device=device))
+        case "qdq":
+            return QuantizedSubstrate()
         case "ternary":
             return TernarySubstrate(SubstrateConfig.ternary(device=device))
         case "memristive":
@@ -194,7 +202,13 @@ def _substrate(arm: str, device: str):
 
 
 def _build_system(
-    arm: str, seed: int, lr: float, max_steps: int, device: str = "cpu"
+    arm: str,
+    seed: int,
+    lr: float,
+    max_steps: int,
+    device: str = "cpu",
+    *,
+    hidden_dims: tuple[int, ...] = HIDDEN_DIMS,
 ) -> System:
     """Compose the declared box; every arm shares architecture and budget."""
     from computronium import (
@@ -231,7 +245,7 @@ def _build_system(
             GeometryConfig.feedforward(
                 input_dim=INPUT_DIM,
                 output_dim=NUM_CLASSES,
-                hidden_dims=HIDDEN_DIMS,
+                hidden_dims=hidden_dims,
             )
         ),
         dynamics=dynamics,
@@ -246,13 +260,14 @@ def _build_system(
 def device_state(system: System, arm: str) -> tuple[int, float]:
     """Device state per step (bytes, bytes/weight) from the substrate's width.
 
-    Only weight matrices are counted; biases and the ternary per-layer scale
-    are declared beside the ruler. ``digital`` is the reference width.
+    Only weight matrices are counted; biases and one fp32 per-tensor scale for
+    a quantised substrate are declared beside the ruler. ``digital`` is the
+    reference width.
     """
     weights = [p for p in system.geometry.params.values() if p.ndim >= 2]
     weights_numel = sum(int(p.numel()) for p in weights)
     bits = DEVICE_BITS["digital" if arm == LEARNING_CONTROL else arm]
-    scale_bytes = TERNARY_SCALE_BYTES * len(weights) if arm == "ternary" else 0
+    scale_bytes = TERNARY_SCALE_BYTES * len(weights) if arm in {"ternary", "qdq"} else 0
     total = math.ceil(weights_numel * bits / 8) + scale_bytes
     return total, total / weights_numel
 
@@ -277,11 +292,12 @@ def _train(
     device: str,
     train_loader: Iterable,
     test_loader: Iterable,
+    hidden_dims: tuple[int, ...] = HIDDEN_DIMS,
 ) -> tuple[float, float, EpochResource, int, float, float, float | None]:
     """One epoch at the declared budget: (val, train, cost, bytes, B/w, s, fwd-eq)."""
     from computronium import SystemTrainer, SystemTrainerConfig
 
-    system = _build_system(arm, seed, lr, max_steps, device)
+    system = _build_system(arm, seed, lr, max_steps, device, hidden_dims=hidden_dims)
     device_bytes, per_weight = device_state(system, arm)
     trainer = SystemTrainer(
         system=system,
@@ -344,9 +360,10 @@ def _refusal_cell(  # ruff: ignore[too-many-arguments]
     device: str,
     started: float,
     note: str,
+    hidden_dims: tuple[int, ...] = HIDDEN_DIMS,
 ) -> SubstrateCell:
     """A crash is a refusal with a trigger, recorded as a row -- never skipped."""
-    system = _build_system(arm, seed, lr, max_steps, device)
+    system = _build_system(arm, seed, lr, max_steps, device, hidden_dims=hidden_dims)
     device_bytes, per_weight = device_state(system, arm)
     return SubstrateCell(
         arm=arm,
@@ -371,7 +388,7 @@ def _refusal_cell(  # ruff: ignore[too-many-arguments]
     )
 
 
-def _run_cell(
+def _run_cell(  # ruff: ignore[too-many-arguments]
     arm: str,
     *,
     stage: str,
@@ -382,6 +399,7 @@ def _run_cell(
     train_loader: Iterable,
     test_loader: Iterable,
     progress: str | Path | None,
+    hidden_dims: tuple[int, ...] = HIDDEN_DIMS,
 ) -> SubstrateCell:
     """Measure one cell, then log it before the next cell runs."""
     started = time.perf_counter()
@@ -402,6 +420,7 @@ def _run_cell(
             device=device,
             train_loader=train_loader,
             test_loader=test_loader,
+            hidden_dims=hidden_dims,
         )
     except (RuntimeError, ValueError) as exc:
         cell = _refusal_cell(
@@ -413,6 +432,7 @@ def _run_cell(
             device=device,
             started=started,
             note=f"refusal at the cell: {exc}",
+            hidden_dims=hidden_dims,
         )
         _write_cell(cell, progress)
         return cell
@@ -498,6 +518,7 @@ def _cell_or_measure(  # ruff: ignore[too-many-arguments]
     train_loader: Iterable,
     test_loader: Iterable,
     progress: str | Path | None,
+    hidden_dims: tuple[int, ...] = HIDDEN_DIMS,
 ) -> SubstrateCell:
     """Reuse a measured cell; otherwise run it and log it."""
     planned = done.get((arm, stage, seed, lr, max_steps))
@@ -513,6 +534,7 @@ def _cell_or_measure(  # ruff: ignore[too-many-arguments]
         train_loader=train_loader,
         test_loader=test_loader,
         progress=progress,
+        hidden_dims=hidden_dims,
     )
 
 
@@ -627,11 +649,13 @@ def _verdict(
     )
 
 
-def _box(device: str, *, stage: str) -> dict[str, object]:
+def _box(
+    device: str, *, stage: str, hidden_dims: tuple[int, ...] = HIDDEN_DIMS
+) -> dict[str, object]:
     """The declared box every cell runs inside."""
     return {
         "task": "MNIST quick mode; full 10k test split (1 sigma = 0.3 pp)",
-        "architecture": f"feedforward {INPUT_DIM}-{HIDDEN_DIMS[0]}-{NUM_CLASSES}",
+        "architecture": f"feedforward {INPUT_DIM}-{'-'.join(map(str, hidden_dims))}-{NUM_CLASSES}",
         "batch": BATCH_SIZE,
         "batches_per_epoch": BATCHES_PER_EPOCH,
         "epochs": EPOCHS,

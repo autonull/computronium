@@ -499,6 +499,61 @@ The Innocenti pre-screen (residual, W=512/B=2048, 200 steps, seed 11) reads
 0.446/0.434 at L=8/L=32 at LR 0.1 — 1.2 pp below its own shallow floor, so
 that trigger's first cell is the same point at 400 steps, not a verdict.
 
+### 2.11 The matched substrate comparison (D2)
+
+**Question.** Does D1's saving survive a matched-budget comparison? The memory
+arm runs the same rule and architecture against the digital rule at matched
+settle compute (the parity reference), against digital backprop at the same
+budget (the learning control: it establishes learnability, not parity), and
+against the int8 quantise-dequantise control (the same width, no device model:
+it prices the representation, so a parity claim can name the constraint that
+binds). The box is MNIST quick mode at **2x** D1's width, 784-64-10, batch 32,
+600 batches, one epoch, beta 0.5, full 10k test split (1 sigma = 0.3 pp), CPU;
+the LR is frozen from D1 at 1e-2, and the settle ladder is 20/40 (D1's best
+point sat on the upper edge).
+
+**The settle screen.** At 2x width the memristive arm reads 0.9259 / 0.9276 at
+settle 20/40 (seed 57) and 0.9245 / 0.9240 (seed 58): +0.17 and -0.05 pp,
+below the 0.5 pp adoption margin, so the matched box stays at settle 20.
+
+**The paired row** (5 paired seeds, settle 20, LR 1e-2; 24 cells, 915 s):
+
+| seed | digital rule | memristive | gap | QDQ control | QDQ gap | backprop | walltime | fwd | device B/weight |
+|---|---|---|---|---|---|---|---|---|---|
+| 71 | 0.9280 | 0.9237 | -0.43 pp | 0.9278 | -0.02 pp | 0.9367 | 2.18x | 1.00x | 2 vs 4 |
+| 72 | 0.9277 | 0.9253 | -0.24 pp | 0.9275 | -0.02 pp | 0.9351 | 2.21x | 1.00x | 2 vs 4 |
+| 73 | 0.9322 | 0.9293 | -0.29 pp | 0.9303 | -0.19 pp | 0.9277 | 1.35x | 1.00x | 2 vs 4 |
+| 74 | 0.9258 | 0.9224 | -0.34 pp | 0.9263 | +0.05 pp | 0.9377 | 2.26x | 1.00x | 2 vs 4 |
+| 75 | 0.9298 | 0.9272 | -0.26 pp | 0.9310 | +0.12 pp | 0.9376 | 2.44x | 1.00x | 2 vs 4 |
+
+**Verdict: refuse the substrate path at this box.** The paired gap is **-0.31
+pp, paired 95% interval [-0.41, -0.22]**, so accuracy parity holds; but the
+memory arm costs **2.09x** the digital rule's walltime at matched settle
+compute (limit 1.2x; 4/5 seeds over the line), with forward-equivalents
+**1.00x** — the extra cost is the differential pair's conductance programming
+on every forward and update, not extra passes. The QDQ control reads **-0.01
+pp**, so the int8 width is harmless and a parity claim cannot be attributed to
+it. The measured mechanism is therefore the **programming budget** (host-side
+conductance programming), not the conductance levels and not drift. D3 does not
+fire: its trigger is parity at matched walltime. The re-open is a device-level
+or compiled quantisation of the pair, not another seed.
+
+The learning control reads 0.9367 / 0.9351 / 0.9277 / 0.9377 / 0.9376, far
+above the 0.55 floor, so the box is learnable.
+
+**One apparatus correction.** `QuantizedSubstrate` claimed int8 precision, but
+its forward cast operands to int8 and never quantised the weights. It now uses
+the float forward with asymmetric per-tensor int8 QDQ (256 levels) and a
+straight-through gradient, so the control prices the representation;
+`DEVICE_BITS` gains `qdq = 8` bits/weight plus one fp32 scale per tensor.
+`_build_system`/`_box` take `hidden_dims`, so the 2x box needed no second
+runner.
+
+Command: `uv run python -m computronium.validation.matched_substrate --device
+cpu`; replay from the cell log without training: `... --replay --device cpu`.
+The table is `results/t93_d2/matched.md`; the cells are
+`results/t93_d2/matched.cells.jsonl`.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -513,6 +568,8 @@ that trigger's first cell is the same point at 400 steps, not a verdict.
 | Substrate device state is a declared width (2/16/32 bits/weight), not a zero | `tests/unit/validation/test_substrate_ladder.py` | 10 s |
 | D1 gate: two-seed parity with less state promotes; one seed below refuses; chance control invalidates | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
 | Kill-safe substrate cell log: resume/replay and dedup | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
+| D2 gate: paired interval, cost ruler, QDQ width, extension screen, replay | `tests/unit/validation/test_matched_substrate.py` | 10 s |
+| QDQ control quantises (256 levels, float forward, STE) and is not a cast | `tests/unit/validation/test_matched_substrate.py` | 5 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |

@@ -991,14 +991,50 @@ class NoisySubstrate(DigitalSubstrate):
 
 
 class QuantizedSubstrate(DigitalSubstrate):
-    """Quantized substrate (int8 precision) for backward compatibility."""
+    """The int8 quantise-dequantise (QDQ) digital control.
+
+    The forward stays a float matmul on the same width, but each weight is
+    rounded to 256 levels and dequantised first, so the control prices the
+    representation's error with no device model. ``SubstrateConfig.digital(
+    precision="int8")`` is *not* this control: its forward casts the
+    operands to int8 and never quantises, so the cast alone would price a
+    different apparatus.
+    """
+
+    LEVELS = 255
 
     def __init__(self, config: SubstrateConfig | None = None):
-        super().__init__(config or SubstrateConfig.digital(precision="int8"))
+        if config is not None and config.precision != "float32":
+            msg = (
+                f"the QDQ control needs a float forward, not {config.precision!r}: "
+                "an int8 cast does not quantise the weights"
+            )
+            raise ValueError(msg)
+        super().__init__(config or SubstrateConfig.digital())
 
     def quantize_weights(self, w: Tensor) -> Tensor:
-        scale = w.abs().max() / 127
-        return (w / scale).round().clamp(-128, 127) * scale
+        return self._qdq(w)
+
+    def _qdq(self, w: Tensor) -> Tensor:
+        """Asymmetric per-tensor int8 QDQ, with a straight-through gradient."""
+        if w.is_complex() or w.numel() == 0:
+            return w
+        low, high = w.amin(), w.amax()
+        if not bool(high > low):
+            return w
+        scale = (high - low) / self.LEVELS
+        zero = -low / scale
+        quantised = ((w / scale) + zero).round().clamp(0, self.LEVELS)
+        dequantised = (quantised - zero) * scale
+        return w + (dequantised - w).detach()
+
+    def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
+        forward = super().get_forward_operator()
+
+        def qdq_forward(x: Tensor, w: Tensor) -> Tensor:
+            return forward(x, self._qdq(w))
+
+        return qdq_forward
 
     def estimate_energy(
         self,
