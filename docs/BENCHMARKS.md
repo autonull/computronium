@@ -4,6 +4,12 @@ Two tables, one purpose: every number a claim rests on is named with the
 coordinate it was measured at, so a reader can rerun it and a defect can be told
 apart from a result.
 
+**Reading note (2026-11-17).** These are measurement records. The verdict
+words in some sections ("refused", "closed as an atlas") predate CORRECTION 25:
+read them as **defect probes** — a named defect with a fix and the capability it
+unlocks (TODO93 §0.6) — never as a conclusion about a mechanism. The numbers,
+boxes, and rulers stand.
+
 TODO93 §3 (P1) owns the parity table; §1/§9.1 own the complexity table. A row
 enters either table in the commit that measures it. An unmeasured row is absent,
 never guessed, and a row whose backend is a stub is `unavailable` with the

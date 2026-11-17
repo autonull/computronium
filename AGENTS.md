@@ -168,6 +168,17 @@
 **Status:** working framework for a general validation methodology; this repo is the first case study.
 **Principle:** Every run answers a decision. Be skeptical of low performance, but a defect is a claim that needs a named mechanism and a test; otherwise a low cell is a coordinate result, not an algorithm verdict. Spend the cheapest evidence that can decide the question, and stop when the decision is determined — not when an arbitrary clock expires.
 
+**Capability first (binding amendment 2026-11-17).** The deliverable is the
+system's ability to do something it could not do before: a new primitive, a
+new task family, a constraint met. A measurement that ends in a negative is
+not a deliverable; a **defect** is, because fixing it widens the system. A low
+cell is therefore a **defect probe** first, and "refused" is only a statement
+about a box (infeasible at this geometry, or over budget), never a verdict on
+a mechanism. A mechanism may be parked as a **capability gap**: the primitive
+or feature that closes it, its cost, and the task family it unlocks. That row
+is work, not a conclusion. A measurement verdict is never final for a
+mechanism; a fix attempt is the next rung.
+
 **When to use:** Any validation with multiple algorithm/architecture combinations where "doesn't work", "is broken", and "is unoptimized" are live possibilities.
 
 **Scope: breadth → viability → competitiveness HPO.** The validation phase produces a **viability map**, not a leaderboard. Do not tune a rule for performance, or rank it against another, until it passes the viability gate. An under-tuned comparison is not evidence; a low cell is a defect probe first.
@@ -176,10 +187,10 @@
 
 0. **DECIDE** — Write the decision, the two actions, the error costs, and the stop rule. If the decision is "X beats Y", it is competitiveness and needs the breadth exit; if it is "is this wired?", it is validation.
 1. **FALSIFY CHEAPLY** — Start at the lowest rung that can decide. Climb only while ambiguous. Never run a more expensive rung to confirm a cheaper definitive result.
-2. **TRIAGE** — Classify: **defect** (named mechanism + failing test), **refusal** (rule + reversal trigger), or **coordinate result** (record the box). A low number is none of these until triage says so. For run-level symptoms (task count, L1/L2 cell count, worker crashes, dedup), use `comp report` / `comp coverage` and the Defect Patterns / Common Fixes tables.
+2. **TRIAGE** — Classify: **defect** (named mechanism + failing test), **capability gap** (the primitive/feature that closes it + its cost + the task family it unlocks), or **coordinate result** (record the box). A low number is none of these until triage says so. "Refused" is a box statement (infeasible, or over budget); it never closes a mechanism. For run-level symptoms (task count, L1/L2 cell count, worker crashes, dedup), use `comp report` / `comp coverage` and the Defect Patterns / Common Fixes tables.
 3. **FIX** — Only a named defect. Correctness/infrastructure, never a knob sweep. If the cause is not found before the rung watchdog, file the symptom with a failing test and stop.
 4. **VERIFY** — The fix must move the cell or the failing test. Moving neither is not a fix.
-5. **RECORD** — Commit the decision, rung reached, stop reason, box, and cost; write the measured number where the mechanism lives (constraint comment, identity card, lock docstring), not only in the log. `unconcluded` is allowed only before the viability gate; after it, a negative is a coordinate result or a refusal.
+5. **RECORD** — Commit the decision, rung reached, stop reason, box, and cost; write the measured number where the mechanism lives (constraint comment, identity card, lock docstring), not only in the log. `unconcluded` is allowed only before the viability gate; after it, a negative is a coordinate result or a capability gap.
 
 **The rung ladder (cheapest falsifier first).**
 
@@ -187,7 +198,7 @@
 |---|---|---|---|---|
 | 0 | Is it wired? | static checks + 1 step: positive control, shapes, label channel, non-zero update, compatibility | defect → triage; clean → rung 1 | seconds |
 | 1 | Does it train? | 1 epoch / 1 seed | failure → defect; above chance → rung 2 | measured pilot × 1 |
-| 2 | Is it viable across its knob? | 3-point ladder, 1 seed each + 1 confirmation seed at the best point | best point above chance → **provisional** coordinate; all fail → defect/refusal | measured pilot × 4 |
+| 2 | Is it viable across its knob? | 3-point ladder, 1 seed each + 1 confirmation seed at the best point | best point above chance → **provisional** coordinate; all fail → defect or capability gap | measured pilot × 4 |
 | 3 | Is the effect real? | pre-registered `n_max`, paired CI | CI decision or `n_max` → claim/coordinate | measured per-seed × n |
 | 4 | Is it competitive? | matched comparison at the breadth exit | pre-registered threshold → competitive verdict | budgeted HPO |
 
@@ -195,7 +206,7 @@ Rungs 0–2 are **mandatory** for a new rule **or a new composition** (a matched
 
 Repo example for a screening cell: `uv run python -m computronium.experiment.survey_cli 0.1 --mode learn --policy tpe --device cuda --tasks <task> --fidelity L0 --axes '<focused_json>' --epochs 1 --n-seeds 1`, or a focused probe for a single-cell check. The cell's `measurement_key` is its identity.
 
-**Stopping rule.** Promote only while the decision is ambiguous and `P(next rung changes the decision) × cost of a wrong decision > cost of the rung`. The rung ladder is the cheap approximation of that rule. A definitive verdict (defect, refusal, coordinate, or claim) stops the loop; otherwise promote. Record the stop reason: `verdict`, `watchdog`, `superseded`, or `n_max` — never the minutes.
+**Stopping rule.** Promote only while the decision is ambiguous and `P(next rung changes the decision) × cost of a wrong decision > cost of the rung`. The rung ladder is the cheap approximation of that rule. A definitive outcome (defect, capability gap, coordinate, or claim) stops the loop; otherwise promote. Record the stop reason: `verdict`, `watchdog`, `superseded`, or `n_max` — never the minutes.
 
 **Watchdog, not timebox.** Rung cost is `fixed startup + pilot × rung size`; kill a rung 0–3 at `2 ×` that measured cost. A cell with no pilot uses the environment's 5-min foreground cap as a **bootstrap cap**: measure that first run, then set the 2× watchdog. A rung that exceeds its watchdog is a cost-model defect or a bad cell: kill, record, re-price. Rung 4 uses the pre-registered HPO budget, not a per-run clock. Do not use a global 5/10/25-minute budget as the primary control; the watchdog is a safety cap, not the methodology. A long run (rung 3+) needs a named claim, a box, a pre-registered `n_max`, and a stop rule; otherwise it is not a run, it is a budget leak.
 
@@ -210,15 +221,15 @@ Repo example for a screening cell: `uv run python -m computronium.experiment.sur
   (**error-blind credits are exempt**: chance is their contract; viability is
   a non-zero update, not accuracy).
 
-No point above chance → triage as defect or refusal, not an algorithm verdict. Best point above chance, confirmed on one more seed → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 2 seeds at the best point, one cell, recorded as a range, never as a claim.
+No point above chance → triage as defect or capability gap, not an algorithm verdict. Best point above chance, confirmed on one more seed → that is the coordinate for a matched comparison. The ladder is **not** competitiveness HPO: 3 points, 2 seeds at the best point, one cell, recorded as a range, never as a claim.
 
 **Defect triage (before a verdict).**
 
 | Signal | Check | If it fails | If all pass |
 |---|---|---|---|
 | val_acc ≈ chance | label channel? pseudo-grad norm > 0? act/param counts match? | defect (name mechanism + test) | coordinate result (box) |
-| No update | credit dispatch, shape, phase | defect/refusal | — |
-| Crash | shape/compatibility | refusal + trigger | — |
+| No update | credit dispatch, shape, phase | defect, or the capability that removes it | — |
+| Crash | shape/compatibility | defect + the primitive that removes it | — |
 | High variance | settle convergence, seeds | coordinate result; n insufficient | — |
 | Gate PASS at chance | gate has no metric bar | gate defect | — |
 
@@ -231,7 +242,7 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 1. **Decision first.** No run without a stated decision and stop rule.
 2. **Cheapest falsifier first.** A cheap rung that decides stops the climb.
 3. **Stop when decided.** Evidence, not wall-clock, ends a rung; claims use sequential or fixed-n-with-no-peeking error control.
-4. **Every negative has a verdict.** Defect with a test, refusal with a trigger, or coordinate result with a box.
+4. **Every negative names a defect, a capability gap, or a coordinate result.** A refusal is a box statement (infeasible or over budget), never an algorithm verdict; a mechanism that cannot train is a defect until a fix is tested.
 5. **The box is part of the result.** No point estimate without its scope.
 6. **Breadth before optimization.** Map viability first; HPO is successive halving/Hyperband under a total budget, not a per-run clock.
 7. **A watchdog is a safety cap, not a budget.** It is priced from a measured pilot.
@@ -397,7 +408,7 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 | Dry-run gate scores RL with a supervised loss | Skip RL and one-class heads | `kernel/compose.py` |
 
 **Breadth exit (when competitiveness HPO may begin; checked by `uv run comp gate breadth`, exit 1 until green):**
-- every declared axis value is live/refused/unavailable with a trigger;
+- every declared axis value is live / infeasible-at-its-box / unavailable, each with a trigger;
 - every error-aware credit has ≥1 legal, above-chance, L2/n≥5 cell on ≥2
   task families, with its label channel declared;
 - every legal composition family has a cell that trains (no unexplained
@@ -441,8 +452,9 @@ Report the box and the cost beside the metric.
   breadth exit above) before any cross-credit comparison.
 - **No cross-credit conclusion from a cell without a declared hyperparameter
   box and a viability ladder.** The box is part of the result.
-- **A low cell is a named defect, a refusal, or a coordinate result — never
-  "the algorithm fails".**
+- **A low cell is a named defect or a capability gap with the fix it needs —
+  never "the algorithm fails". A measurement verdict is never final for a
+  mechanism: the fix is the next rung.**
 
 **Session Log Template (commit message body; never appended to the TODO):**
 ```
@@ -452,7 +464,7 @@ Report the box and the cost beside the metric.
 **Box:** <task, fidelity, seeds, knobs allowed>
 **Rung / stop:** <0-4; why the rung stopped>
 **Result:** <metric, ruler, cost>
-**Triage:** <defect | refusal | coordinate result; if defect, the failing test>
+**Triage:** <defect | capability gap | coordinate result; if defect, the failing test; if gap, the primitive that closes it>
 **Fixes Applied:** <files changed>
 **Next Experiment:** <planned command>
 ```
@@ -461,10 +473,12 @@ Report the box and the cost beside the metric.
 
 | Run | Axes | Box (task/fidelity/seeds/knobs) | Rung / stop | Walltime | Crashes | Gate Failures | Verdict | Fix Applied |
 |-----|------|----------------------------------|-------------|----------|---------|---------------|---------|-------------|
-| N | <axis_json> | <task, fidelity, n_seeds, knobs> | <0-4; why> | <s> | <n> | <n> | defect / refusal / coordinate | <file/change> |
+| N | <axis_json> | <task, fidelity, n_seeds, knobs> | <0-4; why> | <s> | <n> | <n> | defect / capability gap / coordinate | <file/change> |
 
 **Never:**
-- Accept "this algorithm doesn't work" without the viability ladder and triage
+- Accept "this algorithm doesn't work" without the viability ladder, triage, and a tested fix
+- Record a verdict that closes a mechanism: a low cell is a defect probe
+- Gate a primitive behind a negative measurement: primitives are admitted by the capability they add
 - Use a wall-clock budget as the primary stop rule (the watchdog is a safety cap)
 - Run a cell without a measured cost model (the watchdog is 2× that model)
 - Stop a fixed-n comparison early and report its CI as sequential
@@ -502,7 +516,7 @@ Report the box and the cost beside the metric.
 | Positive control (gate) | Positive control PASS (100% target) |
 | Energy minimization (settle to fixed point) | DECIDE→FALSIFY→TRIAGE→FIX→VERIFY (stop when decided) |
 | Credit assignment (local learning signal) | Viability ladder (minimum fair chance before ranking) |
-| Defect patterns (symptom → cause) | Defect triage (defect / refusal / coordinate result) |
+| Defect patterns (symptom → cause) | Defect triage (defect / capability gap / coordinate result) |
 | Harness reliability (heartbeat, deadline) | Test selection by symbol, kill logging, measured pricing |
 | Excluded possibilities (S/G/D/C/U/P) | Question excluded possibilities table |
 | Normalized metrics (ruler-relative) | Per-domain success criteria + declared hyperparameter box |
@@ -514,17 +528,17 @@ Report the box and the cost beside the metric.
 
 **Why it stabilizes:**
 
-1. **Every anomaly is a triage question** — low val_acc ≠ "algorithm failure"; it is a defect, a refusal, or a coordinate result, and the viability ladder gives every approach a minimum fair chance before any verdict.
+1. **Every anomaly is a triage question** — low val_acc ≠ "algorithm failure"; it is a defect, a capability gap, or a coordinate result, and the viability ladder gives every approach a minimum fair chance before any verdict.
 2. **Every assumption is testable** — "unfixable upstream" gets a concrete test.
 3. **Every fix has a file** — symptom → fix → file mapping prevents drift.
 4. **Every run priced from reality** — no stale L0 positive control pricing.
 5. **Context preserved in code** — AGENTS.md rules, not prose in TODOs.
-6. **Every negative has an exit** — a named defect with a failing test, a refusal with a reversal trigger, or a boxed coordinate result. "Unconcluded" is not a permanent state.
+6. **Every negative has an exit** — a named defect with a failing test, a capability gap with the primitive that closes it, or a boxed coordinate result. "Unconcluded" is not a permanent state.
 7. **Breadth before HPO** — the viability map is the artifact; competitiveness tuning begins only when it is complete, with the compute case it supports.
 8. **Time is an outcome** — the rung ladder and the 2× measured-cost watchdog replace arbitrary clocks; a cheap decision stops cheap.
 9. **Claims control error** — screening stops freely; claims use sequential or fixed-n CIs, never optional stopping.
 
 **The meta-stabilization:** The SEC methodology was refined by the same cycle it describes:
-> DECIDE (decision + box) → FALSIFY (smallest rung) → TRIAGE (defect/refusal/coordinate) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → RECORD+COMMIT
+> DECIDE (decision + box) → FALSIFY (smallest rung) → TRIAGE (defect/capability gap/coordinate) → FIX (integrate into AGENTS.md) → VERIFY (tests pass) → RECORD+COMMIT
 
 This document *is* the fixed point. The methodology describes the process that produced it.

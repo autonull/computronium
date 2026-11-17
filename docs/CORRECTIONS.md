@@ -240,3 +240,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The mechanism is the **split at the boundary**: the same rule trains as a whole stack and collapses only when a 2-layer exact-gradient head reads its boundary. The next rung is the split's position (`split_layer` on the last Linear, a readout-only head), not another trunk knob. The diagnostic also measures the hybrid's activation set at **1.06×** the reference's at L=8, so the pilot box cannot decide the memory half. |
 | Status | corrected — T6d refused with the sibling control and the split as the mechanism |
 | Commit | this commit |
+
+| Field | Correction 25 — refusals are defect probes, not verdicts (capability-first) |
+|---|---|
+| Original claim | The plan recorded `refuse` / `⛔` verdicts for B1, D2, F1, T6a/T6a₂, T6c, and T6d — each from one box — and gated every queued primitive behind a measurement trigger produced by those verdicts (§19: "nothing is scheduled"). |
+| Original metric | A screen or a pilot cell read as evidence about a mechanism, with "more primitives is not progress" making capability work a byproduct of the refusal loop. |
+| Audited procedure | The plan's own §0.5 says *grow and stabilise the apparatus; do not adjudicate*, and the SEC loop says a low cell is a defect probe first. The sessions violated both: the queue could not move, and the primitives that would widen the system stayed in a table while the same boxes were measured again (T6a → T6a₂ → T6d). |
+| Affected conclusions | The verdict words only, not the measurements. Every number stands at its box: 0.46× memory at L=32; hybrid 0.184/0.201; 0.163 against the sibling's 0.405; −0.31 pp at 2.09× walltime; STE gap 0.819→0.660; screen 0.669. |
+| Replacement metric | **Defect probe**: a named defect candidate, the fix, and the capability it unlocks (TODO93 §0.6 defect ledger, §14 capability ledger). "Refused" is a box statement (infeasible, or over budget), never a mechanism verdict. The primitives are the work program, admitted by capability (§19). |
+| Status | corrected — TODO93 is a capability program; no track is closed by a low cell |
+| Commit | this commit |
