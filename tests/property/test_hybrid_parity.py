@@ -146,11 +146,13 @@ def _hybrid_grads(
     split: int | None = None,
     gamma: float = 0.05,
     feedback: torch.Tensor | None = None,
+    trunk_lr: float = 1.0,
 ) -> tuple[dict[str, torch.Tensor], HybridCredit]:
     config = CreditAssignmentConfig.hybrid(
         split_layer=split if split is not None else -1,
         gamma=gamma,
         feedback_matrix=feedback,
+        trunk_lr=trunk_lr,
     )
     credit = HybridCredit(config)
     gradients = credit.compute_pseudo_gradient(
@@ -209,6 +211,75 @@ def test_the_head_gets_plain_backprop_gradients() -> None:
     for name, gradient in zip(head_names, exact, strict=True):
         torch.testing.assert_close(hybrid[name], gradient, rtol=0, atol=1e-7)
     assert head
+
+
+def test_a_readout_only_head_keeps_the_trunk_exact() -> None:
+    """The split on the last Linear: 2 trunk layers' contrast + the readout."""
+    torch.manual_seed(2)
+    geometry = _geometry()
+    x = torch.randn(_BATCH, _IN)
+    y = torch.randint(0, _OUT, (_BATCH,))
+    layers = list(geometry._layers)
+    split = max(i for i, layer in enumerate(layers) if isinstance(layer, nn.Linear))
+    torch.manual_seed(12)
+    feedback = torch.randn(_HIDDEN, _IN) * 0.1
+
+    reference = _store_all_hybrid(
+        geometry, x, y, split=split, gamma=0.05, feedback=feedback
+    )
+    hybrid, credit = _hybrid_grads(
+        geometry, x, y, split=split, gamma=0.05, feedback=feedback
+    )
+
+    assert credit.split_layer == split
+    assert len([n for n in reference if int(n.rpartition(".")[0]) < split]) == 2
+    logits = geometry.forward(x, DigitalSubstrate())
+    loss = torch.nn.functional.cross_entropy(logits, y)
+    exact = torch.autograd.grad(loss, [geometry.params[f"{split}.weight"]])[0]
+    for name in reference:
+        torch.testing.assert_close(hybrid[name], reference[name], rtol=0, atol=1e-6)
+    torch.testing.assert_close(hybrid[f"{split}.weight"], exact, rtol=0, atol=1e-6)
+    assert exact.abs().max() > 0
+
+
+def test_a_decoupled_trunk_step_scales_only_the_trunk() -> None:
+    """``trunk_lr`` multiplies the trunk's pseudo-gradients, not the head's."""
+    torch.manual_seed(3)
+    geometry = _geometry()
+    x = torch.randn(_BATCH, _IN)
+    y = torch.randint(0, _OUT, (_BATCH,))
+    _trunk, _head, split = _parts(geometry)
+    torch.manual_seed(13)
+    feedback = torch.randn(_HIDDEN, _IN) * 0.1
+
+    registered, _credit = _hybrid_grads(
+        geometry, x, y, split=split, gamma=0.05, feedback=feedback
+    )
+    scaled, scaled_credit = _hybrid_grads(
+        geometry,
+        x,
+        y,
+        split=split,
+        gamma=0.05,
+        feedback=feedback,
+        trunk_lr=3.0,
+    )
+
+    assert scaled_credit.trunk_lr == 3.0
+    for name in registered:
+        if int(name.rpartition(".")[0]) < split:
+            torch.testing.assert_close(
+                scaled[name], 3.0 * registered[name], rtol=0, atol=1e-7
+            )
+        else:
+            torch.testing.assert_close(
+                scaled[name], registered[name], rtol=0, atol=1e-7
+            )
+    assert any(
+        torch.count_nonzero(registered[name])
+        for name in registered
+        if int(name.rpartition(".")[0]) < split
+    )
 
 
 def test_the_trunk_pass_runs_under_no_grad(monkeypatch) -> None:

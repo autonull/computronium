@@ -234,6 +234,7 @@ class CreditAssignmentConfig:
     sequential_lr: float = 0.0
     grad_clip: float = 1.0  # Per-parameter gradient clipping for pseudo-gradients
     split_layer: int = -1  # Hybrid: stack index where the head starts (-1 auto)
+    trunk_lr: float = 1.0  # Hybrid: trunk step multiplier (decoupled trunk LR)
     estimator_samples: int = 8  # Forward tangents, score samples, or FD pairs
     fd_step: float = 1e-2  # Zeroth-order finite-difference step
 
@@ -500,6 +501,7 @@ class CreditAssignmentConfig:
         gamma: float = 0.05,
         feedback_matrix: Tensor | None = None,
         train_biases: bool = False,
+        trunk_lr: float = 1.0,
         grad_clip: float = 1.0,
     ) -> CreditAssignmentConfig:
         """Lockstep-local trunk + exact-gradient head (TODO93 T3b).
@@ -507,7 +509,10 @@ class CreditAssignmentConfig:
         ``split_layer`` indexes the geometry's layer stack and must land on a
         Linear; ``-1`` places the head on the last two Linears. γ is the
         trunk's input-modulation scale (the PEPITA knob, parity at 0.05), and
-        the head keeps exact autograd gradients.
+        the head keeps exact autograd gradients. ``trunk_lr`` multiplies the
+        trunk's pseudo-gradients only (T6e): under one Euclidean step size it
+        is a decoupled trunk learning rate, so the trunk and the head do not
+        share a scale.
         """
         return cls(
             credit_type="hybrid",
@@ -517,6 +522,7 @@ class CreditAssignmentConfig:
             orthogonal_init=False,
             feedback_scale=gamma,
             split_layer=split_layer,
+            trunk_lr=trunk_lr,
             train_biases=train_biases,
             grad_clip=grad_clip,
         )

@@ -103,6 +103,8 @@ class HybridCredit:
     Linear would have lost its skip input if the split landed between them.
     ``-1`` places the head on the last two Linears (the readout and the last
     hidden layer), clamped so the trunk keeps at least one Linear.
+    ``trunk_lr`` multiplies the trunk's pseudo-gradients only: the update
+    rule shares one step size, so this is a decoupled trunk learning rate.
     """
 
     phases: tuple[Phase, ...] = (Phase.FREE,)
@@ -136,6 +138,7 @@ class HybridCredit:
         approximation_parameters=(
             "feedback_scale γ",
             "split_layer",
+            "trunk_lr",
             "feedback_matrix",
         ),
         validated_limits=(
@@ -151,6 +154,7 @@ class HybridCredit:
         trunk_credit: TrunkContrast | None = None,
         head_credit: GradientCredit | None = None,
         split_layer: int | None = None,
+        trunk_lr: float | None = None,
     ) -> None:
         from computronium.ontology.credit import BackpropCredit, CreditAssignmentConfig
 
@@ -160,6 +164,7 @@ class HybridCredit:
         self.split_layer = (
             self.config.split_layer if split_layer is None else split_layer
         )
+        self.trunk_lr = self.config.trunk_lr if trunk_lr is None else trunk_lr
         self._substrate: Substrate | None = None
         self._trunk_feedback: Tensor | None = None
         self._bias_cache: dict[str, Tensor] | None = None
@@ -292,9 +297,13 @@ class HybridCredit:
             weight, bias = self.trunk_credit.contrast(
                 pre_std, post_std, pre_mod, post_mod
             )
-            weights[f"{index}.weight"] = _clip(weight, self.config.grad_clip)
+            weights[f"{index}.weight"] = self.trunk_lr * _clip(
+                weight, self.config.grad_clip
+            )
             if self.config.train_biases:
-                biases[f"{index}.bias"] = _clip(bias, self.config.grad_clip)
+                biases[f"{index}.bias"] = self.trunk_lr * _clip(
+                    bias, self.config.grad_clip
+                )
 
         # No graph may survive the second pass: an un-wrapped contrast keeps
         # the activation chain alive through its grad_fn and the peak grows

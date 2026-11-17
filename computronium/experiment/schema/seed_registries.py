@@ -210,7 +210,7 @@ _CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     (
         "hybrid",
         "Lockstep-local trunk + exact-gradient head",
-        ("split_layer", "feedback_scale"),
+        ("split_layer", "feedback_scale", "trunk_lr"),
     ),
     ("gradient", "Backprop gradient credit (ruler reference)", ()),
     ("pc_alm", "PC-ALM primal-dual credit", ()),

@@ -37,6 +37,8 @@ def _cell(
     seed: int = 21,
     acc: float = BASELINE,
     activations_mb: float | None = 210.0,
+    split_layer: int = diagnostic.REGISTERED_SPLIT,
+    trunk_lr: float = 1.0,
 ) -> diagnostic.DiagnosticCell:
     return diagnostic.DiagnosticCell(
         arm=arm,
@@ -47,6 +49,8 @@ def _cell(
         walltime_s=10.0,
         activations_mb=activations_mb,
         peak_mb=282.3,
+        split_layer=split_layer,
+        trunk_lr=trunk_lr,
     )
 
 
@@ -113,6 +117,10 @@ def _gate(
     )
 
 
+def _key(arm: str, gamma: float, train_biases: bool, seed: int) -> diagnostic.CellKey:
+    return (arm, gamma, train_biases, seed, diagnostic.REGISTERED_SPLIT, 1.0)
+
+
 def _plan(
     *,
     reference_acc: float = 0.364,
@@ -120,7 +128,7 @@ def _plan(
     bias_gain: float = 0.0,
     head_only_acc: float = 0.201,
     sibling_accs: dict[float, float] | None = None,
-) -> dict[tuple[str, float, bool, int], diagnostic.DiagnosticCell]:
+) -> dict[diagnostic.CellKey, diagnostic.DiagnosticCell]:
     """The cells a fake measurement returns, keyed like the cell log."""
     accs = (
         hybrid_acc if hybrid_acc is not None else {0.05: 0.184, 0.3: 0.190, 1.0: 0.200}
@@ -130,43 +138,45 @@ def _plan(
         if sibling_accs is not None
         else {0.05: 0.3995, 0.3: 0.4051, 1.0: 0.3837}
     )
-    cells: dict[tuple[str, float, bool, int], diagnostic.DiagnosticCell] = {}
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell] = {}
     for seed in diagnostic.DIAGNOSTIC_SEEDS:
-        cells["backprop+ckpt", 0.05, False, seed] = _cell(
+        cells[_key("backprop+ckpt", 0.05, False, seed)] = _cell(
             "backprop+ckpt", 0.05, seed=seed, acc=reference_acc, activations_mb=453.0
         )
         base = accs[diagnostic.GAMMA_LADDER[0]]
-        cells["hybrid", 0.05, False, seed] = _cell("hybrid", 0.05, seed=seed, acc=base)
-        cells["hybrid", 0.05, True, seed] = _cell(
+        cells[_key("hybrid", 0.05, False, seed)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=base
+        )
+        cells[_key("hybrid", 0.05, True, seed)] = _cell(
             "hybrid", 0.05, train_biases=True, seed=seed, acc=base + bias_gain
         )
     first = diagnostic.DIAGNOSTIC_SEEDS[0]
     last = diagnostic.DIAGNOSTIC_SEEDS[-1]
     best = max(accs, key=lambda gamma: accs[gamma])
     for gamma, acc in accs.items():
-        cells["hybrid", gamma, False, first] = _cell(
+        cells[_key("hybrid", gamma, False, first)] = _cell(
             "hybrid", gamma, seed=first, acc=acc
         )
-    cells["hybrid", best, False, last] = _cell(
+    cells[_key("hybrid", best, False, last)] = _cell(
         "hybrid", best, seed=last, acc=accs[best]
     )
-    cells["hybrid", diagnostic.HEAD_ONLY_GAMMA, False, first] = _cell(
+    cells[_key("hybrid", diagnostic.HEAD_ONLY_GAMMA, False, first)] = _cell(
         "hybrid", diagnostic.HEAD_ONLY_GAMMA, seed=first, acc=head_only_acc
     )
     for gamma, acc in sibling_accs.items():
-        cells[diagnostic.SIBLING_ARM, gamma, False, first] = _cell(
+        cells[_key(diagnostic.SIBLING_ARM, gamma, False, first)] = _cell(
             diagnostic.SIBLING_ARM, gamma, seed=first, acc=acc
         )
     return cells
 
 
 def _read(
-    cells: dict[tuple[str, float, bool, int], diagnostic.DiagnosticCell],
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell],
 ) -> Callable[..., diagnostic.DiagnosticCell]:
     def cell(
         arm: str, *, gamma: float, train_biases: bool = False, seed: int
     ) -> diagnostic.DiagnosticCell:
-        return cells[arm, gamma, train_biases, seed]
+        return cells[_key(arm, gamma, train_biases, seed)]
 
     return cell
 
@@ -338,7 +348,7 @@ def test_the_assembly_reads_each_knob_at_the_pilot_box() -> None:
         arm: str, *, gamma: float, train_biases: bool = False, seed: int
     ) -> diagnostic.DiagnosticCell:
         seen.append((arm, gamma, train_biases, seed))
-        return plan[arm, gamma, train_biases, seed]
+        return plan[_key(arm, gamma, train_biases, seed)]
 
     report = diagnostic._assemble(cell, point=diagnostic.BOX)
     assert len(seen) == 14
@@ -385,6 +395,8 @@ def test_the_cell_log_reuses_a_measured_cell(
         y_test: torch.Tensor,
         gamma: float,
         train_biases: bool,
+        split_layer: int,
+        trunk_lr: float,
     ) -> frontier.ArmCell:
         calls.append((gamma, train_biases, seed))
         return frontier.ArmCell(
@@ -429,7 +441,247 @@ def test_the_cell_log_reuses_a_measured_cell(
     assert calls == [(0.3, False, 21)]
     cells = diagnostic.read_cells(path)
     assert len(cells) == 1
-    assert cells["hybrid", 0.3, False, 21] == first
+    assert cells[_key("hybrid", 0.3, False, 21)] == first
     path.write_text(path.read_text(encoding="utf-8") * 2, encoding="utf-8")
     assert diagnostic.read_cells(path) == cells
     assert asdict(first)["arm"] == "hybrid"
+
+
+def _split_key(
+    arm: str, gamma: float, seed: int, *, split_layer: int, trunk_lr: float = 1.0
+) -> diagnostic.CellKey:
+    return (arm, gamma, False, seed, split_layer, trunk_lr)
+
+
+def _split_row(
+    mechanism: str,
+    *,
+    split_layer: int = diagnostic.READOUT_SPLIT,
+    trunk_lr: float = 1.0,
+    acc: float = BASELINE,
+    n: int = 2,
+) -> diagnostic.SplitRow:
+    return diagnostic.SplitRow(
+        mechanism=mechanism,
+        split_layer=split_layer,
+        trunk_lr=trunk_lr,
+        n=n,
+        val_acc=acc,
+        val_acc_sd=0.0,
+        gain=acc - BASELINE,
+        activations_mb=210.0,
+        activation_ratio=0.46,
+        floor=FLOOR,
+    )
+
+
+def _split_gate(
+    *,
+    reference_acc: float = 0.364,
+    rows: tuple[diagnostic.SplitRow, ...] | None = None,
+    ladder: tuple[diagnostic.DiagnosticCell, ...] | None = None,
+) -> diagnostic.UpdateVerdict:
+    return diagnostic.split_gate(
+        reference_acc=reference_acc,
+        baseline_acc=BASELINE,
+        rows=rows
+        if rows is not None
+        else (
+            _split_row("split_layer", acc=0.190),
+            _split_row("trunk_lr", trunk_lr=0.3, acc=0.190, n=1),
+            _split_row("trunk_lr", acc=0.190),
+            _split_row("trunk_lr", trunk_lr=3.0, acc=0.190, n=1),
+        ),
+        ladder=ladder
+        if ladder is not None
+        else tuple(
+            _cell("hybrid", diagnostic.HYBRID_GAMMA, split_layer=7, trunk_lr=trunk_lr)
+            for trunk_lr in diagnostic.TRUNK_LR_LADDER
+        ),
+        floor=FLOOR,
+    )
+
+
+def _split_plan(
+    *,
+    reference_acc: float = 0.364,
+    readout_acc: float = 0.190,
+    trunk_accs: dict[float, float] | None = None,
+) -> dict[diagnostic.CellKey, diagnostic.DiagnosticCell]:
+    accs = trunk_accs if trunk_accs is not None else {0.3: 0.190, 3.0: 0.190}
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell] = {}
+    readout = diagnostic.READOUT_SPLIT
+    for seed in diagnostic.DIAGNOSTIC_SEEDS:
+        cells[_key("backprop+ckpt", 0.05, False, seed)] = _cell(
+            "backprop+ckpt", 0.05, seed=seed, acc=reference_acc, activations_mb=453.0
+        )
+        cells[_key("hybrid", 0.05, False, seed)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=BASELINE
+        )
+        cells[_split_key("hybrid", 0.05, seed, split_layer=readout)] = _cell(
+            "hybrid", 0.05, seed=seed, acc=readout_acc, split_layer=readout
+        )
+    first, last = diagnostic.DIAGNOSTIC_SEEDS[0], diagnostic.DIAGNOSTIC_SEEDS[-1]
+    points = {**dict.fromkeys(diagnostic.TRUNK_LR_LADDER, readout_acc), **accs}
+    for trunk_lr, acc in accs.items():
+        cells[
+            _split_key("hybrid", 0.05, first, split_layer=readout, trunk_lr=trunk_lr)
+        ] = _cell(
+            "hybrid",
+            0.05,
+            seed=first,
+            acc=acc,
+            split_layer=readout,
+            trunk_lr=trunk_lr,
+        )
+    best = max(diagnostic.TRUNK_LR_LADDER, key=lambda trunk_lr: points[trunk_lr])
+    if best != 1.0:
+        cells[_split_key("hybrid", 0.05, last, split_layer=readout, trunk_lr=best)] = (
+            _cell(
+                "hybrid",
+                0.05,
+                seed=last,
+                acc=points[best],
+                split_layer=readout,
+                trunk_lr=best,
+            )
+        )
+    return cells
+
+
+def _read_split(
+    cells: dict[diagnostic.CellKey, diagnostic.DiagnosticCell],
+) -> Callable[..., diagnostic.DiagnosticCell]:
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        split_layer: int = diagnostic.REGISTERED_SPLIT,
+        trunk_lr: float = 1.0,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        if split_layer == diagnostic.REGISTERED_SPLIT:
+            return cells[_key(arm, gamma, train_biases, seed)]
+        return cells[arm, gamma, train_biases, seed, split_layer, trunk_lr]
+
+    return cell
+
+
+def test_the_split_ladder_is_the_last_linear_and_the_registered_head() -> None:
+    assert diagnostic.REGISTERED_SPLIT == -1
+    assert 2 * (diagnostic.BOX.depth - 1) == diagnostic.READOUT_SPLIT
+    assert diagnostic.SPLIT_LADDER == (-1, 14)
+    assert diagnostic.TRUNK_LR_LADDER[1] == 1.0
+    assert set(diagnostic.TRUNK_LR_LADDER) == {0.3, 1.0, 3.0}
+
+
+def test_the_split_gate_promotes_a_readout_head_that_reaches_the_floor() -> None:
+    gate = _split_gate(
+        rows=(
+            _split_row("split_layer", acc=0.360),
+            _split_row("trunk_lr", acc=0.200),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "head's depth" in gate.mechanism
+    assert "0.354" in gate.reason
+    assert "claim run" in gate.trigger
+
+
+def test_the_split_gate_promotes_a_trunk_step_that_reaches_the_floor() -> None:
+    gate = _split_gate(
+        rows=(
+            _split_row("split_layer", acc=0.186),
+            _split_row("trunk_lr", trunk_lr=0.3, acc=0.200, n=1),
+            _split_row("trunk_lr", acc=0.358),
+            _split_row("trunk_lr", trunk_lr=3.0, acc=0.210, n=1),
+        )
+    )
+    assert gate.verdict == "promote"
+    assert "decoupled trunk step" in gate.mechanism
+    assert "trunk_lr=1" in gate.mechanism
+
+
+def test_a_trunk_step_gain_without_the_floor_is_a_coordinate() -> None:
+    gate = _split_gate(
+        rows=(
+            _split_row("split_layer", acc=0.186),
+            _split_row("trunk_lr", acc=0.196),
+        )
+    )
+    assert gate.verdict == "coordinate"
+    assert "trunk_lr=1" in gate.mechanism
+    assert "next trunk-step edge" in gate.trigger
+
+
+def test_a_split_that_moves_nothing_refuses_the_direction() -> None:
+    gate = _split_gate(
+        rows=(
+            _split_row("split_layer", acc=0.189),
+            _split_row("trunk_lr", trunk_lr=0.3, acc=0.189, n=1),
+            _split_row("trunk_lr", acc=0.189),
+        )
+    )
+    assert gate.verdict == "refuse"
+    assert "direction" in gate.mechanism
+    assert "0.3/1/3" in gate.reason
+    assert "learned_feedback" in gate.trigger
+
+
+def test_the_split_gate_invalidates_a_reference_below_the_floor() -> None:
+    gate = _split_gate(reference_acc=0.200)
+    assert gate.verdict == "invalid"
+    assert "reference" in gate.mechanism
+
+
+def test_the_split_assembly_prices_the_cells_at_the_pilot_box() -> None:
+    plan = _split_plan(trunk_accs={0.3: 0.190, 3.0: 0.192})
+    seen: list[diagnostic.CellKey] = []
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        split_layer: int = diagnostic.REGISTERED_SPLIT,
+        trunk_lr: float = 1.0,
+        seed: int,
+    ) -> diagnostic.DiagnosticCell:
+        seen.append((arm, gamma, train_biases, seed, split_layer, trunk_lr))
+        return _read_split(plan)(
+            arm,
+            gamma=gamma,
+            train_biases=train_biases,
+            split_layer=split_layer,
+            trunk_lr=trunk_lr,
+            seed=seed,
+        )
+
+    report = diagnostic._assemble_split(cell, point=diagnostic.BOX)
+    assert len(seen) == 9
+    assert len(set(seen)) == 9
+    assert len(report.cells) == 9
+    assert [row.n for row in report.rows] == [2, 1, 2, 2]
+    assert report.verdict in {"refuse", "coordinate", "promote"}
+    assert report.confirmation.seed == diagnostic.DIAGNOSTIC_SEEDS[-1]
+    assert report.confirmation.split_layer == diagnostic.READOUT_SPLIT
+    assert report.rows[0].activation_ratio == pytest.approx(210.0 / 453.0)
+
+
+def test_the_split_json_carries_the_verdict_and_its_rulers(tmp_path: Path) -> None:
+    report = diagnostic._assemble_split(
+        _read_split(_split_plan(trunk_accs={0.3: 0.190, 3.0: 0.361})),
+        point=diagnostic.BOX,
+    )
+    path = diagnostic.write_split_report(report, tmp_path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["verdict"] == "promote"
+    assert "trunk_lr" in raw["mechanism"]
+    assert raw["point"]["lr"] == diagnostic.LR
+    assert len(raw["rows"]) == 4
+    assert {"mechanism", "reason", "trigger", "cells"} <= set(raw)
+    markdown = (tmp_path / "split_position.md").read_text(encoding="utf-8")
+    assert "T6e" in markdown
+    assert "0.354" in markdown
+    assert "trunk lr" in markdown

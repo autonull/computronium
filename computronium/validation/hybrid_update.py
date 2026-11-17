@@ -1,4 +1,4 @@
-"""T6d -- the hybrid's update diagnostic (TODO93 §8.1 ticket 12c).
+"""T6d and T6e -- the hybrid's update and the split's position (TODO93 §8.1).
 
 T6a2 met the memory bar at the pass-carrying box (0.46x the checkpointed
 arm's activation set under the stream-normalized pass) and refused on
@@ -19,17 +19,28 @@ steps, CIFAR-10, two screen seeds, no claim seeds):
   ceiling: when it reaches the floor while every trunk knob misses it, the
   trunk's update is destructive rather than mis-scaled.
 
-The diagnostic is a screen, not a claim: eleven cells at most, disjoint
-from the claim seeds, and priced rather than pre-registered. A mechanism
-that lifts the hybrid to the checkpointed arm's floor earns the claim box;
-a knob that moves it by at least delta without reaching the floor is a
-coordinate with its next edge; a knob that moves nothing is a refusal that
-names the mechanism and its trigger, not an algorithm verdict.
+T6d refused every knob and localised the mechanism at the split: the same
+trunk rule as a whole stack trains (0.405) where the hybrid collapses.
+T6e prices the split's position and the trunk's step (``--split``):
+
+- ``split_layer``: the head on the last Linear only (7 trunk layers + one
+  readout layer at the pilot box) against the registered two-layer head;
+- ``trunk_lr``: a multiplier on the trunk's pseudo-gradients at the
+  readout split, so the trunk and the head do not share one step size.
+
+Both are screens, not claims: fourteen cells at most, disjoint from the
+claim seeds, and priced rather than pre-registered. A mechanism that lifts
+the hybrid to the checkpointed arm's floor earns the claim box; a knob that
+moves it by at least delta without reaching the floor is a coordinate with
+its next edge; a knob that moves nothing is a refusal that names the
+mechanism and its trigger, not an algorithm verdict.
 
 Run it with::
 
     uv run python -m computronium.validation.hybrid_update --run
     uv run python -m computronium.validation.hybrid_update --replay
+    uv run python -m computronium.validation.hybrid_update --split
+    uv run python -m computronium.validation.hybrid_update --split --replay
 """
 
 from __future__ import annotations
@@ -68,17 +79,28 @@ __all__ = [
     "GAMMA_LADDER",
     "HEAD_ONLY_GAMMA",
     "LR",
+    "READOUT_SPLIT",
     "REFERENCE_ARM",
+    "REGISTERED_SPLIT",
     "SIBLING_ARM",
+    "SPLIT_LADDER",
+    "TRUNK_LR_LADDER",
+    "CellKey",
     "DiagnosticCell",
     "HybridUpdateReport",
     "MechanismRow",
+    "SplitPositionReport",
+    "SplitRow",
     "UpdateVerdict",
     "read_cells",
     "replay_diagnostic",
+    "replay_split_diagnostic",
     "run_diagnostic",
+    "run_split_diagnostic",
+    "split_gate",
     "update_gate",
     "write_report",
+    "write_split_report",
 ]
 
 #: The pilot box the T6a2 trigger names (L=8, W=1024, B=8192, 200 steps).
@@ -89,6 +111,16 @@ LR = 0.3
 GAMMA_LADDER = (HYBRID_GAMMA, 0.3, 1.0)
 #: Zero modulation: the trunk's contrast is zero, so the head alone trains.
 HEAD_ONLY_GAMMA = 0.0
+#: The registered split: the head on the last two Linears (``-1`` is auto).
+REGISTERED_SPLIT = -1
+#: The readout split: the stack index of the last Linear (Linears and ReLUs
+#: alternate from 0, so ``depth`` Linears end at ``2·(depth - 1)``).
+READOUT_SPLIT = 2 * (BOX.depth - 1)
+#: The split's position ladder (T6e): the registered head and a one-layer head.
+SPLIT_LADDER = (REGISTERED_SPLIT, READOUT_SPLIT)
+#: The trunk's own step multipliers (T6e): one box per point, at the readout
+#: split, so the trunk and the head do not share a learning rate.
+TRUNK_LR_LADDER = (0.3, 1.0, 3.0)
 #: The checkpointed arm: the reference the floor is read from.
 REFERENCE_ARM = "backprop+ckpt"
 #: The whole-stack local rule: the same trunk, no head (the sibling control).
@@ -100,15 +132,17 @@ DIAGNOSTIC_SEEDS = LADDER_SEEDS[:2]
 DATE = "2026-11-17"
 DEFAULT_OUT = Path("results/t93_a_stream")
 
-type CellKey = tuple[str, float, bool, int]
+type CellKey = tuple[str, float, bool, int, int, float]
 
 
 @dataclass(frozen=True, slots=True)
 class DiagnosticCell:
     """One measured cell: the arm's knob, its seed, and what it scored.
 
-    The arm, gamma, and bias flag are the cell's identity: a cell log keyed
-    on them replays a report without retraining anything.
+    The arm, gamma, bias flag, split position, and trunk step are the
+    cell's identity: a cell log keyed on them replays a report without
+    retraining anything. ``split_layer`` and ``trunk_lr`` default to the
+    registered arm, so a T6d log line still names its cell.
     """
 
     arm: str
@@ -119,6 +153,8 @@ class DiagnosticCell:
     walltime_s: float
     activations_mb: float | None
     peak_mb: float | None
+    split_layer: int = REGISTERED_SPLIT
+    trunk_lr: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,9 +245,7 @@ class HybridUpdateReport:
             self.head_only,
             *self.sibling,
         ):
-            unique.setdefault(
-                _key(cell.arm, cell.gamma, cell.train_biases, cell.seed), cell
-            )
+            unique.setdefault(_key(cell), cell)
         return tuple(unique.values())
 
     def to_dict(self) -> dict[str, object]:
@@ -576,19 +610,26 @@ def _assemble(
     )
 
 
-def _key(arm: str, gamma: float, train_biases: bool, seed: int) -> CellKey:
-    return (arm, gamma, train_biases, seed)
+def _key(cell: DiagnosticCell) -> CellKey:
+    return (
+        cell.arm,
+        cell.gamma,
+        cell.train_biases,
+        cell.seed,
+        cell.split_layer,
+        cell.trunk_lr,
+    )
 
 
 def read_cells(path: Path) -> dict[CellKey, DiagnosticCell]:
-    """The cells a previous run measured, keyed by arm, knob, flag, and seed."""
+    """The cells a previous run measured, keyed by their identity."""
     if not path.exists():
         return {}
     cells: dict[CellKey, DiagnosticCell] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip():
             cell = DiagnosticCell(**json.loads(line))
-            cells[_key(cell.arm, cell.gamma, cell.train_biases, cell.seed)] = cell
+            cells[_key(cell)] = cell
     return cells
 
 
@@ -609,8 +650,10 @@ class _CellLog:
         point: PilotPoint,
         device: str,
         data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+        split_layer: int = REGISTERED_SPLIT,
+        trunk_lr: float = 1.0,
     ) -> DiagnosticCell:
-        key = _key(arm, gamma, train_biases, seed)
+        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr)
         if key not in self.cells:
             measured = measure_cell(
                 arm,
@@ -624,6 +667,8 @@ class _CellLog:
                 y_test=data[3],
                 gamma=gamma,
                 train_biases=train_biases,
+                split_layer=split_layer,
+                trunk_lr=trunk_lr,
             )
             cell = DiagnosticCell(
                 arm=arm,
@@ -634,6 +679,8 @@ class _CellLog:
                 walltime_s=measured.walltime_s,
                 activations_mb=measured.activations_mb,
                 peak_mb=measured.peak_mb,
+                split_layer=split_layer,
+                trunk_lr=trunk_lr,
             )
             self.cells[key] = cell
             if self.path is not None:
@@ -705,7 +752,7 @@ def replay_diagnostic(*, log_path: Path, point: PilotPoint = BOX) -> HybridUpdat
         train_biases: bool = False,
         seed: int,
     ) -> DiagnosticCell:
-        key = _key(arm, gamma, train_biases, seed)
+        key = (arm, gamma, train_biases, seed, REGISTERED_SPLIT, 1.0)
         if key not in cells:
             raise RuntimeError(f"no measured cell for {key} in {log_path}")
         return cells[key]
@@ -752,17 +799,18 @@ def _markdown(report: HybridUpdateReport) -> str:
         )
     lines.extend([
         "",
-        "| arm | gamma | train biases | seed | val acc | s | activations MB | "
-        "peak MB |",
-        "|---|---|---|---|---|---|---|---|",
+        "| arm | gamma | split | trunk lr | seed | val acc | s | "
+        "activations MB | peak MB |",
+        "|---|---|---|---|---|---|---|---|---|",
     ])
     for cell in report.cells:
         activations = (
             f"{cell.activations_mb:.0f}" if cell.activations_mb is not None else "—"
         )
         peak = f"{cell.peak_mb:.0f}" if cell.peak_mb is not None else "—"
+        position = "registered" if cell.split_layer < 0 else str(cell.split_layer)
         lines.append(
-            f"| `{cell.arm}` | {cell.gamma:g} | {cell.train_biases} | "
+            f"| `{cell.arm}` | {cell.gamma:g} | {position} | {cell.trunk_lr:g} | "
             f"{cell.seed} | {cell.val_acc:.3f} | {cell.walltime_s:.1f} | "
             f"{activations} | {peak} |"
         )
@@ -794,6 +842,532 @@ def write_report(report: HybridUpdateReport, output_dir: str | Path) -> Path:
     return path
 
 
+@dataclass(frozen=True, slots=True)
+class SplitRow:
+    """One mechanism's mean over its seeds, against the reference's floor.
+
+    A row is one point of a knob: ``split_layer`` (the head's position) or
+    ``trunk_lr`` (the trunk's step multiplier), read beside the
+    registered arm at the same box, LR, weight init, and update rule.
+    """
+
+    mechanism: str
+    split_layer: int
+    trunk_lr: float
+    n: int
+    val_acc: float
+    val_acc_sd: float
+    gain: float
+    activations_mb: float | None
+    activation_ratio: float | None
+    floor: float
+
+    @property
+    def reaches_floor(self) -> bool:
+        return self.val_acc >= self.floor
+
+
+@dataclass(frozen=True, slots=True)
+class SplitPositionReport:
+    """T6e's measured cells, its knob rows, and the verdict they decide."""
+
+    point: PilotPoint
+    lr: float
+    reference: tuple[DiagnosticCell, ...]
+    baseline: tuple[DiagnosticCell, ...]
+    split_ladder: tuple[DiagnosticCell, ...]
+    trunk_lr_ladder: tuple[DiagnosticCell, ...]
+    confirmation: DiagnosticCell
+    rows: tuple[SplitRow, ...]
+    floor: float
+    verdict: str
+    mechanism: str
+    reason: str
+    trigger: str
+    date: str = DATE
+
+    @property
+    def reference_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.reference)
+
+    @property
+    def baseline_acc(self) -> float:
+        return fmean(cell.val_acc for cell in self.baseline)
+
+    @property
+    def cells(self) -> tuple[DiagnosticCell, ...]:
+        """Every measured cell once, keyed by its identity."""
+        unique: dict[CellKey, DiagnosticCell] = {}
+        for cell in (
+            *self.reference,
+            *self.baseline,
+            *self.split_ladder,
+            *self.trunk_lr_ladder,
+            self.confirmation,
+        ):
+            unique.setdefault(_key(cell), cell)
+        return tuple(unique.values())
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "date": self.date,
+            "point": asdict(self.point) | {"lr": self.lr},
+            "reference_acc": round(self.reference_acc, 4),
+            "baseline_acc": round(self.baseline_acc, 4),
+            "floor": round(self.floor, 4),
+            "verdict": self.verdict,
+            "mechanism": self.mechanism,
+            "reason": self.reason,
+            "trigger": self.trigger,
+            "rows": [asdict(row) for row in self.rows],
+            "cells": [asdict(cell) for cell in self.cells],
+        }
+
+
+def _split_label(row: SplitRow) -> str:
+    """The knob a row names, in the report's terms."""
+    if row.mechanism == "split_layer":
+        return (
+            "the head at the last Linear"
+            if row.split_layer == READOUT_SPLIT
+            else "the registered two-layer head"
+        )
+    return f"trunk_lr={row.trunk_lr:g}"
+
+
+def _split_row(
+    mechanism: str,
+    cells: tuple[DiagnosticCell, ...],
+    *,
+    baseline_acc: float,
+    reference: tuple[DiagnosticCell, ...],
+    floor: float,
+) -> SplitRow:
+    """One knob point's mean, its gain, and its memory half."""
+    acc, spread = _mean_acc(cells)
+    first = cells[0]
+    return SplitRow(
+        mechanism=mechanism,
+        split_layer=first.split_layer,
+        trunk_lr=first.trunk_lr,
+        n=len(cells),
+        val_acc=acc,
+        val_acc_sd=spread,
+        gain=acc - baseline_acc,
+        activations_mb=_mean_mb(cells),
+        activation_ratio=_ratio(cells, reference),
+        floor=floor,
+    )
+
+
+def _split_rows(
+    *,
+    baseline: tuple[DiagnosticCell, ...],
+    readout: tuple[DiagnosticCell, ...],
+    ladder: tuple[DiagnosticCell, ...],
+    confirmation: DiagnosticCell,
+    reference: tuple[DiagnosticCell, ...],
+    floor: float,
+) -> tuple[SplitRow, ...]:
+    """The split's row on two seeds, then each trunk step beside it.
+
+    The registered trunk step (1.0) at the readout split **is** the split
+    row, so the two are one row read once. The best step is read on the
+    confirmation seed; a step that is not the best keeps its one screen
+    seed, so the table never claims a second seed it did not measure.
+    """
+    baseline_acc, _ = _mean_acc(baseline)
+    best = max(ladder, key=lambda cell: cell.val_acc)
+    rows = [
+        _split_row(
+            "split_layer",
+            readout,
+            baseline_acc=baseline_acc,
+            reference=reference,
+            floor=floor,
+        )
+    ]
+    for cell in ladder:
+        if cell.trunk_lr == 1.0:
+            cells = readout
+        elif cell.trunk_lr == best.trunk_lr:
+            cells = (cell, confirmation)
+        else:
+            cells = (cell,)
+        rows.append(
+            _split_row(
+                "trunk_lr",
+                cells,
+                baseline_acc=baseline_acc,
+                reference=reference,
+                floor=floor,
+            )
+        )
+    return tuple(rows)
+
+
+def split_gate(  # ruff: ignore[too-many-arguments]
+    *,
+    reference_acc: float,
+    baseline_acc: float,
+    rows: tuple[SplitRow, ...],
+    ladder: tuple[DiagnosticCell, ...],
+    floor: float,
+    delta: float = DELTA,
+    learning_floor: float = LEARNING_FLOOR,
+) -> UpdateVerdict:
+    """Control, promote the split, promote the trunk's step, then refuse.
+
+    The split's position is the T6d mechanism, so it is read first: when
+    the readout-only head reaches the floor, the head's depth is the fix.
+    When it does not, the trunk's step is read at the readout split; a
+    step that reaches the floor is the fix, a step that only gains is a
+    coordinate, and no movement at all refuses the split and the step as
+    one mechanism -- the trunk's **direction** -- with its own trigger.
+    """
+    if reference_acc < max(floor, learning_floor):
+        return UpdateVerdict(
+            "invalid",
+            "the checkpointed reference",
+            (
+                f"the reference reads {reference_acc:.3f} against the floor "
+                f"{floor:.3f} at the pilot box; a reference that does not train "
+                "cannot decide the split's position"
+            ),
+            "re-measure the reference at the pilot box; the diagnostic is read "
+            "on the next run",
+        )
+    split_row = next(row for row in rows if row.mechanism == "split_layer")
+    if split_row.reaches_floor:
+        return UpdateVerdict(
+            "promote",
+            "the head's depth: a readout-only head",
+            (
+                f"the readout-only head reads {split_row.val_acc:.3f} (sd "
+                f"{split_row.val_acc_sd:.3f} over {split_row.n} seeds) against "
+                f"the floor {floor:.3f} = checkpoint {reference_acc:.3f} - "
+                f"{delta * 100:.0f} pp, up {split_row.gain * 100:+.1f} pp from "
+                f"the registered arm's {baseline_acc:.3f} at "
+                f"{_ratio_text(split_row.activation_ratio)}"
+            ),
+            (
+                "the claim run re-registers at the pilot box with the split on "
+                "the last Linear: the accuracy bar is demonstrated at L=8, so "
+                "the claim box's L=8->32 rung prices it next"
+            ),
+        )
+    best = max(
+        (row for row in rows if row.mechanism == "trunk_lr"),
+        key=lambda row: row.val_acc,
+    )
+    if best.reaches_floor:
+        return UpdateVerdict(
+            "promote",
+            f"the decoupled trunk step ({_split_label(best)})",
+            (
+                f"{_split_label(best)} reads {best.val_acc:.3f} (sd "
+                f"{best.val_acc_sd:.3f} over {best.n} seeds) against the floor "
+                f"{floor:.3f}, up {best.gain * 100:+.1f} pp from the "
+                f"registered arm's {baseline_acc:.3f}, while the readout-only "
+                f"head alone reads {split_row.val_acc:.3f}"
+            ),
+            (
+                "the claim run re-registers at the pilot box with the split on "
+                "the last Linear and the trunk's step frozen; the memory half "
+                "is read at the same box"
+            ),
+        )
+    if best.gain >= delta:
+        return UpdateVerdict(
+            "coordinate",
+            f"{_split_label(best)} is a real gain, not the mechanism",
+            (
+                f"{_split_label(best)} moves the hybrid {best.gain * 100:+.1f} pp "
+                f"to {best.val_acc:.3f} (sd {best.val_acc_sd:.3f} over {best.n} "
+                f"seeds) but the floor is {floor:.3f}; the split alone reads "
+                f"{split_row.val_acc:.3f} ({split_row.gain * 100:+.1f} pp)"
+            ),
+            (
+                f"the next trunk-step edge above the ladder "
+                f"({2 * TRUNK_LR_LADDER[-1]:g}x) at the readout split; a claim "
+                "run is not scheduled on a coordinate"
+            ),
+        )
+    steps = "/".join(f"{cell.trunk_lr:g}" for cell in ladder)
+    return UpdateVerdict(
+        "refuse",
+        "the trunk's direction, not its position or its step",
+        (
+            f"the readout-only head reads {split_row.val_acc:.3f} "
+            f"({split_row.gain * 100:+.1f} pp from the registered arm "
+            f"{baseline_acc:.3f}, so the position only loses accuracy) and the "
+            f"trunk's step ladder {steps} reads {best.val_acc:.3f} at its best, "
+            f"so neither the position nor the step reaches the floor "
+            f"{floor:.3f} = checkpoint {reference_acc:.3f} - "
+            f"{delta * 100:.0f} pp, at {_ratio_text(best.activation_ratio)}"
+        ),
+        (
+            "a trunk-direction fix: the feedback matrix by ridge regression "
+            "(`learned_feedback`) or an orthogonal init at the readout split, "
+            "or a residual/wider trunk -- the position and the step are priced "
+            "at this box, so the direction is the next variable"
+        ),
+    )
+
+
+def _split_report(
+    *,
+    point: PilotPoint,
+    reference: tuple[DiagnosticCell, ...],
+    baseline: tuple[DiagnosticCell, ...],
+    readout: tuple[DiagnosticCell, ...],
+    ladder: tuple[DiagnosticCell, ...],
+    confirmation: DiagnosticCell,
+) -> SplitPositionReport:
+    """Assemble the rows and the gate from the measured cells."""
+    floor = _floor(reference)
+    rows = _split_rows(
+        baseline=baseline,
+        readout=readout,
+        ladder=ladder,
+        confirmation=confirmation,
+        reference=reference,
+        floor=floor,
+    )
+    reference_acc, _ = _mean_acc(reference)
+    baseline_acc, _ = _mean_acc(baseline)
+    gate = split_gate(
+        reference_acc=reference_acc,
+        baseline_acc=baseline_acc,
+        rows=rows,
+        ladder=ladder,
+        floor=floor,
+    )
+    return SplitPositionReport(
+        point=point,
+        lr=LR,
+        reference=reference,
+        baseline=baseline,
+        split_ladder=readout,
+        trunk_lr_ladder=ladder,
+        confirmation=confirmation,
+        rows=rows,
+        floor=floor,
+        verdict=gate.verdict,
+        mechanism=gate.mechanism,
+        reason=gate.reason,
+        trigger=gate.trigger,
+    )
+
+
+def _assemble_split(
+    cell: Callable[..., DiagnosticCell], *, point: PilotPoint
+) -> SplitPositionReport:
+    """T6e's cell plan: reference, baseline, the split ladder, the step ladder.
+
+    The registered arms are the T6d cells, so a run with the T6d log
+    retrains only the split's cells: two readout-only cells and the
+    trunk's step ladder's outer points. The registered step (1.0) at the
+    readout split is the split's own first seed, so the ladder reuses it
+    and the confirmation is only measured when the best step is not 1.0.
+    """
+    reference = tuple(
+        cell(REFERENCE_ARM, gamma=HYBRID_GAMMA, seed=seed) for seed in DIAGNOSTIC_SEEDS
+    )
+    baseline = tuple(
+        cell("hybrid", gamma=HYBRID_GAMMA, seed=seed) for seed in DIAGNOSTIC_SEEDS
+    )
+    readout = tuple(
+        cell("hybrid", gamma=HYBRID_GAMMA, split_layer=READOUT_SPLIT, seed=seed)
+        for seed in DIAGNOSTIC_SEEDS
+    )
+    first, last = DIAGNOSTIC_SEEDS[0], DIAGNOSTIC_SEEDS[-1]
+    ladder = tuple(
+        readout[0]
+        if trunk_lr == 1.0
+        else cell(
+            "hybrid",
+            gamma=HYBRID_GAMMA,
+            split_layer=READOUT_SPLIT,
+            trunk_lr=trunk_lr,
+            seed=first,
+        )
+        for trunk_lr in TRUNK_LR_LADDER
+    )
+    best = max(ladder, key=lambda measured: measured.val_acc)
+    return _split_report(
+        point=point,
+        reference=reference,
+        baseline=baseline,
+        readout=readout,
+        ladder=ladder,
+        confirmation=readout[-1]
+        if best.trunk_lr == 1.0
+        else cell(
+            "hybrid",
+            gamma=HYBRID_GAMMA,
+            split_layer=READOUT_SPLIT,
+            trunk_lr=best.trunk_lr,
+            seed=last,
+        ),
+    )
+
+
+def run_split_diagnostic(
+    point: PilotPoint = BOX,
+    *,
+    device: str = "cuda",
+    log_path: Path | None = None,
+) -> SplitPositionReport:
+    """Measure the split's position and the trunk's step at the box.
+
+    Args:
+        point: The pilot box the T6a2 trigger names.
+        device: ``"cuda"`` is required -- the cells need a measured peak.
+        log_path: Where each measured cell is appended; a rerun reuses it.
+
+    Raises:
+        RuntimeError: On a non-CUDA device.
+    """
+    _require_cuda(device)
+    log = _CellLog(log_path)
+    data = cifar_splits()
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        split_layer: int = REGISTERED_SPLIT,
+        trunk_lr: float = 1.0,
+        seed: int,
+    ) -> DiagnosticCell:
+        return log.measure(
+            arm,
+            gamma=gamma,
+            train_biases=train_biases,
+            split_layer=split_layer,
+            trunk_lr=trunk_lr,
+            seed=seed,
+            point=point,
+            device=device,
+            data=data,
+        )
+
+    return _assemble_split(cell, point=point)
+
+
+def replay_split_diagnostic(
+    *, log_path: Path, point: PilotPoint = BOX
+) -> SplitPositionReport:
+    """Rebuild T6e's report from the cell log, without training a cell.
+
+    Raises:
+        RuntimeError: When a cell the report needs is missing from the log.
+    """
+    cells = read_cells(log_path)
+    if not cells:
+        raise RuntimeError(f"no cells in {log_path}; run the diagnostic first")
+
+    def cell(
+        arm: str,
+        *,
+        gamma: float,
+        train_biases: bool = False,
+        split_layer: int = REGISTERED_SPLIT,
+        trunk_lr: float = 1.0,
+        seed: int,
+    ) -> DiagnosticCell:
+        key = (arm, gamma, train_biases, seed, split_layer, trunk_lr)
+        if key not in cells:
+            raise RuntimeError(f"no measured cell for {key} in {log_path}")
+        return cells[key]
+
+    return _assemble_split(cell, point=point)
+
+
+def _split_markdown(report: SplitPositionReport) -> str:
+    """The table a third party can read, with its rulers and its command."""
+    point = report.point
+    lines = [
+        "# T6e -- the split's position (TODO93 track A)",
+        "",
+        f"**Box.** CIFAR-10 10k/10k, L={point.depth}, W={point.width}, "
+        f"B={point.batch}, {point.steps} steps, LR {report.lr:g}, seeds "
+        f"{', '.join(str(seed) for seed in DIAGNOSTIC_SEEDS)}, fp32. "
+        f"Reference `{REFERENCE_ARM}`; split positions {SPLIT_LADDER} "
+        f"(`{READOUT_SPLIT}` = a readout-only head); trunk steps "
+        f"{TRUNK_LR_LADDER} on the registered gamma={HYBRID_GAMMA:g}.",
+        "",
+        f"Reference {report.reference_acc:.3f}; baseline "
+        f"{report.baseline_acc:.3f}; floor {report.floor:.3f} (reference - "
+        f"{DELTA * 100:.0f} pp).",
+        "",
+        "| mechanism | position | trunk lr | seeds | val acc | sd | gain | "
+        "activations MB | ratio | floor | reaches |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for row in report.rows:
+        activations = (
+            f"{row.activations_mb:.0f}" if row.activations_mb is not None else "—"
+        )
+        ratio = (
+            f"{row.activation_ratio:.2f}x" if row.activation_ratio is not None else "—"
+        )
+        position = "registered" if row.split_layer < 0 else f"layer {row.split_layer}"
+        lines.append(
+            f"| `{row.mechanism}` | {position} | {row.trunk_lr:g} | {row.n} | "
+            f"{row.val_acc:.3f} | {row.val_acc_sd:.3f} | {row.gain * 100:+.1f} pp "
+            f"| {activations} | {ratio} | {row.floor:.3f} | "
+            f"{'yes' if row.reaches_floor else 'no'} |"
+        )
+    lines.extend([
+        "",
+        "| arm | gamma | split | trunk lr | seed | val acc | s | activations MB "
+        "| peak MB |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ])
+    for cell in report.cells:
+        position = "registered" if cell.split_layer < 0 else str(cell.split_layer)
+        activations = (
+            f"{cell.activations_mb:.0f}" if cell.activations_mb is not None else "—"
+        )
+        peak = f"{cell.peak_mb:.0f}" if cell.peak_mb is not None else "—"
+        lines.append(
+            f"| `{cell.arm}` | {cell.gamma:g} | {position} | {cell.trunk_lr:g} | "
+            f"{cell.seed} | {cell.val_acc:.3f} | {cell.walltime_s:.1f} | "
+            f"{activations} | {peak} |"
+        )
+    lines.extend([
+        "",
+        f"**Verdict: {report.verdict}** -- {report.reason}",
+        "",
+        f"**Trigger.** {report.trigger}",
+        "",
+        "**Rulers.** val acc on the full 10k test split (1 sigma ~ 0.3 pp); "
+        "activation bytes (peak - params - optimizer - auxiliary); walltime per "
+        "cell; the floor is the checkpointed arm's mean minus delta, and the "
+        "baseline is the registered hybrid at the same box.",
+        "",
+        "Command: `uv run python -m computronium.validation.hybrid_update "
+        "--split`; replay the gate from the cell log with `... --split --replay`.",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def write_split_report(report: SplitPositionReport, output_dir: str | Path) -> Path:
+    """Write ``split_position.json`` and ``split_position.md``; return the JSON."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "split_position.json"
+    path.write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+    (output_dir / "split_position.md").write_text(
+        _split_markdown(report), encoding="utf-8"
+    )
+    return path
+
+
 def _main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -808,9 +1382,42 @@ def _main() -> None:
     parser.add_argument(
         "--replay", action="store_true", help="rebuild the gate from the cell log"
     )
+    parser.add_argument(
+        "--split",
+        action="store_true",
+        help="run T6e (the split's position and the trunk's step) instead of T6d",
+    )
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
     log_path = args.out / "hybrid_update.cells.jsonl"
+    if args.split:
+        splits = (
+            replay_split_diagnostic(log_path=log_path)
+            if args.replay
+            else run_split_diagnostic(device=args.device, log_path=log_path)
+        )
+        logger.info(
+            "T6e: reference=%.3f baseline=%.3f floor=%.3f rows=%s",
+            splits.reference_acc,
+            splits.baseline_acc,
+            splits.floor,
+            json.dumps([
+                {
+                    "mechanism": row.mechanism,
+                    "split_layer": row.split_layer,
+                    "trunk_lr": row.trunk_lr,
+                    "val_acc": round(row.val_acc, 3),
+                    "n": row.n,
+                    "gain": round(row.gain, 3),
+                    "reaches_floor": row.reaches_floor,
+                }
+                for row in splits.rows
+            ]),
+        )
+        path = write_split_report(splits, args.out)
+        logger.info("wrote %s", path)
+        logger.info("verdict: %s -- %s", splits.verdict, splits.mechanism)
+        return
     report = (
         replay_diagnostic(log_path=log_path)
         if args.replay

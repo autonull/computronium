@@ -1,5 +1,5 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-17 · **v28 — capability program, routing landed. Every verdict the plan recorded as a refusal is retagged a defect probe with a fix queue (CORRECTION 25); "more primitives is not progress" and the trigger-gated admission map are retired, because they made capability building a byproduct of negative measurements. The work program is the new primitives, in capability order: the estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`), routing (`SurrogateCredit` + a hard top-k `RoutingGeometry`), the depth fix (normalization + a decoupled trunk LR), temporal credits (a new axis), the streaming lifts. The estimator family and routing are landed (4 identity cards, 4 credit primitive rows, 1 geometry row, 6 parity/mechanism locks, 4 capability cards; §18). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell; T6c/T6a/T6a₂/T6d/F1/D2/B1 are defect probes with named fixes. Next session: the depth fix (normalization + a decoupled trunk LR).**
+**Status:** 2026-11-17 · **v29 — capability program; routing and the split's position landed. Every verdict the plan recorded as a refusal is retagged a defect probe with a fix queue (CORRECTION 25); "more primitives is not progress" and the trigger-gated admission map are retired, because they made capability building a byproduct of negative measurements. The work program is the new primitives, in capability order: the estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`), routing (`SurrogateCredit` + a hard top-k `RoutingGeometry`), the split's position and the trunk's step (landed 2026-11-17), the trunk's direction, temporal credits (a new axis), the streaming lifts. The estimator family and routing are landed (4 identity cards, 4 credit primitive rows, 1 geometry row, 6 parity/mechanism locks, 4 capability cards; §18). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell; T6c/T6a/T6a₂/T6d/T6e/F1/D2/B1 are defect probes with named fixes. Next session: the trunk's direction (T6f: `learned_feedback` or an orthogonal init at the readout split, or a residual/wider trunk).**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
 + T6a₂ + T6d + estimator family + routing
 landed: the truth pass, the memory decomposition, the ladder runner, the
@@ -33,10 +33,12 @@ landed and refused composition at its box** (screen 0.669, family ladder 0.783
 vs 0.797 reference), and **T6a has now registered the memory frontier and its
 rung-2 screen refused the claim** (hybrid 0.167 vs floor 0.375; 1.22× the
 checkpointed arm's activation set at L=8; confirmation 0.154 vs 0.363). The
-claim run is still not scheduled: **T6d localised the gap at the split, so the
-split's position (T6e) is the defect fix inside A**, and F2 remains a
-five-seed trigger. The estimator family and routing landed (§19 rows 1–4); the
-session order is §8.1 row 0c (the depth fix).
+claim run is still not scheduled: **T6d localised the gap at the split, and
+T6e priced the split's position and the trunk's step: both refused** (the
+readout-only head loses 3.4 pp; the trunk's step 0.3/1/3 buys none), so
+**T6f — the trunk's direction — is the defect fix inside A**, and F2 remains
+a five-seed trigger. The estimator family and routing landed (§19 rows 1–4);
+the session order is §8.1 row 0c (the trunk's direction).
 
 **Routing landed (2026-11-17).** `SurrogateCredit` differentiates a hard top-k
 selection through its straight-through forward: `w = topk(softmax(g/τ))/k`;
@@ -116,6 +118,22 @@ cell log; replay `uv run python -m computronium.validation.hybrid_update
 --replay`. Next for A: **T6e**, the split's position (`split_layer` on the
 last Linear, a 7-trunk/1-head hybrid) or a decoupled trunk learning rate — a
 defect fix, not the session order (§19 row 1).
+
+**T6e landed and refused the split's position and the trunk's step
+(2026-11-17).** One run at the pilot box (L=8/W=1024/B=8192, LR 0.3, 200
+steps, CIFAR-10, seeds 21/22): 9 measured cells in 8 calls, ~160 s
+(516-589 MB peak). The reference trains (0.419/0.416 against floor 0.408)
+and the registered hybrid reads 0.163/0.169, so the box is sound. **The
+readout-only head loses 3.4 pp** (0.126/0.138 at a 7-trunk/1-head split)
+and **the trunk's own step buys none** (`trunk_lr` 0.3/1/3 -> 0.105/0.126/
+0.103): neither the position nor the step reaches the floor, at 1.06x the
+reference's activation bytes. **The mechanism is the trunk's direction** --
+the feedback matrix B or the trunk's geometry -- not its step or its position
+(CORRECTION 26). Artifacts: `results/t93_a_stream/split_position.{json,md}`
+plus the shared cell log; replay `uv run python -m
+computronium.validation.hybrid_update --split --replay`. Next for A:
+**T6f**, the trunk's direction (`learned_feedback`'s ridge-regressed B, an
+orthogonal init at the readout split, or a residual/wider trunk).
 
 **D1 landed and promoted the memristive arm (2026-11-16).** The substrate
 ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
@@ -272,7 +290,7 @@ mechanism. Memory columns are instruments.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** | 1 session (T6e) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the mechanism is the split's position, so T6e is the defect fix, not another knob** |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** + **T6e ⛔: the readout-only head loses 3.4 pp (0.132 vs 0.166) and the trunk's step 0.3/1/3 buys none (0.105/0.132/0.103) — the trunk's direction is the mechanism** | 1 session (T6f) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the position and the step are priced and refused, so T6f (the trunk's direction) is the defect fix, not another knob** |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → the missing surrogate is the defect; B's claim narrows (§19 row 4) — **the surrogate primitive landed 2026-11-17**, so the next rung is the B1 STE-gap screen at its best temperature/LR |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → the label channel or step scale is the defect; retention is not yet tested |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
@@ -286,11 +304,14 @@ composition screen and refused at its box, so **F2 does not fire on one seed**.
 **The session order is the capability program (§19, CORRECTION 25).** The
 estimator family landed (`ForwardTangentCredit`, `ScoreFunctionCredit`,
 `ZerothOrderCredit`, §19 rows 1–3) and so did routing (`SurrogateCredit` + the
-hard top-k `RoutingGeometry`, row 4); the next session is the **depth fix**
-(normalization + a decoupled trunk LR — the T6c/T6d defect, not a verdict),
-then the temporal axis, then the streaming lifts. The rows above are measurements, not conclusions: each ⛔ row is
-a defect probe with the fix that widens the system (§0.6). F2, D3, and T6e are
-defect fixes inside their tracks, not gates on the program.
+hard top-k `RoutingGeometry`, row 4), and the split's position and the
+trunk's step landed and refused (T6e); the next session is the **trunk's
+direction** (`learned_feedback` or an orthogonal init at the readout split, or a
+residual/wider trunk — the T6d/T6e defect, not a verdict), then the temporal
+axis, then the streaming lifts. The rows above are measurements, not
+conclusions: each ⛔ row is a defect probe with the fix that widens the system
+(§0.6). F2, D3, and T6f are defect fixes inside their tracks, not gates on the
+program.
 
 **Ranking, recomputed every session (§14):** capability added ÷ measured build
 cost, with the cost taken from the last build of that primitive, never guessed.
@@ -513,7 +534,7 @@ check, not a claim, and each fails when its mechanism is removed.
 | T4c | `run_parity(batch_size=...)` threaded to the driver and the baseline; `pepita` family in the ladder portfolio; **fixed a live defect: `backprop_baseline` referenced a `batch_size` it did not have, so every campaign raised `NameError`** | `test_backprop_parity_runner.py` (2) | one runner for the ladder; 2 cells in 4.9 s |
 | T4b | `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`: √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward wrapped (never `train_step`); `create_backprop_mlp(checkpoint_segments=...)` is the arm | `test_checkpoint_parity.py` (7) | checkpointed grads ≡ plain under dropout (bit-exact), RNG-preservation is a negative control, retained set is segment boundaries; **epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192** (§4.1) |
 | T3 | one `lockstep_contrasts` stream serves both families (FF contrasts positive/negative, PEPITA standard/error-modulated — same expression); `train_step` + `kernel_train_step` run it; store-all `forward_*`/`backward` stay as the reference rung; `complexity_verified=True` for FF and PEPITA | `test_lockstep_parity.py` (8, 4 CUDA) | deltas ≡ store-all at `atol=0` per layer; **peak flat 66.3 MB (FF) / 58.5 MB (PEPITA) at L=4→32** vs 576/568 MB retained; **three live defects fixed**: FF `train_step` called a nonexistent `backward_contrastive`, PEPITA `backward` required an `error` argument no caller passed, and the bespoke PEPITA step used the standard pre-activation for both chains (the Triton twin's tested equation uses each chain's own) |
-| T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (8, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
+| T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (10, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
 | T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `depth_rung`, `build_arm` | `test_memory_frontier.py` (12; T6b's `0.5×` lock is live, T6c's verdict is a pure-function lock) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
 | **C1 ✅** | **Plasticity ladder**: `validation/plasticity_ladder.py`; batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed; local (PEPITA) vs exact-gradient control | `test_plasticity_ladder.py` (3), `test_cl_credit_arms.py` (5) | **local 0.945 / 0.947 at LR 1e-3 on two seeds**, control 0.839 / 0.893, floor 0.55 → **verdict: promote**. Two apparatus defects fixed: credit label channel (local scored 0.030 on task 4 before) and data-order seed (backprop swung 0.926→0.839) |
 | **C2 ✅** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; batch-1 SplitMNIST, 3-point EWC-strength ladder at the frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation; kill-safe resume/replay | `test_plasticity_ladder.py` (9), `test_cl_credit_arms.py` (6) | **close at the saturation point λ=100**: local 0.952 / 0.015 vs control 0.963 / 0.020 (gain +0.005 < δ 0.032; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost ratio 1.07×; λ ladder moves 0.6 pp (local) / 2.2 pp (control), both < δ. Defect fixed en route: task-start re-consolidation erased the Fisher importance (CORRECTION 12) |
@@ -531,10 +552,13 @@ check, not a claim, and each fails when its mechanism is removed.
    top-k `RoutingGeometry` — one credit, one geometry, two primitive rows,
    seven locks, one capability card. It unlocks routing/MoE training without a
    soft relaxation; the B1 STE-gap ladder is the next measurement, not a
-   capability gap. **Next session: the depth fix (§8.1 row 0c).**
-3. **The T6c/T6d split fix (§8.1 row 0c) is the next session's capability
-   work:** normalization + a decoupled trunk LR; it follows as a defect fix,
-   not a verdict.
+   capability gap. **Next session: the trunk's direction (§8.1 row 0c →
+   T6f).**
+3. **The split fix landed and refused (§8.1 row 0c → T6e):** the readout-only
+   head loses 3.4 pp and the decoupled trunk step buys none, so the trunk's
+   direction (T6f: `learned_feedback`'s ridge-regressed B, an orthogonal init
+   at the readout split, or a residual/wider trunk) is the next session's
+   capability work — a defect fix, not a verdict.
 4. **A's blockers are decided:** T6b landed (a credit owns its free pass),
    T6a₂'s re-registration refused at the pass-carrying box where the memory
    bar is met, and T6c's re-open is a side track (the pass trains within
@@ -1142,7 +1166,7 @@ is the only one that needs five paired seeds on a real task.
 |---|---|---|---|
 | 0a ✅ | **P0 — estimator family** (landed 2026-11-17) | `ontology/credit/_estimators.py` + `primitives/credit_assignment/{forward_tangent,score_function,zeroth_order}/`; three identity cards, registry rows, parity locks (§19, §18) | each primitive trains a 128-sample separable task above chance (0.914/0.914/0.781 vs 0.5); parity 0.50/0.972/0.9995; variance falls ~21× from 1→16; dispatch and identity locks pass |
 | 0b ✅ | **P1 — routing** (landed 2026-11-17) | `SurrogateCredit` + `RoutingGeometry` (`GeometryConfig.routing`): credit and geometry primitive rows, registry/dispatch wiring (§19 row 4) | a hard top-1 selection trains with no soft relaxation (capability card 0.6875, 1 epoch); the surrogate is exactly the STE gradient and tracks the smoothed reference (cos >0.9); the true hard gradient is zero a.e. |
-| 0c ⏳ | **P0c — depth fix** (next) | normalization + a decoupled trunk LR (the T6c/T6d defect, not a verdict) | the plain stack trains at L=16/32 above the floor; the hybrid's split is priced |
+| 0c ⛔ | **P0c — the split's position and the trunk's step** (landed 2026-11-17, T6e) | `validation/hybrid_update.py --split`; `split_layer` on the last Linear, then `trunk_lr` (a decoupled trunk LR) | **refused at the pilot box**: the readout-only head 0.132 vs the registered 0.166 (−3.4 pp) and the trunk's step 0.3/1/3 → 0.105/0.132/0.103 against floor 0.408, at 1.06× memory; T6f (the trunk's direction) is the fix |
 | 1 ✅ | A — `backprop+ckpt` | landed 2026-11-15 | checkpointed grads ≡ plain under dropout; segments=√L; epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192 |
 | 2 ✅ | A — lockstep two-pass FF/PEPITA | landed 2026-11-16 | deltas ≡ store-all at `atol=0`; peak flat 66.3 / 58.5 MB at L=4→32 |
 | 3 ✅ | A — hybrid trunk + head | landed 2026-11-16 | parity max\|Δ\| = 0.0; head ≡ backprop; trunk flat 81.0 MB |
@@ -1159,15 +1183,16 @@ is the only one that needs five paired seeds on a real task.
 | 12 ⚠️ | **A — T6a registration** | `configs/preregistrations/t93_memory_frontier_registered.json`; replay `--register` | **`invalid-box` (CORRECTIONS 19–20)**: the ratio is depth-declared — 1.22× (L=8), 0.75× (L=16), 0.53× (L=32) at W=512/B=2048, and 0.48× at L=32/B=4096 (1.16 GB, fits); the accuracy bar ends at L=8 (0.385) while L=16/32 read 0.100 for **every** arm (both seeds, both batches), so no point satisfies both bars. The registration stands as measured; the claim re-registers at L=32/stream-norm 3e-2 or as the ratio curve |
 | 12b ✅ | **A — T6a re-registration** | `validation/memory_frontier.py::run_registration(STREAM_BOX)`; `--re-register`; landed 2026-11-17 | **refused at the pass-carrying box** (L=8→32, W=512/B=4096, stream-norm, 21 cells, ~300 s): controls PASS (c=4.125; learning 0.409 vs 0.399), memory bar **met** (0.46×), accuracy missed by 17 pp (hybrid 0.184/0.201 vs ckpt 0.364/0.357, floor 0.354); the mechanism is the hybrid's own update; CORRECTIONS 21–22; artifacts `results/t93_a_stream/` |
 | 12c ✅ | **A — T6d: the hybrid's update diagnostic** | `computronium/validation/hybrid_update.py` (new); 12 measured cells (14 planned), ~200 s; cell log + `--replay`; landed 2026-11-17 | **refused at the pilot box**: no trunk knob reaches the floor (bias flag +0.5 pp, `feedback_scale` 0.163/0.100/0.100, head-only 0.149) while the same trunk rule as a whole stack reads 0.400/0.405/0.384 and does not collapse; the mechanism is the **split at the boundary**, and the hybrid's activation set is 1.06× the reference's at L=8; CORRECTION 24; artifacts `results/t93_a_stream/hybrid_update.{json,md}` |
-| 12d | **A — T6e: the split's position** (defect fix) | `validation/hybrid_update.py` at the pilot box with `split_layer` on the last Linear (7 trunk layers + a readout-only head), then a decoupled trunk learning rate (gamma × lr as one box); the unit test prices both | the hybrid reaches the ckpt's floor when the head is one layer, or the split's position is refused with the mechanism and a new trigger; no claim run is scheduled before a mechanism reaches the floor |
+| 12d ✅ | **A — T6e: the split's position** (defect fix) | `validation/hybrid_update.py --split` at the pilot box with `split_layer` on the last Linear (7 trunk layers + a readout-only head), then `trunk_lr` (the decoupled trunk LR as one box); landed 2026-11-17 (~160 s, 9 cells) | **refused at the pilot box**: the readout-only head 0.126/0.138 vs the registered 0.163/0.169 (−3.4 pp), the trunk's step 0.3/1/3 → 0.105/0.126/0.103, floor 0.408, reference 0.419/0.416, 1.06× memory; CORRECTION 26; artifacts `results/t93_a_stream/split_position.{json,md}` |
+| 12e | **A — T6f: the trunk's direction** (defect fix) | `ontology/credit/_hybrid.py` with `learned_feedback` (the ridge-regressed B) or an orthogonal init at the readout split, then a residual/wider trunk; the unit test prices the direction | the hybrid reaches the ckpt's floor when the trunk's feedback is learned, or the direction is refused with the mechanism and a new trigger; no claim run is scheduled before a mechanism reaches the floor |
 | 13 | **A — T6c re-open** (trigger only) | `validation/memory_frontier.py::depth_rung`; LayerNorm (c≈2) or the Innocenti init at L=16/32 | the pass already trains at L=32/B=4096 (0.364, 1.1 pp below the old floor), so this is a side track: only the stack's last pp of trainability, not the hybrid's 17 pp gap |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
-**Rows 5, 9b, 10, 11 and 12a–12c are defect probes (CORRECTION 25).** The
+**Rows 5, 9b, 10, 11 and 12a–12d are defect probes (CORRECTION 25).** The
 numbers stand as measurements; the verdict words do not. Each carries its named
 defect and the capability the fix unlocks (§0.6). Rows 0a–0c are the new order:
-primitives first.
+primitives first; row 12e (T6f) is the defect fix T6e's refusal names.
 
 **What the next session must not re-derive:** the decomposition API
 (`EpochResource.{params,optimizer,activations,auxiliary,cpu_rss}_mb`,
@@ -1453,9 +1478,10 @@ is a side track.
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
 | 2026-11-17 | A | T6a triage: the ratio is depth-declared and the claim's bars never meet | 18 cells (6 memory + 12 accuracy) | hybrid/ckpt ratio at L=8/16/32 × B=2048/4096; val_acc at L=16 (2 seeds, 2 batches); floor 0.375 | CIFAR-10 10k/10k, W=512, 200 steps where accuracy is read, RTX 3080 10 GiB (≤600 MB/cell) | **`invalid-box`**: ratio 1.22 / 0.75 / 0.53 and 0.48 at L=32; L=16/32 all arms 0.100 on both seeds → the refusal holds only at L=4→8, where the claim was never stated; re-registration at a pass-carrying box | T6a ⚠️ |
 | 2026-11-16 | A | memory-frontier registration and its rung-2 screen (reduced L=4→8 box per the OOM guard) | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the learning floor (0.375); activation ratio vs 0.5×; δ=1 pp; c vs 4.1 (10%) | CIFAR-10 10k/10k, W=512, B=2048, L=4/8/16, 200 steps, seed 11/21/22, RTX 3080 10 GiB | **registered; screen refused the claim**: hybrid 0.167 / 103 MB vs ckpt 0.385 / 85 MB (1.22×), confirmation 0.154 vs 0.363; controls PASS (c=4.25, spread 0.0%; 0.385 vs 0.375); 30 priced cells; trigger T6c | T6a ✅ |
-| 2026-11-17 | A | T6d update diagnostic at the pilot box: bias flag, gamma ladder, head-only, and the sibling whole-stack control | 12 measured cells (14 planned) (2 mechanism rows + 2 head-only/sibling ladders) | val_acc vs the ckpt's minus δ (floor 0.408 = 0.418 - 1 pp); the ladder's collapse to 1/classes; activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, seed 21/22, RTX 3080 10 GiB (516-1037 MB) | **refused**: baseline 0.163/0.169; `train_biases` 0.167/0.175 (+0.5 pp); gamma 0.05/0.3/1.0 → 0.163/0.100/0.100; head-only 0.149; sibling (`local`, same rule whole stack) 0.400/0.405/0.384; hybrid activations 1.06× the ckpt's → **the split is the mechanism** (CORRECTION 24); T6e next | T6d ⛔ |
+| 2026-11-17 | A | T6d update diagnostic at the pilot box: bias flag, gamma ladder, head-only, and the sibling whole-stack control | 12 measured cells (14 planned) (2 mechanism rows + 2 head-only/sibling ladders) | val_acc vs the ckpt's minus δ (floor 0.408 = 0.418 - 1 pp); the ladder's collapse to 1/classes; activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, seed 21/22, RTX 3080 10 GiB (516-1037 MB) | **refused**: baseline 0.163/0.169; `train_biases` 0.167/0.175 (+0.5 pp); gamma 0.05/0.3/1.0 → 0.163/0.100/0.100; head-only 0.149; sibling (`local`, same rule whole stack) 0.400/0.405/0.384; hybrid activations 1.06× the ckpt's → **the split is the mechanism** (CORRECTION 24); T6e then priced the position and the step | T6d ⛔ |
+| 2026-11-17 | A | T6e: the split's position (a readout-only head) and the trunk's step (a decoupled trunk LR) | 9 measured cells in 8 calls (2 split + 3 step + reference/baseline) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0 | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, `split_layer` 14, `trunk_lr` 0.3/1/3, seeds 21/22, RTX 3080 10 GiB (516-589 MB) | **refused**: reference 0.419/0.416; baseline 0.163/0.169; readout-only head 0.126/0.138 (−3.4 pp); trunk step 0.3/1/3 → 0.105/0.132/0.103; 1.06× activation bytes → **the trunk's direction is the mechanism** (CORRECTION 26); T6f next | T6e ⛔ |
 | 2026-11-17 | A | T6a re-registration at the pass-carrying box: the memory bar is met, the accuracy bar is not | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the ckpt's minus δ at the same box (floor 0.354); activation ratio vs 0.5×; c vs 4.1 (10%) | CIFAR-10 10k/10k, L=8→32, W=512, B=4096, stream-norm, 200 steps, seed 21/22, RTX 3080 10 GiB | **refused**: hybrid 0.184 / 210 MB vs ckpt 0.364 / 453 MB (**0.46×**, memory met), confirmation 0.201 vs 0.357; controls PASS (c=4.125; learning 0.409 vs 0.399); 30 priced cells; the hybrid's own update binds → T6d | T6a₂ ⛔ |
-| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d refused the update at the pilot box and the mechanism is the split; T6e (the split's position) is the defect fix, T6c's re-open is a side track | T6e |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d refused the update and T6e refused the split's position and the trunk's step, so the trunk's direction (T6f) is the defect fix; T6c's re-open is a side track | T6f |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D2 refused the path at its walltime box (2.09×); D3's drift rung is a trigger | — | D3 |
 | — | F | composition vs the best single-axis default | 41 arms + 50 screen + 3 ladder + 1 confirmation (96 cells) | ≥δ at matched forward-equivalents; δ=1 pp | F1 refused (0.669 / 0.783 vs 0.797; bar 0.807; confirmation 0.814 > δ as seed spread) | F2's five seeds; no run | F2 |
@@ -1470,7 +1496,7 @@ swept to pass, a verdict that closes a mechanism.
 
 | Rank | Track | Capability at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **P0b** depth fix | does the plain stack train at L≥16 with normalization and a decoupled LR? | 1 session | T6c/T6d are defect probes (T6d localized the split; the sibling rule reads 0.405); T6e is the fix |
+| 1 | **P0b** the split's position | does the hybrid train when the head is one layer, or with a decoupled trunk LR? | 1 session (T6f) | T6c/T6d/T6e are defect probes (T6d localized the split; T6e priced the position and the step: both refused); the trunk's direction is the fix |
 | 2 | **P1** routing | can the system train a hard top-k selection without a soft relaxation? | 1 session (the B1 ladder) | **landed** — `SurrogateCredit` + `RoutingGeometry` (§19 row 4); the B1 STE-gap screen is the next measurement |
 | 3 | **P0c** temporal | does a sequence axis exist and train? | 2–3 sessions | the axis does not exist; three credits are absent |
 | 4 | **A/F/D** defect rows | the split, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
@@ -1490,6 +1516,7 @@ stand, their verdict words do not.
 | T6c | plain L=32 at 0.100; normalized 0.314 / 0.326 vs floor 0.375 | no depth normalization; a fixed `sqrt(W)` stream scale; one LR | LayerNorm + a per-depth LR box | deep training at L≥16 | `... memory_frontier --rung --depth 32 --width 512 --batch 2048 --steps 200` |
 | T6a/T6a₂ | hybrid 0.184 / 0.201 at 0.46× memory | two step scales on one LR; the head split at the boundary | a decoupled trunk LR; the split's position | deep local learning at parity | `... memory_frontier --re-register` |
 | T6d | no trunk knob reaches 0.408; sibling 0.405 | the split's position and the head/trunk LR coupling | a readout-only head; a decoupled trunk LR | the trunk rule at parity | `... hybrid_update --replay` |
+| T6e | the readout head 0.132 (−3.4 pp); the trunk step 0.3/1/3 → 0.105/0.132/0.103 vs floor 0.408 | the trunk's direction: a first-order B and the trunk's geometry | `learned_feedback` (ridge-regressed B) or an orthogonal init at the readout split; a residual/wider trunk | the trunk rule at parity | `... hybrid_update --split --replay` |
 | D2 | memristive −0.31 pp at 2.09× walltime | no programming-budget model; per-step conductance writes | a device-level or compiled quantisation of the pair | substrate-native training with a priced budget | `... matched_substrate --replay` |
 | B1 | STE gap 0.819 → 0.660 over depth | no load-balance term; the B1 ladder is unrun | z-loss at the best temperature/LR | hard top-k training at variable k | §19 row 4 — **the surrogate primitive landed 2026-11-17** (`SurrogateCredit`; locks in `test_surrogate_credit_lock.py`); the ladder is the next measurement |
 | F1 | screen 0.669 / ladder 0.783 vs bar 0.807 | the composition is measured on an untrainable deep box; the axis space is narrow | the depth fix + the routing and temporal axes | a real multi-axis search | §19 rows 4–6 |
@@ -1547,10 +1574,13 @@ per session.
 - **Start order is the capability program (§8.1 row 0c), not a DAG.** The
   estimator family and routing landed (`ForwardTangentCredit`,
   `ScoreFunctionCredit`, `ZerothOrderCredit`, `SurrogateCredit` +
-  `RoutingGeometry`); the next session lands the depth fix (normalization + a
-  decoupled trunk LR). The prior measurements are defect probes, not gates:
-  T6c/T6d localized the split, B1 the missing surrogate (now landed), D2 the
-  unpriced programming budget, F1 the untrainable deep box.
+  `RoutingGeometry`); the split's position and the trunk's step landed
+  2026-11-17 and refused (T6e), so the next session lands the trunk's
+  direction (`learned_feedback` or an orthogonal init at the readout split, or a
+  residual/wider trunk). The prior measurements are defect probes, not gates:
+  T6c/T6d localized the split, T6e priced its position and the step, B1 the
+  missing surrogate (now landed), D2 the unpriced programming budget, F1 the
+  untrainable deep box.
   C1 promoted and C2 measured its saturation point; E1's atlas is the capability
   map; D1 promoted memristive. T5 runs in parallel as credibility work. No claim
   run is scheduled; a claim is optional until a mechanism reaches its floor.
@@ -1580,19 +1610,24 @@ per session.
   met, accuracy 17 pp below). **T6d then landed and refused its update
   diagnostic** (no trunk knob reaches the floor; the sibling shows the same
   trunk rule as a whole stack reading 0.405, so the split is the mechanism),
-  so the defect fix is **T6e (the split's position)**, not a claim run; the
-  session order is the depth fix (§8.1 row 0c). **Routing landed 2026-11-17:**
+  so the defect fix was **T6e (the split's position)**, which landed and
+  refused; the session order is now **T6f (the trunk's direction)** (§8.1 row
+  0c). **Routing landed 2026-11-17:**
   `SurrogateCredit` (STE) + `RoutingGeometry` (hard top-k), 7 locks, one
   capability card (0.6875, 1 epoch); the forward-tangent × recurrent-LSTM and
-  cover-reproducibility defects were fixed. Open: the 1-batch causal-transformer
-  smoke cell is below the 0.1 ruler (pre-existing; §14 fix queue).
+  cover-reproducibility defects were fixed. **T6e landed and refused the
+  split's position and the trunk's step** (the readout-only head loses 3.4 pp;
+  the trunk's step 0.3/1/3 buys none), so the trunk's **direction** is the
+  mechanism and T6f is the defect fix; the session order is §8.1 row 0c. Open:
+  the 1-batch causal-transformer smoke cell is below the 0.1 ruler (pre-existing;
+  §14 fix queue).
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v28 start: the **depth fix** (normalization + a decoupled trunk LR, §8.1 row 0c), then the temporal axis, then the streaming lifts. The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3) and routing (`SurrogateCredit` + `RoutingGeometry`, §19 row 4) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6d's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
+| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v29 start: the **trunk's direction** (`learned_feedback` or an orthogonal init at the readout split, or a residual/wider trunk, §8.1 row 0c), then the temporal axis, then the streaming lifts. The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3) and routing (`SurrogateCredit` + `RoutingGeometry`, §19 row 4) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, T6e priced the split's position and the trunk's step (both refused, so the direction is next), B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6e's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables first, then any credit the new primitives add. The complexity-audit column is part of every row; reproduce the published protocol and record σ. |
@@ -1790,8 +1825,9 @@ per session.
 - the cell loop is `validation/memory_frontier.py` (`run_pilot` writes
   `results.json` + `appendix.md`); the Pareto aggregation reads its `arms` rows,
   so no second ladder exists. T6b has landed and T6a₂ priced the pass-carrying
-  box; the hybrid's update (T6d) has landed and refused, so the figure's points
-  are the pilot box's until T6e prices the split's position.
+  box; the hybrid's update (T6d) and the split's position (T6e) have landed and
+  refused, so the figure's points are the pilot box's until T6f fixes the trunk's
+  direction.
 **T1 (cont.) — estimator coordinate.**
 - `experiment/schema/axis.py:116` — add
   `estimator_kind: Literal["exact","surrogate","gradient_approx","objective_local","local_supervised","score_function","forward_mode","zeroth_order","temporal_local","hybrid"]`
@@ -1881,7 +1917,41 @@ per session.
 - **Composition and refusal are both declared.** One `_CREDIT_PRIMS` row, one
   `estimator_kind="hybrid"` card, a `system.py` validator plus a constraint row
   refusing non-feedforward geometry; `tests/property/test_hybrid_parity.py`
-  (8 tests, 16 s, 2 s CUDA) is the lock.
+  (10 tests, 16 s, 2 s CUDA) is the lock — T6e added the readout split's
+  store-all parity and `trunk_lr`'s 3× scaling of the trunk only.
+
+### Landed 2026-11-17 (T6e — what the code actually did)
+- **The split's position is a stack index; the readout split is 2·(L−1).**
+  `FeedforwardGeometry._build_layers` emits Linear, ReLU, …, Linear, so the
+  last Linear is at `2·(depth−1)` (14 at the pilot box), not `depth−1`;
+  `READOUT_SPLIT` is that index and `SPLIT_LADDER` is
+  `(REGISTERED_SPLIT, READOUT_SPLIT)`. The first run raised the credit's own
+  guard on the wrong index — the guard is the reason the mistake cost a
+  rebuild, not a corrupt cell log.
+- **The trunk's step is a gradient multiplier, not a second optimizer.**
+  `CreditAssignmentConfig` gained `trunk_lr` (default 1.0) and
+  `HybridCredit._trunk_contrasts` multiplies the trunk's weight and bias
+  pseudo-gradients only; the update rule keeps one Euclidean step size for the
+  whole stack, so a scaled trunk gradient is a decoupled trunk learning rate.
+  The card declares it in `approximation_parameters`, the `_CREDIT_PRIMS` row
+  matches (`("split_layer", "feedback_scale", "trunk_lr")`), and the primitive
+  reference reads it from the case config.
+- **One cell log, one schema.** `DiagnosticCell` gained defaulted
+  `split_layer`/`trunk_lr` fields and the cell key gained both, so the T6d log
+  still parses and its reference/baseline cells are reused by T6e; the registered
+  trunk step (1.0) at the readout split **is** the split's own first seed, so the
+  ladder reuses that cell rather than measuring it twice.
+- **The gate is a new function, not a new semantics.** `split_gate` reads the
+  reference control, then the split's row (the T6d mechanism), then the trunk's
+  step ladder at the readout split: a mechanism that reaches the floor is a
+  promote, a gain of at least delta is a coordinate, and no movement is a
+  refusal naming the trunk's **direction** with its trigger. `update_gate` stays
+  T6d's gate, so the two verdicts never overwrite each other.
+- **Locks.** `tests/unit/validation/test_hybrid_update.py` (24 tests) prices
+  both knobs' gates and the 8-cell plan; `test_hybrid_parity.py` gained the
+  readout split's store-all parity and the trunk step's 3× scaling of the trunk
+  weights only. Measured: reference 0.418, floor 0.408, the readout head 0.132,
+  the trunk's step 0.3/1/3 → 0.105/0.132/0.103, 1.06× memory → refuse.
 
 ### Landed 2026-11-16 (T6 — what the code actually did)
 - **One point, four arms, one builder.** `validation/memory_frontier.py` owns the
@@ -2613,8 +2683,8 @@ binding point) now has two registered boxes and two rung-2 refusals: L=4→8
 (0.167/103 MB vs 0.385/85 MB, 1.22×) and L=8→32/B=4096 (0.184/210 MB vs
 0.364/453 MB, **0.46×** — the memory bar is met and the baseline trains, so
 the accuracy gap is the split, not the trunk's rule or its scale). The next
-defect fix is **T6e**, not a claim run; the session order is the estimator
-family (§19 row 1). T6/T6a is no longer the critical path to a
+defect fix is **T6f** (the trunk's direction), not a claim run; the session
+order is §8.1 row 0c. T6/T6a is no longer the critical path to a
 positive result: the
 hybrid has a landed wrapper, measured parity, a store-all reference fixture,
 and a depth-flat peak, but its accuracy is 17 pp below the baseline at the

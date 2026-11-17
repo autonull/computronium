@@ -18,6 +18,7 @@ def _config_factory(config: dict[str, Any]) -> CreditAssignmentConfig:
         split_layer=config.get("split_layer", -1),
         gamma=config.get("gamma", 0.05),
         feedback_matrix=config.get("feedback_matrix"),
+        trunk_lr=config.get("trunk_lr", 1.0),
     )
 
 

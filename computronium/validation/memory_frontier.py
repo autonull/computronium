@@ -438,13 +438,23 @@ def cifar_splits() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tens
 
 
 def _credit(
-    arm: str, *, gamma: float = HYBRID_GAMMA, train_biases: bool = False
+    arm: str,
+    *,
+    gamma: float = HYBRID_GAMMA,
+    train_biases: bool = False,
+    split_layer: int = -1,
+    trunk_lr: float = 1.0,
 ) -> CreditAssignmentConfig:
     match arm:
         case "backprop" | "backprop+ckpt":
             return CreditAssignmentConfig.gradient()
         case "hybrid":
-            return CreditAssignmentConfig.hybrid(gamma=gamma, train_biases=train_biases)
+            return CreditAssignmentConfig.hybrid(
+                gamma=gamma,
+                train_biases=train_biases,
+                split_layer=split_layer,
+                trunk_lr=trunk_lr,
+            )
         case "local":
             return CreditAssignmentConfig.pepita(gamma=gamma)
         case other:
@@ -460,6 +470,8 @@ def build_arm(
     seed: int,
     gamma: float = HYBRID_GAMMA,
     train_biases: bool = False,
+    split_layer: int = -1,
+    trunk_lr: float = 1.0,
 ) -> System:
     """One arm at one point; the geometry, init, and update are shared.
 
@@ -469,6 +481,8 @@ def build_arm(
     primitive, and the plain arm's cells stay bit-identical.
     ``gamma`` and ``train_biases`` are the hybrid's two update knobs (T6d);
     a caller that leaves them unset reads the registered arm.
+    ``split_layer`` and ``trunk_lr`` are the split's position and its
+    decoupled trunk step (T6e); ``-1``/``1.0`` read the registered arm.
     """
     if arm not in ARMS:
         msg = f"unknown arm {arm!r}; expected one of {ARMS}"
@@ -483,7 +497,13 @@ def build_arm(
             stream_norm=point.stream_norm,
         ),
         dynamics=StateDynamicsConfig.instantaneous(),
-        credit=_credit(arm, gamma=gamma, train_biases=train_biases),
+        credit=_credit(
+            arm,
+            gamma=gamma,
+            train_biases=train_biases,
+            split_layer=split_layer,
+            trunk_lr=trunk_lr,
+        ),
         update=ParameterUpdateConfig.euclidean(step_size=lr),
     )
     if arm == "backprop+ckpt":
@@ -1027,11 +1047,20 @@ def measure_cell(  # ruff: ignore[too-many-arguments]
     y_test: torch.Tensor,
     gamma: float = HYBRID_GAMMA,
     train_biases: bool = False,
+    split_layer: int = -1,
+    trunk_lr: float = 1.0,
 ) -> ArmCell:
     """Train one (arm, seed) cell and return its measured cost and accuracy."""
     torch.cuda.empty_cache()
     system = build_arm(
-        arm, point, lr=lr, seed=seed, gamma=gamma, train_biases=train_biases
+        arm,
+        point,
+        lr=lr,
+        seed=seed,
+        gamma=gamma,
+        train_biases=train_biases,
+        split_layer=split_layer,
+        trunk_lr=trunk_lr,
     )
     trainer = SystemTrainer(
         system=system,

@@ -43,6 +43,7 @@ def _get_primitives_for_axis(axis: StructuralAxis) -> list[str]:
 # These are tested in integration tests with actual task dimensions
 _GEOMETRY_REQUIRES_ARGS = {
     "feedforward",
+    "routing",
     "recurrent",
     "causal_transformer",
     "attention",

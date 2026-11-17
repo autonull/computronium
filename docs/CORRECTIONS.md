@@ -250,3 +250,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | **Defect probe**: a named defect candidate, the fix, and the capability it unlocks (TODO93 §0.6 defect ledger, §14 capability ledger). "Refused" is a box statement (infeasible, or over budget), never a mechanism verdict. The primitives are the work program, admitted by capability (§19). |
 | Status | corrected — TODO93 is a capability program; no track is closed by a low cell |
 | Commit | this commit |
+
+| Field | Correction 26 — the split is priced; the trunk's direction is the mechanism |
+|---|---|
+| Original claim | T6d localized the 17 pp gap at "the split at the boundary" and framed the next rung as the split's position (`split_layer` on the last Linear) or a decoupled trunk learning rate (CORRECTION 24). |
+| Original metric | A readout-only head and a trunk step were candidate mechanisms, but the refusal named "the split's position" without pricing it; a position that is never measured cannot be distinguished from a trunk whose update direction is wrong. |
+| Audited procedure | T6e at L=8/W=1024/B=8192, 200 steps, LR 0.3, seeds 21/22: reference `backprop+ckpt` 0.419/0.416 (floor 0.408); baseline hybrid 0.163/0.169; **readout-only head (`split_layer`=14) 0.126/0.138 (−3.4 pp)**; **`trunk_lr` 0.3/1/3 → 0.105/0.126/0.103**; activation set 1.06× the reference's at L=8. |
+| Affected conclusions | The split's position is no longer a candidate mechanism: moving the boundary to the last Linear **loses** 3.4 pp, and a decoupled trunk step buys nothing. The level is the trunk's **direction** (its first-order feedback matrix B and its geometry), not its step or its position. T6d's refusal stands; T6e's numbers stand as measurements. |
+| Replacement metric | The mechanism is the trunk's **direction**: the next rung is `learned_feedback` (a ridge-regressed B) or an orthogonal init at the readout split, or a residual/wider trunk. "The split's position" is retired as the trigger; the step and the position are priced at the pilot box. |
+| Status | corrected — T6e refused the position and the step with the direction as the mechanism |
+| Commit | this commit |

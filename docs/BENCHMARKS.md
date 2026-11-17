@@ -796,14 +796,52 @@ scale. **CORRECTION 24.**
 diagnostic box; the bar is met at L=32 under the stream-normalized pass
 (0.46×, §2.14). The pilot box cannot decide the memory claim.
 
-**Trigger.** T6e — the split's position at the pilot box: `split_layer` on the
-last Linear (a readout-only head: 7 trunk layers + 1 exact-gradient layer) at
-gamma 0.05, then a decoupled trunk learning rate (gamma × lr as one box). No
-claim run is scheduled (12 measured cells (14 planned), no claim cell).
+**Trigger.** T6e — the split's position at the pilot box; measured in §2.16
+and refused. No claim run is scheduled (12 measured cells (14 planned), no
+claim cell).
 
 Artifacts: `results/t93_a_stream/hybrid_update.{json,md}` plus the kill-safe
 cell log `hybrid_update.cells.jsonl`; replay
 `uv run python -m computronium.validation.hybrid_update --replay`.
+
+### 2.16 The split's position and the trunk's step (T6e) — refused; the trunk's direction is the mechanism
+
+**Question.** T6d localized the gap at the split. Is the fix the split's
+position (a readout-only head: one exact-gradient Linear over seven trunk
+Layers) or the trunk's step (a decoupled trunk learning rate, priced as a
+multiplier on the shared step)?
+
+**Box.** The T6d pilot box — CIFAR-10 fixed 10k-image train subset / full 10k
+test, L=8/W=1024/B=8192, 200 steps, LR 0.3, fp32, seeds 21/22, data-order seed
+7. Nine measured cells in eight calls, ~160 s (10-12 s/cell; 516-589 MB peak) on
+the RTX 3080 10 GiB. `READOUT_SPLIT` is 14: `_build_layers` alternates
+Linear/ReLU, so the last Linear of an 8-Linear stack is at `2·(L−1)`.
+
+**Measured.**
+
+| Arm | split | trunk lr | val_acc | activations MB | peak MB | s |
+|---|---|---|---|---|---|---|
+| `backprop+ckpt` | — | — | **0.419 / 0.416** | 485 | 557 | 11.3 |
+| `hybrid` (registered) | −1 | 1 | 0.163 / 0.169 | 516 | 589 | 10.2 / 10.3 |
+| `hybrid` (readout head) | 14 | 1 | **0.126 / 0.138** | 516 | 589 | 10.7 |
+| `hybrid` (readout head) | 14 | 0.3 | 0.105 | 516 | 589 | 10.8 |
+| `hybrid` (readout head) | 14 | 3 | 0.103 | 516 | 589 | 10.9 |
+
+The reference trains, so the floor is **0.408**. **The split's position only
+loses accuracy**: a readout-only head reads 0.126/0.138, **3.4 pp below** the
+registered two-layer head (0.163/0.169). **The trunk's step buys nothing**: the
+0.3/1/3 ladder reads 0.105/0.126/0.103 at its best. The hybrid's activation
+set is 1.06× the reference's, so the memory half is unchanged by either knob.
+
+**Verdict: refuse.** Neither the split's position nor the trunk's step reaches
+the floor, and the position moves the wrong way, so the mechanism is the trunk's
+**direction** — its first-order feedback matrix B or its geometry (**CORRECTION
+26**). The next rung is `learned_feedback` (a ridge-regressed B) or an
+orthogonal init at the readout split, or a residual/wider trunk.
+
+Artifacts: `results/t93_a_stream/split_position.{json,md}` plus the shared cell
+log `hybrid_update.cells.jsonl`; replay
+`uv run python -m computronium.validation.hybrid_update --split --replay`.
 
 ## 3. Open locks
 
@@ -822,9 +860,11 @@ cell log `hybrid_update.cells.jsonl`; replay
 | D2 gate: paired interval, cost ruler, QDQ width, extension screen, replay | `tests/unit/validation/test_matched_substrate.py` | 10 s |
 | F1 gate: screen/ladder/confirmation, invalid reference/control, median family, 2/4/6 width ladder | `tests/unit/validation/test_composition_ladder.py` | 14 s |
 | T6d gate: floor from the reference, ladder confirmation, sibling/composition, head-only refusals, kill-safe cell log | `tests/unit/validation/test_hybrid_update.py` | 9 s |
+| T6e gate: split's position, trunk-step ladder, coordinate/refusal, 8-cell plan, split JSON | `tests/unit/validation/test_hybrid_update.py` | 9 s |
 | Kill-safe composition cell log: replay recomputes the gate; registration precedes the first cell | `tests/unit/validation/test_composition_ladder.py` | 1 s |
 | QDQ control quantises (256 levels, float forward, STE) and is not a cast | `tests/unit/validation/test_matched_substrate.py` | 5 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
+| Readout-only split ≡ store-all hybrid; `trunk_lr` scales the trunk only | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | T6a box: the ratio is depth-declared (1.22 / 0.75 / 0.53 at L=8/16/32) and the claim's two bars never meet | `scripts/probes/t93_t6a_box_triage.py` | 90 s (CUDA, ~600 MB) |
