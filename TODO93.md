@@ -1120,7 +1120,7 @@ not scheduled, however cheap.
 | 2026-11-16 | E | estimator atlas: bias/variance/compute per kind | 18 claim cells (6 arms × 3 seeds) + 22 ladder/confirmation cells | full MNIST test split (1 σ = 0.3 pp); chance 0.1; floor 0.25; probe 256; FD tol 0.99 | MNIST quick, feedforward 784-32-10, batch 32, 600 batches, 1 epoch, per-arm LR 1e-3/1e-2/1e-1, CPU | **controls pass** (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 ± 0.001 / 1.60×, 0.923 ± 0.003; FA 0.125 ± 0.079 / 0.002×, 0.821 ± 0.007; hybrid 0.185 ± 0.007 / 0.395×, 0.827 ± 0.007; FF 0.143 ± 0.109 / 1.211 ± 0.308, 0.816 ± 0.089; PC-ALM depth-2 regime mismatch/refusal (0.105 ± 0.013, one seed refused) → **verdict: atlas, not a winner**; CORRECTION 16 | E1 ✅ |
 | 2026-11-16 | D | substrate ladder: ternary/memristive + `energy_min` at settle 5/10/20, per-arm LR | 24 cells (3 arms × 3 LR + 3 settle + 5 confirmation) + 1 control | full 10k test split (1σ = 0.3 pp); chance 0.1; floor 0.55; δ = 0.01; device B/weight | MNIST quick, 784-32-10, B=32, 600 batches, 1 epoch, β=0.5, CPU | **memristive 0.9097 vs digital 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight → promote D2**; ternary 0.861 vs 0.913, 2 bits/weight → refused; control 0.9234; CORRECTION 17 | D1 ✅ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
-| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | — | T6a (blocked on T6b/T6c) |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | memory blocker fixed (T6b); depth rung L=4→8 until T6c re-opens | T6a |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D1 promoted memristive (0.9097 vs 0.9097, 2 vs 4 B/weight) | — | D2 |
 | — | F | does composition beat the best single-axis default? | — | ≥δ at matched budget | — | — | F1 |
@@ -1217,7 +1217,7 @@ session.
 - **Start order is the portfolio rank (§14), not a DAG.** C1 landed and C2
   closed at its saturation point; B1 landed and refused its depth axis; E1
   landed and closed as an atlas; D1 landed and promoted memristive. The next
-  session runs **A's two blockers (T6b/T6c)**, then **D2**, then F1 and T6a.
+  session runs **D2**, then F1 and T6a; T6b landed and T6c's re-open is queued.
   T5 is a standing side track. T7 stays parked (E1 did not promote); T8's
   trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence
   axis; B's and ternary's triggers are in §14.
@@ -1245,7 +1245,7 @@ session.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v18 start: A's blockers T6b/T6c, then **D2** (matched substrate comparison), then F1 (composition screen) and T6a. D1 landed and promoted memristive. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed and gate T6a (composed-path memory and depth trainability are pre-conditions). |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v19 start: **D2** (matched substrate comparison), then F1 (composition screen) and T6a; T6b landed and T6c refused its cheap pass. D1 landed and promoted memristive. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed; T6b (composed-path memory) is fixed and T6c (depth trainability) refused its cheap pass, so T6a registers with the L=4→8 depth rung unless T6c re-opens first. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1431,7 +1431,7 @@ session.
   (objectives `["accuracy", "peak_bytes"]`, `maximize=[True, False]`).
 - the cell loop is `validation/memory_frontier.py` (`run_pilot` writes
   `results.json` + `appendix.md`); the Pareto aggregation reads its `arms` rows,
-  so no second ladder exists. T6b/T6c must land before the points on that figure
+  so no second ladder exists. T6b has landed; T6c's re-open must land before the points on that figure
   mean what the axes say.
 **T1 (cont.) — estimator coordinate.**
 - `experiment/schema/axis.py:116` — add
@@ -1552,7 +1552,7 @@ session.
   fallback must be taken before any depth rung is registered.
 - **No registration was committed.** A threshold written while the treatment's
   memory advantage is absent on the claim path would be decided by a defect.
-  T6a is blocked on T6b + T6c, and its essentials (floor, δ, `n_max=5`, the
+  T6a waits on T6c's re-open for the depth half (T6b landed), and its essentials (floor, δ, `n_max=5`, the
   binding appendix, disjoint seeds) are recorded in §2/§8.1 ready to write.
 - **Locks.** `tests/property/test_memory_frontier.py` (8 tests, 21 s CUDA) holds
   the coefficient, the gate, the checkpointed arm's 0.39× activation set, and
