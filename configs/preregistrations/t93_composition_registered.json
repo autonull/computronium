@@ -1,0 +1,38 @@
+{
+  "claim": "a legal 6-axis composition beats the best single-axis default by at least delta at matched forward-equivalents",
+  "metric": "val_acc",
+  "threshold": 0.01,
+  "alpha": 0.05,
+  "min_seeds": 1,
+  "created": "2026-11-16",
+  "box": {
+    "task": "digits",
+    "fidelity": "L0",
+    "device": "cpu",
+    "epochs": 1,
+    "batch_limit": 57,
+    "forward_equivalents": 57,
+    "param_budget": 50000,
+    "screen_cells": 50,
+    "scan_limit": 2000,
+    "screen_seed": 42,
+    "control_seed": 43,
+    "delta": 0.01,
+    "floor": 0.55,
+    "control_tol": 0.1,
+    "ladder_widths": [
+      2,
+      4,
+      6
+    ],
+    "default": {
+      "substrate": "digital",
+      "geometry": "feedforward",
+      "dynamics": "instantaneous",
+      "plasticity": "null",
+      "credit": "gradient",
+      "update": "euclidean"
+    }
+  },
+  "note": "screening registration: a promotion is F2's five-seed replication, not a claim"
+}

@@ -554,6 +554,76 @@ cpu`; replay from the cell log without training: `... --replay --device cpu`.
 The table is `results/t93_d2/matched.md`; the cells are
 `results/t93_d2/matched.cells.jsonl`.
 
+### 2.12 The composition screen (F1)
+
+**Question.** Does any legal 6-axis composition beat the best single-axis
+default by δ at matched forward-equivalents? The 6-axis generator and its
+legality filter already exist; the screen is one cheap task, 50 legal multi-axis
+cells drawn uniformly, with **every legal single-axis arm** as the reference, and
+a 2/4/6-width family ladder on the best credit family. A composition cannot be
+its own bar, and the reference's second seed plus the ladder's confirmation seed
+price the seed spread.
+
+**The box.** `digits` quick mode (1797x64, 10 classes), batch 32, 57 batches
+(one epoch, so 57 forward-equivalents per cell), 1 seed, CPU, 50k parameter
+ceiling. δ = 1 pp, floor 0.55, and the control band is 10 pp (the pilot
+measured a 6.9 pp data-order swing before the run).
+
+**The reference** (41 legal single-axis arms; `plasticity:
+conflict_adaptive` refused training and is recorded):
+
+| axis | primitive | val acc | walltime |
+|---|---|---|---|
+| update | ortho_adam | **0.797** | 1.7 s |
+| geometry | attention | 0.792 | 0.9 s |
+| geometry | tile_mesh | 0.769 | 0.5 s |
+| update | muon | 0.764 | 1.6 s |
+| geometry | nca | 0.678 | 0.2 s |
+| default | digital MLP | 0.194 | 1.3 s |
+
+The learning control (untuned default at 1e-2) reads 0.194 at this box; the
+reference's second seed reads **0.867** (drift 6.9 pp, inside the band).
+
+**The 50 legal compositions** (seeded reservoir; 50/50 measured, no refusals):
+
+| substrate | geometry | dynamics | plasticity | credit | update | width | val acc |
+|---|---|---|---|---|---|---|---|
+| digital | tile_mesh | instantaneous | temporal_psi | random_projections | riemannian_orthogonal | 4 | **0.669** |
+| ternary | conv | instantaneous | temporal_psi | gradient | muon | 4 | 0.481 |
+| digital | tile_mesh | instantaneous | null | random_projections | lion | 3 | 0.328 |
+| analog | tile | instantaneous | conflict_adaptive | random_projections | local_adam | 5 | 0.306 |
+| analog | tile_mesh | instantaneous | routing | gradient | role_split | 4 | 0.269 |
+| memristive | feedforward | lazy | temporal_psi | local_contrastive | lion | 5 | 0.189 |
+
+**The family ladder** (credit families, selected by median with n >= 2; the best
+is `random_projections`):
+
+| seed | width | val acc | note |
+|---|---|---|---|
+| 42 | 2 | 0.092 | the width-2 point is near the single-axis level |
+| 42 | 4 | 0.783 | the screen seed's ladder best |
+| 42 | 6 | refused | `tile_mesh + energy_minimization + random_projections + riemannian_orthogonal + analog + temporal_psi` failed to train |
+| 43 | 4 | 0.814 | the confirmation seed; a **3.1 pp** spread from the screen seed |
+
+**Verdict: refuse composition at this box.** The bar is 0.797 + 1 pp = **0.807**.
+The screen's best composition reads 0.669 (12.8 pp below the single-axis
+default), and the family ladder's best reads 0.783 (1.4 pp below the bar) on the
+screen seed. The confirmation seed reads 0.814 (+1.7 pp above the bar), but its
+3.1 pp spread from the screen seed is **wider than δ**, so the point did not
+reproduce. The seed spread, not the composition, is the binding ruler; F2's five
+seeds at the same box are the trigger. Verdict "composition is false" is not
+available from one seed. Re-open: F2 (five seeds), a matched-parameter
+composition, or a real task family (MNIST/CIFAR, wider axes).
+
+Command: `uv run python -m computronium.validation.composition_ladder --device
+cpu`; replay from the cell log without training: `... --replay`. The table is
+`results/t93_f1/composition.md`; the cells are
+`results/t93_f1/composition.cells.jsonl`; the registration written before the
+first cell is `configs/preregistrations/t93_composition_registered.json` (the
+21:54 copy preceded the first cell log at 22:12 by 17 minutes). Runtime: 96
+cells, about 19 min on CPU (the seeded generator examined 2,000 candidates in
+18 s and yielded 321 legal composable cells).
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -569,6 +639,8 @@ The table is `results/t93_d2/matched.md`; the cells are
 | D1 gate: two-seed parity with less state promotes; one seed below refuses; chance control invalidates | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
 | Kill-safe substrate cell log: resume/replay and dedup | `tests/unit/validation/test_substrate_ladder.py` | 1 s |
 | D2 gate: paired interval, cost ruler, QDQ width, extension screen, replay | `tests/unit/validation/test_matched_substrate.py` | 10 s |
+| F1 gate: screen/ladder/confirmation, invalid reference/control, median family, 2/4/6 width ladder | `tests/unit/validation/test_composition_ladder.py` | 14 s |
+| Kill-safe composition cell log: replay recomputes the gate; registration precedes the first cell | `tests/unit/validation/test_composition_ladder.py` | 1 s |
 | QDQ control quantises (256 levels, float forward, STE) and is not a cast | `tests/unit/validation/test_matched_substrate.py` | 5 s |
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
