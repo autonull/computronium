@@ -8,6 +8,9 @@ pilot, the routing refusal, the plasticity ladder, the retention ladder, the
 estimator atlas, the substrate ladder, its matched comparison, the
 composition screen, the memory-frontier registration, its re-registration, and
 the hybrid's update diagnostic.
+**Reading the narrative below.** Entries written before v26 say "refused" or
+"closed"; those words are historical — every one is a defect probe or a
+capability map in §0.6 (CORRECTION 25). The measurements stand.
 Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
 PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
 spread 0.0 %; L=8 learns 0.419); the pilot's two blockers are decided:
@@ -120,8 +123,8 @@ device model). *Rulers:* accuracy, walltime, forward-equivalents, device state
 per step, and the constraint that binds (conductance levels, programming
 budget, drift) — a parity claim must name it. *Stop:* within 1 pp of the
 digital rule at ≤1.2× walltime → D3 (a device-drift/retention model); a
-disadvantage >1 pp at matched walltime → refuse the substrate path with the
-measured mechanism. *Box:* CIFAR-10 quick mode or MNIST at 2× width, 5 paired
+disadvantage >1 pp at matched walltime → the programming budget is the defect,
+and a device-level or compiled quantisation of the pair is the fix. *Box:* CIFAR-10 quick mode or MNIST at 2× width, 5 paired
 seeds. D2 needs no new primitive: it reuses `MemristiveSubstrate`,
 `EnergyMinimizationDynamics`, and the D1 runner.
 
@@ -224,8 +227,8 @@ six is not a track.
 
 **Six tracks, cheap-first.** Tracks A–C are the v10 MPUs; D–F are the parts of
 Computronium's own promise that no previous TODO has measured. Every track reuses
-something already built, and every track carries a kill rule so the portfolio
-shrinks instead of accumulating.
+something already built, and every track names what parks it and the fix that
+reopens it, so the portfolio grows instead of accumulating verdicts.
 
 **Reading note (2026-11-17).** The verdict words in this table predate
 CORRECTION 25: read `⛔` / "refused" as **defect probe** — a named defect with
@@ -235,8 +238,8 @@ mechanism. Memory columns are instruments.
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
 | **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + **T6a₂ ⛔: the pass-carrying L=8→32/B=4096 box meets the memory bar (0.46×) and trains (0.364 vs 0.354), but the hybrid reads 0.184/0.201 — 17 pp below** + **T6d ⛔: no trunk knob reaches the floor (bias +0.5 pp, gamma peaks at the registered scale, collapses at 0.3/1.0, head alone 0.149), while the same trunk rule as a whole stack reads 0.405 — the split is the mechanism** | 1 session (T6e) | the hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the pilot box; the mechanism is the split's position, so T6e is the defect fix, not another knob** |
-| **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
-| **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
+| **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → the missing surrogate is the defect; B's claim narrows (§19 row 4) |
+| **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → the label channel or step scale is the defect; retention is not yet tested |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
 | **E. Estimator atlas** ✅ | Cite a measured bias/variance/compute table for every estimator kind | exact gradient + smoothed/finite-difference reference | **E-lite**: 4 arms × 1 task × 1 seed; then 6 arms × 3 seeds | hours + 1 session | **closed as an atlas (2026-11-16)**: controls pass, table is the artifact; PC-ALM depth-100 trigger, empty unbiased cells visible but not pulled |
 | **F. Does composition matter? ⛔** | Say whether a 6-axis composition beats the best single-axis default, by ≥δ | best-of-single-axis at matched budget | **F1 landed**: 50 legal cells vs 41 legal single-axis arms on `digits`, then the family ladder | 1 session | **refused at this box**: reference 0.797, screen 0.669, family ladder 0.783 vs bar 0.807; confirmation 0.814 (3.1 pp seed spread > δ); F2 needs five seeds |
@@ -285,9 +288,9 @@ probe is a claim with no evidence path.
 | 9. Atlas of the space | identity cards, evidence store, fingerprinting | partial: 3.5k measurements | **E** (estimator atlas) + F (composition map) | a table a third party can read |
 | 10. Trade-offs, not one best | Pareto analysis, multi-objective metrics | harness exists, no frontier claimed | A's two-budget table | hypervolume or the ≤0.5× byte rule |
 | 11. Local/alternative paradigms | 11 credits, energy dynamics, streaming | parity, no structural win | A/B/C/D | a structural win, or a capability gap with the primitive that closes it |
-| 12. Growing architectures | routing plasticity, NCA/tile, tape memory | registered, partly unavailable | parked: fires when B or C lands | a substrate/streaming result |
+| 12. Growing architectures | routing plasticity, NCA/tile, tape memory | registered, partly unavailable | §19 rows 4–6: the routing primitive, the temporal axis, and the long-stream lift | a legal cell that trains and beats its fixed-topology twin |
 | 13–15. New mechanisms, discovery systems, cheap screening | plugin registry, policies, staged evaluation | present and used | F + the surprise channel | a promoted unexpected cell |
-| 16–18. Physical hardware, shared infrastructure, community | provenance, identity cards, store | present, unused externally | parked until a digital claim lands | an external collaborator |
+| 16–18. Physical hardware, shared infrastructure, community | provenance, identity cards, store | present, unused externally | a collaborator brings a device or a dataset; the store is ready | a shared measurement or an external reproduction |
 
 **What this map says.** Three promises (3–4, 9, 1) have *never* had a probe in
 any TODO. Those are the least-explored, most distinctive regions, and D/E/F are
@@ -322,15 +325,15 @@ column above.
 | **Grow the architecture**: routing/tile/NCA at fixed budget | `algorithms/routing/`, tile/NCA kernels, availability flags | architecture as a learned variable is the project's §12 promise | one legal cell that trains and beats its fixed-topology twin |
 | **Memristive drift as consolidation** | memristive model; SI/replay arms | a hardware defect becomes free EWC-like anchoring | needs a retention/device model — parked until one exists |
 
-**How a probe enters:** it must name the decision, the baseline, and the kill
-rule in one line before it runs. A probe that would only add a row to a table
+**How a probe enters:** it names the capability, the baseline, and what would
+park it in one line before it runs. A probe that would only add a row to a table
 belongs in a screen, not the ledger.
 
-### 0.4 Screen ≠ verdict — a kill needs a ladder
+### 0.4 Screen ≠ verdict — a defect needs a fix
 
-"Cheap" means *few cells*, never *one un-tuned cell*. A low number at one setting
-is a **defect probe**, not evidence about an idea. A track is refused only at
-rung 2 of the SEC ladder:
+"Cheap" means *few cells*, never *one un-tuned cell*. A low number at one
+setting is a **defect probe**, not evidence about an idea. A mechanism is parked
+only at rung 2 of the SEC ladder, and only as a capability gap:
 
 | Level | Evidence required | Cells | What it may decide |
 |---|---|---|---|
@@ -338,12 +341,12 @@ rung 2 of the SEC ladder:
 | 2 — viable | **3-point ladder on the track's primary knob**, 1 seed each, + 1 confirmation seed at the best point | 4 | a defect with a knob box, or promotion |
 | 3 — claim | 5 paired seeds, pre-registered threshold, CI | 5+ | a claim |
 
-**Primary knob, fixed before the ladder runs:** B = stacked discrete-op count
-and STE temperature/LR; C = consolidation strength and LR; D = `max_steps` and
-quantization width; A = LR and depth (frozen at 0.3 from the measured ladder);
-E = none (descriptive); F = family, not a knob — a composition defect probe is
-a breadth statement over 50 cells, and the best-looking family gets its own
-ladder before any verdict word is written.
+**Primary knob, declared before the ladder runs:** B = stacked discrete-op
+count and STE temperature/LR; C = consolidation strength and LR; D = `max_steps`
+and quantization width; A = LR and depth (frozen at 0.3 from the measured
+ladder); E = none (descriptive); F = family, not a knob — a composition defect
+probe is a breadth statement over 50 cells. The box is declared, never fixed:
+when a defect names a missing knob, the box widens and the ladder re-runs.
 
 **Every defect probe carries its fix.** A low cell goes into §0.6 / §14 with
 (a) the knob box measured, (b) the **named defect candidate**, (c) the fix and
@@ -353,7 +356,8 @@ that closes it, and the row stays in the ledger as work.
 
 **Why this is not slower.** A 4-cell ladder at L0 costs minutes. What it buys is
 the difference between "one config was bad" and "the knob box is exhausted" —
-the exact confusion that turns a portfolio into an excuse to stop.
+the exact confusion that turns tuning into a verdict. A ladder that stays empty
+names the defect; it does not end the idea.
 
 ### 0.5 What this phase is for — and what it is not
 
@@ -377,11 +381,12 @@ here is a **defect probe** about coordinates, not a verdict about an idea — an
 §0.4 keeps its fix.
 
 **Why the order is apparatus-first.** Exhaustive HPO on this system today would
-optimise an objective with four known hazards: cells that cannot train (T6c,
-refused at its box), memory attributed to the wrong term (T1, fixed), baselines
-that are not matched (the binding gate), and compositions whose mechanism never
-runs on the claim path (T6b, fixed). Tuning around those hazards produces numbers that look like
-results and are not. The screens remove them for hours, not sessions.
+optimise an objective with four known hazards: cells that cannot train (T6c, a
+defect probe), memory attributed to the wrong term (T1, fixed), baselines that
+are not matched (the binding gate), and compositions whose mechanism never runs
+on the claim path (T6b, fixed). Tuning around those hazards produces numbers
+that look like results and are not. The ladders remove them for minutes, not
+sessions — and a primitive that needs no apparatus starts today (§19 row 1).
 
 **Primitives are the work.** §19 is a build program, not an admission map:
 surrogate, forward-tangent, score-function, zeroth-order, local supervision, SI
@@ -437,6 +442,32 @@ retags every refusal as a defect probe.
 No row above is a conclusion about an algorithm. Each is a defect to fix or a
 capability to build.
 
+### 0.7 Operating philosophy — relaxed (binding)
+
+**The mode is build, not judge.** Ideal operation is a lab that ships
+capabilities and records costs, not a tribunal that closes ideas.
+
+1. **Explore in parallel.** A claim run is serial and pre-registered; capability
+   work is not. Several primitives may be in flight; a session lands one row.
+2. **Tune before comparing, not instead of it.** Find each mechanism's best
+   declared box (its ladder), then compare at matched boxes. An under-tuned
+   comparison is a defect, not a ranking.
+3. **Pre-registration is for claims.** A primitive needs a capability card and a
+   parity lock, not a registration. Only a claim freezes `n_max`, a seed plan,
+   and a threshold before its first run.
+4. **Four rulers, one capability.** Memory, accuracy, walltime, and
+   forward-equivalents are peers; the capability is the deliverable.
+5. **Rules are defaults.** Every rule in this document yields to a named reason
+   and a working capability. Write the reason where the number lives.
+6. **No ceremony between an idea and its measurement.** A primitive is one row
+   (class, identity card, row, registry, parity, lock); a defect is one fix; a
+   claim is one pre-registered run.
+7. **A defect is the good news.** A low cell is where the system gets faster,
+   smaller, or able to do something it could not.
+
+**The only hard rules.** No fabricated number, no fake gate, no unmeasured
+claim. Everything else is a default.
+
 **Progress (2026-11-16 — T1, T4a, T4c, T4b, T3, T3b, T6, B1, C1, C2, E1, D1).** Every row is a runnable
 check, not a claim, and each fails when its mechanism is removed.
 
@@ -481,11 +512,12 @@ below the baseline would be decided by the hybrid's own update, which is why the
 claim run is parked rather than scheduled. T5 (published parity) is a standing side track —
 it needs no primitive and every track's credibility depends on it.
 
-**The credibility gate comes first (P1).** A low number from a weak implementation
-is a defect, not a verdict. Before any claim, each credit we intend to publish
-must reproduce its *published* number at the published architecture within
-tolerance. P1 is also where the claimed-vs-measured complexity audit lands,
-because the audit is what makes the memory thesis checkable at all.
+**Credibility runs in parallel (P1).** A low number from a weak implementation
+is a defect, not a verdict. Each credit we intend to publish reproduces its
+*published* number at the published architecture within tolerance; a claim run
+needs that row, but the audit is not a gate on exploration. P1 is also where
+the claimed-vs-measured complexity audit lands, because the audit is what makes
+the memory ruler checkable at all.
 **What changed from v2 and why**
 | v2 | v3 | Reason |
 |---|---|---|
@@ -535,7 +567,11 @@ because the audit is what makes the memory thesis checkable at all.
 | "shared LR is fine for the substrate screen" | **per-arm LR viability ladder** (CORRECTION 17) | a shared LR collapsed ternary to 0.381 while its best point is 3e-3; a screening gate must not be decided by a tuning defect |
 | D2 unnamed | **D2 defined**: matched settle compute, matched walltime, int8 QDQ control, 5 paired seeds | a promoted arm needs its matched comparison written before it runs |
 ---
-## 1. The scarce-resource thesis (corrected)
+## 1. The cost thesis — a capability at a declared budget (memory is one ruler)
+**The thesis.** Expand what the system can do, and state each capability at its
+measured cost. Memory is one ruler beside accuracy, walltime, and
+forward-equivalents; it is not the thesis.
+
 **Measured fact (was wrong in v2).** Backprop stores per-layer activations:
 O(L·B·W). Local rules as *implemented* store two full activation lists — the free
 and nudged passes — so their peak is ≈2× a forward pass, not O(1):
@@ -600,9 +636,10 @@ small saturated tasks; walltime on matmul-optimised GPUs where the backward pass
 is cheap; anything where the global gradient is the only signal that propagates
 credit across many layers; and any comparison whose activation memory never binds.
 ---
-## 2. The four win conditions (falsifiable, with floors)
+## 2. The win conditions (falsifiable, with floors)
 | # | Prediction | Floor / baseline | Falsifier | If false |
 |---|---|---|---|---|
+| W0 | **Capability:** a new primitive trains its task family above chance, or trains it at a smaller constraint (state, memory, steps) | the task family's chance rate; the capability card | the primitive does not train above chance on its target family | the primitive is a defect probe with a named fix (§0.6), not a failure |
 | W1 | **ε-dominance (ε=1 pp):** on ≥1 task family the hybrid or local front improves hypervolume on (accuracy, peak GB) by ≥δ over `backprop+ckpt(√L)`, **or** reaches accuracy ≥ baseline −1 pp at ≤0.5× **activation bytes** (peak reported alongside; the ≤0.5× *peak* form is rejected — params+optimizer is an arm-neutral floor) | reference point fixed in T6a (`(floor−5 pp, max_peak×1.1)`); δ pre-registered; floor per task; binding gate | no arm dominates and no arm reaches the floor | memory frontier closed; the measured frontier is still the artifact |
 | W2 | At fixed peak memory (8 GB), max depth at val-acc ≥ floor for local/hybrid ≥ 2× `backprop+ckpt` | floor locked before seed 1; "trainable" must mean "learns" | ratio <2, or floor not met at depth | report the measured ratio; do not claim depth |
 | W3 | On hard top-k routing, the local arm beats the **best backprop-compatible estimator** (STE + load-balancing/z-loss) by ≥2 pp at matched walltime. **Bias is measured only among gradient-estimator arms; objective-local arms report update-direction alignment, not bias** | soft-relaxation gradient and/or finite-difference reference for the estimator arms; `bias_reference="none"` for objective-local; expert-choice and dense-backprop-MoE are positioning controls | STE+aux ≥ local−2 pp | negative with the measured mechanism named; no category error |
@@ -648,7 +685,7 @@ forward-equivalents, params, optimizer state, accuracy, σ, and the **matched**
 budget. `[regime-mismatch]` marks a cell whose activation share is below the
 binding gate — it is not evidence either way.
 ---
-## 3. P1 — The credibility gate (published-parity audit, scoped)
+## 3. P1 — The credibility step (published-parity audit, in parallel)
 **Decision.** Do our implementations of the credits we intend to publish reproduce
 their published numbers at their published architecture and schedule?
 **Why first.** A reference implementation weaker than the literature is a defect
@@ -1008,7 +1045,7 @@ The six tracks are targeted experiments and need no proposal bias. So:
 fails if the field's removal leaves proposals unchanged on a seeded fixture; a
 below-bar foreign cell is `[regime-mismatch]`, not a defect.
 ---
-## 8. Tickets by track (parallel, gated)
+## 8. Tickets by track (parallel, unparked)
 The DAG is gone. A ticket belongs to a **track**, a track promotes on a gate,
 and the portfolio rank (§14) decides what runs next. Landed tickets stay as the
 record of what exists.
@@ -1279,7 +1316,7 @@ dense-backprop-MoE are positioning controls. Streaming: `backprop + SI/online-EW
 ± small replay; the cheapest falsifier is plasticity before retention. **No arm
 is compared against a weaker implementation of itself.**
 ---
-## 11. Artifact-first: the deliverable that survives any verdict
+## 11. Artifact-first: the deliverable that survives any measurement
 The durable, citable artifact is not a single win; it is:
 - `docs/BENCHMARKS.md` — published / ours / delta / σ / command;
 - the **measured complexity table** — claimed vs actual per backend, with the
@@ -1302,8 +1339,8 @@ frontier/negative mechanism analysis. Naming both forces the artifact spec; "dec
 later" is how the suite drifts into a demo. The contribution is **rigor and the
 frontier**, not terra incognita.
 ---
-## 12. Deferred track (v1, kept with triggers)
-Nothing here is discarded; each item re-enters when its trigger fires.
+## 12. Deferred options (kept with their capability gaps)
+Nothing here is discarded; each item re-enters when a task family needs it.
 | Item | Why it stays | Trigger to re-enter |
 |---|---|---|
 | **Phase-conjugate credit** (optical) | a credit mechanism physics provides and digital cannot; `U†` realised by phase conjugation, no stored backward weights | a digital claim lands and needs a substrate contrast, or a photonics collaborator appears |
@@ -1314,39 +1351,42 @@ Nothing here is discarded; each item re-enters when its trigger fires.
 **Why deferred, plainly:** substrate and toy-regime results do not help a user
 today. If a digital result needs a substrate control, the trigger fires.
 ---
-## 13. Portfolio discipline (no artificial caps)
-1. **Every ticket names a decision, a falsifier, a cost, and a stop rule.** That
-   is the only admission rule; there is no ticket-count quota.
-2. **Cost is priced from a measured pilot**; the watchdog is 2× that price. A
-   ticket that exceeds its watchdog is re-priced or killed, never extended.
-3. **Re-rank every session** by expected value to the user ÷ expected cost;
-   record the ranking in §14.
-4. **Screening is wide; promotion is rare.** Hundreds of L0 cells allowed; five
-   seeds and a pre-registration only after a screen promotes.
-5. **A low number is a defect probe first** (P1 tolerance rule).
+## 13. Portfolio discipline (no artificial caps, relaxed)
+1. **Every row names its capability, its price, and what stops it.** That is the
+   only admission rule; there is no ticket-count quota and no serial gate.
+2. **Cost is priced from a measured build**; the watchdog is 2× that price. A
+   row that exceeds its watchdog is re-priced or parked, never extended by
+   default.
+3. **Re-rank every session** by capability gained ÷ build cost; record the
+   ranking in §14. Run what the session can support; park the rest with a fix or
+   a capability gap.
+4. **Screening is wide; claims are rare.** Hundreds of L0 cells allowed; a claim
+   freezes five seeds and a pre-registration.
+5. **A low number is a defect probe first** (§0.6).
 6. **Steering rules — the plan changes itself when results say so.**
-| Observation | Steering |
+
+| Observation | Response |
 |---|---|
 | W1/W2 hold | track A becomes the lead claim; B/C/D run as follow-ups |
-| hybrid loses at matched memory and walltime | close A; lead with B/C/D; the frontier stays as artifact |
+| hybrid loses at matched memory and walltime | the split or the LR coupling is the defect; the frontier stays as the artifact |
 | pure local loses but hybrid wins | expected; report the composition result, not a local-rule win |
-| binding gate red at the pilot | re-pose the operating point (batch/width/dtype); **never** report the cell |
-| STE+aux beats local on routing | publish the negative with the measured bias; drop track B |
-| STE-gap flat across the 4-op ladder at its best point | refuse B with a trigger and a re-open command (§0.4) |
-| plasticity at chance at C's best ladder point | refuse C before retention; retention is undefined |
-| replay saturates streaming | close C; report the saturation point |
-| substrate arm at parity with less state | promote D; it is the project's most distinctive claim |
-| substrate arm cannot train at any ladder point | park D with a trigger; do not port the digital stack again |
-| composition flat after each family's ladder | record the defect probe + fix; E and D carry the plan |
+| binding gate red at the pilot | re-pose the operating point (batch/width/dtype); never report the cell |
+| STE+aux beats local on routing | narrow B's claim to the estimator that won; keep the measured bias |
+| the STE gap is flat across the ladder | the missing surrogate primitive is the gap (§19 row 4) |
+| plasticity at chance at C's best ladder point | the label channel or the step scale is the defect; retention is not yet tested |
+| replay saturates streaming | measure the saturation point; the long-stream protocol is the capability (§19 row 7) |
+| a substrate arm reaches parity with less state | promote D; it is the project's most distinctive claim |
+| a substrate arm cannot train at any ladder point | the device model or the programming budget is the defect; park D as a capability gap |
+| composition is flat after each family's ladder | record the defect probe; the axis space is the gap (§19 rows 4–6), and E/D carry the plan |
 | an atlas row contradicts a published number | T5 defect first; no atlas claim until closed |
 | a surprise cell beats its declared expectation by ≥2σ | ticket in the same session; the plan re-ranks around it |
 | P1 gaps beyond tolerance | defect tickets only; no measurement claims until closed |
-| nothing wins at these coordinates | the coordinates and the box are the result: record the decomposition that shows why, keep the re-open probes, and let the later HPO phase re-test a wider box. Then §12's triggers lead |
-**Portfolio rank (rewrite each session).** List the tracks by expected decision
-value ÷ measured cost, with the last pilot cost beside each. The top three run;
-everything else is parked. A track whose next rung cannot change a decision is
-not scheduled, however cheap.
----
+| nothing wins at these coordinates | the coordinates and the box are the result; the defect ledger carries the fixes and a later HPO re-tests a wider box; §12's options lead |
+
+**Portfolio rank (rewrite each session).** List the rows by capability gained ÷
+build cost, with the last build cost beside each. A primitive row is a full
+session; a defect fix rides its track. A row whose next step adds no capability
+is a side track.
 ## 14. Scoreboard (update in place; rulers mandatory)
 | Date | Track | Measurement | n | Ruler | Regime | Verdict | Ticket |
 |---|---|---|---|---|---|---|---|
@@ -1427,24 +1467,32 @@ per session.
 - **Every number carries its ruler, its command, and its σ.**
 - **Every run carries a positive control.** A failed control invalidates the run,
   not the arm. Never skip it (SEC: the control is the cheapest falsifier).
-- **Rows, not prose.** ≤1 new module per ticket; no ontology change beyond the
-  per-layer credit field and the §19 primitive rows, each with its identity card,
-  parity test, and lock.
+- **A primitive row is the unit.** One new primitive per session: class,
+  identity card, primitive row, registry entry, parity test, lock. A defect fix
+  rides the session that owns the defect; a second primitive waits for the next
+  session unless the first lands early.
 - **A new kernel path is a new identity, never a silent replacement.** Old rows
   stay valid under their old identity card.
 - **Lift, do not duplicate.** A mechanism that already lives inside another
   module (STE in `core/utils/surrogate.py`, REINFORCE in `training/rl.py:196`,
   Lion at `primitives/parameter_update/lion`) becomes a first-class primitive by
   wrapping it, never by a second implementation.
-- **No tuning to pass.** A knob turned to rescue a cell is a defect ticket.
-- **A kill needs a ladder.** A track is refused only after §0.4's 4-cell rung 2;
-  a one-cell low result is a defect probe or a coordinate, never a verdict, and
-  every refusal keeps its reversal trigger and re-open command.
-- **Cheap screens before claims.** No ticket is scheduled ahead of a cheaper
-  screen that could cancel it; the portfolio rank carries the last measured cost.
+- **Tune to find the best point; never tune to win a comparison.** A knob
+  inside a declared box is the method (the ladder). A knob chosen to make a
+  comparison look good, or turned after seeing the rival's number, is a defect.
+- **Rules are defaults.** Every rule here yields to a named reason and a working
+  capability; write the reason where the number lives.
+- **Exploration is parallel by default.** A claim run is serial and
+  pre-registered; capability work is not.
+- **A park needs a ladder.** A mechanism is parked only after §0.4's 4-cell
+  rung 2, and only as a capability gap with the primitive that closes it; a
+  one-cell low result is a defect probe or a coordinate, never a verdict.
+- **Cheap screens before claims, not before exploration.** A claim follows a
+  cheaper screen; a primitive needs no screen to start. The portfolio rank
+  carries the last measured build cost.
 - **Every track spends 10 % on the unexpected** (§0.2); a surprise is a result,
   not noise, and it enters §14 the session it appears.
-- **Pre-register claims only**; screens run freely and stop cheaply. Reuse
+- **Pre-register claims only**; exploration runs freely and stops cheaply. Reuse
   `configs/preregistrations/` (`r92_memory_budget_registered.json` is the shape).
 - **Watchdog = 2× pilot price.** Kill or re-price; never extend.
 - **If a ticket does not name a decision and a falsifier, it does not land.**
@@ -1454,18 +1502,14 @@ per session.
 ---
 ## 16. Handoff contract
 - TODO92 stays closed: gate, rulers, registrations, and ledger unchanged.
-- **Start order is the portfolio rank (§14), not a DAG.** C1 landed and C2
-  closed at its saturation point; B1 landed and refused its depth axis; E1
-  landed and closed as an atlas; D1 landed and promoted memristive; **D2 landed
-  and refused the path at its walltime box**; **F1 landed and refused
-  composition at its box**. **T6a landed and its rung-2 screen refused the
-  claim** at the reduced L=4→8 box (hybrid 0.167/103 MB vs ckpt 0.385/85 MB;
-  confirmation 0.154 vs 0.363; controls PASS at c=4.25 and 0.385 vs floor
-  0.375), so **no claim run is scheduled**; the next session runs **T6c's
-  re-open** (LayerNorm c≈2 / Innocenti init) and F2 is a five-seed trigger.
-  T5 is a standing side track. T7 stays parked (E1 did not promote); T8's
-  trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence
-  axis; B's, ternary's, and D3's triggers are in §14.
+- **Start order is the capability program (§19 row 1), not a DAG.** The next
+  session lands the estimator family (`ForwardTangentCredit`,
+  `ScoreFunctionCredit`, `ZerothOrderCredit`). The prior measurements are
+  defect probes, not gates: T6c/T6d localized the split, B1 the missing
+  surrogate, D2 the unpriced programming budget, F1 the untrainable deep box.
+  C1 promoted and C2 measured its saturation point; E1's atlas is the capability
+  map; D1 promoted memristive. T5 runs in parallel as credibility work. No claim
+  run is scheduled; a claim is optional until a mechanism reaches its floor.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
 - **Live from 2026-11-16:** C2 closed at the saturation point (λ=100): local
@@ -1503,7 +1547,7 @@ per session.
 | 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v26 start: **the estimator family** (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 row 1), then routing (`SurrogateCredit` + hard top-k), then the depth fix (normalization + a decoupled trunk LR), then the temporal axis, then the streaming lifts. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, B1 the missing surrogate, D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6d's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
-| 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
+| 4. P1 scope | Three publishables first, then any credit the new primitives add. The complexity-audit column is part of every row; reproduce the published protocol and record σ. |
 | 5. D1/D2 timing | **Landed 2026-11-16** (D1: 24 cells, 617 s; D2: 24 cells, 915 s, CPU): D1 promoted memristive and refused ternary; D2 refused the path at the walltime box (−0.31 pp at 2.09× walltime; the programming budget binds). D3 is a trigger; no continuous surrogate is needed for a parity coordinate. |
 | 6. Triggers | Event triggers, no fixed dates. D3 stays parked: D2 held parity but missed the 1.2× walltime. A device-level/compiled quantisation of the pair is its re-open. Ternary re-opens on a wider width or a learnable α per layer. |
 | 7. Headline | **Frontier, not depth:** "accuracy per GB at iso-walltime", ε-dominance with a pre-registered δ (or baseline accuracy at ≤0.5× **activation bytes**), with a stacked memory decomposition. "2× depth" is reported only with the accuracy floor. |
