@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from typing import cast
 
 import pytest
 
@@ -26,6 +27,12 @@ from computronium.validation.preregistration import ThresholdRegistration
 
 _POINT = frontier.PilotPoint(depth=8, width=512, batch=2048, steps=200)
 _LADDER = {arm: {"0.1": 0.300, "0.3": 0.385, "1.0": 0.140} for arm in frontier.ARMS}
+_STREAM_LADDER = {
+    "backprop": {"0.003": 0.300, "0.01": 0.315, "0.03": 0.326},
+    "backprop+ckpt": {"0.003": 0.300, "0.01": 0.315, "0.03": 0.326},
+    "hybrid": {"0.003": 0.150, "0.01": 0.160, "0.03": 0.167},
+    "local": {"0.003": 0.280, "0.01": 0.300, "0.03": 0.310},
+}
 
 
 def _instrument(measured_c: float = 4.125) -> frontier.InstrumentControl:
@@ -108,17 +115,20 @@ def _screen(
 
 def _registration(
     *,
+    point: frontier.PilotPoint | None = None,
     ladder: dict[str, dict[str, float]] | None = None,
     instrument: frontier.InstrumentControl | None = None,
     learning: frontier.LearningControl | None = None,
     screen: frontier.ScreenVerdict | None = None,
+    box: frontier.RegistrationBox = frontier.AS_REGISTERED,
 ) -> frontier.MemoryFrontierRegistration:
     return frontier.build_registration(
-        point=_POINT,
+        point=point or _POINT,
         ladder=ladder or _LADDER,
         instrument=instrument or _instrument(),
         learning=learning or _learning(),
         screen=screen,
+        box=box,
     )
 
 
@@ -129,7 +139,7 @@ def test_the_registration_carries_every_essential(tmp_path) -> None:
     assert raw["min_seeds"] == frontier.N_MAX == 5
     assert raw["depth_rung"] == [4, 8]
     assert len(raw["lr_ladder"]) == len(frontier.ARMS) * len(frontier.LR_LADDER)
-    assert len(raw["claim_cells"]) == 30
+    assert len(cast("list[object]", raw["claim_cells"])) == 30
     assert raw["box"]["depth_rung"] == [4, 8]
     assert raw["box"]["floor"] == pytest.approx(0.375, abs=1e-3)
     assert raw["box"]["depth_trigger"]
@@ -266,3 +276,70 @@ def test_the_registration_is_written_then_committed_without_overwrite(tmp_path) 
     )
     other.commit(committed)
     assert committed.read_text(encoding="utf-8") == first
+
+
+def test_the_stream_box_states_its_own_rung_and_path(tmp_path) -> None:
+    """The re-registration is a different box, not the same claim re-run."""
+    box = replace(frontier.STREAM_BOX, committed=tmp_path / "stream.json")
+    registration = _registration(box=box, point=box.point, ladder=_STREAM_LADDER)
+    raw = registration.to_dict()
+    box_raw = cast("dict[str, object]", raw["box"])
+    assert registration.depth_rung == (8, 32)
+    assert registration.point.stream_norm is True
+    assert registration.point.batch == 4096
+    assert registration.committed_path == tmp_path / "stream.json"
+    assert registration.lrs == dict.fromkeys(frontier.ARMS, 0.03)
+    assert box_raw["label"] == "l8-32-stream"
+    assert box_raw["stream_norm"] is True
+    assert box_raw["box_triage_activation_ratio"] == 0.48
+    assert "4 steps" in cast("str", box_raw["box_triage_ruler"])
+    assert len(cast("list[object]", raw["claim_cells"])) == 30
+    assert {cell.depth for cell in registration.claim_cells} == {8, 32}
+    assert {row.depth for row in registration.binding.rows} == {8, 32}
+    assert all(cell.affordable for cell in registration.claim_cells)
+    assert all(
+        cell.lr == registration.lrs[cell.arm] for cell in registration.claim_cells
+    )
+
+
+def test_a_box_whose_own_ratio_misses_the_memory_bar_is_refused() -> None:
+    """The B=2048 box measures 0.53×, so it cannot register the 0.5× claim."""
+    infeasible = replace(frontier.STREAM_BOX, label="l32-b2048", measured_ratio=0.53)
+    with pytest.raises(ValueError, match="activation ratio"):
+        _registration(
+            box=infeasible, point=frontier.STREAM_BOX.point, ladder=_STREAM_LADDER
+        )
+    assert frontier.STREAM_BOX.meets_memory_bar is True
+
+
+def test_the_learning_control_bars_a_chance_level_stack() -> None:
+    """A control at chance passes the relative floor, so it must fail the box."""
+    chance = frontier.learning_control_gate(
+        depth=8, steps=200, backprop_acc=0.100, checkpointed_acc=0.100
+    )
+    assert chance.floor == pytest.approx(0.09)
+    assert chance.passed is False
+    trained = frontier.learning_control_gate(
+        depth=8, steps=200, backprop_acc=0.385, checkpointed_acc=0.385
+    )
+    assert trained.passed is True
+    below = frontier.learning_control_gate(
+        depth=8, steps=200, backprop_acc=0.360, checkpointed_acc=0.385
+    )
+    assert below.passed is False
+
+
+def test_the_two_boxes_commit_to_their_own_paths(tmp_path) -> None:
+    first = replace(frontier.AS_REGISTERED, committed=tmp_path / "first.json")
+    second = replace(frontier.STREAM_BOX, committed=tmp_path / "second.json")
+    a = _registration(box=first)
+    b = _registration(box=second, point=second.point, ladder=_STREAM_LADDER)
+    a.commit()
+    b.commit()
+    assert json.loads(a.committed_path.read_text(encoding="utf-8"))["box"]["label"] == (
+        "l4-8"
+    )
+    assert json.loads(b.committed_path.read_text(encoding="utf-8"))["box"]["label"] == (
+        "l8-32-stream"
+    )
+    assert a.committed_path != b.committed_path

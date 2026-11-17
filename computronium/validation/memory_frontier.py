@@ -64,6 +64,7 @@ __all__ = [
     "ACTIVATION_RATIO_MAX",
     "ADMISSION_BUDGET_MB",
     "ARMS",
+    "AS_REGISTERED",
     "CLAIM_ARMS",
     "CLAIM_SEEDS",
     "COMMITTED_REGISTRATION",
@@ -74,27 +75,33 @@ __all__ = [
     "FROZEN_LR",
     "INSTRUMENT_DEPTH",
     "LADDER_SEEDS",
+    "LEARNING_FLOOR",
     "LR_LADDER",
     "N_MAX",
     "PILOT_SEEDS",
     "REGISTRATION_DATE",
+    "STREAM_BOX",
     "STREAM_LR_LADDER",
+    "STREAM_REGISTRATION",
     "BindingAppendix",
     "BindingRow",
     "ClaimCell",
     "DepthCell",
     "DepthRung",
     "InstrumentControl",
+    "LearningControl",
     "MemoryFrontierRegistration",
     "PilotPoint",
     "PilotReport",
+    "RegistrationBox",
     "ScreenVerdict",
     "build_registration",
     "claim_ladder",
     "depth_rung",
-    "register_memory_frontier",
+    "learning_control_gate",
     "run_learning_ladder",
     "run_pilot",
+    "run_registration",
     "run_screen",
 ]
 
@@ -119,8 +126,9 @@ LADDER_SEEDS = (21, 22, 23)
 CLAIM_SEEDS = (101, 102, 103, 104, 105)
 DATA_SEED = 7
 
-#: T6a registers the depth rung the plain stack can still train: T6c refused
-#: the L=32 pass, and the plain stack stops learning between L=4 and L=16.
+#: The as-registered rung: the only depths the plain stack could train when
+#: T6a registered. :data:`STREAM_BOX` re-states the claim at L=32 under the
+#: stream-normalized pass, where the plain stack leaves the plateau.
 DEPTH_RUNG = (4, 8)
 #: The instrument control's depth: two deltas above the claim point measure c
 #: at W=512/B=2048 without the 8 GB pilot's 4.5 GiB allocation (OOM guard).
@@ -136,15 +144,30 @@ COMMITTED_REGISTRATION = (
     / "preregistrations"
     / "t93_memory_frontier_registered.json"
 )
+STREAM_REGISTRATION = (
+    Path(__file__).resolve().parents[2]
+    / "configs"
+    / "preregistrations"
+    / "t93_memory_frontier_stream_registered.json"
+)
 
 ARMS = ("backprop", "backprop+ckpt", "hybrid", "local")
 LR_LADDER = (0.1, 0.3, 1.0)
+STREAM_LR_LADDER = (3e-3, 1e-2, 3e-2)
+"""The normalized stack's own LR box (TODO93 T6c), pre-registered.
+
+The plain ladder's 0.1/0.3/1.0 edges diverge under unit-scale streams
+(measured 2026-11-16: L=8 at 0.3 reads loss 3.4), so the depth rung's knob
+is this interior box, not the arm's frozen LR.
+"""
 #: The pre-registered material effect: one percentage point of accuracy.
 DELTA = 0.01
 #: The held-out test split's binomial resolution (~0.3 pp at 10k samples).
 ACCURACY_RESOLUTION = 0.003
 #: The learning control's bar: the shallow checkpointed arm minus this margin.
 FLOOR_MARGIN = 0.01
+#: The declared learning floor: a control at chance cannot validate a task.
+LEARNING_FLOOR = 0.25
 #: Best point of the L=8 ladder per arm; frozen before the claim seeds run.
 FROZEN_LR: Mapping[str, float] = MappingProxyType({
     "backprop": 0.3,
@@ -237,6 +260,106 @@ class PilotPoint:
             input_dim=self.input_dim,
             classes=self.classes,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationBox:
+    """The point, rung, and LR box a claim is registered at (CORRECTION 21).
+
+    The box is part of the registration: the same claim reads a 1.22×
+    activation ratio at L=4→8 and 0.48× at L=32/B=4096, so a claim without
+    its box is not a claim. ``measured_ratio`` is the box triage's measured
+    ratio under ``ratio_note``'s ruler; when it is not ``None``, a box whose
+    own arithmetic misses the bar is refused before any claim cell is priced.
+    """
+
+    label: str
+    point: PilotPoint
+    depth_rung: tuple[int, int]
+    lr_ladder: tuple[float, ...]
+    committed: Path
+    claim: str
+    stop_rule: str
+    trigger: str
+    measured_ratio: float | None = None
+    ratio_note: str = ""
+
+    def __post_init__(self) -> None:
+        if not 0 < self.depth_rung[0] <= self.depth_rung[1] <= self.point.depth:
+            raise ValueError(
+                f"box {self.label!r}: rung {self.depth_rung} must be two "
+                f"depths at or below the point's L={self.point.depth}"
+            )
+
+    @property
+    def meets_memory_bar(self) -> bool | None:
+        if self.measured_ratio is None:
+            return None
+        return self.measured_ratio <= ACTIVATION_RATIO_MAX
+
+
+AS_REGISTERED = RegistrationBox(
+    label="l4-8",
+    point=PilotPoint(depth=DEPTH_RUNG[-1], width=512, batch=2048, steps=200),
+    depth_rung=DEPTH_RUNG,
+    lr_ladder=LR_LADDER,
+    committed=COMMITTED_REGISTRATION,
+    claim=(
+        "at the registered L=4→8 rung on CIFAR-10, the hybrid reaches the "
+        "checkpointed arm's accuracy within delta at no more than 0.5× its "
+        "activation bytes, at matched steps, width, batch, and optimizer"
+    ),
+    stop_rule=(
+        "At n_max=5 paired seeds, promote only if the hybrid's paired 95% "
+        "activation-ratio interval lies at or below 0.5× and its accuracy "
+        "lies at or above the checkpointed arm's minus delta; if either "
+        "interval straddles its bar, record a coordinate with the trigger; "
+        "if the hybrid misses both, refuse with the measured mechanism. "
+        "Do not extend depth past L=8 until T6c re-opens."
+    ),
+    trigger=(
+        "T6c re-opens with LayerNorm (c≈2) or the Innocenti depth-scaled "
+        "init; until then the rung stays L=4→8"
+    ),
+)
+
+STREAM_BOX = RegistrationBox(
+    label="l8-32-stream",
+    point=PilotPoint(depth=32, width=512, batch=4096, steps=200, stream_norm=True),
+    depth_rung=(8, 32),
+    lr_ladder=STREAM_LR_LADDER,
+    committed=STREAM_REGISTRATION,
+    claim=(
+        "at the registered L=8→32 rung on CIFAR-10 under the "
+        "stream-normalized pass at the frozen per-arm learning rate, the "
+        "hybrid reaches the checkpointed arm's accuracy within delta at no "
+        "more than 0.5× its activation bytes, at matched steps, width, "
+        "batch, and optimizer; the L=8 cell states the ratio curve"
+    ),
+    stop_rule=(
+        "At n_max=5 paired seeds at L=32, promote only if the hybrid's "
+        "paired 95% activation-ratio interval lies at or below 0.5× and its "
+        "accuracy lies at or above the checkpointed arm's minus delta; if "
+        "either interval straddles its bar, record a coordinate with the "
+        "trigger; if the hybrid misses both, refuse with the measured "
+        "mechanism. The L=8 cell is the curve's shallow point, never the "
+        "claim. Do not extend past L=32 until the hybrid's own update is "
+        "decided."
+    ),
+    trigger=(
+        "the hybrid's composed update: at L=8 its arm reads 0.163-0.167 at "
+        "every box while both parts read 0.39-0.42, and at L=32 the parts "
+        "read 0.354-0.364 against its 0.184-0.201; its own update is the "
+        "open suspicion; a screen refusal here re-opens it at the pilot "
+        "box (train_biases and a batch-scaled trunk contrast) before any "
+        "depth extension"
+    ),
+    measured_ratio=0.48,
+    ratio_note=(
+        "0.48× at 4 steps, seed 21, W=512/B=4096, L=32 (T6a box triage, "
+        "2026-11-17); 0.53× at B=2048, so the pass-carrying batch is 4096"
+    ),
+)
 
 
 def _ladder_cell(point: PilotPoint, *, c: float = DECLARED_C) -> dict[str, object]:
@@ -733,6 +856,11 @@ class MemoryFrontierRegistration:
     binding: BindingAppendix
     screen: ScreenVerdict | None
     stop_rule: str
+    label: str = ""
+    box_trigger: str = ""
+    committed_path: Path = COMMITTED_REGISTRATION
+    measured_ratio: float | None = None
+    ratio_note: str = ""
 
     @property
     def controls_passed(self) -> bool:
@@ -753,6 +881,7 @@ class MemoryFrontierRegistration:
             "point": asdict(self.point),
             "box": {
                 "task": "cifar10",
+                "label": self.label,
                 "train_subset": TRAIN_SUBSET,
                 "test_samples": TEST_SAMPLES,
                 "fidelity": "L0",
@@ -764,15 +893,15 @@ class MemoryFrontierRegistration:
                 "steps": self.point.steps,
                 "epochs": self.point.epochs,
                 "batches_per_epoch": self.point.batches_per_epoch,
+                "stream_norm": self.point.stream_norm,
                 "dtype": "fp32",
                 "delta": self.threshold,
                 "floor": self.learning.floor,
                 "n_max": self.min_seeds,
                 "admission_budget_mb": ADMISSION_BUDGET_MB,
-                "depth_trigger": (
-                    "T6c re-opens with LayerNorm (c≈2) or the Innocenti "
-                    "depth-scaled init; until then the rung stays L=4→8"
-                ),
+                "box_triage_activation_ratio": self.measured_ratio,
+                "box_triage_ruler": self.ratio_note,
+                "depth_trigger": self.box_trigger,
             },
             "depth_rung": list(self.depth_rung),
             "pilot_seeds": list(self.pilot_seeds),
@@ -805,11 +934,12 @@ class MemoryFrontierRegistration:
 
     def markdown(self) -> str:
         lines = [
-            f"# Memory frontier registration ({self.created})",
+            f"# Memory frontier registration ({self.created}) — `{self.label}`",
             "",
             self.claim,
             "",
-            f"Depth rung L={self.depth_rung[0]}→{self.depth_rung[1]} at "
+            f"{'Stream-normalized' if self.point.stream_norm else 'Plain'} pass; "
+            f"depth rung L={self.depth_rung[0]}→{self.depth_rung[1]} at "
             f"W={self.point.width}, B={self.point.batch}, "
             f"{self.point.steps} steps, {self.threshold:.1%} delta, "
             f"n_max={self.min_seeds}.",
@@ -857,8 +987,9 @@ class MemoryFrontierRegistration:
         )
         return path
 
-    def commit(self, path: Path = COMMITTED_REGISTRATION) -> Path:
+    def commit(self, path: Path | None = None) -> Path:
         """Commit the registration to the repo; never overwrite an existing one."""
+        path = self.committed_path if path is None else path
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
@@ -1023,10 +1154,32 @@ def _calibrate(
     return measured, spread, rows
 
 
+def learning_control_gate(
+    *, depth: int, steps: int, backprop_acc: float, checkpointed_acc: float
+) -> LearningControl:
+    """The control's predicate: the relative floor and the learning floor.
+
+    A chance-level stack passes the relative floor degenerately (both arms
+    read 0.100, so the floor is 0.090); the control proves the task is
+    learnable, so :data:`LEARNING_FLOOR` also bars it (CORRECTION 22).
+    """
+    floor = checkpointed_acc - FLOOR_MARGIN
+    return LearningControl(
+        depth=depth,
+        steps=steps,
+        backprop_acc=backprop_acc,
+        checkpointed_acc=checkpointed_acc,
+        floor=floor,
+        margin=backprop_acc - floor,
+        passed=backprop_acc >= max(floor, LEARNING_FLOOR),
+    )
+
+
 def _learning_control(
     point: PilotPoint,
     *,
     lrs: Mapping[str, float] = FROZEN_LR,
+    stream_norm: bool = False,
     device: str,
     seed: int,
     x_train: torch.Tensor,
@@ -1034,8 +1187,13 @@ def _learning_control(
     x_test: torch.Tensor,
     y_test: torch.Tensor,
 ) -> LearningControl:
-    """Floor = checkpointed accuracy at L=8 − 1 pp; backprop must reach it."""
-    shallow = point.scaled(depth=8)
+    """Floor = checkpointed accuracy at L=8 − 1 pp; backprop must reach it.
+
+    ``stream_norm`` defaults off: the task's control is the plain pass at the
+    box's width and batch, not the claim's pass (a control for the pass
+    would share the defect it must catch).
+    """
+    shallow = point.scaled(depth=8, stream_norm=stream_norm)
     measured = {
         arm: _measure(
             arm,
@@ -1050,15 +1208,11 @@ def _learning_control(
         ).val_acc
         for arm in ("backprop", "backprop+ckpt")
     }
-    floor = measured["backprop+ckpt"] - FLOOR_MARGIN
-    return LearningControl(
-        depth=8,
+    return learning_control_gate(
+        depth=shallow.depth,
         steps=shallow.steps,
         backprop_acc=measured["backprop"],
         checkpointed_acc=measured["backprop+ckpt"],
-        floor=floor,
-        margin=measured["backprop"] - floor,
-        passed=measured["backprop"] >= floor,
     )
 
 
@@ -1093,18 +1247,27 @@ def _registered_cell(
 
 
 def _claim_cells(
-    point: PilotPoint, lrs: Mapping[str, float], *, c: float = DECLARED_C
+    point: PilotPoint,
+    lrs: Mapping[str, float],
+    *,
+    rung: tuple[int, int] = DEPTH_RUNG,
+    c: float = DECLARED_C,
 ) -> tuple[ClaimCell, ...]:
-    """The minimal claim ladder: 3 arms × 2 depths × 5 paired seeds."""
+    """The minimal claim ladder: 3 arms × the rung's depths × 5 paired seeds."""
     return tuple(
         _registered_cell(point, arm, depth=depth, seed=seed, lr=lrs[arm], c=c)
         for arm in CLAIM_ARMS
-        for depth in DEPTH_RUNG
+        for depth in rung
         for seed in CLAIM_SEEDS
     )
 
 
-def _binding(point: PilotPoint, *, measured_c: float) -> BindingAppendix:
+def _binding(
+    point: PilotPoint,
+    *,
+    measured_c: float,
+    rung: tuple[int, int] = DEPTH_RUNG,
+) -> BindingAppendix:
     """The binding appendix: arithmetic at the claim box and the pilot point."""
 
     def row(source: PilotPoint, depth: int) -> BindingRow:
@@ -1126,14 +1289,14 @@ def _binding(point: PilotPoint, *, measured_c: float) -> BindingAppendix:
     return BindingAppendix(
         share_floor=BINDING_SHARE,
         c=measured_c,
-        rows=tuple(row(point, depth) for depth in DEPTH_RUNG),
+        rows=tuple(row(point, depth) for depth in rung),
         pilot_appendix=row(PilotPoint(), PilotPoint().depth),
     )
 
 
 def build_registration(
     *,
-    point: PilotPoint,
+    point: PilotPoint | None = None,
     ladder: Mapping[str, Mapping[str, float]],
     instrument: InstrumentControl,
     learning: LearningControl,
@@ -1141,14 +1304,24 @@ def build_registration(
     lrs: Mapping[str, float] | None = None,
     c: float = DECLARED_C,
     created: str = REGISTRATION_DATE,
+    box: RegistrationBox = AS_REGISTERED,
 ) -> MemoryFrontierRegistration:
-    """Build T6a's registration from the measured ladder and both controls.
+    """Build one registration from the measured ladder, controls, and box.
 
     This is the pure half of the runner: it prices the claim ladder and fixes
-    the stop rule without measuring a claim cell. The claim's rule is the
-    sharper W1 form -- accuracy within ``delta`` at ≤0.5× activation bytes --
-    so no hypervolume reference point is registered.
+    the stop rule without measuring a claim cell. The box carries the claim's
+    point, rung, LR ladder, and text: a box whose own measured activation
+    ratio misses the bar is refused before a cell is priced (CORRECTION 21),
+    and the committed path is the box's, so a second registration never
+    overwrites the first.
     """
+    point = point or box.point
+    if box.meets_memory_bar is False:
+        raise ValueError(
+            f"box {box.label!r}: its own measured activation ratio "
+            f"{box.measured_ratio:.2f}× exceeds the "
+            f"{ACTIVATION_RATIO_MAX:.1f}× bar ({box.ratio_note})"
+        )
     frozen = dict(lrs or {arm: _best_lr(points) for arm, points in ladder.items()})
     if not instrument.passed or not learning.passed:
         raise ValueError("a failed positive control invalidates the registration")
@@ -1163,18 +1336,14 @@ def build_registration(
         for lr in sorted(points, key=float)
     )
     return MemoryFrontierRegistration(
-        claim=(
-            "at the registered L=4→8 rung on CIFAR-10, the hybrid reaches the "
-            "checkpointed arm's accuracy within delta at no more than 0.5× its "
-            "activation bytes, at matched steps, width, batch, and optimizer"
-        ),
+        claim=box.claim,
         metric="val_acc",
         threshold=DELTA,
         alpha=0.05,
         min_seeds=N_MAX,
         created=created,
         point=point,
-        depth_rung=DEPTH_RUNG,
+        depth_rung=box.depth_rung,
         pilot_seeds=PILOT_SEEDS,
         ladder_seeds=LADDER_SEEDS,
         claim_seeds=CLAIM_SEEDS,
@@ -1183,17 +1352,15 @@ def build_registration(
         lrs=frozen,
         instrument=instrument,
         learning=learning,
-        claim_cells=_claim_cells(point, frozen, c=c),
-        binding=_binding(point, measured_c=c),
+        claim_cells=_claim_cells(point, frozen, rung=box.depth_rung, c=c),
+        binding=_binding(point, measured_c=c, rung=box.depth_rung),
         screen=screen,
-        stop_rule=(
-            "At n_max=5 paired seeds, promote only if the hybrid's paired 95% "
-            "activation-ratio interval lies at or below 0.5× and its accuracy "
-            "lies at or above the checkpointed arm's minus delta; if either "
-            "interval straddles its bar, record a coordinate with the trigger; "
-            "if the hybrid misses both, refuse with the measured mechanism. "
-            "Do not extend depth past L=8 until T6c re-opens."
-        ),
+        stop_rule=box.stop_rule,
+        label=box.label,
+        box_trigger=box.trigger,
+        committed_path=box.committed,
+        measured_ratio=box.measured_ratio,
+        ratio_note=box.ratio_note,
     )
 
 
@@ -1246,25 +1413,35 @@ def run_screen(
     )
 
 
-def register_memory_frontier(
-    *, device: str = "cuda", output_dir: Path = Path("results/t93_a")
+def run_registration(
+    box: RegistrationBox = AS_REGISTERED,
+    *,
+    device: str = "cuda",
+    output_dir: Path | None = Path("results/t93_a"),
 ) -> MemoryFrontierRegistration:
-    """Run T6a: the per-arm LR ladder at L=8 and both positive controls.
+    """Run one registration at its box: the ladder, both controls, the screen.
 
     The ladder is a screen; its best point per arm is frozen in the
-    registration, and the claim cells are priced but never run here. A failed
+    registration, and the claim cells are priced but never run here. The
+    screen is the rung-2 cheap falsifier at the box's point, so a refusal is
+    recorded with the box's trigger, not as an algorithm verdict. A failed
     control invalidates the run instead of producing a registration.
 
+    Args:
+        box: The point, rung, and LR ladder the claim is registered at.
+        device: ``"cuda"`` is required -- the controls need a peak.
+        output_dir: Where the registration table is written; ``None`` skips.
+
     Raises:
-        RuntimeError: On a non-CUDA device, an unaffordable point, or a failed
-            positive control.
+        RuntimeError: On a non-CUDA device, or on an unaffordable point.
+        ValueError: On a failed positive control or an infeasible box.
     """
     if device != "cuda" and not device.startswith("cuda:"):
         raise RuntimeError("the memory frontier registration needs CUDA controls")
-    point = PilotPoint(depth=DEPTH_RUNG[-1], width=512, batch=2048, steps=200)
+    point = box.point
     if not point.affordable():
         raise RuntimeError(
-            f"registration point needs {point.peak_mb():.0f} MB > budget "
+            f"box {box.label!r} needs {point.peak_mb():.0f} MB > budget "
             f"{ADMISSION_BUDGET_MB:.0f} MB"
         )
     x_train, y_train, x_test, y_test = _cifar()
@@ -1273,9 +1450,15 @@ def register_memory_frontier(
         seeds=LADDER_SEEDS[:1],
         device=device,
         data=(x_train, y_train, x_test, y_test),
+        lr_ladder=box.lr_ladder,
     )
-    lrs = {arm: _best_lr(points) for arm, points in ladder.items()}
-    pilot = PilotPoint(depth=INSTRUMENT_DEPTH, width=512, batch=2048, steps=200)
+    frozen = {arm: _best_lr(points) for arm, points in ladder.items()}
+    pilot = PilotPoint(
+        depth=INSTRUMENT_DEPTH,
+        width=point.width,
+        batch=point.batch,
+        steps=point.steps,
+    )
     measured_c, spread, calibration = _calibrate(
         pilot,
         device=device,
@@ -1294,7 +1477,7 @@ def register_memory_frontier(
     )
     learning = _learning_control(
         point,
-        lrs=lrs,
+        lrs=FROZEN_LR,
         device=device,
         seed=LADDER_SEEDS[0],
         x_train=x_train,
@@ -1304,21 +1487,22 @@ def register_memory_frontier(
     )
     screen = _screen(
         point,
-        lrs=lrs,
-        seeds=LADDER_SEEDS,
+        lrs=frozen,
+        seeds=LADDER_SEEDS[:2],
         device=device,
         data=(x_train, y_train, x_test, y_test),
     )
     registration = build_registration(
-        point=point,
         ladder=ladder,
-        lrs=lrs,
+        lrs=frozen,
         instrument=instrument,
         learning=learning,
         screen=screen,
         c=measured_c,
+        box=box,
     )
-    registration.write(output_dir)
+    if output_dir is not None:
+        registration.write(output_dir)
     registration.commit()
     return registration
 
@@ -1410,13 +1594,14 @@ def _learning_ladder(
     seeds: tuple[int, ...],
     device: str,
     data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+    lr_ladder: tuple[float, ...] = LR_LADDER,
 ) -> dict[str, dict[str, float]]:
     """The per-arm LR ladder at one point; one CIFAR load serves every cell."""
     x_train, y_train, x_test, y_test = data
     results: dict[str, dict[str, float]] = {}
     for arm in ARMS:
         results[arm] = {}
-        for lr in LR_LADDER:
+        for lr in lr_ladder:
             cells = [
                 _measure(
                     arm,
@@ -1452,15 +1637,6 @@ def run_learning_ladder(
         device=device,
         data=_cifar(),
     )
-
-
-STREAM_LR_LADDER = (3e-3, 1e-2, 3e-2)
-"""The normalized stack's own LR box (TODO93 T6c), pre-registered.
-
-The plain ladder's 0.1/0.3/1.0 edges diverge under unit-scale streams
-(measured 2026-11-16: L=8 at 0.3 reads loss 3.4), so the depth rung's knob
-is this interior box, not the arm's frozen LR.
-"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1620,7 +1796,12 @@ def _main() -> None:
     parser.add_argument(
         "--register",
         action="store_true",
-        help="run T6a: the L=8 LR ladder and both controls, then register",
+        help="run T6a as registered: the L=8 LR ladder and both controls",
+    )
+    parser.add_argument(
+        "--re-register",
+        action="store_true",
+        help="re-register T6a at STREAM_BOX: L=32, stream-norm, B=4096",
     )
     parser.add_argument(
         "--registration-dir",
@@ -1630,18 +1811,20 @@ def _main() -> None:
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    if args.register:
-        registration = register_memory_frontier(
-            device=args.device, output_dir=args.registration_dir
+    if args.register or args.re_register:
+        box = STREAM_BOX if args.re_register else AS_REGISTERED
+        registration = run_registration(
+            box, device=args.device, output_dir=args.registration_dir
         )
         logger.info(
-            "registration: L=%d→%d lrs=%s controls=%s cells=%d committed=%s",
+            "registration %s: L=%d→%d lrs=%s controls=%s cells=%d committed=%s",
+            box.label,
             registration.depth_rung[0],
             registration.depth_rung[1],
             json.dumps(registration.lrs),
             "PASS" if registration.controls_passed else "FAIL",
             len(registration.claim_cells),
-            COMMITTED_REGISTRATION,
+            registration.committed_path,
         )
         if registration.screen is not None:
             logger.info(

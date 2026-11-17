@@ -198,5 +198,35 @@ the audit that invalidated it, and the replacement metric.
 | Audited procedure | `t93_t6a_box_triage.py`: L=16/B=2048/200 steps, seed 21 and 22, plain/ckpt/hybrid all 0.100 (chance, 10 classes); L=16/B=4096 the same. `depth_rung`'s L=8 0.385 is the last trainable depth at LR 0.3. |
 | Affected conclusions | T6a's claim box and the W1 claim form. Not T6c's shelf (the stream-norm pass at 3e-2 trains L=32 at 0.314/0.326). |
 | Replacement metric | The claim needs a **pass-carrying box**: L=32, `stream_norm=True` at LR 3e-2 (T6c's shelf), where the ratio is 0.53× and the arm is above chance; or the ratio curve itself as the claim, with accuracy read only at L=8. |
-| Status | corrected — the claim is re-registered, not refused |
+| Status | corrected — the claim was re-registered at the pass-carrying box and refused there (§2.14), so this is a box correction, not a verdict |
+| Commit | this commit |
+
+| Field | Correction 21 — the re-registration's box missed its own memory bar |
+|---|---|
+| Original claim | T6a's claim re-registers at L=32 with the stream-normalized pass at LR 3e-2, W=512/B=2048 (TODO93 v23, item 12b). |
+| Original metric | The plan's own box triage reads the hybrid/checkpointed activation ratio **0.53× at L=32/B=2048** and **0.48× at L=32/B=4096** (4 steps, seed 21). A re-registration at B=2048 would therefore price a claim whose own measured arithmetic misses the 0.5× bar by 0.03×, whatever the screen reads. |
+| Audited procedure | The box triage's six cells: 1.22/0.75/0.53 at B=2048 and 1.25/0.72/0.48 at B=4096 for L=8/16/32, same width and seed. The pass-carrying batch is 4096 (peak 1.12 GB, 17 % of the admission budget). |
+| Affected conclusions | The re-registration's box only. The measured L=4→8 refusal (CORRECTION 19) and the empty feasible set (CORRECTION 20) are untouched. |
+| Replacement metric | `RegistrationBox` states the point, the rung, the LR box, and its measured triage ratio; `build_registration` refuses a box whose own measured ratio misses the bar. The second box is L=32/B=4096 (`STREAM_BOX`), with its own committed path so it never overwrites the first. |
+| Status | corrected — the claim re-registers at B=4096 |
+| Commit | this commit |
+
+| Field | Correction 22 — a chance-level learning control passed the relative floor |
+|---|---|
+| Original claim | The learning control passes when plain backprop at L=8 reaches the checkpointed arm's accuracy minus 1 pp. |
+| Original metric | At a box where both arms sit at chance (0.100, 10 classes) the relative floor is 0.090, so the control passes degenerately: it reports "a memory number from a stack that does not learn is not a frontier" while the stack does not learn. |
+| Audited procedure | The control's two arms at L=8, plain pass, the box's width/batch; the predicate is `backprop >= max(checkpointed − 0.01, 0.25)`. The registered control at 0.385 passes both; a chance pair (0.100 / 0.100) fails. |
+| Affected conclusions | Only a control run at a chance box. T6a's registered control (0.385 vs 0.375) is unchanged. |
+| Replacement metric | `learning_control_gate` is the one predicate, with `LEARNING_FLOOR = 0.25` as the task's declared learning floor. The control also stays the **plain** pass at the box's width/batch: a control for the claim's pass would share the defect it must catch. |
+| Status | corrected — the control bars chance |
+| Commit | this commit |
+
+| Field | Correction 23 — the hybrid's box sensitivity was read against the control's cell |
+|---|---|
+| Original claim | The hybrid's accuracy is box-sensitive: 0.164 (W=64/B=128) and 0.167 (W=512/B=2048) against "the pilot's 0.419 (W=1024/B=8192)", while backprop moves 0.215 → 0.385 (BENCHMARKS §2.13). |
+| Original metric | The 0.419 is the **plain backprop** arm's L=8 cell at the pilot's ladder (LR 0.3, W=1024/B=8192); the pilot's *hybrid* cell at the same point and LR is **0.163** (§2.4's ladder: `hybrid 0.100/0.163/0.100`). The comparison put one arm's cell against another arm's. |
+| Audited procedure | The hybrid at L=8 reads 0.164 / 0.167 / 0.163 at W=64/B=128, W=512/B=2048, and W=1024/B=8192: flat across a 4× batch and a 16× width. Its parts at the same boxes read 0.215-0.419 (backprop) and 0.393-0.400 (local). |
+| Affected conclusions | The "box-sensitive accuracy" suspicion only; the box triage's ratio table (1.22/0.75/0.53) is unaffected. |
+| Replacement metric | The suspicion is the **level gap**, not the box: the composition reads ~0.16 at every box while both parts read 0.35-0.42, so the hybrid's own update is the mechanism and the trigger (T6d). |
+| Status | corrected — the hybrid is box-insensitive; the gap is the update |
 | Commit | this commit |

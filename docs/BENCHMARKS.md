@@ -499,6 +499,14 @@ The Innocenti pre-screen (residual, W=512/B=2048, 200 steps, seed 11) reads
 0.446/0.434 at L=8/L=32 at LR 0.1 — 1.2 pp below its own shallow floor, so
 that trigger's first cell is the same point at 400 steps, not a verdict.
 
+**The B=4096 pass (2026-11-17).** The re-registration's ladder at
+L=32/W=512/B=4096/`stream_norm` reads **0.364** for the checkpointed arm at
+LR 3e-2 (seed 21; 0.357 on the confirmation seed), so the pass carries the
+depth to within 1.1 pp of the old floor (0.375). The plain L=32 cell still
+reads 0.100 at B=2048. T6c's LayerNorm re-open is therefore a side track:
+it can close the stack's last pp, not the hybrid's 17 pp accuracy gap
+(§2.14).
+
 ### 2.11 The matched substrate comparison (D2)
 
 **Question.** Does D1's saving survive a matched-budget comparison? The memory
@@ -662,15 +670,77 @@ the ratio curve as the claim with accuracy read at L=8.
 **Open update suspicion, with a test.** The hybrid never moves a bias (eight
 bias tensors, 60 steps, movement exactly 0.0) and its trunk movement decays
 ~6× per layer (0.33 → 0.016 → 0.0026 → 4e-4 → 2e-4 → 5e-5). Its accuracy is
-also box-sensitive: 0.164 (W=64/B=128) and 0.167 (W=512/B=2048) against the
-pilot's 0.419 (W=1024/B=8192), while backprop moves only 0.215 → 0.385. A test
-compares `train_biases=True` and a batch-scaled trunk contrast at the pilot
-box; if the pilot's row does not reproduce, the pilot's learning control is the
-defect.
+**box-insensitive and low**: 0.164 (W=64/B=128), 0.167 (W=512/B=2048), 0.163
+(W=1024/B=8192, §2.4's ladder), while its parts read 0.215-0.419 (backprop) and
+0.393-0.400 (local) — the earlier "0.419 at the pilot box" was the *backprop*
+control's cell, not the hybrid's (CORRECTION 23). The suspicion is the level gap:
+the composition reads ~0.16 at every box while both parts read above it. A test
+compares `train_biases=True`, `feedback_scale`, and a head-only control at the
+pilot box; a mechanism that moves the hybrid within δ names the defect.
 
 Probes: `scripts/probes/t93_t6c_hybrid_triage.py` (12 cells, W=64/512),
 `scripts/probes/t93_t6a_box_triage.py` (6 cells, L=16). Runtime ~90 s each,
 peaks 13–597 MB.
+
+### 2.14 The memory-frontier re-registration (T6a₂) — refused at its box
+
+**Question.** At the **pass-carrying** box — L=8→32, W=512/B=4096, the
+stream-normalized pass at the frozen per-arm LR, 200 steps — does the hybrid
+reach the checkpointed arm's accuracy within δ at ≤0.5× its activation bytes?
+The first registration priced L=4→8 because the 4.5 GiB pilot exceeded the
+card; its ratio measured the OOM guard's box (1.22×), while the claim's ratio
+is depth-declared (0.48× at L=32/B=4096; CORRECTION 21).
+
+**Box (registered before the first claim seed).** CIFAR-10 fixed 10k-image
+train subset / full 10k test, L=8→32 at W=512/B=4096, `stream_norm=True`, 200
+steps (100 epochs × 2 batches), fp32, seed 21 + confirmation 22; claim seeds
+101-105, ladder seeds 21-23, pilot seeds 11-13, data-order seed 7. One
+registration run, 21 cells, ~300 s (one probe at the box: 14.0 s/cell, seed 99,
+0.183 val_acc, 210 MB activations, 282 MB peak).
+
+**Controls pass.** The instrument control reads **c = 4.125**, spread 0.0 %
+(depths 4/8/16, B=4096); the learning control at L=8/B=4096, plain pass,
+LR 0.3 reads **0.409** against floor 0.399 (both arms), and the
+`LEARNING_FLOOR = 0.25` now bars a chance-level control (CORRECTION 22).
+
+**Ladder at L=32 (200 steps, seed 21).**
+
+| Arm | LR 3e-3 | LR 1e-2 | LR 3e-2 |
+|---|---|---|---|
+| `backprop` | 0.285 | 0.308 | **0.364** |
+| `backprop+ckpt` | 0.285 | 0.308 | **0.364** |
+| `hybrid` | 0.182 | **0.184** | 0.171 |
+| `local` (PEPITA) | 0.289 | 0.324 | **0.354** |
+
+The best point is the upper edge for every arm except the hybrid, whose best
+is the interior point (LR 1e-2); the frozen LR is per arm.
+
+**Screen (best LR per arm, seeds 21 / 22).**
+
+| Arm | val_acc | Activations MB | Peak MB | Fwd-eq | Walltime s |
+|---|---|---|---|---|---|
+| `hybrid` | 0.184 / 0.201 | 210.2 | 282.3 | 7.56 / 9.02 | 13.4 / 16.1 |
+| `backprop+ckpt` | 0.364 / 0.357 | 452.7 | 524.8 | 4.13 / 12.83 | 18.1 / 22.7 |
+
+The activation ratio is **0.46×** on both seeds (the 0.5× bar is met); the
+accuracy floor is the checkpointed arm's minus δ (0.354), and the hybrid is
+**17 pp below** on both seeds. `verdict = refuse`: this is not `invalid-box` —
+the pass trains (0.364, 2.9× chance), the memory bar is met, and the accuracy
+gap is the hybrid's own update. At L=8 the same arm reads 0.163 (plain) and
+0.167 (W=512/B=2048) while its parts read 0.39-0.42; at L=32 it reads
+0.184-0.201 while the parts read 0.354-0.364. So the composition reads below
+both parts at every measured box (CORRECTION 23).
+
+**Trigger.** T6d — the hybrid's update diagnostic at the pilot box
+(L=8/W=1024/B=8192, LR 0.3): `train_biases`, `feedback_scale`, and a head-only
+control; a mechanism that moves the hybrid within δ names the defect. T6c's
+LayerNorm re-open is a side track: the stack's pass is 1.1 pp below the old
+0.375 floor, not the 17 pp hybrid gap. No claim run is scheduled (30 priced
+cells, none measured).
+
+Artifacts: `results/t93_a_stream/memory_frontier.registered.{json,md}`;
+committed `configs/preregistrations/t93_memory_frontier_stream_registered.json`;
+replay `uv run python -m computronium.validation.memory_frontier --re-register`.
 
 ## 3. Open locks
 
@@ -694,6 +764,7 @@ peaks 13–597 MB.
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | T6a box: the ratio is depth-declared (1.22 / 0.75 / 0.53 at L=8/16/32) and the claim's two bars never meet | `scripts/probes/t93_t6a_box_triage.py` | 90 s (CUDA, ~600 MB) |
+| Re-registration box: its own rung/path/ratio; a 0.53× box refuses itself; a chance-level control fails | `tests/unit/validation/test_memory_frontier_registration.py` | 14 s |
 | Hybrid update: biases move, trunk contrast does not decay 6× per layer | `scripts/probes/t93_t6c_hybrid_triage.py` | 90 s (CUDA, ~600 MB) |
 | Batch-1 plasticity ladder gate (C1) | `tests/unit/validation/test_plasticity_ladder.py` | 9 s |
 | C2 retention gate: floor on two seeds, matched per-step cost, forgetting δ, saturation | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
