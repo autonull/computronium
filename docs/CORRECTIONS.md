@@ -180,3 +180,23 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | A credit may own its free pass: `free_activations(substrate, geometry, x)` is optional on `CreditAssignment`, and the pipeline calls it instead of the pre-forward, the FREE settle, and the free-metrics settle. Locks: `test_memory_frontier.py::test_the_hybrid_owns_its_free_pass`, `::test_the_plain_arm_reads_the_pipeline_forward` (the tripwire's positive control), and `::test_the_hybrid_activation_set_is_half_the_checkpointed_arms`. |
 | Status | corrected — the pilot's hybrid row was re-measured at the claim point |
 | Commit | this commit |
+
+| Field | Correction 19 — the T6a refusal was measured at the OOM guard's box, not the claim's |
+|---|---|
+| Original claim | T6a's rung-2 screen refused the memory claim: at the registered L=4→8 point (W=512/B=2048/200 steps) the hybrid reads 0.167 against the 0.375 floor and 1.22× the checkpointed arm's activation set (103 vs 85 MB). |
+| Original metric | `run_register` prices the claim at L=4→8 because the 4.5 GiB L=32 pilot exceeded the card; the memory ratio was therefore read where checkpointing has almost nothing to save. The claim's own ratio is stated at **L=32** (T6b's lock: 210 vs 437 MB, 0.48×). |
+| Audited procedure | Same geometry, only depth moves (W=512/B=4096, seed 21, 4 steps): hybrid/ckpt = **1.25× (L=8), 0.72× (L=16), 0.48× (L=32)**; at B=2048: **1.22 / 0.75 / 0.53**. The root is cached, so the L=32 cell is 1.16 GB and fits. |
+| Affected conclusions | T6a's `refuse` verdict only. T6b's lock and the pilot's `c` are untouched. |
+| Replacement metric | The ratio is **depth-dependent** and must be stated at a declared depth (0.53× at L=32/B=2048, 0.48× at L=32/B=4096), never at L=4→8. |
+| Status | corrected — T6a's verdict is `invalid-box`, not `refuse` |
+| Commit | this commit |
+
+| Field | Correction 20 — T6a's registered claim has an empty feasible set |
+|---|---|
+| Original claim | At one point, the hybrid reaches accuracy within δ of the checkpointed arm **and** uses ≤0.5× its activation bytes. |
+| Original metric | The two conditions live in different depth regimes. Trainability ends at L=8 (plain 0.385 at 200 steps, LR 0.3); at L=16 and L=32 **every** arm reads 0.100, on both seeds, at B=2048 and B=4096. The memory ratio ≤0.5× needs L≈24–32. No declared point satisfies both, so the screen measured two different points and called it one refusal. |
+| Audited procedure | `t93_t6a_box_triage.py`: L=16/B=2048/200 steps, seed 21 and 22, plain/ckpt/hybrid all 0.100 (chance, 10 classes); L=16/B=4096 the same. `depth_rung`'s L=8 0.385 is the last trainable depth at LR 0.3. |
+| Affected conclusions | T6a's claim box and the W1 claim form. Not T6c's shelf (the stream-norm pass at 3e-2 trains L=32 at 0.314/0.326). |
+| Replacement metric | The claim needs a **pass-carrying box**: L=32, `stream_norm=True` at LR 3e-2 (T6c's shelf), where the ratio is 0.53× and the arm is above chance; or the ratio curve itself as the claim, with accuracy read only at L=8. |
+| Status | corrected — the claim is re-registered, not refused |
+| Commit | this commit |

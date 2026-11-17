@@ -624,6 +624,54 @@ first cell is `configs/preregistrations/t93_composition_registered.json` (the
 cells, about 19 min on CPU (the seeded generator examined 2,000 candidates in
 18 s and yielded 321 legal composable cells).
 
+### 2.13 The memory-frontier registration (T6a) — `invalid-box`
+
+**Question.** At one point, does the hybrid reach accuracy within δ of the
+checkpointed arm at ≤0.5× its activation bytes? The registration priced 30
+claim cells at L=4→8 (W=512/B=2048) because the 4.5 GiB L=32 pilot exceeded
+the card, and its rung-2 screen then refused the claim there.
+
+**The triage (2026-11-17).** Two registration defects make that refusal an
+`invalid-box`, not a verdict (CORRECTIONS 19–20). Same geometry, only depth or
+batch moves, seed 21, four steps:
+
+| depth | batch | hybrid act MB | ckpt act MB | ratio |
+|---|---|---|---|---|
+| 8 | 2048 | 103.2 | 84.6 | **1.22×** |
+| 16 | 2048 | 111.2 | 148.6 | 0.75× |
+| 32 | 2048 | 127.2 | 240.6 | 0.53× |
+| 8 | 4096 | 186.2 | 149.0 | 1.25× |
+| 16 | 4096 | 194.2 | 269.0 | 0.72× |
+| 32 | 4096 | 210.2 | 437.0 | **0.48×** |
+
+The checkpointed arm's saving grows with √L, so the ratio crosses 0.5 between
+L=16 and L=32. T6b's lock states it at L=32 (0.48×); the registration read it
+at L=4→8 — the guard's box, not the claim's.
+
+**The other half is empty.** At 200 steps and LR 0.3 the plain stack trains
+only at L=8 (0.385); at L=16 and L=32 **every** arm reads 0.100 (chance, 10
+classes) on seeds 21 and 22 at both batches. The memory ratio needs L≈24–32, so
+the registered claim has no point where both conditions hold. The shelf that
+does train a deep arm is T6c's stream-norm pass (3e-2 → 0.314/0.326 at L=32).
+
+**Verdict: `invalid-box`.** The refusal stands only at L=4→8, where the claim
+was never stated. The track is not refused: it re-registers at a pass-carrying
+box (L=32, `stream_norm=True` at 3e-2, W=512/B=2048 → ~1.6 GB, fits) or states
+the ratio curve as the claim with accuracy read at L=8.
+
+**Open update suspicion, with a test.** The hybrid never moves a bias (eight
+bias tensors, 60 steps, movement exactly 0.0) and its trunk movement decays
+~6× per layer (0.33 → 0.016 → 0.0026 → 4e-4 → 2e-4 → 5e-5). Its accuracy is
+also box-sensitive: 0.164 (W=64/B=128) and 0.167 (W=512/B=2048) against the
+pilot's 0.419 (W=1024/B=8192), while backprop moves only 0.215 → 0.385. A test
+compares `train_biases=True` and a batch-scaled trunk contrast at the pilot
+box; if the pilot's row does not reproduce, the pilot's learning control is the
+defect.
+
+Probes: `scripts/probes/t93_t6c_hybrid_triage.py` (12 cells, W=64/512),
+`scripts/probes/t93_t6a_box_triage.py` (6 cells, L=16). Runtime ~90 s each,
+peaks 13–597 MB.
+
 ## 3. Open locks
 
 | Lock | Test | Cost |
@@ -645,6 +693,8 @@ cells, about 19 min on CPU (the seeded generator examined 2,000 candidates in
 | Hybrid trunk ≡ store-all hybrid `atol=1e-7`; head ≡ backprop; peak flat | `tests/property/test_hybrid_parity.py` | 16 s (2 s CUDA) |
 | Pilot point: measured c, binding gate, ckpt ≤ 0.5× activations | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
 | **Hybrid ≤ 0.5× ckpt activations on the composed path (T6b, xfail)** | `tests/property/test_memory_frontier.py` | 20 s (CUDA) |
+| T6a box: the ratio is depth-declared (1.22 / 0.75 / 0.53 at L=8/16/32) and the claim's two bars never meet | `scripts/probes/t93_t6a_box_triage.py` | 90 s (CUDA, ~600 MB) |
+| Hybrid update: biases move, trunk contrast does not decay 6× per layer | `scripts/probes/t93_t6c_hybrid_triage.py` | 90 s (CUDA, ~600 MB) |
 | Batch-1 plasticity ladder gate (C1) | `tests/unit/validation/test_plasticity_ladder.py` | 9 s |
 | C2 retention gate: floor on two seeds, matched per-step cost, forgetting δ, saturation | `tests/unit/validation/test_plasticity_ladder.py` | 12 s |
 | Task start anchors EWC without erasing the Fisher importance | `tests/unit/core/test_cl_credit_arms.py` | 14 s |
