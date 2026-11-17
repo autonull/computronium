@@ -212,6 +212,20 @@ class HybridCredit:
             )
         return layers[:split], layers[split:], split
 
+    def free_activations(
+        self, substrate: Substrate, geometry: Geometry, x: Tensor
+    ) -> Tensor:
+        """The credit's own free pass: the logits, never the stored stack.
+
+        The head recomputes its layers from ``x`` at its recorded boundary and
+        the trunk's contrast is lockstep, so a store-all activation set is a
+        tensor the rule never reads (TODO93 T6b). One readout activation is
+        the whole free-phase set, so the composed path is flat in depth.
+        """
+        stack = self._stack(geometry)
+        with torch.no_grad():
+            return stack.forward(x, substrate)
+
     def _feedback_matrix(self, delta: Tensor, x: Tensor) -> Tensor:
         """The fixed random trunk B (boundary × input), drawn lazily once."""
         shape = (delta.shape[1], x.shape[1])

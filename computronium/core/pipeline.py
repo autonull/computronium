@@ -70,12 +70,30 @@ class _BiasGradientSource(Protocol):
     ) -> dict[str, Tensor]: ...
 
 
+class _FreePassOwner(Protocol):
+    """The optional free-pass hook: a rule that computes its own FREE phase.
+
+    A store-all ``forward_pass`` plus settle materializes an activation set
+    the rule never reads; such a rule returns the activations its own phase
+    consumes and the pipeline skips both (TODO93 T6b: the hybrid's composed
+    path was 1.98× the checkpointed arm's for a set it discards).
+    """
+
+    def free_activations(
+        self, substrate: Substrate, geometry: Geometry, x: Tensor
+    ) -> list[Tensor] | Tensor: ...
+
+
 def _is_plasticity(candidate: object) -> TypeIs[_Plasticity]:
     return callable(getattr(candidate, "step", None))
 
 
 def _is_bias_gradient_source(candidate: object) -> TypeIs[_BiasGradientSource]:
     return callable(getattr(candidate, "compute_bias_pseudo_gradients", None))
+
+
+def _is_free_pass_owner(candidate: object) -> TypeIs[_FreePassOwner]:
+    return callable(getattr(candidate, "free_activations", None))
 
 
 __all__ = [
@@ -136,6 +154,30 @@ def forward_pass(
     if acts is not None:
         acts = substrate.inject_state_noise(acts)
     return acts
+
+
+def _owned_free_state(
+    substrate: Substrate,
+    geometry: Geometry,
+    credit: CreditAssignment,
+    x: Tensor,
+    y: Tensor,
+) -> SettableState | None:
+    """The credit's own FREE-phase state, or ``None`` when the pipeline settles.
+
+    The rule's own autograd context governs its pass; the pipeline only injects
+    the substrate's state noise, the same contract as ``forward_pass``.
+    """
+    if not _is_free_pass_owner(credit):
+        return None
+    state = SystemState(x=x, y=y)
+    acts = credit.free_activations(substrate, geometry, x)
+    state.activations = (
+        [substrate.inject_state_noise(act) for act in acts]
+        if isinstance(acts, list)
+        else substrate.inject_state_noise(acts)
+    )
+    return state
 
 
 def task_loss(state: SettableState, y: Tensor, loss_fn: LossFn | None = None) -> Tensor:
@@ -252,6 +294,7 @@ class _PhaseContext:
     context: object | None
     loss_fn: LossFn | None = None
     graph_kwargs: dict[str, Tensor] | None = None
+    owned_free: SettableState | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,16 +321,19 @@ def _run_phases(ctx: _PhaseContext) -> dict[Phase, SettableState]:
     grad_ctx = nullcontext() if ctx.credit.requires_autograd else torch.no_grad()
     with grad_ctx:
         for phase in ctx.credit.phases:
-            state = SystemState(x=ctx.x, y=ctx.y)
-            state.activations = ctx.initial_activations
-            target = ctx.y if phase is Phase.NUDGED else None
-            settled = ctx.dynamics.settle(
-                state,
-                ctx.geometry,
-                ctx.substrate,
-                target=target,
-                **(ctx.graph_kwargs or {}),
-            )
+            if phase is Phase.FREE and ctx.owned_free is not None:
+                settled = ctx.owned_free
+            else:
+                state = SystemState(x=ctx.x, y=ctx.y)
+                state.activations = ctx.initial_activations
+                target = ctx.y if phase is Phase.NUDGED else None
+                settled = ctx.dynamics.settle(
+                    state,
+                    ctx.geometry,
+                    ctx.substrate,
+                    target=target,
+                    **(ctx.graph_kwargs or {}),
+                )
 
             # P-axis: ψ steps ONCE per episode. Default phase is the credit's
             # first phase (target-free settled activity); a primitive may
@@ -391,6 +437,7 @@ def _apply_update(
 
 
 def _compute_free_metrics(
+    credit: CreditAssignment,
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -402,14 +449,18 @@ def _compute_free_metrics(
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Compute post-update free metrics (target-free)."""
     with torch.no_grad():
-        free_state = SystemState(x=x, y=y)
-        free_state.activations = forward_pass(substrate, geometry, x, **graph_kwargs)
-        free_settled = dynamics.settle(
-            free_state, geometry, substrate, target=None, **graph_kwargs
-        )
-        free_loss, _ = _task_loss_tensor(free_settled, y, loss_fn)
-        free_energy = dynamics.compute_energy(free_settled, geometry)
-        free_accuracy = (free_settled.metrics or {}).get("accuracy", torch.tensor(0.0))
+        settled = _owned_free_state(substrate, geometry, credit, x, y)
+        if settled is None:
+            free_state = SystemState(x=x, y=y)
+            free_state.activations = forward_pass(
+                substrate, geometry, x, **graph_kwargs
+            )
+            settled = dynamics.settle(
+                free_state, geometry, substrate, target=None, **graph_kwargs
+            )
+        free_loss, _ = _task_loss_tensor(settled, y, loss_fn)
+        free_energy = dynamics.compute_energy(settled, geometry)
+        free_accuracy = (settled.metrics or {}).get("accuracy", torch.tensor(0.0))
         if not isinstance(free_accuracy, Tensor):
             free_accuracy = torch.as_tensor(free_accuracy)
     return free_loss, free_energy, free_accuracy
@@ -417,8 +468,17 @@ def _compute_free_metrics(
 
 def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
     """Internal implementation of run_train_step_tensor using context object."""
-    initial_activations = forward_pass(
-        ctx.substrate, ctx.geometry, ctx.x, **(ctx.graph_kwargs or {})
+    owned_free = (
+        _owned_free_state(ctx.substrate, ctx.geometry, ctx.credit, ctx.x, ctx.y)
+        if Phase.FREE in ctx.credit.phases
+        else None
+    )
+    # The owned set is the FREE phase for every reader: a later phase settles
+    # from it exactly as it would from the pipeline's forward.
+    initial_activations = (
+        forward_pass(ctx.substrate, ctx.geometry, ctx.x, **(ctx.graph_kwargs or {}))
+        if owned_free is None
+        else owned_free.activations
     )
     phase_ctx = _PhaseContext(
         credit=ctx.credit,
@@ -433,6 +493,7 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
         context=ctx.context,
         loss_fn=ctx.loss_fn,
         graph_kwargs=ctx.graph_kwargs,
+        owned_free=owned_free,
     )
     states = _run_phases(phase_ctx)
 
@@ -453,6 +514,7 @@ def _run_train_step_tensor_impl(ctx: _TrainStepContext) -> dict[str, Tensor]:
 
     # Post-update, target-free forward+settle for honest learning metrics.
     free_loss, free_energy, free_accuracy = _compute_free_metrics(
+        ctx.credit,
         ctx.substrate,
         ctx.geometry,
         ctx.dynamics,

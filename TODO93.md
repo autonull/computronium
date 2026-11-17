@@ -1,5 +1,5 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v18 — D1's substrate ladder landed and promoted the memristive arm to D2; A's two blockers are the next screen. Apparatus phase, not adjudication.**
+**Status:** 2026-11-16 · **v19 — T6b landed (the hybrid owns its free pass: 611 vs 1637 MB at the claim point) and T6c refused its cheap pass (stream_norm leaves the plateau but misses the floor). D2 is the next screen. Apparatus phase, not adjudication.**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 landed: the
 truth pass, the memory decomposition, the ladder runner, the checkpointed
 baseline, the lockstep two-pass rung, the hybrid, the composed pilot, the
@@ -7,8 +7,11 @@ routing refusal, the plasticity ladder, the retention ladder, the estimator
 atlas, and the substrate ladder.
 Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
 PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
-spread 0.0 %; L=8 learns 0.419), and the pilot's two blockers (**T6b**
-composed-path memory, **T6c** depth trainability) are named and locked. v12
+spread 0.0 %; L=8 learns 0.419); the pilot's two blockers are decided:
+**T6b is fixed** (a credit owns its free pass, so the hybrid reads 0.37× the
+checkpointed arm's activation set; CORRECTION 18) and **T6c refused its cheap
+pass at the box** (unit-scale streams leave the plateau but miss the floor;
+the LayerNorm fallback is the trigger, §2.10). v12
 changes what the plan *is*: a portfolio of six capability tracks ordered by
 information per session, not a serial DAG through one publishable unit. **v13
 states the phase's purpose: grow and stabilise the apparatus and record
@@ -17,8 +20,8 @@ first because it was the cheapest that could cancel a whole track; it has now
 refused that track at its box. E1 has now produced its atlas, and D1 has
 produced its first matched row: memristive reaches parity with the digital rule
 inside 0.05 pp on two seeds at 2 B/weight against 4 B/weight, while ternary
-refuses at this box (0.861 vs 0.913 on the confirmation seed). A's two
-blockers are the next screen.
+refuses at this box (0.861 vs 0.913 on the confirmation seed). D2 is the
+next screen; T6c's re-open (LayerNorm, c≈2) is queued with its trigger.
 
 **D1 landed and promoted the memristive arm (2026-11-16).** The substrate
 ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
@@ -169,7 +172,7 @@ shrinks instead of accumulating.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b (credit owns its free pass) + T6c (trainable depth) + T6a | 2 sessions | after T6b/T6c: hybrid not ≤0.5× the baseline's **activation bytes** at parity, at the frozen LR ladder's best point → refuse A with a trigger |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + T6c ⛔ (its cheap pass refused; LayerNorm re-open queued) + T6a | 1–2 sessions | hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → refuse A with a trigger (the memory side already passes; the depth side refused its cheap pass) |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
 | **D. Substrate-native training** ✅ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed 2026-11-16**: 24 cells, per-arm LR ladder + settle 5/10/20; memristive **0.910 vs 0.910** at 2 vs 4 B/weight; ternary refused (0.861 vs 0.913) | 10 min | **D1 promoted memristive to D2**; ternary refused with a re-open trigger (§14) |
@@ -181,7 +184,8 @@ screen that could cancel it.* D1 has spent its cheap screen and promoted one
 arm; D2 is the matched comparison that decides whether the saving survives.
 B, C, and E have each spent their cheap screen: B refused its depth axis, C
 closed at its saturation point, and E closed as an atlas. **Session order is
-therefore A's two blockers (T6b/T6c), then D2, then F1; the closed tracks'
+therefore D2, then F1 and T6a; A's memory blocker (T6b) is fixed, and T6c's
+cheap pass refused, so its re-open is queued behind D2. The closed tracks'
 triggers stay in §14.**
 
 **Ranking, recomputed every session (§14):** expected decision value ÷ measured
@@ -306,10 +310,10 @@ is a statement about **coordinates**, not about an idea — and §0.4 keeps its
 re-open probe.
 
 **Why the order is apparatus-first.** Exhaustive HPO on this system today would
-optimise an objective with four known hazards: cells that cannot train (T6c),
-memory that is attributed to the wrong term (T1), baselines that are not
-matched (the binding gate), and compositions whose mechanism never runs on the
-claim path (T6b). Tuning around those hazards produces numbers that look like
+optimise an objective with four known hazards: cells that cannot train (T6c,
+refused at its box), memory attributed to the wrong term (T1, fixed), baselines
+that are not matched (the binding gate), and compositions whose mechanism never
+runs on the claim path (T6b, fixed). Tuning around those hazards produces numbers that look like
 results and are not. The screens remove them for hours, not sessions.
 
 **Primitives are not forgotten.** §19's admission map names every queued
@@ -334,16 +338,16 @@ check, not a claim, and each fails when its mechanism is removed.
 | T4b | `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`: √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward wrapped (never `train_step`); `create_backprop_mlp(checkpoint_segments=...)` is the arm | `test_checkpoint_parity.py` (7) | checkpointed grads ≡ plain under dropout (bit-exact), RNG-preservation is a negative control, retained set is segment boundaries; **epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192** (§4.1) |
 | T3 | one `lockstep_contrasts` stream serves both families (FF contrasts positive/negative, PEPITA standard/error-modulated — same expression); `train_step` + `kernel_train_step` run it; store-all `forward_*`/`backward` stay as the reference rung; `complexity_verified=True` for FF and PEPITA | `test_lockstep_parity.py` (8, 4 CUDA) | deltas ≡ store-all at `atol=0` per layer; **peak flat 66.3 MB (FF) / 58.5 MB (PEPITA) at L=4→32** vs 576/568 MB retained; **three live defects fixed**: FF `train_step` called a nonexistent `backward_contrastive`, PEPITA `backward` required an `error` argument no caller passed, and the bespoke PEPITA step used the standard pre-activation for both chains (the Triton twin's tested equation uses each chain's own) |
 | T3b | `HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast + `GradientCredit.gradient_of` head; `step_layer` threads the residual input across one layer; `split_layer` must land on a Linear; one registry row (`estimator_kind="hybrid"`) and feedforward-geometry refusal | `test_hybrid_parity.py` (8, 2 CUDA) | trunk deltas ≡ store-all hybrid **max\|Δ\| = 0.0**; head ≡ plain backprop; **trunk peak flat 81.0 MB above gradients at L=4→32** vs store-all 122→1018 MB; composed `train_step` decreases loss and moves every weight |
-| T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `build_arm` | `test_memory_frontier.py` (8, 1 CUDA xfail) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
+| T6 | `validation/memory_frontier.py`: one operating point, four arms, two controls, appendix writer; `run_pilot`, `run_learning_ladder`, `claim_ladder`, `depth_rung`, `build_arm` | `test_memory_frontier.py` (12; T6b's `0.5×` lock is live, T6c's verdict is a pure-function lock) | **c = 4.125 (0.0 % spread) at L=32/B=8192/W=1024**; gate green (share 0.941); learning control passes (0.419 vs floor 0.409); **two defects found** — T6b (composed hybrid 3249 MB vs ckpt 1637 MB) and T6c (loss plateau at L=32) |
 | **C1 ✅** | **Plasticity ladder**: `validation/plasticity_ladder.py`; batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed; local (PEPITA) vs exact-gradient control | `test_plasticity_ladder.py` (3), `test_cl_credit_arms.py` (5) | **local 0.945 / 0.947 at LR 1e-3 on two seeds**, control 0.839 / 0.893, floor 0.55 → **verdict: promote**. Two apparatus defects fixed: credit label channel (local scored 0.030 on task 4 before) and data-order seed (backprop swung 0.926→0.839) |
 | **C2 ✅** | **Retention ladder**: `validation/plasticity_ladder.py --stage consolidation`; batch-1 SplitMNIST, 3-point EWC-strength ladder at the frozen LR (1/10/100), local × EWC vs backprop × EWC; 1 seed + confirmation; kill-safe resume/replay | `test_plasticity_ladder.py` (9), `test_cl_credit_arms.py` (6) | **close at the saturation point λ=100**: local 0.952 / 0.015 vs control 0.963 / 0.020 (gain +0.005 < δ 0.032; accuracy −1.1 pp); confirmation 0.951 / 0.016 vs 0.958 / 0.024; cost ratio 1.07×; λ ladder moves 0.6 pp (local) / 2.2 pp (control), both < δ. Defect fixed en route: task-start re-consolidation erased the Fisher importance (CORRECTION 12) |
 | **D1 ✅** | **Substrate ladder**: `validation/substrate_ladder.py`; ternary/memristive + `energy_min` at settle 5/10/20, per-arm LR ladder, 2 seeds, device state | `test_substrate_ladder.py` (9) | **promoted memristive** (0.9097 vs 0.9097 at settle 20 on the confirmation seed, 2 vs 4 B/weight); ternary refused at 0.861 vs 0.913 (2 bits/weight); CORRECTION 17 (per-arm LR) |
 **Next (three sessions, not a DAG).**
 
-1. **A's blockers first:** T6b (credit owns its free pass) and T6c (trainable
-   depth) — the instrument is done, and the claim is two hours-scale defects
-   away. D1 has promoted one substrate arm, but that rung is a matched
-   comparison, not a blocker for A.
+1. **A's blockers are decided:** T6b landed (a credit owns its free pass) and
+   T6c refused its cheap pass (its LayerNorm re-open is queued). D1 has
+   promoted one substrate arm, and its matched comparison (D2) is now the
+   cheapest rung that can change a decision.
 2. **D2:** the promoted memristive arm's matched-budget comparison (5 paired
    seeds, matched walltime, the int8 QDQ control); then **F** (50 legal cells vs
    the best single-axis default) and **T6a**.
@@ -652,11 +656,16 @@ dispatches by layer index; it delegates the head to
 change; one registry row and one declared `estimator_kind`.
 **Composed pilot (T6 ✅, landed 2026-11-16).** The point and both controls are
 measured on the claim path (`validation/memory_frontier.py`; §2.4). Two blockers
-came out of it and gate T6a: **T6b** — the pipeline's eager store-all forward
-survives composition, so the hybrid's activation set is 1.98× the checkpointed
-arm's; **T6c** — the plain stack sits on the loss plateau at L=32, so the depth
-rung needs §4's LayerNorm fallback (c≈2) and a recomputed appendix. Neither is a
-verdict on the credit; both are pre-conditions for a claim.
+came out of it; both are now decided: **T6b ✅** — the pipeline's eager store-all
+forward survived composition (hybrid 1.98× the checkpointed arm's activation
+set); a credit may now own its free pass, and the hybrid reads **611 MB against
+the checkpointed arm's 1637 MB (0.37×)** at the claim point (CORRECTION 18);
+**T6c ⛔** — the plain stack sits on the loss plateau at L=32. Its cheap pass
+(`stream_norm`) leaves the plateau but misses the floor and costs 1.45× bytes
+(§2.10), so the depth rung needs §4's LayerNorm fallback (c≈2) with a recomputed
+appendix, or the Innocenti init on a residual geometry. Neither is a verdict on
+the credit; T6b is a memory precondition now met, T6c a depth precondition still
+open.
 **Reuse the runner, do not build a second ladder.** `validation/backprop_parity.py`
 already implements a depth loop with per-depth baseline, seeds, bootstrap CIs,
 peak memory, FLOPs, and parameter counts (`run_parity`, :729). Extend it with a
@@ -831,9 +840,9 @@ record of what exists.
 | T4c ✅ | Ladder runner with `batch_size` + `pepita` family | A | hours | one runner, no second depth loop |
 | T3b ✅ | `HybridCredit` (trunk local + head backprop) | A | 1–2 sessions | composes; trunk flat; head exact |
 | T6 ✅ | Composed pilot at one binding point | A | 1 session | controls pass; two blockers named |
-| T6b | **Composed-path memory**: a credit owns its free pass | A | hours | hybrid activation set ≤0.5× ckpt (843 vs 437 MB today); xfail flips |
-| T6c | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | hours | L=32 leaves the plateau and reaches the L=8 floor |
-| T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | blocked on T6b+T6c |
+| **T6b ✅** | **Composed-path memory**: a credit owns its free pass | A | landed 2026-11-16 | hybrid 210 vs ckpt 437 MB (0.48×) at the lock point and 611 vs 1637 MB (0.37×) at the claim point; xfail flipped; CORRECTION 18 |
+| **T6c ⛔** | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | landed 2026-11-16 | **refused its cheap pass** (`stream_norm`): 0.314 / 0.326 vs floor 0.375, edge 1e-1 collapses, 3× steps 0.360, 1.45× bytes; trigger = LayerNorm (c≈2) or the Innocenti init |
+| T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | T6b landed; T6c refused → register with the L=4→8 depth rung, or re-open T6c first |
 | **B1 ⛔** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | landed 2026-11-16 | **refused at this box**: gap 0.819 → 0.660 (−0.159) at τ=0.25 and −0.037 on the confirmation seed vs δ=0.05; reference FD 0.013; both ends above the floor; B2 not run, trigger in §14 |
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
 | **C2 ✅** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | landed 2026-11-16 | local 0.952 / 0.015 vs control 0.963 / 0.020 at λ=100 (gain +0.005 < δ 0.032); confirmation 0.951 / 0.016 vs 0.958 / 0.024 → **close C at the saturation point**; task-start anchor defect fixed (CORRECTION 12) |
@@ -876,10 +885,11 @@ last, because it is the only one that needs five paired seeds on a real task.
 | 7a ✅ | **C2 — retention ladder** | `results/t93_c1/consolidation.json` (replay: `... --stage consolidation --replay`) | **closed at the saturation point λ=100**: local forgets 0.005 less than the control, below δ=0.032, at 1.07× cost; confirmation seed repeats |
 | 7b ✅ | **E — estimator atlas** | `computronium/validation/estimator_atlas.py`; E-lite then `--full`; replay from the cell log | **landed 2026-11-16**: controls pass (FD 1.0000; exact 0.914 ± 0.006); 6 arms × 3 seeds at a matched box with a per-arm LR ladder; table is the artifact; PC-ALM depth-2 regime mismatch/refusal with a depth-100 trigger |
 | 8 ✅ | **D — substrate ladder** | `computronium/validation/substrate_ladder.py`; landed 2026-11-16 | **promoted memristive** (0.9097 vs 0.9097, 2 vs 4 B/weight on two seeds); ternary refused with a re-open trigger |
-| 9 | **A — T6b + T6c** (next) | `core/pipeline.py::_run_train_step_tensor_impl`; `GeometryConfig.feedforward(stream_norm=True)` | xfail flips; L=32 leaves the plateau |
-| 10 | **D — D2 matched comparison** | `computronium/validation/substrate_ladder.py` + a matched-walltime driver | within 1 pp at ≤1.2× walltime → D3; >1 pp behind → refuse with the mechanism |
+| 9a ✅ | **A — T6b: a credit owns its free pass** | `core/pipeline.py::_run_free_pass`; `HybridCredit.free_activations`; landed 2026-11-16 | **landed**: hybrid 210 vs ckpt 437 MB (0.48×) at the lock point and 611 vs 1637 MB (0.37×) at the claim point; strict xfail flipped; tripwire lock; CORRECTION 18 |
+| 9b ⛔ | **A — T6c: the depth rung** | `validation/memory_frontier.py::depth_rung`; `--rung`; landed 2026-11-16 | **refused at this box**: plain L=32 0.100, stream-normalized 0.314 (seed 21) / 0.326 (seed 23) vs floor 0.375; edge 1e-1 → 0.100; 3× steps → 0.360; 1.45× activation bytes; trigger = LayerNorm (c≈2) or the Innocenti init on residual (§2.10) |
+| 10 | **D — D2 matched comparison** (next) | `computronium/validation/substrate_ladder.py` + a matched-walltime driver | within 1 pp at ≤1.2× walltime → D3; >1 pp behind → refuse with the mechanism |
 | 11 | **F — composition ladder** | survey harness, 50 legal cells + a family ladder, cheap task; §13 | ≥δ above the best single-axis default after the ladder → F2; flat → refusal |
-| 12 | **A — T6a** | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix |
+| 12 | **A — T6a** (blocked on 9b's re-open) | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix; the depth rung is L=4→8 until T6c re-opens (the plain stack stops learning between depth 4 and 16 at W=512/B=2048/200 steps) |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
@@ -897,9 +907,12 @@ hybrid (`HybridCredit` in `ontology/credit/_hybrid.py`: `PepitaTrunk` contrast,
 `FeedforwardGeometry.step_layer` for one-layer lockstep with the residual input
 threaded; the store-all reference is written from the equations in
 `test_hybrid_parity.py`), the pilot (`validation/memory_frontier.py`:
-`PilotPoint.activation_mb/peak_mb/affordable`, `build_arm` with one shared
-geometry/init/update and `checkpoint_segments=isqrt(L)`, `run_pilot` writing
-`results.json` + `appendix.md`, `_measure` as the one cell loop), the atlas
+`PilotPoint.activation_mb/peak_mb/affordable/stream_norm`, `build_arm` with one
+shared geometry/init/update and `checkpoint_segments=isqrt(L)`, `depth_rung` and
+its own `STREAM_LR_LADDER` box, `run_pilot` writing `results.json` +
+`appendix.md`, `_measure` as the one cell loop), the owned free pass
+(`CreditAssignment.free_activations`; the pipeline skips the pre-forward, the
+FREE settle, and the free-metrics settle, and its tripwire lock), the atlas
 (`validation/estimator_atlas.py`: `_build_arm` reads each credit's identity
 card, `_reference_delta` is the exact arm's one-step reference, `_train` takes
 the per-arm LR, `_run_cell`/`_refusal_cell` write the kill-safe log, and
@@ -1009,10 +1022,9 @@ the registered width/batch, plain-backprop share ≥0.5, and L=8 at the floor),
 plus lock 5 on the composed path (the checkpointed arm's activation set is
 0.39× plain backprop's, so the recovered arm is reported and not gated). Lock 8
 (W2 floor) stays open: **no depth rung counts until T6c makes the claim geometry
-train**. The hybrid's composed-path memory is a **strict `xfail`** naming T6b
-(the pipeline's store-all forward survives composition); when T6b lands, the
-marker must flip, and a strict xfail fails if the property starts holding
-without that bookkeeping.
+train**, and T6c refused its cheap pass (§2.10), so the LayerNorm re-open is the
+next cell. The hybrid's composed-path memory is no longer an `xfail`: T6b landed
+(a credit owns its free pass) and the `0.5×` property is a plain lock.
 ---
 ## 10. Baseline ladder, stated once
 ```
@@ -1099,8 +1111,8 @@ not scheduled, however cheap.
 | 2026-11-16 | P2 | hybrid credit (lockstep-local trunk + exact head): parity and depth-flat peak | 2 fixtures + 4 depths × 1 step | per-layer ΔW vs store-all hybrid; head vs plain backprop; CUDA peak above gradients | Linear+ReLU fp32, W=512, B=4096, L=4/8/16/32, RTX 3080 10 GiB | **trunk Δ ≡ 0; head ≡ backprop; trunk peak flat 81.0 MB vs store-all 122→1018 MB; composed step learns** | T3b ✅ |
 | 2026-11-15 | P2 | `backprop+ckpt` retained set and pilot admission | 2 depths × 1 forward + 1 epoch | forward peak and epoch peak vs the 6554 MB budget | W=1024, B=8192, L=16/64, fp32, RTX 3080 10 GiB | **ckpt fwd 480 MB at L=64 vs plain 2080 MB; epoch peak 3894 MB < budget; grads bit-exact under dropout** | T4b ✅ |
 | 2026-11-16 | P2 | composed pilot at the registered point: controls, four arms, decomposition | 3 seeds × 4 arms + 3 calibration + 2 control cells | c at the point (10 %); learning floor at L=8; binding share; activations/peak; fwd-eq | L=32, B=8192, W=1024, fp32, CIFAR-10 10k/10k, 200 steps, RTX 3080 10 GiB | **c=4.125 (0.0 % spread), gate green (0.941), learning PASS (0.419 vs 0.409); four arms at chance at L=32** | T6 ✅ |
-| 2026-11-16 | P2 | composed-path memory of the hybrid | 1 cell | activation set vs the checkpointed arm | same point, one seed | **defect: hybrid 3249 MB vs ckpt 1637 MB (1.98×); mechanism = the pipeline's eager store-all forward** | T6b |
-| 2026-11-16 | P2 | depth-rung trainability of the plain stack | 1 seed × 4 checkpoints + 4 arms | val_acc and loss vs the L=8 floor | L=32, W=1024, B=8192, 200→1000 steps | **coordinate: loss pinned at 2.2132, all arms 0.100; L=8 = 0.419 → re-pose (norm/init) before any depth claim** | T6c |
+| 2026-11-16 | P2 | composed-path memory of the hybrid | 1 cell at the lock point + 1 at the claim point | activation set vs the checkpointed arm | L=32, W=512/B=4096 and W=1024/B=8192 | **defect found and fixed**: hybrid 3249 → 611 MB vs ckpt 1637 MB (0.37×) at the claim point, 210 vs 437 MB (0.48×) at the lock point; mechanism = the pipeline's eager store-all forward; CORRECTION 18 | T6b ✅ |
+| 2026-11-16 | P2 | depth rung: plain plateau vs the stream-normalized pass | 9 cells (2 plain, 3-LR ladder, shallow, edge, 2 confirmation) + a claim-point screen | val_acc vs the learning control's floor (0.375); the ladder's own LR box | L=8/32, W=512, B=2048, 200 steps, seed 21/23 | **refused at this box**: plain 0.100, normalized 0.314/0.326 vs floor 0.375; edge 1e-1 collapses to 0.100; 3× steps 0.360; 1.45× bytes → trigger = LayerNorm (c≈2) or Innocenti init | T6c ⛔ |
 | 2026-11-16 | B | routing ladder: STE gap vs its smoothed reference over stacked hard selections | 9 cells (3 τ + 4 depths + 2 confirmation) | relative norm gap on 512 probes; reference FD ≤0.10; floor 0.40; δ = 0.05 | blobs 4-class, 8 experts k=2, W=256, LR 1e-3, RTX 3080 10 GiB | **gap 0.819 → 0.660 (−0.159) at τ=0.25; confirmation −0.037; reference FD 0.013; both ends trained (0.933/1.000) → verdict: refuse** (the depth axis is not where the surrogate is wrong; B2 not run, trigger in §14) | B1 ⛔ |
 | 2026-11-16 | P2 | C1 apparatus defects: credit label channel and data-order seed | 2 cells + 2 defect probes | task-1 accuracy and backprop at LR 1e-3 | SplitMNIST batch 1, W=256, 30k steps/5 tasks, 1 seed | **defects found and fixed** — local scored 0.030 on task 4 under task-local labels (0.964 on task 1 alone after); backprop swung 0.926→0.839 under the data-order seed | C1 ✅ |
 | 2026-11-16 | C | batch-1 plasticity ladder: local (PEPITA) vs exact gradient | 8 cells (2 arms × 3 LR + 2 seeds) | 2000 held-out samples/task (1 σ = 0.011); floor 0.55 | SplitMNIST, batch 1, 1 epoch/task, W=256, RTX 3080 10 GiB | **local 0.945 / 0.947 at LR 1e-3 on two seeds**; control 0.839 / 0.893; forgetting 0.038/0.036 vs 0.145/0.091; **verdict: promote** (coordinate, n=1; best at the lower edge) | C1 ✅ |
@@ -1122,7 +1134,7 @@ trigger and a re-open command**; **a surprise that opens a new question (§0.2)*
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 2 sessions | instrument done; 2 blockers (T6b/T6c) |
+| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 1–2 sessions | instrument done; **T6b fixed** (0.37× at the claim point); T6c refused → the depth claim's rung is L=4→8 until its re-open |
 | 2 | **D** substrate | does memristive parity survive a matched-budget comparison? | 1 session (5 paired seeds) | **D1 promoted**: 0.9097 vs 0.9097 at 2 vs 4 B/weight (2 seeds); ternary refused with a trigger |
 | 3 | **F** composition | does any 6-axis composition beat the best single axis? | 1 session (50 + ladder) | harness exists; no comparison |
 
@@ -1139,9 +1151,11 @@ question is answered at this box and its re-open probes carry the track.
 Why B is gone: B1 refused its depth axis (0.819 → 0.660, −0.159 on the ladder
 seed and −0.037 on the confirmation seed, vs δ=0.05), so B2 is not run and the
 trigger in §14 carries the track.
-Why A is first: its instrument is done, but its claim is two hours-scale
-defects away and its treatment arm is unvalidated (the hybrid learns worse than
-its own trunk rule at L=8). **A is not abandoned** — it keeps its next rung now.
+Why A is first: its instrument is done and its memory blocker is fixed (the
+hybrid reads 0.37× the checkpointed baseline at the claim point), but its depth
+blocker refused the cheap pass, so the registration's depth rung is L=4→8 and
+the LayerNorm re-open is the queued rung. **A is not abandoned** — it keeps its
+next rung now.
 Why D is second: D1 promoted a substrate arm, but parity on one cheap box is a
 coordinate, not a matched-budget result; D2's 5 paired seeds decide whether the
 saving survives. Why F is last: it reads the whole space, and a 6-axis
@@ -1160,6 +1174,7 @@ deletion).**
 | **C — consolidation strength (closed, not refused)** | λ = 1/10/100 at frozen LR 1e-3; 8 cells; 3.1 MiB state; cost ≤1.5× | **close** at the saturation point λ=100 (local 0.952 / 0.015; control 0.963 / 0.020; gain +0.005 < δ) | a 5-seed retention protocol (rung 3), a matched-byte replay composition, or SI/cascade at the frozen LR | fresh ladder or `--stage consolidation --replay` |
 | **D — ternary (refused at this box)** | width 32, settle 5/10/20, LR ladder 1e-3/3e-3/1e-2, β=0.5, TWN threshold 0.7·E\|w\| | **refuse**: 0.861 vs digital 0.913 at settle 10 on the confirmation seed (5.2 pp); best 0.835 at settle 10, LR 3e-3; 2 bits/weight (16× less state) does not buy parity at this width | a wider hidden layer, a learnable α per layer (STE to α), or a delta-ternary scale | `... --replay` with a fresh ladder at that box |
 | **D — memristive (promoted to D2)** | width 32, settle 5/10/20, LR ladder, int8 differential pair | **promote**: 0.9097 vs 0.9097 at settle 20 on the confirmation seed (0.05 pp), 2 vs 4 B/weight; best settle at the upper edge | a >1 pp gap at matched walltime in D2, or no gain over the int8-quantised digital control | D2 command; the D1 cell log re-runs it |
+| **A — depth rung (refused at its box)** | plain L=8/32 and the stream-normalized pass at LR 3e-3/1e-2/3e-2, L=8/32, W=512/B=2048, 200 steps, seeds 21/23; edge 1e-1; 3× steps | **refuse the cheap pass**: plain 0.100, normalized 0.314 / 0.326 vs floor 0.375 (−5.9 / −4.9 pp); edge 0.100; 3× steps 0.360 vs shallow 0.392; 1.45× activation bytes (c≈6.2) | **LayerNorm (c≈2, appendix recomputed in the same commit)**, or the Innocenti depth-scaled init on a residual geometry (pre-screened 1.2 pp below its own shallow floor) | `uv run python -m computronium.validation.memory_frontier --rung --depth 32 --width 512 --batch 2048 --steps 200` |
 | **E — estimator atlas (closed as an atlas, not refused)** | 6 arms × 3 seeds at MNIST quick mode, per-arm LR ladder 1e-3/1e-2/1e-1; matched 600×32, one epoch; floor 0.25 | **close as an atlas**: controls pass (FD 1.0000; exact 0.914 ± 0.006); PEPITA 0.972 / 1.60×; FA 0.125 / 0.002×; hybrid 0.185 / 0.395×; FF 0.143 / 1.211×; no estimator is promoted; PC-ALM's shallow row is a regime mismatch/refusal | PC-ALM at its card's depth-100 box, or an empty unbiased cell (score-function, forward-mode, zeroth order) admitted by E2 | `... --full` at the depth-100 box; `... --replay` on the cell log |
 
 New refusals and closes are appended here by the session that measures them,
@@ -1218,14 +1233,12 @@ session.
   1.0000; exact 0.914 ± 0.006), the table is the artifact, and PC-ALM's
   depth-2 chance is a regime mismatch with a depth-100 trigger. D1 landed:
   **promoted memristive** (0.9097 vs 0.9097 at settle 20, 2 vs 4 B/weight) and
-  refused ternary (0.861 vs 0.913) with a re-open trigger. The next screen is
-  **A's blockers** (T6b composed-path memory, T6c trainable depth); D2 is the
-  promoted track's matched comparison. A's blockers are unchanged: T6b lets a credit
-  own its free pass so the strict xfail in `test_memory_frontier.py` flips; T6c
-  re-poses the claim geometry on a trainable one (LayerNorm, c≈2, or a
-  depth-stable init) and re-runs `python -m
-  computronium.validation.memory_frontier` at L=32 before T6a writes the
-  threshold.
+  refused ternary (0.861 vs 0.913) with a re-open trigger. T6b landed (a credit
+  owns its free pass; the hybrid reads 0.37× the checkpointed arm's activation
+  set at the claim point) and T6c refused its cheap pass at the box (0.314/0.326
+  vs floor 0.375; 1.45× bytes) with the LayerNorm re-open as its trigger. The
+  next screen is **D2**, the promoted track's matched comparison; T6a registers
+  with a L=4→8 depth rung until T6c re-opens.
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
@@ -1760,6 +1773,57 @@ permanent fix.
   kill-safe log (resume reuses, replay recomputes). **Verdict: refuse** at
   this box; B2 is not run and the trigger is in §14.
 
+### Landed 2026-11-16 (T6b — what the code actually did)
+- **One capability, three call sites.** `credit.free_activations(substrate,
+  geometry, x)` is the optional free pass (`_FreePassOwner` /
+  `_is_free_pass_owner`, the same callable-shape declaration as the bias
+  hook). The pipeline calls it once for the FREE phase and once for the
+  post-update free metrics, and skips the pre-forward, the FREE settle, and
+  the free-metrics settle: `_owned_free_state` is the one constructor, so the
+  owned set is built in one place.
+- **The hybrid's own pass is one tensor.** `HybridCredit.free_activations`
+  runs the full stack under `no_grad` and returns the logits, which the head
+  and trunk recompute from `x` anyway; the free phase's state is
+  `[logits]`, flat in depth. Arithmetic is unchanged (the loss is the same
+  forward's logits; the credit reads only `x`/`y`), so the lockstep parity
+  lock still passes.
+- **Measured.** At the claim point (L=32/B=8192/W=1024) the hybrid's
+  activation set moves **3249 → 611 MB** against the checkpointed arm's 1637
+  (0.37×), forward-equivalents 5.50 → 4.27, walltime 45.5 → 34.6 s; at the
+  lock point 210 vs 437 MB (0.48×). The `≤0.5×` property is live, no
+  `xfail`.
+- **Locks.** `test_the_hybrid_activation_set_is_half_the_checkpointed_arms`
+  (no `xfail`), `test_the_hybrid_owns_its_free_pass` (tripwire: the
+  pipeline's `forward_pass` must not run), and
+  `test_the_plain_arm_reads_the_pipeline_forward` (the tripwire's positive
+  control — without it the first test is a comment).
+
+### Landed 2026-11-16 (T6c — what the code actually did)
+- **The pass is a point coordinate.** `PilotPoint.stream_norm` (carried by
+  `scaled`) flips `GeometryConfig.feedforward(stream_norm=...)`; the cell's
+  coordinate is the point, so no argument can be silently dropped, and the
+  plain cells stay bit-identical (`PilotPoint.stream_norm=False`).
+- **`depth_rung` is the rung, not a second ladder.** It reuses `_measure`,
+  takes its floor from `_learning_control` (one source for the bar), and runs
+  the plain L=8/L=32 cells, the normalized pass's own `STREAM_LR_LADDER`
+  (3e-3/1e-2/3e-2 — the plain box diverges under unit-scale streams), the
+  shallow cell at the best LR, and a confirmation seed at the best point.
+  `DepthCell` carries `lr`, so a cell states its own LR (`ArmCell.lr` added;
+  the results JSON now names it per cell).
+- **Measured and refused** (§2.10): plain L=32 0.100, normalized 0.314 /
+  0.326 against floor 0.375; the edge LR 1e-1 collapses to 0.100, so the best
+  point is interior; 3× steps reach 0.360, still 3.2 pp below the shallow
+  cell; the pass costs 1.45× the plain activation bytes. The trigger is
+  LayerNorm (c≈2, appendix recomputed) or the Innocenti init on a residual
+  geometry.
+- **One coordinate for the registration.** The plain stack stops learning
+  between depth 4 (0.399) and depth 16 (0.100) at W=512/B=2048/200 steps, so
+  T6a's depth rung is L=4→8 until T6c re-opens.
+- **Locks.** `test_the_depth_rung_verdict_reads_the_floor_and_the_confirmation`
+  (the verdict function: plateau, lift, floor, and the second seed) and
+  `test_the_rung_point_carries_its_pass_into_the_geometry` (the coordinate
+  reaches the geometry; removing the pass silently measures the plain arm).
+
 ## 19. Primitive admission queue (cost-priced, ticket-bound)
 **Framing.** `more primitives` is not progress (§14). Each row below names the
 ticket that cannot run without it; a row whose trigger has not fired is not work.
@@ -1777,12 +1841,15 @@ T1 and are now read from the identity cards).** Still absent:
 (`create_replay_arm`); eight EP variants plus PC/pcalm (`algorithms/`). SI and
 replay are arms today, not first-class U rows: lift SI, reuse replay.
 
-**T6b is a pipeline capability, not a primitive row.** The composed path
-materialises the free-phase forward for every credit (`core/pipeline.py`), with
-autograd enabled even when the credit declares `requires_autograd=False`. Letting
-a credit own its free pass is a declared capability on the C axis, and it is
-admitted by T6b's ticket, not by this queue: no new mechanism is created, the
-existing lockstep trunk stops paying for a chain it never reads.
+**T6b landed as a pipeline capability, not a primitive row.** The composed path
+materialised the free-phase forward for every credit (`core/pipeline.py`), with
+autograd enabled even when the credit declares `requires_autograd=False`. A
+credit owning its free pass is a declared capability on the C axis: no new
+mechanism is created, the lockstep trunk stops paying for a chain it never reads
+(CORRECTION 18). **T6c's re-open also needs no primitive row:** `stream_norm`
+already exists on `GeometryConfig`, and the LayerNorm fallback is torch's own
+module — its admission is a geometry-config field plus the appendix recompute,
+not a queue row.
 
 **Admission map — nothing is forgotten, nothing is scheduled.** A primitive is
 written only when its trigger fires, and the trigger is a measurement from a

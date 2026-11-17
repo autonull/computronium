@@ -65,13 +65,18 @@ __all__ = [
     "ARMS",
     "CLAIM_SEEDS",
     "DECLARED_C",
+    "FLOOR_MARGIN",
     "FROZEN_LR",
     "LADDER_SEEDS",
     "LR_LADDER",
     "PILOT_SEEDS",
+    "STREAM_LR_LADDER",
+    "DepthCell",
+    "DepthRung",
     "PilotPoint",
     "PilotReport",
     "claim_ladder",
+    "depth_rung",
     "run_learning_ladder",
     "run_pilot",
 ]
@@ -99,6 +104,8 @@ DATA_SEED = 7
 
 ARMS = ("backprop", "backprop+ckpt", "hybrid", "local")
 LR_LADDER = (0.1, 0.3, 1.0)
+#: The learning control's bar: the shallow checkpointed arm minus this margin.
+FLOOR_MARGIN = 0.01
 #: Best point of the L=8 ladder per arm; frozen before the claim seeds run.
 FROZEN_LR: Mapping[str, float] = MappingProxyType({
     "backprop": 0.3,
@@ -124,6 +131,7 @@ class PilotPoint:
     batch: int = 8192
     steps: int = 200
     batches_per_epoch: int = 2
+    stream_norm: bool = False
     input_dim: int = INPUT_DIM
     classes: int = CLASSES
 
@@ -173,13 +181,20 @@ class PilotPoint:
         """Whether the plain-backprop arm fits the budget at this point."""
         return self.peak_mb(c=c) <= budget_mb
 
-    def scaled(self, *, depth: int, batch: int | None = None) -> PilotPoint:
+    def scaled(
+        self,
+        *,
+        depth: int,
+        batch: int | None = None,
+        stream_norm: bool | None = None,
+    ) -> PilotPoint:
         return PilotPoint(
             depth=depth,
             width=self.width,
             batch=self.batch if batch is None else batch,
             steps=self.steps,
             batches_per_epoch=self.batches_per_epoch,
+            stream_norm=self.stream_norm if stream_norm is None else stream_norm,
             input_dim=self.input_dim,
             classes=self.classes,
         )
@@ -270,7 +285,13 @@ def _credit(arm: str) -> CreditAssignmentConfig:
 
 
 def build_arm(arm: str, point: PilotPoint, *, lr: float, seed: int) -> System:
-    """One arm at one point; the geometry, init, and update are shared."""
+    """One arm at one point; the geometry, init, and update are shared.
+
+    ``point.stream_norm`` is the depth rung's declared pass (TODO93 T6c): the
+    stack's post-activations are rescaled to length sqrt(width) so the
+    signal does not die with depth. It is a run setting, not a new
+    primitive, and the plain arm's cells stay bit-identical.
+    """
     if arm not in ARMS:
         msg = f"unknown arm {arm!r}; expected one of {ARMS}"
         raise ValueError(msg)
@@ -281,6 +302,7 @@ def build_arm(arm: str, point: PilotPoint, *, lr: float, seed: int) -> System:
             input_dim=point.input_dim,
             output_dim=point.classes,
             hidden_dims=point.hidden_dims,
+            stream_norm=point.stream_norm,
         ),
         dynamics=StateDynamicsConfig.instantaneous(),
         credit=_credit(arm),
@@ -323,6 +345,7 @@ class ArmCell:
     depth: int
     batch: int
     steps: int
+    lr: float
     val_acc: float
     walltime_s: float
     forward_equivalents: float
@@ -521,6 +544,7 @@ def _measure(
         depth=point.depth,
         batch=point.batch,
         steps=trainer.global_step,
+        lr=lr,
         val_acc=_accuracy(system, x_test, y_test, device),
         walltime_s=walltime,
         forward_equivalents=forward_equivalents,
@@ -657,7 +681,7 @@ def _learning_control(
         ).val_acc
         for arm in ("backprop", "backprop+ckpt")
     }
-    floor = measured["backprop+ckpt"] - 0.01
+    floor = measured["backprop+ckpt"] - FLOOR_MARGIN
     return LearningControl(
         depth=8,
         steps=shallow.steps,
@@ -785,6 +809,151 @@ def run_learning_ladder(
     return results
 
 
+STREAM_LR_LADDER = (3e-3, 1e-2, 3e-2)
+"""The normalized stack's own LR box (TODO93 T6c), pre-registered.
+
+The plain ladder's 0.1/0.3/1.0 edges diverge under unit-scale streams
+(measured 2026-11-16: L=8 at 0.3 reads loss 3.4), so the depth rung's knob
+is this interior box, not the arm's frozen LR.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class DepthCell:
+    """One rung cell: a depth, the pass, the LR, and what it scored."""
+
+    depth: int
+    stream_norm: bool
+    lr: float
+    seed: int
+    val_acc: float
+    activations_mb: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class DepthRung:
+    """The depth rung: the plain plateau against the normalized pass.
+
+    The plain stack at the claim depth is pinned at chance (measured 0.100
+    from step 200 on); the normalized pass must reach the shallow arm's
+    floor to unblock the depth claim (TODO93 T6c). The floor is the learning
+    control's, not a second definition of it.
+    """
+
+    floor: float
+    plain: tuple[DepthCell, DepthCell]
+    normalized_shallow: DepthCell
+    normalized: tuple[DepthCell, ...]
+    confirmation: DepthCell
+
+    @property
+    def plateaued(self) -> bool:
+        """The plain claim-depth cell sits below the shallow floor."""
+        return self.plain[-1].val_acc < self.floor
+
+    @property
+    def best(self) -> DepthCell:
+        """The ladder's best deep point; a tie keeps the smaller LR."""
+        return max(self.normalized, key=lambda cell: cell.val_acc)
+
+    @property
+    def left_the_plateau(self) -> bool:
+        """The best deep point is above the plain claim-depth cell."""
+        return self.best.val_acc > self.plain[-1].val_acc
+
+    @property
+    def reaches_floor(self) -> bool:
+        """Both seeds of the best point, and its shallow cell, clear the floor."""
+        return (
+            self.normalized_shallow.val_acc >= self.floor
+            and self.best.val_acc >= self.floor
+            and self.confirmation.val_acc >= self.floor
+        )
+
+    @property
+    def activation_ratio(self) -> float | None:
+        """Best deep cell / plain claim-depth cell, in activation bytes."""
+        plain = self.plain[-1].activations_mb
+        best = self.best.activations_mb
+        if not plain or best is None:
+            return None
+        return best / plain
+
+
+def _depth_cell(cell: ArmCell, *, stream_norm: bool) -> DepthCell:
+    return DepthCell(
+        depth=cell.depth,
+        stream_norm=stream_norm,
+        lr=cell.lr,
+        seed=cell.seed,
+        val_acc=cell.val_acc,
+        activations_mb=cell.activations_mb,
+    )
+
+
+def depth_rung(
+    point: PilotPoint | None = None,
+    *,
+    seeds: tuple[int, ...] = LADDER_SEEDS,
+    device: str = "cuda",
+) -> DepthRung:
+    """Measure the depth rung at one box: plateau, lift, and floor (T6c).
+
+    Cells: the plain stack at L=8 and the claim depth, the floor from the
+    learning control, the normalized pass's own LR ladder at the claim depth,
+    its shallow cell at the best LR, and a confirmation seed at that point.
+
+    Raises:
+        RuntimeError: On a non-CUDA device.
+    """
+    point = point or PilotPoint()
+    if device != "cuda" and not device.startswith("cuda:"):
+        raise RuntimeError("the depth rung needs a CUDA peak measurement")
+    x_train, y_train, x_test, y_test = _cifar()
+
+    def cell(
+        depth: int, *, lr: float, seed: int, stream_norm: bool = False
+    ) -> DepthCell:
+        measured = _measure(
+            "backprop",
+            point.scaled(depth=depth, stream_norm=stream_norm),
+            lr=lr,
+            seed=seed,
+            device=device,
+            x_train=x_train,
+            y_train=y_train,
+            x_test=x_test,
+            y_test=y_test,
+        )
+        return _depth_cell(measured, stream_norm=stream_norm)
+
+    learning = _learning_control(
+        point,
+        device=device,
+        seed=seeds[0],
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+    )
+    plain = (
+        cell(8, lr=FROZEN_LR["backprop"], seed=seeds[0]),
+        cell(point.depth, lr=FROZEN_LR["backprop"], seed=seeds[0]),
+    )
+    normalized = tuple(
+        cell(point.depth, lr=lr, seed=seeds[0], stream_norm=True)
+        for lr in STREAM_LR_LADDER
+    )
+    best = max(normalized, key=lambda candidate: candidate.val_acc)
+    return DepthRung(
+        floor=learning.floor,
+        plain=plain,
+        normalized_shallow=cell(8, lr=best.lr, seed=seeds[0], stream_norm=True),
+        normalized=normalized,
+        confirmation=cell(point.depth, lr=best.lr, seed=seeds[-1], stream_norm=True),
+    )
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default="cuda")
@@ -792,10 +961,16 @@ def _main() -> None:
         "--output-dir", type=Path, default=Path("results/memory_frontier")
     )
     parser.add_argument("--depth", type=int, default=32)
+    parser.add_argument("--width", type=int, default=1024)
     parser.add_argument("--batch", type=int, default=8192)
     parser.add_argument("--steps", type=int, default=200)
     parser.add_argument(
         "--ladder", action="store_true", help="run the L=8 LR ladder only"
+    )
+    parser.add_argument(
+        "--rung",
+        action="store_true",
+        help="run the depth rung (plain plateau vs the normalized pass) only",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -803,8 +978,37 @@ def _main() -> None:
         ladder = run_learning_ladder(device=args.device)
         logger.info("LR ladder: %s", json.dumps(ladder))
         return
+    if args.rung:
+        rung = depth_rung(
+            PilotPoint(
+                depth=args.depth,
+                width=args.width,
+                batch=args.batch,
+                steps=args.steps,
+            ),
+            device=args.device,
+        )
+        logger.info("depth rung: %s", json.dumps(asdict(rung), default=str))
+        logger.info(
+            "floor=%.3f plain L=%d %.3f best %.3f lr=%g (%s) confirmation %.3f "
+            "ratio=%s -> plateaued=%s left=%s floor_met=%s",
+            rung.floor,
+            rung.plain[-1].depth,
+            rung.plain[-1].val_acc,
+            rung.best.val_acc,
+            rung.best.lr,
+            "on" if rung.best.stream_norm else "off",
+            rung.confirmation.val_acc,
+            "n/a" if rung.activation_ratio is None else f"{rung.activation_ratio:.2f}x",
+            rung.plateaued,
+            rung.left_the_plateau,
+            rung.reaches_floor,
+        )
+        return
     report = run_pilot(
-        PilotPoint(depth=args.depth, batch=args.batch, steps=args.steps),
+        PilotPoint(
+            depth=args.depth, width=args.width, batch=args.batch, steps=args.steps
+        ),
         device=args.device,
         output_dir=args.output_dir,
     )

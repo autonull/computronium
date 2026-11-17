@@ -679,6 +679,12 @@ class CreditAssignment(Protocol):
       the loss, so on a supervised task it measures chance *by contract*
       — this is a declared boundary, not a bug. The success criterion
       counts error-aware credits (TODO88 N10).
+    - ``free_activations``: implemented when the rule owns its free pass.
+      The pipeline then calls it instead of ``forward_pass`` and never
+      settles a store-all set for the FREE phase: a rule that recomputes
+      what its phase reads must not be handed a set it discards (TODO93
+      T6b). The returned set is the FREE phase for every reader, so a
+      later phase settles from it as it would from the pipeline's forward.
 
     Output is a list of pseudo-gradients, one per learnable weight layer,
     matching the Geometry's parameter structure.

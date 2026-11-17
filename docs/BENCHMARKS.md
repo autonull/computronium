@@ -125,7 +125,7 @@ give **c = 4.125 with 0.0 % spread** (8→16→32), and the declared appendix is
 |---|---|---|---|---|---|---|---|---|
 | `backprop` | 0.100 | 0.000 | 4229 | 4494 | 0.941 | yes | 4.19 | 34.3 |
 | `backprop+ckpt` | 0.100 | 0.000 | 1637 | 1902 | 0.861 | reported | 4.80 | 39.6 |
-| `hybrid` | 0.100 | 0.000 | 3249 | 3513 | 0.925 | reported | 5.50 | 45.5 |
+| `hybrid` | 0.100 | 0.000 | 611 | 876 | 0.698 | reported | 4.27 | 34.6 |
 | `local` (PEPITA) | 0.100 | 0.000 | 3365 | 3630 | 0.927 | reported | 6.64 | 54.9 |
 
 Controls: the **instrument control passes** (`c = 4.125`, spread 0.0 %, within
@@ -136,22 +136,25 @@ hybrid 0.100/0.163/0.100. Frozen LR is 0.3 for every arm.
 
 Two findings, both measured, both named:
 
-- **T6b — the composed path pays the pipeline's store-all forward.** The hybrid's
-  credit-level trunk is flat at 81 MB (§2.3), but on the composed training path
-  its activation set is 3249 MB against the checkpointed arm's 1637 MB (1.98×).
-  Mechanism: `core/pipeline._run_train_step_tensor_impl` materialises
-  `forward_pass(...)` before the credit runs, and it does so with autograd
-  enabled although `HybridCredit.requires_autograd` is `False`; the chain is
-  held by the phase states. The `≤ 0.5×` activation claim is unreachable until a
-  credit may own its free pass. Lock:
-  `test_memory_frontier.py::test_the_hybrid_activation_set_is_half_the_checkpointed_arms`
-  (strict `xfail`; 843 MB vs 437 MB at the lock's smaller point).
+- **T6b — the composed path paid the pipeline's store-all forward (fixed and
+  locked).** The hybrid's credit-level trunk is flat at 81 MB (§2.3), but on the
+  composed training path its activation set was 3249 MB against the
+  checkpointed arm's 1637 MB (1.98×). Mechanism:
+  `core/pipeline._run_train_step_tensor_impl` materialised `forward_pass(...)`
+  before the credit ran, and it did so with autograd enabled although
+  `HybridCredit.requires_autograd` is `False`; the chain was held by the phase
+  states. Fix: a credit may own its free pass (`free_activations`), and the
+  pipeline then never materialises the store-all set — neither the pre-forward
+  nor the FREE settle nor the post-update free-metrics pass. At the lock's
+  smaller point the hybrid now reads **210 MB against the checkpointed arm's
+  437 MB (0.48×)**; the `≤0.5×` lock is live (`test_memory_frontier.py`,
+  no `xfail`), and a tripwire lock proves the pipeline's forward is gone for
+  the hybrid and present for the plain arm.
 - **T6c — the plain stack does not leave the plateau at the claim depth.** At
   L=32 every arm reports val_acc 0.100 with σ=0.000 and the backprop loss is
   pinned at 2.2132 from step 200 through step 1000 (measured separately), while
   L=8 reaches 0.419. A depth rung whose own baseline does not learn is not
-  evidence. The plan's stated fallback applies: LayerNorm (c≈2), or a
-  depth-stable geometry, with the appendix recomputed in the same commit.
+  evidence. §2.10 records the cheap pass's rung and its refusal.
 
 Ruler: val_acc on the full 10k test split; memory from `EpochResource`'s
 decomposition; forward-equivalents measured against one forward pass of the same
@@ -445,6 +448,56 @@ moving scale was not the degradation's mechanism and no code fix was applied.
 Command: `uv run python -m computronium.validation.substrate_ladder --device
 cpu`; replay from the cell log without training: `... --replay`. The table is
 `results/t93_d1/substrate.md`.
+
+### 2.10 The depth rung (T6c) — refused at its box
+
+**Question.** Does the depth-stable pass leave the L=32 plateau and reach the
+L=8 floor at one box? The cheap pass is `GeometryConfig.feedforward(
+stream_norm=True)`: Hinton's unit-scale stream (length sqrt(width) per
+post-activation), no parameters and no new primitive. The floor is the learning
+control's (`checkpointed L=8 − 1 pp`), never a second number. Box: CIFAR-10
+10k-image train subset / full 10k test, **W=512, B=2048, 200 steps**,
+`backprop` + `EuclideanUpdate`, ladder seed 21, confirmation seed 23.
+
+| cell | depth | pass | LR | val_acc | activations MB |
+|---|---|---|---|---|---|
+| plain | 8 | off | 0.3 | 0.385 | 157 |
+| plain | 32 | off | 0.3 | **0.100** | 565 |
+| normalized (shallow) | 8 | on | 3e-2 | 0.376 | 217 |
+| normalized | 32 | on | 3e-3 | 0.253 | 817 |
+| normalized | 32 | on | 1e-2 | 0.290 | 817 |
+| normalized | 32 | on | **3e-2** | **0.314** | 817 |
+| confirmation (seed 23) | 32 | on | 3e-2 | **0.326** | 817 |
+
+Floor 0.375. **Edge extension:** at LR 1e-1 the claim depth reads **0.100**
+(L=8 0.390), so the best point is interior at 3e-2 — the ladder's upper edge is
+taken and refused, not truncated. **Step extension (3x):** at 600 steps the
+normalized claim depth reads **0.360** against its own shallow cell's 0.392,
+still 3.2 pp below the L=8 value.
+
+**Verdict: refuse the cheap pass at this box.** It leaves the plateau on both
+seeds (0.100 → 0.314/0.326), but it misses the floor by 5.9 pp and 4.9 pp, and
+it costs **1.45x** the plain activation set (c ~ 6.2 against 4.1) — at the claim
+point (W=1024/B=8192) that is 6281 MB of 6554 MB budget. The refusal keeps the
+knob box (LR 3e-3/1e-2/3e-2, 200 steps), the reversal trigger (**LayerNorm,
+which sets c ~ 2 and requires the appendix recomputed in the same commit**, or
+the Innocenti depth-scaled init on a residual geometry), and the re-open command
+`uv run python -m computronium.validation.memory_frontier --rung --depth 32
+--width 512 --batch 2048 --steps 200`.
+
+**The claim-point rows** (W=1024, B=8192, 200 steps, seed 11), for the claim
+ladder's admission check:
+
+| cell | depth | pass | LR | val_acc | activations MB |
+|---|---|---|---|---|---|
+| plain | 8 | off | 0.3 | 0.419 | 1061 |
+| plain | 32 | off | 0.3 | 0.100 | 4229 |
+| normalized | 8 | on | 3e-3 / 1e-2 / 3e-2 | 0.411 / 0.411 / 0.406 | 1602 |
+| normalized | 32 | on | 3e-3 / 1e-2 / 3e-2 | 0.315 / 0.336 / **0.341** | 6281 |
+
+The Innocenti pre-screen (residual, W=512/B=2048, 200 steps, seed 11) reads
+0.446/0.434 at L=8/L=32 at LR 0.1 — 1.2 pp below its own shallow floor, so
+that trigger's first cell is the same point at 400 steps, not a verdict.
 
 ## 3. Open locks
 

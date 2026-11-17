@@ -12,12 +12,12 @@ point, or the cell is ``[regime-mismatch]`` and no memory claim can rest on it.
 
 **The mechanism.** A frontier claim needs the treatment arm's activation set
 below the checkpointed baseline's. ``backprop+ckpt`` passes that lock today
-(measured 0.39x). The hybrid does **not**: its composed path pays the
-pipeline's eager store-all forward on top of its lockstep trunk, measured
-3249 MB against the checkpointed arm's 1637 MB at L=32/B=8192. That lock is a
-strict ``xfail`` naming the mechanism (TODO93 T6b); when the pipeline lets a
-credit own its free pass, the marker must be flipped, and a strict xfail fails
-if the property quietly starts holding.
+(measured 0.39x). The hybrid passes it because it owns its free pass: the
+pipeline keeps one readout activation instead of the store-all forward the
+hybrid's head and trunk recompute anyway (TODO93 T6b, measured 210 MB against
+the checkpointed arm's 437 MB at L=32/B=4096/W=512). The tripwire lock keeps
+the capability load-bearing: with the owned pass removed, the pipeline's
+``forward_pass`` runs again and the hook records it.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 import pytest
 import torch
 
+from computronium.core import pipeline
 from computronium.core.system_trainer._resources import BINDING_SHARE
 from computronium.validation import memory_frontier as frontier
 
@@ -99,15 +100,6 @@ def test_checkpointing_halves_the_activation_set_on_the_composed_path(cifar) -> 
 
 
 @_GPU
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "T6b: the composed path materialises the pipeline's store-all forward "
-        "before the hybrid credit runs, so the lockstep trunk's flat peak is "
-        "not reached (measured 3249 MB vs the checkpointed arm's 1637 MB at "
-        "L=32/B=8192/W=1024)"
-    ),
-)
 def test_the_hybrid_activation_set_is_half_the_checkpointed_arms(cifar) -> None:
     hybrid = _cell("hybrid", cifar=cifar)
     checkpointed = _cell("backprop+ckpt", cifar=cifar)
@@ -115,6 +107,34 @@ def test_the_hybrid_activation_set_is_half_the_checkpointed_arms(cifar) -> None:
     assert hybrid.activations_mb <= 0.5 * checkpointed.activations_mb, (
         f"hybrid {hybrid.activations_mb:.0f} MB vs ckpt {checkpointed.activations_mb:.0f} MB"
     )
+
+
+def _step_calls(monkeypatch, arm: str) -> list[int]:
+    """One train step with the pipeline's store-all forward counted."""
+    calls: list[int] = []
+    original = pipeline.forward_pass
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "forward_pass", spy)
+    point = frontier.PilotPoint(depth=4, width=16, batch=8, steps=2)
+    system = frontier.build_arm(arm, point, lr=0.1, seed=1)
+    x = torch.randn(8, point.input_dim)
+    y = torch.randint(0, point.classes, (8,))
+    system.train_step(x, y)
+    return calls
+
+
+def test_the_hybrid_owns_its_free_pass(monkeypatch) -> None:
+    """The tripwire: a pipeline forward for the hybrid means the pass is lost."""
+    assert not _step_calls(monkeypatch, "hybrid")
+
+
+def test_the_plain_arm_reads_the_pipeline_forward(monkeypatch) -> None:
+    """Positive control: the tripwire above is load-bearing, not dead."""
+    assert _step_calls(monkeypatch, "backprop")
 
 
 def test_the_arms_are_wired_to_their_declared_credits() -> None:
@@ -168,3 +188,85 @@ def test_the_pilot_runner_writes_its_appendix(tmp_path) -> None:
     written = (tmp_path / "results.json").read_text(encoding="utf-8")
     assert '"controls_passed"' in written
     assert (tmp_path / "appendix.md").exists()
+
+
+def _rung_cell(
+    depth: int,
+    *,
+    val_acc: float,
+    stream_norm: bool = False,
+    lr: float = 0.03,
+    factor: float = 1.0,
+) -> frontier.DepthCell:
+    return frontier.DepthCell(
+        depth=depth,
+        stream_norm=stream_norm,
+        lr=lr,
+        seed=1,
+        val_acc=val_acc,
+        activations_mb=factor * 100.0 * depth,
+    )
+
+
+def test_the_depth_rung_verdict_reads_the_floor_and_the_confirmation() -> None:
+    """The depth rung's decision: plateau, lift, floor, and the second seed.
+
+    The gate is the shallow arm's floor, not a fresh number: a best point at
+    the floor boundary plus a confirmation seed below it must refuse.
+    """
+    floor = 0.375
+    plain = (_rung_cell(8, val_acc=0.39), _rung_cell(32, val_acc=0.10))
+    ladder = (
+        _rung_cell(32, val_acc=0.30, stream_norm=True, lr=1e-3, factor=1.45),
+        _rung_cell(32, val_acc=0.31, stream_norm=True, lr=1e-2, factor=1.45),
+    )
+    shallow = _rung_cell(8, val_acc=0.38, stream_norm=True)
+    lifted = frontier.DepthRung(
+        floor=floor,
+        plain=plain,
+        normalized_shallow=shallow,
+        normalized=ladder,
+        confirmation=_rung_cell(32, val_acc=0.37, stream_norm=True),
+    )
+    assert lifted.plateaued
+    assert lifted.left_the_plateau
+    assert not lifted.reaches_floor
+    assert lifted.best.val_acc == 0.31
+    assert lifted.activation_ratio == pytest.approx(1.45)
+
+    met = frontier.DepthRung(
+        floor=floor,
+        plain=plain,
+        normalized_shallow=shallow,
+        normalized=(*ladder, _rung_cell(32, val_acc=0.38, stream_norm=True, lr=3e-2)),
+        confirmation=_rung_cell(32, val_acc=0.385, stream_norm=True),
+    )
+    assert met.reaches_floor
+
+    no_plateau = frontier.DepthRung(
+        floor=floor,
+        plain=(plain[0], _rung_cell(32, val_acc=0.38)),
+        normalized_shallow=shallow,
+        normalized=ladder,
+        confirmation=_rung_cell(32, val_acc=0.39, stream_norm=True),
+    )
+    assert not no_plateau.plateaued
+
+
+def test_the_rung_point_carries_its_pass_into_the_geometry() -> None:
+    """The rung's coordinate is the point's pass, not a dropped argument."""
+    plain = frontier.build_arm(
+        "backprop",
+        frontier.PilotPoint(depth=4, width=8, batch=8, steps=2),
+        lr=0.1,
+        seed=1,
+    )
+    normalized = frontier.build_arm(
+        "backprop",
+        frontier.PilotPoint(depth=4, width=8, batch=8, steps=2, stream_norm=True),
+        lr=0.1,
+        seed=1,
+    )
+    assert plain.geometry.config.stream_norm is False
+    assert normalized.geometry.config.stream_norm is True
+    assert frontier.PilotPoint(stream_norm=True).scaled(depth=4).stream_norm is True

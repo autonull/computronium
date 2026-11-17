@@ -170,3 +170,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | Each arm gets a 3-point LR ladder at a disjoint ladder seed (59) and the middle settle (10), its best point is frozen, then the settle ladder 5/10/20 runs at that LR with a confirmation seed (60). The selected LR is part of the row and compute stays matched. |
 | Status | corrected — the ladder ran with the per-arm viability ladder |
 | Commit | this commit |
+
+| Field | Correction 18 — a store-all free pass measured a rule that never reads it |
+|---|---|
+| Original claim | The composed pilot's arm decomposition measured each credit's composed path, so the hybrid's 3249 MB activation set at L=32/B=8192/W=1024 was read as the hybrid's memory. It read 1.98× the checkpointed arm's 1637 MB, which would have closed the memory frontier (MPU1) on a memory disadvantage. |
+| Original metric | `EpochResource.activations_mb` with `core/pipeline._run_train_step_tensor_impl` materialising `forward_pass(...)` before the credit ran, and doing so with autograd enabled although `HybridCredit.requires_autograd` is `False`; the FREE settle and the post-update free-metrics pass materialised two more store-all sets. |
+| Audited procedure | At the lock point (L=32/W=512/B=4096) the hybrid's credit-level trunk is flat at 81 MB and its `compute_pseudo_gradient` reads only `x`/`y`, so the pipeline's activation set is a tensor the rule never reads. Measured after delegating the free pass: **210 MB against the checkpointed arm's 437 MB (0.48×)**; at the claim point the row moves 3249 → **611 MB** (0.37×), forward-equivalents 5.50 → 4.27, walltime 45.5 → 34.6 s. |
+| Affected conclusions | The T6b blocker row and the pilot's hybrid row in `docs/BENCHMARKS.md` §2.4; any memory comparison read from the composed path before the fix. The stop rule ("hybrid loses at matched memory") was never invoked. |
+| Replacement metric | A credit may own its free pass: `free_activations(substrate, geometry, x)` is optional on `CreditAssignment`, and the pipeline calls it instead of the pre-forward, the FREE settle, and the free-metrics settle. Locks: `test_memory_frontier.py::test_the_hybrid_owns_its_free_pass`, `::test_the_plain_arm_reads_the_pipeline_forward` (the tripwire's positive control), and `::test_the_hybrid_activation_set_is_half_the_checkpointed_arms`. |
+| Status | corrected — the pilot's hybrid row was re-measured at the claim point |
+| Commit | this commit |
