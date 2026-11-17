@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
-from computronium.core.system_trainer._resources import binding_verdict
+from computronium.core.system_trainer._resources import BINDING_SHARE, binding_verdict
 from computronium.core.system_trainer.spec import compose_system_from_configs
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -61,24 +61,41 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ACTIVATION_RATIO_MAX",
     "ADMISSION_BUDGET_MB",
     "ARMS",
+    "CLAIM_ARMS",
     "CLAIM_SEEDS",
+    "COMMITTED_REGISTRATION",
     "DECLARED_C",
+    "DELTA",
+    "DEPTH_RUNG",
     "FLOOR_MARGIN",
     "FROZEN_LR",
+    "INSTRUMENT_DEPTH",
     "LADDER_SEEDS",
     "LR_LADDER",
+    "N_MAX",
     "PILOT_SEEDS",
+    "REGISTRATION_DATE",
     "STREAM_LR_LADDER",
+    "BindingAppendix",
+    "BindingRow",
+    "ClaimCell",
     "DepthCell",
     "DepthRung",
+    "InstrumentControl",
+    "MemoryFrontierRegistration",
     "PilotPoint",
     "PilotReport",
+    "ScreenVerdict",
+    "build_registration",
     "claim_ladder",
     "depth_rung",
+    "register_memory_frontier",
     "run_learning_ladder",
     "run_pilot",
+    "run_screen",
 ]
 
 #: Activation coefficient measured on the claim geometry (TODO93 §4.1, T4a).
@@ -102,8 +119,30 @@ LADDER_SEEDS = (21, 22, 23)
 CLAIM_SEEDS = (101, 102, 103, 104, 105)
 DATA_SEED = 7
 
+#: T6a registers the depth rung the plain stack can still train: T6c refused
+#: the L=32 pass, and the plain stack stops learning between L=4 and L=16.
+DEPTH_RUNG = (4, 8)
+#: The instrument control's depth: two deltas above the claim point measure c
+#: at W=512/B=2048 without the 8 GB pilot's 4.5 GiB allocation (OOM guard).
+INSTRUMENT_DEPTH = 16
+#: The claim's two arms plus the plain arm the binding gate reads.
+CLAIM_ARMS = ("hybrid", "backprop+ckpt", "backprop")
+ACTIVATION_RATIO_MAX = 0.5
+N_MAX = 5
+REGISTRATION_DATE = "2026-11-16"
+COMMITTED_REGISTRATION = (
+    Path(__file__).resolve().parents[2]
+    / "configs"
+    / "preregistrations"
+    / "t93_memory_frontier_registered.json"
+)
+
 ARMS = ("backprop", "backprop+ckpt", "hybrid", "local")
 LR_LADDER = (0.1, 0.3, 1.0)
+#: The pre-registered material effect: one percentage point of accuracy.
+DELTA = 0.01
+#: The held-out test split's binomial resolution (~0.3 pp at 10k samples).
+ACCURACY_RESOLUTION = 0.003
 #: The learning control's bar: the shallow checkpointed arm minus this margin.
 FLOOR_MARGIN = 0.01
 #: Best point of the L=8 ladder per arm; frozen before the claim seeds run.
@@ -407,6 +446,48 @@ class LearningControl:
 
 
 @dataclass(frozen=True, slots=True)
+class InstrumentControl:
+    """Does the calibration cell read ``c·L·B·W·4`` within tolerance?"""
+
+    point: PilotPoint
+    measured_c: float
+    spread: float
+    tolerance: float
+    calibration: tuple[CalibrationRow, ...]
+
+    @property
+    def passed(self) -> bool:
+        return self.spread < self.tolerance and (
+            abs(self.measured_c - DECLARED_C) / DECLARED_C < self.tolerance
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimCell:
+    """One registered (arm, depth, seed) cell, priced but not measured.
+
+    ``activations_mb`` and ``peak_mb`` are the **plain** arm's ceiling for the
+    same geometry: a checkpointed or hybrid claim cell retains no more than the
+    plain stack, so admission is conservative rather than optimistic.
+    """
+
+    arm: str
+    depth: int
+    seed: int
+    lr: float
+    width: int
+    batch: int
+    steps: int
+    activations_mb: float
+    params_mb: float
+    peak_mb: float
+    affordable: bool
+    runnable: bool
+    measured: bool = False
+    skipped_reason: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class PilotReport:
     """The pilot's measured appendix: controls, rows, and the point they ran at."""
 
@@ -496,6 +577,293 @@ class PilotReport:
         (output_dir / "appendix.md").write_text(
             "\n".join(lines) + "\n", encoding="utf-8"
         )
+        return path
+
+
+@dataclass(frozen=True, slots=True)
+class BindingRow:
+    """One row of the binding arithmetic: peak, share, and the gate verdict."""
+
+    depth: int
+    width: int
+    batch: int
+    activations_mb: float
+    params_mb: float
+    peak_mb: float
+    activation_share: float
+    binding: bool
+
+
+@dataclass(frozen=True, slots=True)
+class BindingAppendix:
+    """The binding arithmetic at the claim box and the measured pilot point."""
+
+    share_floor: float
+    c: float
+    rows: tuple[BindingRow, ...]
+    pilot_appendix: BindingRow
+
+
+@dataclass(frozen=True, slots=True)
+class ScreenVerdict:
+    """The cheap falsifier at the registered rung: rung 2, not the claim.
+
+    ``hybrid`` and ``baseline`` are the best ladder points on the ladder seed;
+    ``confirmation_hybrid``/``confirmation_baseline`` repeat them on the
+    disjoint confirmation seed. The screen can refuse the claim, in which case
+    the claim run is not scheduled; a candidate screen is the trigger for it.
+    """
+
+    hybrid: ArmCell
+    baseline: ArmCell
+    confirmation_hybrid: ArmCell
+    confirmation_baseline: ArmCell
+
+    @property
+    def floor(self) -> float:
+        return self.baseline.val_acc - DELTA
+
+    @property
+    def activation_ratio(self) -> float | None:
+        if not self.hybrid.activations_mb or not self.baseline.activations_mb:
+            return None
+        return self.hybrid.activations_mb / self.baseline.activations_mb
+
+    @property
+    def confirmation_ratio(self) -> float | None:
+        if (
+            not self.confirmation_hybrid.activations_mb
+            or not self.confirmation_baseline.activations_mb
+        ):
+            return None
+        return (
+            self.confirmation_hybrid.activations_mb
+            / self.confirmation_baseline.activations_mb
+        )
+
+    @property
+    def meets_accuracy(self) -> bool:
+        return self.hybrid.val_acc >= self.floor
+
+    @property
+    def meets_memory(self) -> bool:
+        ratio = self.activation_ratio
+        return ratio is not None and ratio <= ACTIVATION_RATIO_MAX
+
+    @property
+    def confirmation_met(self) -> bool:
+        ratio = self.confirmation_ratio
+        return (
+            self.confirmation_hybrid.val_acc >= self.floor
+            and ratio is not None
+            and ratio <= ACTIVATION_RATIO_MAX
+        )
+
+    @property
+    def verdict(self) -> str:
+        if not self.meets_memory:
+            return "refuse"
+        if not self.meets_accuracy:
+            marginal = abs(self.hybrid.val_acc - self.floor) < ACCURACY_RESOLUTION
+            return "coordinate" if marginal else "refuse"
+        if not self.confirmation_met:
+            return "coordinate"
+        if abs(self.hybrid.val_acc - self.floor) < ACCURACY_RESOLUTION:
+            return "coordinate"
+        return "candidate"
+
+    @property
+    def reason(self) -> str:
+        ratio = self.activation_ratio
+        parts = [
+            f"hybrid {self.hybrid.val_acc:.3f} vs floor {self.floor:.3f} "
+            f"({'met' if self.meets_accuracy else 'below'})",
+            f"activation set {ratio:.2f}× the checkpointed arm "
+            f"({'met' if self.meets_memory else 'above'} the "
+            f"{ACTIVATION_RATIO_MAX:.1f}× bar)"
+            if ratio is not None
+            else "activation set unmeasured",
+        ]
+        if not self.confirmation_met:
+            parts.append("the confirmation seed does not repeat the screen")
+        return "; ".join(parts)
+
+    @property
+    def trigger(self) -> str:
+        return (
+            "T6c re-opens with LayerNorm (c≈2) or the Innocenti init, or a "
+            "depth where the hybrid's memory crossover and the stack's "
+            "trainability meet (L≥16)"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryFrontierRegistration:
+    """T6a: the memory-frontier claim, written before the claim cells run.
+
+    The registration fixes the claim, the depth rung, the per-arm frozen
+    learning rate, the claim seeds, the minimal ladder (30 priced cells), both
+    positive controls, the binding arithmetic, and the stop rule. It is not a
+    result: every registered cell is ``measured=False`` until a later session
+    runs the claim.
+
+    The claim is W1's sharper form -- accuracy within :data:`threshold` of the
+    checkpointed arm at no more than :data:`ACTIVATION_RATIO_MAX` its activation
+    bytes -- so no hypervolume reference point must be fixed. The alternative
+    (a hypervolume reference) is deliberately not registered.
+    """
+
+    claim: str
+    metric: str
+    threshold: float
+    alpha: float
+    min_seeds: int
+    created: str
+    point: PilotPoint
+    depth_rung: tuple[int, int]
+    pilot_seeds: tuple[int, ...]
+    ladder_seeds: tuple[int, ...]
+    claim_seeds: tuple[int, ...]
+    data_seed: int
+    lr_ladder: tuple[dict[str, object], ...]
+    lrs: dict[str, float]
+    instrument: InstrumentControl
+    learning: LearningControl
+    claim_cells: tuple[ClaimCell, ...]
+    binding: BindingAppendix
+    screen: ScreenVerdict | None
+    stop_rule: str
+
+    @property
+    def controls_passed(self) -> bool:
+        return self.instrument.passed and self.learning.passed
+
+    @property
+    def decision(self) -> str:
+        return "activation_ratio<=0.5x at accuracy within delta"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "claim": self.claim,
+            "metric": self.metric,
+            "threshold": self.threshold,
+            "alpha": self.alpha,
+            "min_seeds": self.min_seeds,
+            "created": self.created,
+            "point": asdict(self.point),
+            "box": {
+                "task": "cifar10",
+                "train_subset": TRAIN_SUBSET,
+                "test_samples": TEST_SAMPLES,
+                "fidelity": "L0",
+                "device": "cuda",
+                "depth": self.point.depth,
+                "depth_rung": list(self.depth_rung),
+                "width": self.point.width,
+                "batch": self.point.batch,
+                "steps": self.point.steps,
+                "epochs": self.point.epochs,
+                "batches_per_epoch": self.point.batches_per_epoch,
+                "dtype": "fp32",
+                "delta": self.threshold,
+                "floor": self.learning.floor,
+                "n_max": self.min_seeds,
+                "admission_budget_mb": ADMISSION_BUDGET_MB,
+                "depth_trigger": (
+                    "T6c re-opens with LayerNorm (c≈2) or the Innocenti "
+                    "depth-scaled init; until then the rung stays L=4→8"
+                ),
+            },
+            "depth_rung": list(self.depth_rung),
+            "pilot_seeds": list(self.pilot_seeds),
+            "ladder_seeds": list(self.ladder_seeds),
+            "claim_seeds": list(self.claim_seeds),
+            "data_seed": self.data_seed,
+            "lr_ladder": [dict(row) for row in self.lr_ladder],
+            "lrs": dict(self.lrs),
+            "controls": {
+                "instrument": asdict(self.instrument)
+                | {"passed": self.instrument.passed},
+                "learning": asdict(self.learning),
+            },
+            "decision": self.decision,
+            "claim_cells": [asdict(cell) for cell in self.claim_cells],
+            "binding": asdict(self.binding),
+            "screen": None
+            if self.screen is None
+            else {
+                **asdict(self.screen),
+                "verdict": self.screen.verdict,
+                "reason": self.screen.reason,
+                "trigger": self.screen.trigger,
+                "floor": self.screen.floor,
+                "activation_ratio": self.screen.activation_ratio,
+                "confirmation_ratio": self.screen.confirmation_ratio,
+            },
+            "stop_rule": self.stop_rule,
+        }
+
+    def markdown(self) -> str:
+        lines = [
+            f"# Memory frontier registration ({self.created})",
+            "",
+            self.claim,
+            "",
+            f"Depth rung L={self.depth_rung[0]}→{self.depth_rung[1]} at "
+            f"W={self.point.width}, B={self.point.batch}, "
+            f"{self.point.steps} steps, {self.threshold:.1%} delta, "
+            f"n_max={self.min_seeds}.",
+            "",
+            f"Instrument control {'PASS' if self.instrument.passed else 'FAIL'} "
+            f"(c={self.instrument.measured_c:.3f}, spread "
+            f"{self.instrument.spread:.1%}); learning control "
+            f"{'PASS' if self.learning.passed else 'FAIL'} "
+            f"(backprop {self.learning.backprop_acc:.3f} vs floor "
+            f"{self.learning.floor:.3f}).",
+            "",
+            "| Arm | LR | val_acc |",
+            "|---|---|---|",
+        ]
+        lines.extend(
+            f"| `{row['arm']}` | {row['lr']} | {row['val_acc']} |"
+            for row in self.lr_ladder
+        )
+        if self.screen is not None:
+            lines.extend([
+                "",
+                f"**Screen ({self.screen.verdict}).** {self.screen.reason}.",
+                f"Trigger: {self.screen.trigger}.",
+            ])
+        lines.extend([
+            "",
+            "| Arm | Depth | Seeds | LR | Peak MB | Admitted | Measured |",
+            "|---|---|---|---|---|---|---|",
+        ])
+        lines.extend(
+            f"| `{row.arm}` | {row.depth} | {len(self.claim_seeds)} | "
+            f"{row.lr} | {row.peak_mb} | {row.affordable} | {row.measured} |"
+            for row in self.claim_cells
+        )
+        lines.extend(["", f"**Stop rule.** {self.stop_rule}", ""])
+        return "\n".join(lines)
+
+    def write(self, output_dir: Path) -> Path:
+        """Write the registration and its table to the result directory."""
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / "memory_frontier.registered.json"
+        path.write_text(json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8")
+        (output_dir / "memory_frontier.registered.md").write_text(
+            self.markdown(), encoding="utf-8"
+        )
+        return path
+
+    def commit(self, path: Path = COMMITTED_REGISTRATION) -> Path:
+        """Commit the registration to the repo; never overwrite an existing one."""
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(self.to_dict(), indent=2) + "\n", encoding="utf-8"
+            )
         return path
 
 
@@ -658,6 +1026,7 @@ def _calibrate(
 def _learning_control(
     point: PilotPoint,
     *,
+    lrs: Mapping[str, float] = FROZEN_LR,
     device: str,
     seed: int,
     x_train: torch.Tensor,
@@ -671,7 +1040,7 @@ def _learning_control(
         arm: _measure(
             arm,
             shallow,
-            lr=FROZEN_LR[arm],
+            lr=lrs[arm],
             seed=seed,
             device=device,
             x_train=x_train,
@@ -691,6 +1060,267 @@ def _learning_control(
         margin=measured["backprop"] - floor,
         passed=measured["backprop"] >= floor,
     )
+
+
+def _best_lr(points: Mapping[str, float]) -> float:
+    """The ladder's best point; a tie keeps the smaller LR."""
+    return float(max(sorted(points, key=float), key=lambda lr: points[lr]))
+
+
+def _registered_cell(
+    point: PilotPoint, arm: str, *, depth: int, seed: int, lr: float, c: float
+) -> ClaimCell:
+    """Price one claim cell with the plain arm's ceiling for its geometry."""
+    scaled = point.scaled(depth=depth)
+    runnable = scaled.batch <= TRAIN_SUBSET
+    return ClaimCell(
+        arm=arm,
+        depth=depth,
+        seed=seed,
+        lr=lr,
+        width=scaled.width,
+        batch=scaled.batch,
+        steps=scaled.steps,
+        activations_mb=round(scaled.activation_mb(c=c), 1),
+        params_mb=round(scaled.params_mb(), 1),
+        peak_mb=round(scaled.peak_mb(c=c), 1),
+        affordable=scaled.affordable(),
+        runnable=runnable,
+        skipped_reason=""
+        if runnable
+        else f"batch exceeds the fixed {TRAIN_SUBSET}-image train subset",
+    )
+
+
+def _claim_cells(
+    point: PilotPoint, lrs: Mapping[str, float], *, c: float = DECLARED_C
+) -> tuple[ClaimCell, ...]:
+    """The minimal claim ladder: 3 arms × 2 depths × 5 paired seeds."""
+    return tuple(
+        _registered_cell(point, arm, depth=depth, seed=seed, lr=lrs[arm], c=c)
+        for arm in CLAIM_ARMS
+        for depth in DEPTH_RUNG
+        for seed in CLAIM_SEEDS
+    )
+
+
+def _binding(point: PilotPoint, *, measured_c: float) -> BindingAppendix:
+    """The binding appendix: arithmetic at the claim box and the pilot point."""
+
+    def row(source: PilotPoint, depth: int) -> BindingRow:
+        scaled = source.scaled(depth=depth)
+        activations = scaled.activation_mb(c=measured_c)
+        params = scaled.params_mb()
+        peak = activations + 2 * params
+        return BindingRow(
+            depth=scaled.depth,
+            width=scaled.width,
+            batch=scaled.batch,
+            activations_mb=round(activations, 1),
+            params_mb=round(params, 1),
+            peak_mb=round(peak, 1),
+            activation_share=round(activations / peak, 3),
+            binding=activations / peak >= BINDING_SHARE,
+        )
+
+    return BindingAppendix(
+        share_floor=BINDING_SHARE,
+        c=measured_c,
+        rows=tuple(row(point, depth) for depth in DEPTH_RUNG),
+        pilot_appendix=row(PilotPoint(), PilotPoint().depth),
+    )
+
+
+def build_registration(
+    *,
+    point: PilotPoint,
+    ladder: Mapping[str, Mapping[str, float]],
+    instrument: InstrumentControl,
+    learning: LearningControl,
+    screen: ScreenVerdict | None = None,
+    lrs: Mapping[str, float] | None = None,
+    c: float = DECLARED_C,
+    created: str = REGISTRATION_DATE,
+) -> MemoryFrontierRegistration:
+    """Build T6a's registration from the measured ladder and both controls.
+
+    This is the pure half of the runner: it prices the claim ladder and fixes
+    the stop rule without measuring a claim cell. The claim's rule is the
+    sharper W1 form -- accuracy within ``delta`` at ≤0.5× activation bytes --
+    so no hypervolume reference point is registered.
+    """
+    frozen = dict(lrs or {arm: _best_lr(points) for arm, points in ladder.items()})
+    if not instrument.passed or not learning.passed:
+        raise ValueError("a failed positive control invalidates the registration")
+    rows = tuple(
+        {
+            "arm": arm,
+            "lr": float(lr),
+            "val_acc": round(points[lr], 4),
+            "seed": LADDER_SEEDS[0],
+        }
+        for arm, points in ladder.items()
+        for lr in sorted(points, key=float)
+    )
+    return MemoryFrontierRegistration(
+        claim=(
+            "at the registered L=4→8 rung on CIFAR-10, the hybrid reaches the "
+            "checkpointed arm's accuracy within delta at no more than 0.5× its "
+            "activation bytes, at matched steps, width, batch, and optimizer"
+        ),
+        metric="val_acc",
+        threshold=DELTA,
+        alpha=0.05,
+        min_seeds=N_MAX,
+        created=created,
+        point=point,
+        depth_rung=DEPTH_RUNG,
+        pilot_seeds=PILOT_SEEDS,
+        ladder_seeds=LADDER_SEEDS,
+        claim_seeds=CLAIM_SEEDS,
+        data_seed=DATA_SEED,
+        lr_ladder=rows,
+        lrs=frozen,
+        instrument=instrument,
+        learning=learning,
+        claim_cells=_claim_cells(point, frozen, c=c),
+        binding=_binding(point, measured_c=c),
+        screen=screen,
+        stop_rule=(
+            "At n_max=5 paired seeds, promote only if the hybrid's paired 95% "
+            "activation-ratio interval lies at or below 0.5× and its accuracy "
+            "lies at or above the checkpointed arm's minus delta; if either "
+            "interval straddles its bar, record a coordinate with the trigger; "
+            "if the hybrid misses both, refuse with the measured mechanism. "
+            "Do not extend depth past L=8 until T6c re-opens."
+        ),
+    )
+
+
+def _screen(
+    point: PilotPoint,
+    *,
+    lrs: Mapping[str, float],
+    seeds: tuple[int, ...],
+    device: str,
+    data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
+) -> ScreenVerdict:
+    """Run the hybrid and the checkpointed arm at the frozen LR on two seeds."""
+    x_train, y_train, x_test, y_test = data
+
+    def cell(arm: str, seed: int) -> ArmCell:
+        return _measure(
+            arm,
+            point,
+            lr=lrs[arm],
+            seed=seed,
+            device=device,
+            x_train=x_train,
+            y_train=y_train,
+            x_test=x_test,
+            y_test=y_test,
+        )
+
+    return ScreenVerdict(
+        hybrid=cell("hybrid", seeds[0]),
+        baseline=cell("backprop+ckpt", seeds[0]),
+        confirmation_hybrid=cell("hybrid", seeds[1]),
+        confirmation_baseline=cell("backprop+ckpt", seeds[1]),
+    )
+
+
+def run_screen(
+    point: PilotPoint | None = None,
+    *,
+    lrs: Mapping[str, float] = FROZEN_LR,
+    seeds: tuple[int, ...] = LADDER_SEEDS[:2],
+    device: str = "cuda",
+) -> ScreenVerdict:
+    """The rung-2 screen at the registered point: the claim's cheap falsifier."""
+    return _screen(
+        point or PilotPoint(depth=DEPTH_RUNG[-1], width=512, batch=2048, steps=200),
+        lrs=lrs,
+        seeds=seeds,
+        device=device,
+        data=_cifar(),
+    )
+
+
+def register_memory_frontier(
+    *, device: str = "cuda", output_dir: Path = Path("results/t93_a")
+) -> MemoryFrontierRegistration:
+    """Run T6a: the per-arm LR ladder at L=8 and both positive controls.
+
+    The ladder is a screen; its best point per arm is frozen in the
+    registration, and the claim cells are priced but never run here. A failed
+    control invalidates the run instead of producing a registration.
+
+    Raises:
+        RuntimeError: On a non-CUDA device, an unaffordable point, or a failed
+            positive control.
+    """
+    if device != "cuda" and not device.startswith("cuda:"):
+        raise RuntimeError("the memory frontier registration needs CUDA controls")
+    point = PilotPoint(depth=DEPTH_RUNG[-1], width=512, batch=2048, steps=200)
+    if not point.affordable():
+        raise RuntimeError(
+            f"registration point needs {point.peak_mb():.0f} MB > budget "
+            f"{ADMISSION_BUDGET_MB:.0f} MB"
+        )
+    x_train, y_train, x_test, y_test = _cifar()
+    ladder = _learning_ladder(
+        point,
+        seeds=LADDER_SEEDS[:1],
+        device=device,
+        data=(x_train, y_train, x_test, y_test),
+    )
+    lrs = {arm: _best_lr(points) for arm, points in ladder.items()}
+    pilot = PilotPoint(depth=INSTRUMENT_DEPTH, width=512, batch=2048, steps=200)
+    measured_c, spread, calibration = _calibrate(
+        pilot,
+        device=device,
+        seed=PILOT_SEEDS[0],
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+    )
+    instrument = InstrumentControl(
+        point=pilot,
+        measured_c=measured_c,
+        spread=spread,
+        tolerance=0.10,
+        calibration=calibration,
+    )
+    learning = _learning_control(
+        point,
+        lrs=lrs,
+        device=device,
+        seed=LADDER_SEEDS[0],
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+    )
+    screen = _screen(
+        point,
+        lrs=lrs,
+        seeds=LADDER_SEEDS,
+        device=device,
+        data=(x_train, y_train, x_test, y_test),
+    )
+    registration = build_registration(
+        point=point,
+        ladder=ladder,
+        lrs=lrs,
+        instrument=instrument,
+        learning=learning,
+        screen=screen,
+        c=measured_c,
+    )
+    registration.write(output_dir)
+    registration.commit()
+    return registration
 
 
 def run_pilot(
@@ -774,19 +1404,15 @@ def run_pilot(
     return report
 
 
-def run_learning_ladder(
+def _learning_ladder(
+    point: PilotPoint,
     *,
-    depth: int = 8,
-    seeds: tuple[int, ...] = LADDER_SEEDS[:1],
-    device: str = "cuda",
+    seeds: tuple[int, ...],
+    device: str,
+    data: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
 ) -> dict[str, dict[str, float]]:
-    """The per-arm LR viability ladder at L=8: three points, one seed each.
-
-    Returns:
-        ``{arm: {lr: val_acc}}`` for every arm and ladder point.
-    """
-    point = PilotPoint(depth=depth)
-    x_train, y_train, x_test, y_test = _cifar()
+    """The per-arm LR ladder at one point; one CIFAR load serves every cell."""
+    x_train, y_train, x_test, y_test = data
     results: dict[str, dict[str, float]] = {}
     for arm in ARMS:
         results[arm] = {}
@@ -807,6 +1433,25 @@ def run_learning_ladder(
             ]
             results[arm][str(lr)] = fmean(cell.val_acc for cell in cells)
     return results
+
+
+def run_learning_ladder(
+    point: PilotPoint | None = None,
+    *,
+    seeds: tuple[int, ...] = LADDER_SEEDS[:1],
+    device: str = "cuda",
+) -> dict[str, dict[str, float]]:
+    """The per-arm LR viability ladder: three points, one seed each.
+
+    Returns:
+        ``{arm: {lr: val_acc}}`` for every arm and ladder point.
+    """
+    return _learning_ladder(
+        point or PilotPoint(depth=8),
+        seeds=seeds,
+        device=device,
+        data=_cifar(),
+    )
 
 
 STREAM_LR_LADDER = (3e-3, 1e-2, 3e-2)
@@ -972,8 +1617,40 @@ def _main() -> None:
         action="store_true",
         help="run the depth rung (plain plateau vs the normalized pass) only",
     )
+    parser.add_argument(
+        "--register",
+        action="store_true",
+        help="run T6a: the L=8 LR ladder and both controls, then register",
+    )
+    parser.add_argument(
+        "--registration-dir",
+        type=Path,
+        default=Path("results/t93_a"),
+        help="where the registration table is written",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
+    if args.register:
+        registration = register_memory_frontier(
+            device=args.device, output_dir=args.registration_dir
+        )
+        logger.info(
+            "registration: L=%d→%d lrs=%s controls=%s cells=%d committed=%s",
+            registration.depth_rung[0],
+            registration.depth_rung[1],
+            json.dumps(registration.lrs),
+            "PASS" if registration.controls_passed else "FAIL",
+            len(registration.claim_cells),
+            COMMITTED_REGISTRATION,
+        )
+        if registration.screen is not None:
+            logger.info(
+                "screen: %s (%s) trigger: %s",
+                registration.screen.verdict,
+                registration.screen.reason,
+                registration.screen.trigger,
+            )
+        return
     if args.ladder:
         ladder = run_learning_ladder(device=args.device)
         logger.info("LR ladder: %s", json.dumps(ladder))

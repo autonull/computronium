@@ -1,11 +1,11 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-16 · **v21 — F1 landed and refused composition at its box: the screen's best composition reads 0.669 and the random_projections family ladder reads 0.783 against 0.797 for the best single-axis default (bar 0.807), while the disjoint confirmation seed reads 0.814 — a 3.1 pp seed spread, wider than δ=1 pp. T6a is next; F2 is a five-seed trigger. Apparatus phase, not adjudication.**
-T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1
+**Status:** 2026-11-17 · **v22 — T6a landed at its box and its rung-2 screen refused the claim: at the registered L=4→8 point (W=512/B=2048/200 steps) the hybrid's best ladder point reads 0.167 against the 0.375 floor, its activation set is 1.22× the checkpointed arm's (103 vs 85 MB), and the disjoint confirmation seed does not repeat (0.154 vs 0.363). Both controls pass (c=4.25, spread 0.0%; backprop 0.385 vs floor 0.375), so the registration is written and committed; the claim run is not scheduled. T6c's LayerNorm re-open is the next trigger; F2 is a five-seed trigger. Apparatus phase, not adjudication.**
+T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
 landed: the truth pass, the memory decomposition, the ladder runner, the
 checkpointed baseline, the lockstep two-pass rung, the hybrid, the composed
 pilot, the routing refusal, the plasticity ladder, the retention ladder, the
-estimator atlas, the substrate ladder, its matched comparison, and the
-composition screen.
+estimator atlas, the substrate ladder, its matched comparison, the
+composition screen, and the memory-frontier registration.
 Measured: **c≈4.1** (not 1), lockstep **flat in depth** (66.3 MB FF / 58.5 MB
 PEPITA), hybrid trunk **flat at 81.0 MB**, pilot controls **pass** (c = 4.125,
 spread 0.0 %; L=8 learns 0.419); the pilot's two blockers are decided:
@@ -24,8 +24,11 @@ inside 0.05 pp on two seeds at 2 B/weight against 4 B/weight, while ternary
 refuses at this box (0.861 vs 0.913 on the confirmation seed). D2 has now
 refused that parity on cost (2.09× walltime, the programming budget); **F1 then
 landed and refused composition at its box** (screen 0.669, family ladder 0.783
-vs 0.797 reference), so T6a is the next screen; T6c's re-open (LayerNorm,
-c≈2) is queued with its trigger.
+vs 0.797 reference), and **T6a has now registered the memory frontier and its
+rung-2 screen refused the claim** (hybrid 0.167 vs floor 0.375; 1.22× the
+checkpointed arm's activation set at L=8; confirmation 0.154 vs 0.363). The
+claim run is not scheduled: **T6c's re-open (LayerNorm, c≈2) is the next
+trigger**, and F2 remains a five-seed trigger.
 
 **D1 landed and promoted the memristive arm (2026-11-16).** The substrate
 ladder ran 24 cells at one box: MNIST quick mode, 784-32-10, batch 32, 600
@@ -176,7 +179,7 @@ shrinks instead of accumulating.
 
 | Track | Capability card (what a user could do) | Strongest baseline | Cheapest decisive probe | Cost | Kill rule |
 |---|---|---|---|---|---|
-| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + T6c ⛔ (its cheap pass refused; LayerNorm re-open queued) + T6a | 1–2 sessions | hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → refuse A with a trigger (the memory side already passes; the depth side refused its cheap pass) |
+| **A. Memory frontier** (MPU1) | Train deeper at 8 GB at parity accuracy | `backprop+ckpt(√L)` | T6b ✅ (credit owns its free pass: 0.37× at the claim point) + T6c ⛔ (its cheap pass refused; LayerNorm re-open queued) + **T6a ✅ registered at the reduced L=4→8 box; its rung-2 screen refused the claim** (hybrid 0.167 vs floor 0.375, 1.22× at L=8) | 1–2 sessions | hybrid not ≤0.5× the baseline's **activation bytes** at parity at the frozen LR ladder's best point → **refused at the L=4→8 box; trigger is T6c's re-open (LayerNorm c≈2 / Innocenti init) or a depth ≥16 where the memory crossover and trainability meet** |
 | **B. Non-differentiable routing** (MPU2) | Train hard top-k without a surrogate | STE + load-balancing/z-loss | stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs (`benchmarks/joint/z3_fixed_weights.py`) | **hours** | gap flat across the 4-op ladder **at its best temperature/LR** → refuse B with a trigger |
 | **C. Streaming without replay** (MPU3) | Adapt at batch 1 with no replay buffer | backprop + SI/EWC ± small replay at matched bytes | batch-1 `SplitMNIST`: 3-point consolidation/LR ladder + 1 confirmation seed | **hours** | local at chance **at the best ladder point on 2 seeds** → refuse C (retention undefined) |
 | **D. Substrate-native training** ⛔ | Train on a constrained substrate at digital parity with less state | digital backprop at matched accuracy | **D1 landed**: memristive **0.910 vs 0.910** at settle 20, 2 vs 4 B/weight; ternary refused (0.861 vs 0.913). **D2 landed and refused**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp | 10 + 20 min | **D2 refused the substrate path at its walltime box** (the programming budget binds, not the width or drift); D3 is a trigger, not scheduled; ternary re-opens on a wider width or learnable α |
@@ -187,11 +190,12 @@ shrinks instead of accumulating.
 screen that could cancel it.* D1 promoted one arm; D2 spent the matched
 comparison and refused the path on cost, so **D3 does not fire**; F1 spent the
 composition screen and refused at its box, so **F2 does not fire on one seed**.
-**T6a is the next screen that can change a decision.** B, C, and E have each
+**T6a landed and its rung-2 screen refused the claim.** B, C, and E have each
 spent their cheap screen: B refused its depth axis, C closed at its saturation
-point, and E closed as an atlas. **Session order is therefore T6a, while A's
-memory blocker (T6b) is fixed and T6c's cheap pass refused, so its re-open is
-queued behind it. F2 is a five-seed trigger, and the closed tracks' triggers
+point, and E closed as an atlas. **Session order is therefore T6c's re-open:
+A's memory blocker (T6b) is fixed, T6a's registration is written, and its
+screen refused the claim at L=4→8 (0.167/103 MB vs 0.385/85 MB), so the claim
+run stays parked. F2 is a five-seed trigger, and the closed tracks' triggers
 stay in §14.**
 
 **Ranking, recomputed every session (§14):** expected decision value ÷ measured
@@ -351,23 +355,26 @@ check, not a claim, and each fails when its mechanism is removed.
 | **D2 ⛔** | **Matched substrate comparison**: `validation/matched_substrate.py`; 784-64-10, settle 20/40 screen, 5 paired seeds, digital backprop control, int8 QDQ control | `test_matched_substrate.py` (13) | **refused at the walltime box**: −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime** (limit 1.2×); QDQ −0.01 pp (the width is harmless); the programming budget binds; D3's drift trigger stays parked. Correction: the QDQ control now quantises (it cast to int8 and did not) |
 **Next (three sessions, not a DAG).**
 
-1. **F is now the cheapest rung that can change a decision:** 50 legal cells
-   against the best single-axis default, then a family ladder on the best-looking
-   family. D2 has refused the substrate path at its walltime box, so D3 is a
-   trigger, not a ticket.
+1. **T6c's re-open is now the cheapest rung that can change a decision:**
+   LayerNorm (c≈2) or the Innocenti init at L=16/32, then the claim only if
+   the plain stack trains and the hybrid reaches ≤0.5× the checkpointed arm's
+   activation set within δ. T6a landed and its rung-2 screen refused the claim
+   at L=4→8, so no claim run is scheduled.
 2. **A's blockers are decided:** T6b landed (a credit owns its free pass) and
-   T6c refused its cheap pass (its LayerNorm re-open is queued). **T6a** registers
-   with the L=4→8 depth rung unless T6c re-opens first.
+   T6c refused its cheap pass (its LayerNorm re-open is queued); **T6a is
+   registered** with the L=4→8 depth rung (reduced box, 30 priced cells).
 3. **Triggers, not tickets:** D3's drift row (D2 held parity but missed the
    1.2× walltime), a device-level/compiled quantisation of the pair, PC-ALM at
    its depth-100 box, the empty unbiased cells (score-function, forward-mode,
    zeroth order), C's 5-seed retention protocol, ternary's wider-width/learnable-α
-   box, and B's chained/Gumbel/k≥4 re-open are all in §14.
+   box, B's chained/Gumbel/k≥4 re-open, and F2's five-seed composition are
+   all in §14.
 
-T6a is **not** registered before step 3: a threshold written while the treatment's
-memory mechanism is absent on the claim path would be decided by a defect. T5
-(published parity) is a standing side track — it needs no primitive and every
-track's credibility depends on it.
+T6a **is** registered before the claim, and the rung-2 screen refused the claim
+at its box: a threshold written while the treatment's memory advantage is absent
+on the claim path would be decided by a defect, which is why the claim run is
+parked rather than scheduled. T5 (published parity) is a standing side track —
+it needs no primitive and every track's credibility depends on it.
 
 **The credibility gate comes first (P1).** A low number from a weak implementation
 is a defect, not a verdict. Before any claim, each credit we intend to publish
@@ -404,6 +411,15 @@ because the audit is what makes the memory thesis checkable at all.
 | the screen's reference is a composition | **the reference is the best legal single-axis arm, never a composition it judges** | a composition cannot be its own bar; the 41-arm sweep is the strongest default that structure reaches |
 | one seed can decide a composition | **a confirmation seed at the ladder's best width is a ruler, and δ must exceed the seed spread** | the family ladder moved 3.1 pp between seeds; a 1 pp δ is smaller than the measured spread, so the point is `refuse` with F2's five seeds as the trigger |
 | no composition box | **the box is `digits` at 57 forward-equivalents, a 50k parameter ceiling, and a 10 pp control band fixed from the pilot** | digits' parameter ceiling changes the composed cell, so it is part of the measurement; the pilot measured a 6.9 pp data-order swing before the run |
+
+**What changed in v21→v22 and why.**
+| v21 | v22 | Reason |
+|---|---|---|
+| T6a is the next screen | **T6a landed and its rung-2 screen refused the claim** | at the registered L=4→8 box the hybrid's best ladder point reads 0.167/103 MB against the ckpt arm's 0.385/85 MB (1.22×), and the confirmation seed reads 0.154 vs 0.363; no claim run is scheduled |
+| the pilot point is L=32/W=1024/B=8192 | **the registration's claim point is L=4→8/W=512/B=2048**, with the instrument control at the smaller L=16/W=512/B=2048 pilot | the 4.5 GiB pilot allocation is replaced by the smaller L=16/W=512/B=2048 instrument point under the OOM guard; the coefficient still measures from two depth deltas (c=4.25, spread 0.0%) and the claim cells price from the measured c |
+| the registration's claim is W1 at the 8 GB frontier | **the registered claim is W1's ≤0.5× activation-bytes form at the reduced box**, so no hypervolume reference point is registered | the reduced box is a screen, not the 8 GB claim; the claim run stays parked behind T6c |
+| T6a's registration has no screen | **`ScreenVerdict` is the rung-2 falsifier** | `verdict=refuse`, `reason` and `trigger` are in the raw JSON; a claim-table test reads them without trusting `ThresholdRegistration.from_dict`, which ignores the box and the binding gate |
+| next is the claim run | **next is T6c's re-open (LayerNorm c≈2 / Innocenti init)** | a registration whose treatment misses both bars at its own box cannot open a claim run; the depth crossover (L≥16) and trainability must meet first |
 
 **What changed in v17→v18 and why.**
 | v17 | v18 | Reason |
@@ -902,7 +918,8 @@ record of what exists.
 | T6 ✅ | Composed pilot at one binding point | A | 1 session | controls pass; two blockers named |
 | **T6b ✅** | **Composed-path memory**: a credit owns its free pass | A | landed 2026-11-16 | hybrid 210 vs ckpt 437 MB (0.48×) at the lock point and 611 vs 1637 MB (0.37×) at the claim point; xfail flipped; CORRECTION 18 |
 | **T6c ⛔** | **Trainable claim depth**: LayerNorm (c≈2) or depth-stable init, appendix recomputed | A | landed 2026-11-16 | **refused its cheap pass** (`stream_norm`): 0.314 / 0.326 vs floor 0.375, edge 1e-1 collapses, 3× steps 0.360, 1.45× bytes; trigger = LayerNorm (c≈2) or the Innocenti init |
-| T6a | Registration: floor, budgets, `n_max=5`, binding appendix, stop rule | A | hours | T6b landed; T6c refused → register with the L=4→8 depth rung, or re-open T6c first |
+| **T6a ✅** | **Memory-frontier registration**: floor, budgets, `n_max=5`, binding appendix, stop rule | A | landed 2026-11-16 (~2 min) | **registered and its rung-2 screen refused the claim**: at the L=4→8 box (W=512/B=2048) hybrid 0.167/103 MB vs ckpt 0.385/85 MB (1.22×); confirmation 0.154 vs 0.363; controls pass (c=4.25, spread 0.0%; backprop 0.385 vs floor 0.375); 30 claim cells priced, none run; trigger = T6c's re-open |
+| T6c re-open | Depth rung: LayerNorm (c≈2) or the Innocenti init, appendix recomputed | A | 1–2 sessions | the plain stack trains at L=16/32, and the hybrid's ratio is ≤0.5× with accuracy within δ; else a second trigger |
 | **B1 ⛔** | **Routing ladder**: STE-gap vs stacked discrete-op count 1/2/4/8 × 3 STE temperatures/LRs; soft-relaxation bound | B | landed 2026-11-16 | **refused at this box**: gap 0.819 → 0.660 (−0.159) at τ=0.25 and −0.037 on the confirmation seed vs δ=0.05; reference FD 0.013; both ends above the floor; B2 not run, trigger in §14 |
 | **C1 ✅** | **Plasticity ladder**: batch-1 SplitMNIST, 5 tasks, LR ladder (1e-3/1e-2/1e-1) + confirmation seed | C | landed 2026-11-16 | local **0.945 / 0.947** at LR 1e-3 on 2 seeds, control 0.839 / 0.893, floor 0.55 → **promote to C2**. Best point is the lower edge; a downward extension (3e-4/1e-4) is the next rung if an optimum is claimed |
 | **C2 ✅** | **Retention ladder**: 3-point EWC-strength ladder (λ = 1/10/100) at the frozen LR, local × EWC vs backprop × EWC, matched per-step cost | C | landed 2026-11-16 | local 0.952 / 0.015 vs control 0.963 / 0.020 at λ=100 (gain +0.005 < δ 0.032); confirmation 0.951 / 0.016 vs 0.958 / 0.024 → **close C at the saturation point**; task-start anchor defect fixed (CORRECTION 12) |
@@ -951,7 +968,8 @@ is the only one that needs five paired seeds on a real task.
 | 9b ⛔ | **A — T6c: the depth rung** | `validation/memory_frontier.py::depth_rung`; `--rung`; landed 2026-11-16 | **refused at this box**: plain L=32 0.100, stream-normalized 0.314 (seed 21) / 0.326 (seed 23) vs floor 0.375; edge 1e-1 → 0.100; 3× steps → 0.360; 1.45× activation bytes; trigger = LayerNorm (c≈2) or the Innocenti init on residual (§2.10) |
 | 10 ✅ | **D — D2 matched comparison** | `computronium/validation/matched_substrate.py`; landed 2026-11-16 | **refused at this box**: parity −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime** (limit 1.2×); QDQ −0.01 pp (width harmless); control 0.9366; the programming budget binds; D3's drift trigger stays parked |
 | 11 ✅ | **F — composition ladder** | `validation/composition_ladder.py`; landed 2026-11-16 | **refused at this box**: 50/50 cells measured; screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814 (3.1 pp drift); replayable from `results/t93_f1/`; next is **F2** (5 seeds) or T6a |
-| 12 | **A — T6a** (blocked on 9b's re-open) | `configs/preregistrations/t93_memory_frontier_registered.json` | registration with floor, δ, `n_max=5`, binding appendix; the depth rung is L=4→8 until T6c re-opens (the plain stack stops learning between depth 4 and 16 at W=512/B=2048/200 steps) |
+| 12 ✅ | **A — T6a registration** | `configs/preregistrations/t93_memory_frontier_registered.json`; replay `--register` | **registered and the rung-2 screen refused the claim** at the L=4→8 box (W=512/B=2048): hybrid 0.167/103 MB vs ckpt 0.385/85 MB (1.22×), confirmation 0.154 vs 0.363; controls pass (c=4.25, spread 0.0%; backprop 0.385 vs floor 0.375); 30 priced cells, none run; no claim run scheduled |
+| 13 | **A — T6c re-open** (the trigger) | `validation/memory_frontier.py::depth_rung`; re-open with LayerNorm (c≈2) or the Innocenti init at L=16/32 | the plain stack trains at the claim depth and the hybrid's activation ratio is ≤0.5× with accuracy within δ; otherwise a second trigger, recorded in §14 |
 | ∥ | **T5** — published parity | §3 method | one row per (credit, dataset, arch, backend path) with Δ and σ |
 | gate | **T7 / T8 / T9** | E1 closed (not promoted) / C1 promoted / trigger | T7 stays parked (E did not promote); T8's trigger fired but is a side track; T9 waits on MPU1 or a sequence axis |
 
@@ -1081,6 +1099,19 @@ the family selector is a median and refuses a singleton; the width ladder is
 2/4/6 non-default axes with the family credit kept; the screen sample is seeded,
 deterministic, and multi-axis; the reference sweep varies each axis and is legal;
 and the registration is written before the first cell).
+
+**Landed 2026-11-16 (T6a):** the registration and screen locks
+(`tests/unit/validation/test_memory_frontier_registration.py`: the registration
+cannot be missing a field -- claim, δ, `n_max=5`, the reduced box, the measured
+L=8 ladder with its frozen best per arm, the disjoint claim/data seeds, both
+controls, the 30 priced cells, the binding appendix, the stop rule; the raw-JSON
+loader split (`ThresholdRegistration.from_dict` ignores the extra keys, so the
+claim-table test, not the loader, enforces the binding gate); the minimal claim
+ladder is 3 arms × L=4/8 × 5 paired seeds and no depth ≥16; a failed control
+raises and writes no file; the binding rows price `peak = activations + 2·params`
+at a share ≥0.5; the screen refuses the claim when the hybrid is below the floor
+or above 0.5×, and is marginal within one held-out resolution; and write/commit
+never overwrites an existing registration).
 
 **Landed 2026-11-16 (C1):** a label-channel lock and a data-order lock.
 (1) The credit-facing `SystemState` carries the **global** class index
@@ -1218,7 +1249,8 @@ not scheduled, however cheap.
 | 2026-11-16 | D | matched substrate comparison: memristive vs the digital rule at matched settle compute, backprop control, int8 QDQ control | 5 paired seeds × 4 arms + 4 extension-screen cells | paired 95% interval on the accuracy gap (1σ = 0.3 pp); floor 0.55; parity 1 pp; cost 1.2×; device B/weight | MNIST quick, 784-64-10, B=32, 600 batches, 1 epoch, β=0.5, settle 20/40, CPU | **refused at the walltime box**: gap −0.31 pp (CI [−0.41, −0.22]) at **2.09× walltime**; QDQ −0.01 pp (width harmless), forward-equivalents 1.00×, 2 vs 4 B/weight; control 0.9366 → the programming budget binds; D3 parked; CORRECTION 19 (QDQ cast ≠ quantisation) | D2 ⛔ |
 | 2026-11-16 | F | composition screen: 50 legal multi-axis cells vs the best legal single-axis default, then the family ladder | 41 single-axis arms + 1 reference control + 50 screen + 3 ladder + 1 confirmation (96 cells) | accuracy on the full `digits` split; matched forward-equivalents (57); δ=1 pp; floor 0.55; control band 10 pp; param ceiling 50k | `digits` quick, 1797×64, 10 classes, B=32, 57 batches, 1 epoch, 1 seed, CPU, 50k params | **refused at this box**: reference 0.797 (`update`), screen best 0.669 (4 axes), `random_projections` ladder 0.092/0.783/refused at width 6 vs bar 0.807; confirmation 0.814 (3.1 pp seed spread > δ); control 0.867 (drift 6.9 pp, inside the 10 pp band); 50/50 measured | F1 ⛔ |
 | — | P1 | published-parity (3 publishables + hybrid trunk rule) | — | published ±1 pp / σ | — | — | T5 |
-| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | memory blocker fixed (T6b); depth rung L=4→8 until T6c re-opens | T6a |
+| 2026-11-16 | A | memory-frontier registration and its rung-2 screen (reduced L=4→8 box per the OOM guard) | 12 ladder + 4 screen + 3 calibration + 2 control cells | val_acc vs the learning floor (0.375); activation ratio vs 0.5×; δ=1 pp; c vs 4.1 (10%) | CIFAR-10 10k/10k, W=512, B=2048, L=4/8/16, 200 steps, seed 11/21/22, RTX 3080 10 GiB | **registered; screen refused the claim**: hybrid 0.167 / 103 MB vs ckpt 0.385 / 85 MB (1.22×), confirmation 0.154 vs 0.363; controls PASS (c=4.25, spread 0.0%; 0.385 vs 0.375); 30 priced cells; trigger T6c | T6a ✅ |
+| — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6a's screen refused at L=4→8; next trigger is T6c's re-open (LayerNorm c≈2 / Innocenti init) | T6c re-open |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
 | — | D | substrate-native training at matched accuracy | 5 paired seeds | state per step; accuracy; dtype constraints | D2 refused the path at its walltime box (2.09×); D3's drift rung is a trigger | — | D3 |
 | — | F | composition vs the best single-axis default | 41 arms + 50 screen + 3 ladder + 1 confirmation (96 cells) | ≥δ at matched forward-equivalents; δ=1 pp | F1 refused (0.669 / 0.783 vs 0.797; bar 0.807; confirmation 0.814 > δ as seed spread) | F2's five seeds; no run | F2 |
@@ -1228,11 +1260,11 @@ coordinate at a declared box** (the apparatus grew); a **laddered refusal with a
 trigger and a re-open command**; **a surprise that opens a new question (§0.2)**.
 **Not progress:** more cells, more prose, more primitives, a knob swept to pass.
 
-**Portfolio position, 2026-11-16 (rewrite each session).**
+**Portfolio position, 2026-11-17 (rewrite each session).**
 
 | Rank | Track | Decision at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 1–2 sessions | instrument done; **T6b fixed** (0.37× at the claim point); T6c refused → **T6a** registers at L=4→8 until its re-open |
+| 1 | **A** memory | hybrid ≤0.5× activations at parity? | 1–2 sessions | instrument done; **T6b fixed** (0.37× at the claim point); **T6a registered** and its screen refused (0.167 vs 0.375; 1.22× at L=8); **next is T6c's re-open**, the claim run stays parked |
 | 2 | **F** composition | does any 6-axis composition beat the best single axis? | trigger only (F2 = 5 seeds) | **F1 refused**: screen 0.669, family ladder 0.783 vs 0.797 reference (bar 0.807); confirmation 0.814 (3.1 pp > δ); F2 is a trigger |
 | 3 | **D** substrate | does memristive parity survive a matched-budget comparison? | trigger only | **D2 refused**: −0.31 pp at **2.09× walltime**; QDQ −0.01 pp; D3's drift row is parked |
 
@@ -1251,9 +1283,11 @@ seed and −0.037 on the confirmation seed, vs δ=0.05), so B2 is not run and th
 trigger in §14 carries the track.
 Why A is second: its instrument is done and its memory blocker is fixed (the
 hybrid reads 0.37× the checkpointed baseline at the claim point), but its depth
-blocker refused the cheap pass, so the registration's depth rung is L=4→8 and
-the LayerNorm re-open is the queued rung. **A is not abandoned** — it keeps its
-next rung now, and T6a is the start of the next session.
+blocker refused the cheap pass, so the registration's depth rung is L=4→8.
+**T6a is now written and its rung-2 screen refused the claim at that box**
+(hybrid 0.167/103 MB vs ckpt 0.385/85 MB; confirmation 0.154 vs 0.363), so
+the claim run is parked and **T6c's LayerNorm re-open is the next rung**. A is
+not abandoned: its registration and trigger stay in the ledger.
 Why D is parked: D2's 5 paired seeds found parity (−0.31 pp) but at 2.09×
 walltime, so the saving does not survive a matched-budget comparison and D3
 does not fire; the programming budget, not the width or drift, is the measured
@@ -1320,11 +1354,14 @@ session.
   closed at its saturation point; B1 landed and refused its depth axis; E1
   landed and closed as an atlas; D1 landed and promoted memristive; **D2 landed
   and refused the path at its walltime box**; **F1 landed and refused
-  composition at its box**. The next session runs **T6a**; T6b landed and
-  T6c's re-open is queued; F2 is a five-seed trigger. T5 is a standing side
-  track. T7 stays parked (E1 did not promote); T8's trigger fired with C1 but
-  is a side track; T9 waits on MPU1 or a sequence axis; B's, ternary's, and
-  D3's triggers are in §14.
+  composition at its box**. **T6a landed and its rung-2 screen refused the
+  claim** at the reduced L=4→8 box (hybrid 0.167/103 MB vs ckpt 0.385/85 MB;
+  confirmation 0.154 vs 0.363; controls PASS at c=4.25 and 0.385 vs floor
+  0.375), so **no claim run is scheduled**; the next session runs **T6c's
+  re-open** (LayerNorm c≈2 / Innocenti init) and F2 is a five-seed trigger.
+  T5 is a standing side track. T7 stays parked (E1 did not promote); T8's
+  trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence
+  axis; B's, ternary's, and D3's triggers are in §14.
 - Every ticket lands with its measurement recorded where the mechanism lives, not
   only in the log.
 - **Live from 2026-11-16:** C2 closed at the saturation point (λ=100): local
@@ -1346,15 +1383,16 @@ session.
   bytes) with the LayerNorm re-open as its trigger. **F1 landed and refused
   composition at its box**: reference 0.797, screen 0.669, family ladder 0.783
   vs bar 0.807, confirmation 0.814 (3.1 pp > δ); F2's five seeds are the
-  trigger. The next screen is **T6a**, with a L=4→8 depth rung until T6c
-  re-opens.
+  trigger. **T6a landed and its rung-2 screen refused the claim** (hybrid
+  0.167/103 MB vs ckpt 0.385/85 MB at L=8; confirmation 0.154 vs 0.363), so
+  the next trigger is **T6c's re-open**, not a claim run.
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
   result.
 ---
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v21 start: **T6a** (the L=4→8 depth rung); F1 landed and refused composition at its box (screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814), so F2 is a five-seed trigger. T6b landed and T6c refused its cheap pass. D1 promoted memristive; **D2 landed and refused the path at its walltime box** (2.09×, the programming budget binds), so D3 is a trigger. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed; T6b (composed-path memory) is fixed and T6c (depth trainability) refused its cheap pass, so T6a registers with the L=4→8 depth rung unless T6c re-opens first. |
+| 1. Order | **Portfolio rank, rewritten every session (§14)**, not a DAG. v22 start: **T6c's re-open** (LayerNorm c≈2 / Innocenti init at L=16/32); **T6a landed and its rung-2 screen refused the claim** at L=4→8 (hybrid 0.167/103 MB vs ckpt 0.385/85 MB; confirmation 0.154 vs 0.363), so no claim run is scheduled. F1 landed and refused composition at its box (screen 0.669, family ladder 0.783, reference 0.797, bar 0.807, confirmation 0.814), so F2 is a five-seed trigger. T6b landed and T6c refused its cheap pass. D1 promoted memristive; **D2 landed and refused the path at its walltime box** (2.09×, the programming budget binds), so D3 is a trigger. C1 promoted and C2 closed at its saturation point on 2026-11-16; **B1 landed and refused its depth axis** (trigger in §14), so B2 does not run; **E1 landed and closed as an atlas** (not promoted, not refused), so T7 stays parked while its PC-ALM depth-100 row is a trigger. T5 is a standing side track; T8's trigger fired with C1 but is a side track; T9 waits on MPU1 or a sequence axis. T4b and T6's pilot landed. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables + the arm P2–P4 uses. Not eight. Add the complexity-audit column; reproduce the published protocol and record σ. |
@@ -1496,12 +1534,18 @@ session.
   second pass originally ran outside `no_grad`, so each stored contrast's
   `grad_fn` pinned the whole activation chain and the "flat" peak grew
   101→577 MB — the lock's first measurement caught it.
-**T6a — pre-registration.**
-- `configs/preregistrations/t93_memory_frontier.json` — a `ThresholdRegistration`
-  for the accuracy delta/floor (`metric`, `threshold`, `min_seeds=5`) plus the
-  budgets, binding arithmetic, and stop rule as extra keys.
-  `ThresholdRegistration.from_dict` ignores extra keys, so a claim-table test
-  reads the raw JSON; do not assume the loader enforces the binding gate.
+**T6a — the registration (✅ landed 2026-11-16).**
+- `configs/preregistrations/t93_memory_frontier_registered.json` —
+  `MemoryFrontierRegistration` (in `validation/memory_frontier.py`) keeps the
+  claim, the meta-threshold (`metric`, `threshold=δ`, `min_seeds=5`, `alpha`),
+  the reduced box (L=4→8, W=512, B=2048, 200 steps, fp32, SGD+momentum), the
+  measured L=8 LR ladder (12 rows, best per arm frozen), the claim seeds
+  (101–105, disjoint from pilot 11–13 and ladder 21–23), the data-order seed
+  (7), both controls, the 30 priced claim cells, the binding appendix, and the
+  stop rule. `ThresholdRegistration.from_dict` ignores extra keys, so a
+  claim-table test reads the raw JSON; the loader does not enforce the binding
+  gate. The registration's claim is W1's **≤0.5× activation-bytes** form, so no
+  hypervolume reference point is registered.
 - register the **LR viability ladder** (3 points per arm at L=8, best frozen,
   **seeds disjoint from the claim**), the fixed epochs/`batches_per_epoch`, the
   claim seed list and data-order seed, the **minimal ladder** (§4: ~30 cells, not
@@ -1664,10 +1708,16 @@ session.
   with the backprop loss pinned at 2.2132 from step 200 to 1000, so the plain
   Linear+ReLU stack at the claim depth is not trainable and §4's LayerNorm
   fallback must be taken before any depth rung is registered.
-- **No registration was committed.** A threshold written while the treatment's
-  memory advantage is absent on the claim path would be decided by a defect.
-  T6a waits on T6c's re-open for the depth half (T6b landed), and its essentials (floor, δ, `n_max=5`, the
-  binding appendix, disjoint seeds) are recorded in §2/§8.1 ready to write.
+- **The registration was committed, and the screen refused the claim.** T6a
+  wrote the registration at the reduced L=4→8 box (W=512/B=2048/200 steps) per
+  the OOM guard: the instrument control measures c=4.25 from L=8/16/32 standard
+  deltas (spread 0.0%, within 10 % of the declared 4.1), and the learning
+  control reads backprop 0.385 vs floor 0.375 (PASS). The rung-2 screen then
+  measured the hybrid at 0.167 and 103 MB against the checkpointed arm's 0.385
+  and 85 MB (1.22×), with the confirmation seed at 0.154 vs 0.363, so the
+  claim is refused at this box and no claim run is scheduled. The trigger is
+  T6c's re-open (LayerNorm c≈2 or the Innocenti init) or a depth ≥16 where
+  the memory crossover and trainability meet.
 - **Locks.** `tests/property/test_memory_frontier.py` (8 tests, 21 s CUDA) holds
   the coefficient, the gate, the checkpointed arm's 0.39× activation set, and
   the arm wiring; the hybrid's composed-path property is a **strict xfail**
@@ -1932,11 +1982,52 @@ permanent fix.
   geometry.
 - **One coordinate for the registration.** The plain stack stops learning
   between depth 4 (0.399) and depth 16 (0.100) at W=512/B=2048/200 steps, so
-  T6a's depth rung is L=4→8 until T6c re-opens.
+  T6a's depth rung is L=4→8 until T6c re-opens. The registration's measured
+  rows: backprop 0.343/0.385/0.139 and backprop+ckpt the same; hybrid
+  0.100/0.167/0.100; local 0.340/0.350/0.145 at LR 0.1/0.3/1.0, all on seed 21.
 - **Locks.** `test_the_depth_rung_verdict_reads_the_floor_and_the_confirmation`
   (the verdict function: plateau, lift, floor, and the second seed) and
   `test_the_rung_point_carries_its_pass_into_the_geometry` (the coordinate
   reaches the geometry; removing the pass silently measures the plain arm).
+
+### Landed 2026-11-16 (T6a — what the code actually did)
+- **One registration, one screen, no claim run.** `validation/memory_frontier.py`
+  gained `_learning_ladder`, `_screen`/`run_screen`, `InstrumentControl`,
+  `ClaimCell`, `BindingRow`/`BindingAppendix`, `ScreenVerdict`,
+  `MemoryFrontierRegistration`, `build_registration`, and
+  `register_memory_frontier` (`--register`). The registration is written and
+  committed to `configs/preregistrations/t93_memory_frontier_registered.json`
+  before any claim; its 30 claim cells are priced with the measured coefficient
+  and never run.
+- **The OOM guard re-posed the box, and that is recorded.** The pilot point is
+  L=16/W=512/B=2048 (two depth deltas, c=4.25, spread 0.0 %) and the claim point
+  is the L=4→8 depth rung at the same width/batch, not the 4.5 GiB
+  L=32/W=1024/B=8192 allocation. The coefficient still cancels the cuBLAS
+  floor in the deltas, and the claim cells fit with a measured binding share
+  of 0.81/0.85.
+- **Measured and refused by the rung-2 screen.** The 12 ladder cells at L=8
+  (seed 21) read backprop 0.343/0.385/0.139, the same for `backprop+ckpt`,
+  hybrid 0.100/0.167/0.100, and local 0.340/0.350/0.145 at LR 0.1/0.3/1.0; the
+  best per arm freezes at 0.3. The screen then reads the hybrid at 0.167/103 MB
+  against the checkpointed arm's 0.385/85 MB (1.22×) and the confirmation seed
+  at 0.154 vs 0.363, so `verdict=refuse`: the claim run is not scheduled.
+- **Both controls pass.** Instrument c=4.25 from two deltas within 10 % of the
+  declared 4.1; learning backprop 0.385 against floor 0.375. A failed control
+  raises `ValueError` and writes no registration.
+- **No hypervolume reference point.** The registered claim is W1's ≤0.5×
+  activation-bytes form, so the sharper alternative is pre-registered and the
+  hypervolume form is deliberately absent.
+- **Locks.** `tests/unit/validation/test_memory_frontier_registration.py`
+  (11 tests, 11 s, no model trained: the essentials and the raw-JSON loader
+  split, disjoint seeds, the 30-cell minimal ladder, the frozen best point with
+  the smaller-LR tie, a failed control, the binding arithmetic, the screen's
+  refuse/candidate/coordinate verdicts, and the write-then-commit no-overwrite
+  rule). Replay: `uv run python -m computronium.validation.memory_frontier
+  --register --device cuda --registration-dir results/t93_a`.
+- **No defect in the mechanism; one serialization defect found and fixed.** The
+  first write dropped `ScreenVerdict`'s derived `verdict`/`reason`/`trigger`
+  because they are properties, not fields; `to_dict` now emits them explicitly
+  and the screen test fails when that line is removed.
 
 ### Landed 2026-11-16 (D2 — what the code actually did)
 - **One runner, one box, one screen.** `validation/matched_substrate.py`
@@ -2184,6 +2275,9 @@ arm), `runner.py:412` (`run_continual_learning`); `core/utils/surrogate.py:8` +
 **Net effect.** The truth pass and the decomposition are one day, not three. The
 **implementation** falsifier (the lockstep and the hybrid both work) cost ~6
 sessions and is closed; the first **research** falsifier (hybrid vs ckpt at a
-binding point) costs ~6–7; a claim-grade row ~10–11. T6/T6a is the critical path
-to a positive result: the hybrid now has a landed wrapper, measured parity, a
-store-all reference fixture, and a depth-flat peak.
+binding point) now has a registered box and a rung-2 refusal (0.167/103 MB vs
+0.385/85 MB; confirmation 0.154 vs 0.363), so the next rung is T6c's re-open,
+not a claim run. T6/T6a is no longer the critical path to a positive result:
+the hybrid has a landed wrapper, measured parity, a store-all reference fixture,
+and a depth-flat peak, but its memory advantage is absent at the trainable
+depth. The trigger is a depth ≥16 where both meet, or T6c's LayerNorm re-open.
