@@ -105,50 +105,23 @@ whose control is at chance cannot label anything (P1); only then is a census
 meaningful (P2); interactions require a fixed base (P3); the deep dive is chosen
 by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
 
-### Progress (session 13, 2026-11-18)
+### Queue (session 14; one table)
 
-| Step | State | Evidence / next |
-|---|---|---|
-| P0a inventory | **done** | census v3: 75 rows (73 axis + 2 gaps); `test_inventory_single_source`; `schema/primitives.py` deleted |
-| P0b record | after debt | schema change; unblocks claim checks and the replay hash |
-| P0.5 defects | **done** | six chance rows measured at 375/150k; `mean_norm` step fixed (`3558a59e`); spectral/elastic ladder open |
-| P0.75 binding | **done** | `sec_binding.py`; every cell carries `binding`; `test_binding_condition` |
-| P1 calibrate | partial | vision base: control 0.8914, 7.7 s/cell. Tabular/graph/sequence bases open |
-| P2 census | partial | 75 rows: 61 measured (31 bound, 30 inert), 8 defect, 6 refused, 0 missing; `own-knobs` after P0b |
-| P3–P5 | open | P3 needs P2's variance; P4 is chosen by P3; P5 is the external path |
+The base-box census is landed: 75 rows, 61 measured (31 bound, 30 inert), 8
+defect, 6 refused, 0 missing; box `mnist`/375/150k/seed 0, control 0.8914.
+The remaining work is one schema session, one calibration session and two claim
+sessions. A row without a gate is prose; a session without a claim is a sweep.
 
-The census's base is `mnist`, 1 epoch, 375 batches, 150k params, seed 0. Every
-defect names its mechanism in `map.json`: 3 sequence credits cannot read a
-vision shape, 5 rows exceed the parameter ceiling. A 60 s per-primitive cap
-refuses `natural_gradient` (no epoch inside the cap) — a cost defect, not a
-verdict. The map is a map of *one box*, so the next sessions are ordered by
-what it cannot answer:
+| # | Session | Closes | Gate |
+|---|---|---|---|
+| S1 | **Schema + debt** (no GPU) | the record and the box (P0b); delete the P1 track and map `confirmation`; one `MAP_VERSION`; one gap table; extract `_screen_coordinate`; README counts from the generator (it reads the registry); the inventory: fix `noisy`/`closed_form_ridge` and retire `rule_state`/`substrate_coupled` → **73 available, 0 gaps** | `test_box_identity`, `test_loop_has_no_bar`, `test_init_then_update_keeps_a_row`, `test_gap_table_single_source`, `test_readme_counts_match_census`, `test_spec_composes`; `ruff` no PLR09/C901 |
+| S2 | **Calibrate + bind** (~20 min GPU) | the bar (chance + 2σ at the ruler's resolution) and a 3-seed control per family; the `iris` base; the task-family filter (3 sequence credits become `refused`); the own-knobs pass (30 inert rows); the resource vector gains `memory_mb` and `energy_per_batch` | `test_control_power`, `test_task_family_filter`, `test_own_knobs`, `test_resource_vector` |
+| S3 | **Interaction** (P3, ~10 min GPU) | rank only `binding=bound` rows; the pair with the most variance; 1 seed per cell, 3 for the top; intervals, not a ranking | `test_interaction_power` |
+| S4 | **Claim + publish** (P4/P5) | ladder the surprising bound row to 3 points, then 5 paired at matched boxes; pre-registered margin; method cards, the committed `docs/sec/map.md`, `comp verify` | `test_paired_ci`, `test_map_summary_matches_census`, `test_extension_path` |
 
-1. **Debt, no compute** — close the six rows below in their order; each has a
-   gate, and a row without a gate is prose.
-2. **P0b, no training** — one record schema; `batch_size` alone refuses a
-   claim; every row carries a replay hash.
-3. **Own-knobs, 10–15 min GPU** — the 30 inert rows bind, or keep a named
-   unmet condition.
-4. **One family base (`iris`)** — a cheap control and measured cost; then `cora`
-   if the graph path needs it.
-5. **P3** — the census variance picks the pair; 1 seed per cell, 3 for the top
-   interactions.
-6. **P4, one claim** — today's candidates are defect probes: `diffusion` 0.116
-   at 136 s, `conv` 0.122 at 41 s, `spike_integration` 0.132 at 34 s.
-
-Do not run another sweep at the MNIST box: it adds rows, not answers.
-
-### Debt — the map's backlog (before P0b; no compute)
-
-| Debt | Fix (file) | Gate |
-|---|---|---|
-| Legacy bar: `run_p1_track` runs 1 batch with a local `chance=0.1` and `is_surprise` (D5 residual) | delete the P1 track, `--p1-from-map` and the map `confirmation` block; P3 is the confirmation layer | `test_loop_has_no_bar`: no `chance`/`is_surprise` in `sec_loop` |
-| `sec_init` writes `SEC-v2` while the map is v3 | one `MAP_VERSION` constant in `sec_census`, imported by `sec_init` and `sec_loop` | `test_init_then_update_keeps_a_row` |
-| Two joins, two gap tables: `NO_COORDINATE` vs `GAP_REASON` (D1 residual) | `sec_census` projects `surface.inventory`'s primitive rows; one reason per row | `test_gap_table_single_source`: same id and reason from both surfaces |
-| `run_p0_track` is 87 statements / 36 locals | extract `_screen_coordinate`; the loop selects and reports | `ruff check` has no `PLR09`/`C901` in `sec_loop.py` |
-| The map is gitignored, so the product is not reviewable | `sec_census --summary` writes a committed `docs/sec/map.md`: box, counts, per-axis states, defects | `test_map_summary_matches_census` |
-| The box lives in `Schedule`, `_box_summary`, the map row and `Coordinate` (D2) | P0b: one box type; every row is a projection of it | `test_box_identity` |
+Stop rules: a slice whose control is at chance is refused before it is priced; a
+pair with no power is marked, not reported; a claim is fixed-n, no peeking. The
+detailed decisions and done conditions follow.
 
 ### P0a — One inventory (no training; done) ✅
 
@@ -157,6 +130,11 @@ the census prints 75. `noisy` and `closed_form_ridge` are `available=False`
 with "no config classmethod — a capability gap". `ALL_PRIMITIVES` is deleted;
 the axis registry is the only list.
 **Gate:** `test_inventory_single_source` (75 total; every axis row an entry).
+**Open:** the two spec-only rows have two honest ends — fix their classmethods and
+add their axis rows, or retire their specs; the two no-op plasticities
+(`rule_state`, `substrate_coupled`) have the same choice. S1 adopts the 73-row
+target: fix the shipped two, retire the no-ops, and D9's `test_spec_composes`
+passes with no permanent gaps.
 
 ### P0b — One box, one record (schema change; 1 session)
 
@@ -193,7 +171,8 @@ and the cell is ≤ ~2 min. Publish `cells/hour`, measured, not estimated.
 **Box:** vision: `mnist`, 1 epoch, 375 batches, hidden 128, 150k, control
 0.8914, 5–60 s/cell. The next base is `iris` (tabular); graph and sequence
 follow.
-**Gate:** the pilot prints control ± σ; a slice with a chance control is refused.
+**Gate:** the pilot prints control ± σ and the bar (chance/majority + 2σ at the
+ruler's resolution); a slice with a chance control is refused.
 **Done when:** each family has a calibrated base and a measured cost per cell.
 
 ### P2 — The census (the first real map; ~2 h) ▶
@@ -208,8 +187,10 @@ refused counts per axis, and the defect list with mechanisms named.
 measured at its nearest legal box and marked `swapped`; each primitive is also
 measured at its own declared defaults and marked `own-knobs`. The measured base:
 375 batches, hidden 128, 150k ceiling, control 0.8914, 5–60 s/cell.
-**Open:** the own-knobs pass (after P0b); swap labels on defect rows; the replay
-hash (rides P0b); the three non-vision family bases.
+**Open:** the own-knobs pass (the varied axis at its config-classmethod
+defaults, companions at the base); the task-family filter (a sequence credit on
+MNIST is `refused`, not `defect`); `memory_mb` and `energy_per_batch` in the
+resource vector; swap labels on defect rows; the replay hash (P0b).
 **Gate:** every row reproducible; every `fail` names a mechanism; the report
 prints the inventory count.
 **Done when:** one map with no missing rows, no inflated status, and every inert
@@ -218,10 +199,10 @@ row named — the base-box map meets this; own-knobs extends it.
 ### P3 — The interaction slice (the map's structure; ~2 h)
 
 **Decision:** which axis pairs change each other at the fixed base?
-**Deliverable:** a factorial slice on the two axes with the most census variance
-(the substrate × credit pair is `PURPOSE.md` §3's substrate→algorithm question;
-credit × geometry is the fallback). 1 seed each at the base, the top interactions
-at 3 seeds; interaction effects with intervals, not a ranking.
+**Deliverable:** a factorial slice on the two axes with the most variance over
+`binding=bound` rows (the substrate × credit pair is `PURPOSE.md` §3's
+substrate→algorithm question; credit × geometry is the fallback). 1 seed each at
+the base, the top interactions at 3 seeds; intervals, not a ranking.
 **Box:** the P1 base, only the two varied axes changing.
 **Gate:** the control clears the bar in every cell; a pair with no power is
 marked, not reported.
@@ -287,9 +268,10 @@ before the first cell is a budget leak.
 
 ## 7. Definition of done
 
-- One inventory (75 census rows: 73 composable + 2 named gaps) projected into
-  census, map, README and method cards.
-- Every map row carries its task, base box, ruler, control and cost.
+- One inventory (73 available rows: 63 measured, 5 ceiling defects, 5 box
+  refusals; no permanent gaps) projected into census, map, README and method
+  cards.
+- Every measured row carries its task, base box, ruler, control and cost.
 - Each family has a calibrated base with a measured cells/hour.
 - No `measured` row called viable; no missing row; no `swapped` row labelled
   comparable; an inert row is never a result about its axis.
