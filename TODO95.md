@@ -29,24 +29,17 @@ cost.
 
 ---
 
-## 1. What the record says (measured 2026-11-18)
+## 1. What the record said before P0a (measured 2026-11-18)
 
 | Fact | Evidence | Consequence |
 |---|---|---|
-| Three inventories disagree | `schema/primitives.py:ALL_PRIMITIVES` has 62 (credit 14, update 12); the axis registry has 19 and 18 → 73; README says 71 | 11 primitives (5 credits, 6 updates) are absent, and `sec_loop.py:416` screens from the same short list |
-| The missing rows are all available | axis rows: `available=True` for the 11 | this is a stale hand list, not an unavailable set |
-| 62 entries at 57 boxes | `map.json` box variants | the rows are not comparable: each "pass" is at its own nearest-legal box |
-| One ruler for every primitive | all 62 rows say `val_acc on mnist` | wrong ruler for graph/tabular/sequence primitives; the box has no task key |
-| 21 of 61 accuracies ≤ 0.20 | `map.json` best_coordinate | MNIST chance is 0.10; the "pass" label is inflated for a third of the map |
-| The box carries no task, epochs, batch, seed | box = 6 axes only | the row cannot be reproduced, and the ruler is unstated |
-| The screen is uncalibrated | all 5 controls at `0.09375`, `cause=divergence` on digits | PASS/DEFECT at that box is a coin flip |
-| The P0 box was 32 batches | `P0_BATCH_LIMIT=32`; `adam` 0.198, `euclidean` 0.540 | at 375 batches: `adam` 0.927, `lion` 0.914, `euclidean` 0.894 — the box ranked by step size, not mechanism |
-| The P0 box declared an impossible ceiling | `P0_PARAM_BUDGET=10000`; `hidden_dim=128` composes 118,282 parameters | the screen never checked the ceiling: every row was outside its own box |
-| `mean_norm`'s default step was 10x too large | 0.01 → 0.101 (chance); 1e-3 → 0.887 at the same box | an absolute-displacement rule needs an absolute step, not an lr |
-| The screen minted its own verdict | `chance = 0.1; PASS if val_acc > chance + 0.02` | a second bar, and a verdict from a 1-seed cell — the thing this plan forbids |
-| Two implemented primitives cannot compose | `ClosedFormRidgePlasticity` and `NoisySubstrate` exist with specs, capability rows (C75) and acceleration specs, but the axis registry omits them | a capability that exists, is advertised in the README, and is unreachable from the space |
-| Five update primitives "pass" at chance | `adam` 0.198, `lion` 0.198, `mean_norm` 0.129, `spectral_constrained` 0.161, `elastic_consolidation` 0.161 vs `euclidean` 0.540 | these are standard optimizers: a chance score is a **step-size defect**, not a coordinate |
-| Every substrate lands in a 0.49–0.63 band | 9 substrate rows, one algorithm, one task | a 14 pp band answers "does the substrate perturb MNIST", not the substrate→algorithm question; that needs a substrate-sensitive metric/task |
+| Three inventories disagree | `ALL_PRIMITIVES` 62 vs the axis registry 73 vs README 71 | 11 available primitives absent; 2 implemented specs outside the registry |
+| 62 rows at 57 boxes, one ruler | `map.json` box variants; all rows `val_acc on mnist`; 21 of 61 ≤ 0.20 | rows are neither comparable nor reproducible; a third of the `pass` labels are inflated |
+| The box was 32 batches and a 10k ceiling | `P0_BATCH_LIMIT=32`; 118,282 parameters composed | ranked by step size; at 375 batches `adam` 0.198 → 0.927; every row was outside its own box |
+| `mean_norm`'s default step was 10× too large | 0.01 → 0.101 at the same box; 1e-3 → 0.887 | an absolute-displacement rule needs an absolute step, not an lr |
+| The screen was uncalibrated | 5 controls at `0.09375`, `cause=divergence` on digits | PASS/DEFECT at that box is a coin flip |
+| The screen minted its own verdict | `chance = 0.1; PASS if val_acc > chance + 0.02` | a second bar, and a judgment from a 1-seed cell |
+| Every substrate lands in a 0.49–0.63 band | 9 substrate rows, one algorithm, one task | a 14 pp band answers "does the substrate perturb MNIST", not the substrate→algorithm question |
 
 The pattern: **the map is a legality report with numbers attached.**
 
@@ -54,12 +47,9 @@ The pattern: **the map is a legality report with numbers attached.**
 
 ## 2. The unit of knowledge: a comparable cell
 
-A map row is a **cell** with five fields, and a row is only comparable when the
-four fixed fields match the slice:
-
-```
-cell = (varied axis value, base box, task + ruler, control, resource vector)
-```
+A map row is a **cell** with five fields — `(varied axis value, base box,
+task + ruler, control, resource vector)` — and a row is comparable only when
+the four fixed fields match the slice.
 
 - **Base box** — `Schedule` (task, batch_size, steps/task, epochs, seeds,
   device, dataset version). One base per slice; only the varied axes change.
@@ -90,22 +80,21 @@ A row whose varied field is not the only difference from the base is
 
 ---
 
-## 3. Seven defect classes and their locks
+## 3. The defect classes and their locks
 
 | # | Class | Permanent fix | Lock |
 |---|---|---|---|
-| D1 | **Inventory drift.** Three lists of primitives. | `AXES_REGISTRIES` is the only inventory; census, map, README and method cards are projections. | `test_inventory_single_source`: count == sum of axes, every primitive has a map row |
+| D1 | **Inventory drift** ✅ Three lists of primitives. | `AXES_REGISTRIES` is the only inventory; census, map, README and method cards are projections. | `test_inventory_single_source`: count == sum of axes, every primitive has a map row |
 | D2 | **Box unread.** Batch/steps/knobs are not checked against the claim. | `Schedule` **is** the box; add `batch_size`, `steps_per_task`; print it, store it, compare on claim. No parallel `Box` type. | `test_box_identity`: change `batch_size` alone → claim refuses |
 | D3 | **Incomparable rows.** 57 boxes, one ruler. | One base per slice; a row differing elsewhere is `swapped`; the ruler is per task family. | `test_slice_comparability`: a non-base row cannot be treated as comparable |
 | D4 | **Uncalibrated screen.** PASS at a box where the control is at chance. | Every slice publishes a control; below the bar → `chance`, no status. | `test_screen_power`: a constant arm yields `chance` |
-| D5 | **The screen mints a verdict.** P0 computed `PASS` above a local `chance = 0.1` — a second bar, and a judgment from one seed. | A screen emits measurements and execution defects only; a bar is a gate floor and a comparison is pre-registered. | `test_screen_has_no_verdict`: no `PASS`/`viable` key from `run_p0_track` |
+| D5 | **The screen mints a verdict** ✅ P0 computed `PASS` above a local `chance = 0.1` — a second bar, and a judgment from one seed. | A screen emits measurements and execution defects only; a bar is a gate floor and a comparison is pre-registered. | `test_screen_has_no_verdict`: no `PASS`/`viable` key from `run_p0_track` |
 | D6 | **Untested extension path.** No acceptance test adds a primitive. | A fake credit through the documented ramp → a map row in ≤60 s. | `tests/acceptance/test_extension_path.py` |
 | D7 | **Docs drift.** Recipes and numbers live in prose. | Every recipe runs at its declared box in `tests/docs/`. | `test_recipes_reproduce` |
-| D8 | **An axis that does not bind.** 9 substrates "pass" on an MLP. | Every slice declares its binding condition; a non-binding axis is `inert`. | `test_binding_condition`: a substrate row on MNIST is `inert`, not `pass` |
-| D9 | **Implemented but not composable.** 2 primitives exist outside the axis registry. | Registry derived from `primitives/*/spec.py`; every spec must compose. | `test_spec_composes`: every spec id resolves to an axis row |
+| D8 | **An axis that does not bind** ✅ 9 substrates "pass" on an MLP. | Every slice declares its binding condition; a non-binding axis is `inert`. | `test_binding_condition`: a substrate row on MNIST is `inert`, not `pass` |
+| D9 | **Implemented but not composable** ✅ 2 primitives exist outside the axis registry. | Registry derived from `primitives/*/spec.py`; every spec must compose. | `test_spec_composes`: every spec id resolves to an axis row |
 
-D1–D3 cost no compute. They are the difference between a map and a table of
-numbers.
+A debt row closes on its gate; an item without a gate is prose.
 
 ---
 
@@ -121,7 +110,7 @@ by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
 | Step | State | Evidence / next |
 |---|---|---|
 | P0a inventory | **done** | census v3: 75 rows (73 axis + 2 gaps); `test_inventory_single_source`; `schema/primitives.py` deleted |
-| P0b record | **next** | schema change; unblocks claim checks and the replay hash |
+| P0b record | after debt | schema change; unblocks claim checks and the replay hash |
 | P0.5 defects | **done** | six chance rows measured at 375/150k; `mean_norm` step fixed (`3558a59e`); spectral/elastic ladder open |
 | P0.75 binding | **done** | `sec_binding.py`; every cell carries `binding`; `test_binding_condition` |
 | P1 calibrate | partial | vision base: control 0.8914, 7.7 s/cell. Tabular/graph/sequence bases open |
@@ -135,18 +124,31 @@ refuses `natural_gradient` (no epoch inside the cap) — a cost defect, not a
 verdict. The map is a map of *one box*, so the next sessions are ordered by
 what it cannot answer:
 
-1. **P0b, no training** — one record schema; `batch_size` alone refuses a
+1. **Debt, no compute** — close the six rows below in their order; each has a
+   gate, and a row without a gate is prose.
+2. **P0b, no training** — one record schema; `batch_size` alone refuses a
    claim; every row carries a replay hash.
-2. **Own-knobs, 10–15 min GPU** — the 30 inert rows bind, or keep a named
+3. **Own-knobs, 10–15 min GPU** — the 30 inert rows bind, or keep a named
    unmet condition.
-3. **One family base (`iris`)** — a cheap control and measured cost; then `cora`
+4. **One family base (`iris`)** — a cheap control and measured cost; then `cora`
    if the graph path needs it.
-4. **P3** — the census variance picks the pair; 1 seed per cell, 3 for the top
+5. **P3** — the census variance picks the pair; 1 seed per cell, 3 for the top
    interactions.
-5. **P4, one claim** — today's candidates are defect probes: `diffusion` 0.116
+6. **P4, one claim** — today's candidates are defect probes: `diffusion` 0.116
    at 136 s, `conv` 0.122 at 41 s, `spike_integration` 0.132 at 34 s.
 
 Do not run another sweep at the MNIST box: it adds rows, not answers.
+
+### Debt — the map's backlog (before P0b; no compute)
+
+| Debt | Fix (file) | Gate |
+|---|---|---|
+| Legacy bar: `run_p1_track` runs 1 batch with a local `chance=0.1` and `is_surprise` (D5 residual) | delete the P1 track, `--p1-from-map` and the map `confirmation` block; P3 is the confirmation layer | `test_loop_has_no_bar`: no `chance`/`is_surprise` in `sec_loop` |
+| `sec_init` writes `SEC-v2` while the map is v3 | one `MAP_VERSION` constant in `sec_census`, imported by `sec_init` and `sec_loop` | `test_init_then_update_keeps_a_row` |
+| Two joins, two gap tables: `NO_COORDINATE` vs `GAP_REASON` (D1 residual) | `sec_census` projects `surface.inventory`'s primitive rows; one reason per row | `test_gap_table_single_source`: same id and reason from both surfaces |
+| `run_p0_track` is 87 statements / 36 locals | extract `_screen_coordinate`; the loop selects and reports | `ruff check` has no `PLR09`/`C901` in `sec_loop.py` |
+| The map is gitignored, so the product is not reviewable | `sec_census --summary` writes a committed `docs/sec/map.md`: box, counts, per-axis states, defects | `test_map_summary_matches_census` |
+| The box lives in `Schedule`, `_box_summary`, the map row and `Coordinate` (D2) | P0b: one box type; every row is a projection of it | `test_box_identity` |
 
 ### P0a — One inventory (no training; done) ✅
 
@@ -279,10 +281,9 @@ measurement there.
   documents longer than 300 lines.
 
 **What made this plan wrong once:** a retry chain spent a whole axis on one
-primitive, so the sweep was not affordable. The census now runs axis by axis and
-accumulates rows, and a 60 s per-primitive cap refuses a cell it cannot price.
-The remaining falsifier: a session that cannot name its claim before the first
-cell is a budget leak, not research.
+primitive. The census now accumulates axis by axis and a 60 s cap refuses an
+unpriceable cell. The remaining falsifier: a session that cannot name its claim
+before the first cell is a budget leak.
 
 ## 7. Definition of done
 
