@@ -513,14 +513,22 @@ No slides. The cell log is the record. The map is the result.
 **P1 Confirmation (38 PASS primitives, 3 seeds):** 3 surprises (same 3 parameter_update: adam, ortho_adam, lion)
 **New primitives confirmed working:** NCA, routing, predictive_settling, pc_alm, fast_weights, substrate_coupled, rule_state, temporal_psi, thermodynamic_contrast, elastic_consolidation, analog, optical, complex, ntm
 
-**UNAVAILABLE (legitimate - require specific companion axes):**
-- neuromorphic substrate (needs spike_integration/energy_minimization/diffusion dynamics)
-- quantum substrate (fundamentally incompatible with standard training)
-- recurrent geometry (needs energy_minimization/predictive_settling/error_predictive_coding/pc_alm/diffusion dynamics)
-- graph geometry (needs edge_index)
-- spike_integration dynamics (needs spiking/target_inversion/target_prop/temporal_trace credit)
-- diffusion dynamics (incompatible with gradient credit)
-- conflict_adaptive plasticity (replaces readout, breaks gradient reachability)
+**UNAVAILABLE (7) — verified by actual testing, not assumptions:**
+| Primitive | Actually Works With | Fails With | Notes |
+|-----------|---------------------|------------|-------|
+| neuromorphic substrate | energy_minimization + gradient (0.563) | instantaneous, spike_integration, diffusion | Only energy_minimization works |
+| quantum substrate | instantaneous + gradient (0.603 at 5 epochs) | — | Likely mock/fallback implementation |
+| recurrent geometry | energy_minimization + gradient (0.442) or thermodynamic_contrast (0.414); predictive_settling + thermodynamic_contrast (0.552) | instantaneous, error_predictive_coding, pc_alm, diffusion | PEPITA/local_supervision fail (require feedforward) |
+| graph geometry | — | all credits (gradient, thermodynamic_contrast, local_supervision, pepita) | Needs edge_index |
+| spike_integration dynamics | target_inversion (0.197 digital, 0.193 neuromorphic); temporal_trace (0.166 neuromorphic) | gradient, surrogate, pepita | Works on DIGITAL substrate too |
+| diffusion dynamics | — | all credits (gradient, target_inversion, temporal_trace, pepita, surrogate) | Fundamentally incompatible with standard credits |
+| conflict_adaptive plasticity | — | gradient | Replaces readout, breaks gradient reachability |
+
+**CORRECTION from earlier claims:**
+- Recurrent geometry does NOT work with error_predictive_coding, pc_alm, diffusion — only energy_minimization and predictive_settling
+- Spike integration DOES work on digital substrate with target_inversion (not just neuromorphic)
+- Diffusion dynamics fails with ALL credits, not just gradient
+- Quantum substrate actually WORKS (0.603) — likely a mock
 
 **Next Experiment:**
 - Run R1/R2 tracks with PEPITA (already done - kill rules triggered)
