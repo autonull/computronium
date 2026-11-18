@@ -7,6 +7,24 @@
 
 ---
 
+## Next (measured 2026-11-18, Session 11)
+
+| # | Item | State | Next check |
+|---|---|---|---|
+| R1 | one legality table | 5 axis-value tables lifted; `valid_combinations` matrix deleted | rows still literal: attention credits, transformer pairing, the local family, `pc_alm`, NCA/NTM fast weights, nonlayered |
+| R1b | `_compile_expr` | compiles 9 of ~30 DSL nodes | add a row using `le`/`implies`, call the planner |
+| R2 | every axis `raise` is a declaration | open | `rg "raise (Value|Type)Error" computronium/ontology/{credit,dynamics,update}` |
+| R3 | scale gate | **green**: 0 defects, 0 uncovered, 69 covered | `comp coverage combinations --task iris --task mnist --task cora --budget 128 --strict` |
+| R4 | concrete defects | fixed — the `graph`+`target_inversion`/`lion` row was the nudge's ignore sentinel | `tests/property/test_masked_target_lock.py` |
+| R5 | screen on the thesis task | open | batch-1 SplitMNIST + EWC, not MNIST |
+| R6 | no second tables | five removed; one class-index form | `rg "one_hot" computronium/core computronium/ontology` |
+
+**Known red, not this plan:** the property suite carries ~35 pre-existing
+failures — gallery provenance digests, README build, banned phrases in
+`docs/PROOF.md`, the lint ratchet. They fail identically at `683c9698`.
+
+---
+
 ## 0. The Loop
 
 ```python
