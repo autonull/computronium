@@ -423,7 +423,7 @@ def get_legal_coordinate_for_primitive(
 
     # Build coordinate with minimal params - only set structural params that are
     # universally required. Let the schema defaults handle geometry-specific params.
-    params = {
+    params: dict[str, Any] = {
         "credit.lr": 0.01,
         "update.lr": 0.01,
     }
