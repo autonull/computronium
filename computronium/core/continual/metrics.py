@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.core.continual.constants import CL_CLASSES_PER_TASK
+
 
 if TYPE_CHECKING:
     from computronium.core.continual.system import ContinualJointSystem
@@ -21,6 +21,10 @@ class CLConfig:
     input_dim: int = 784
     hidden_dim: int = 256
     output_dim: int = 10  # CL_TOTAL_CLASSES
+
+    # Task structure
+    num_tasks: int = 5
+    classes_per_task: int = 2
 
     # Training
     epochs_per_task: int = 5
@@ -49,6 +53,10 @@ class CLConfig:
     seed: int = 42
     protocol: str = "task_incremental"  # or "task_free"
     num_workers: int = 0  # 0 to avoid multiprocessing resource leaks
+
+    @property
+    def total_classes(self) -> int:
+        return self.num_tasks * self.classes_per_task
 
 
 @dataclass
@@ -89,6 +97,7 @@ def compute_cl_metrics(  # ruff: ignore[complex-structure, too-many-locals]
     task_loaders: list,
     current_task: int,
     accuracy_matrix: list[list[float]] | None = None,
+    classes_per_task: int = 2,
 ) -> CLMetrics:
     """Compute comprehensive CL metrics."""
     metrics = CLMetrics()
@@ -111,12 +120,12 @@ def compute_cl_metrics(  # ruff: ignore[complex-structure, too-many-locals]
                 y = y.to(device)  # ruff: ignore[redefined-loop-name]
                 logits = model(x, task_id=i)
                 # Mask to task-relevant classes
-                task_start = i * CL_CLASSES_PER_TASK
-                task_end = task_start + CL_CLASSES_PER_TASK
+                task_start = i * classes_per_task
+                task_end = task_start + classes_per_task
                 task_logits = logits[:, task_start:task_end]
                 pred = task_logits.argmax(dim=1)
-                # Map global labels to local (0/1)
-                local_y = y % CL_CLASSES_PER_TASK
+                # Map global labels to local
+                local_y = y % classes_per_task
                 correct += (pred == local_y).sum().item()
                 total += y.shape[0]
         acc = correct / total if total > 0 else 0.0

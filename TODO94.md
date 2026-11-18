@@ -337,6 +337,47 @@ No slides. The cell log is the record. The map is the result.
 
 ---
 
+### Session 2 — 2026-11-18
+**Decision:** Implement R2 track and expand P0 delta screening across all axes.
+
+**Experiments:**
+1. Added `PermutedMNIST` task (20 tasks, 10 classes each) in `domains/vision.py`
+2. Updated continual learning runner to support variable `num_tasks` and `classes_per_task` via `CLConfig`
+3. Implemented `run_r2_track` in `sec_loop.py` (Permuted MNIST, 20 tasks, local_ewc vs backprop_ewc, 5 seeds)
+4. Expanded `get_legal_coordinate_for_primitive` to handle geometry-specific params for all axes
+5. Fixed P0 delta to read screening status from `map.json` and catch validation errors as UNAVAILABLE
+6. Ran P0 delta with `--max-primitives 50` → screened 36 primitives across all 6 axes
+
+**Box:** Permuted MNIST, batch 32, 1 epoch/task, W=256, local×EWC vs backprop×EWC, 5 data-order seeds
+
+**Rung / stop:** R2 running (10 cells, ~25 min on CPU); P0 complete (36 primitives: 15 PASS, 1 DEFECT, 8 UNAVAILABLE, 12 COORDINATE)
+
+**Results (P0):**
+- substrate: digital PASS, sparse/ternary PASS, complex PASS, analog/memristive/neuromorphic/optical/quantum UNAVAILABLE
+- geometry: feedforward/tile PASS, tile_mesh/conv/attention/spatial_lattice COORDINATE, recurrent/causal_transformer/graph/ntm UNAVAILABLE, nca/routing DEFECT
+- dynamics: energy_minimization/instantaneous PASS, predictive_settling/error_predictive_coding/spike_integration UNAVAILABLE
+- credit: gradient PASS (others not tested yet)
+- update: euclidean/adam/lion/spectral_constrained/mean_norm/role_split PASS, natural_gradient COORDINATE, elastic_consolidation UNAVAILABLE
+- plasticity: null PASS (others not tested yet)
+
+**Triage:**
+- P0 delta working across all axes; map.json updated with 36 entries
+- R2 running — will determine if local credit scales to 20-task stream
+
+**Fixes Applied:**
+- Added `PermutedMNIST` class with fixed permutations per task
+- Made `CLConfig` support `num_tasks` and `classes_per_task` (with `total_classes` property)
+- Updated continual learning runner, arms, and training to use `config.classes_per_task` instead of hardcoded `CL_CLASSES_PER_TASK=2`
+- Fixed coordinate building for all geometry types (feedforward, recurrent, conv, graph, tile, tile_mesh, nca, spatial_lattice)
+- Caught validation errors in P0 as UNAVAILABLE instead of DEFECT
+
+**Next Experiment:**
+- Wait for R2 completion
+- If R2 passes → promote to claim; if fails → investigate D track (memristive + local)
+- Run P1 confirmation on P0 passes
+
+---
+
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
 **Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`

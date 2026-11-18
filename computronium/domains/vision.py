@@ -21,6 +21,7 @@ from computronium.domains.base import (
 
 __all__ = [
     "SplitMNIST",
+    "PermutedMNIST",
     "VisionTask",
 ]
 
@@ -402,6 +403,168 @@ class SplitMNIST(DomainTask):
         """Evaluate model on all 5 tasks."""
         results = []
         for task_id in range(5):
+            self.set_task(task_id)
+            results.append(self.evaluate(model, split))
+        return results
+
+
+class PermutedMNIST(DomainTask):
+    """Permuted-MNIST continual learning benchmark.
+
+    Each task is the full MNIST 10-class classification with a fixed
+    random permutation of the input pixels. The continual learning
+    challenge is to learn all tasks sequentially without catastrophic
+    forgetting.
+    """
+
+    def __init__(
+        self,
+        name: str = "permuted_mnist",
+        data_dir: str = "./data",
+        download: bool = True,
+        num_workers: int = 2,
+        task_id: int | None = None,
+        num_tasks: int = 20,
+        seed: int = 42,
+        **kwargs,
+    ):
+        super().__init__(name, **kwargs)
+        self.data_dir = data_dir
+        self.download = download
+        self.num_workers = num_workers
+        self.task_id = task_id
+        self.num_tasks = num_tasks
+        self.seed = seed
+        self._full_train_ds = None
+        self._full_test_ds = None
+        self._permutations: list[torch.Tensor] = []
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.VISION
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.VISION,
+            description=f"Permuted-MNIST continual learning ({self.num_tasks} tasks)",
+            default_metrics=["accuracy", "loss", "backward_transfer", "forgetting"],
+            supported_tasks=["continual_learning", "classification"],
+            default_batch_size=64,
+            default_lr=1e-3,
+            requires_spatial=True,
+            tags=["vision", "continual", "mnist", "permuted"],
+        )
+
+    def _generate_permutations(self) -> list[torch.Tensor]:
+        """Generate fixed random permutations for each task."""
+        generator = torch.Generator().manual_seed(self.seed)
+        permutations = []
+        for _ in range(self.num_tasks):
+            perm = torch.randperm(784, generator=generator)
+            permutations.append(perm)
+        return permutations
+
+    def _apply_permutation(self, data: torch.Tensor, perm: torch.Tensor) -> torch.Tensor:
+        """Apply permutation to flattened images."""
+        # data shape: (N, 1, 28, 28) -> flatten to (N, 784), permute, reshape
+        flat = data.view(data.size(0), -1)
+        permuted = flat[:, perm]
+        return permuted.view(data.size(0), 1, 28, 28)
+
+    def setup(self) -> None:
+        """Load full MNIST and generate permutations."""
+        from torchvision import datasets
+
+        self._full_train_ds = datasets.MNIST(
+            self.data_dir,
+            train=True,
+            download=self.download,
+            transform=None,
+        )
+        self._full_test_ds = datasets.MNIST(
+            self.data_dir,
+            train=False,
+            download=self.download,
+            transform=None,
+        )
+
+        self._permutations = self._generate_permutations()
+        self._input_dim = (1, 28, 28)
+        self._output_dim = 10  # 10 classes
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        if not self._setup_done:
+            self.setup()
+
+        if self.task_id is None:
+            raise ValueError(
+                "PermutedMNIST requires a task_id to be set. "
+                "Use set_task(task_id) or pass task_id at construction."
+            )
+
+        perm = self._permutations[self.task_id]
+
+        if split == TaskSplit.TRAIN:
+            data = self._full_train_ds.data
+            targets = self._full_train_ds.targets
+        else:
+            data = self._full_test_ds.data
+            targets = self._full_test_ds.targets
+
+        # Apply permutation
+        permuted_data = self._apply_permutation(data, perm)
+
+        # Create tensor dataset
+        tensor_dataset = torch.utils.data.TensorDataset(
+            permuted_data.float() / 255.0, targets
+        )
+
+        return DataLoader(
+            tensor_dataset,
+            batch_size=self.batch_size,
+            shuffle=(split == TaskSplit.TRAIN),
+            num_workers=self.num_workers,
+        )
+
+    def set_task(self, task_id: int) -> None:
+        """Set the active task for this PermutedMNIST instance."""
+        if task_id < 0 or task_id >= self.num_tasks:
+            raise ValueError(f"task_id must be in [0, {self.num_tasks - 1}], got {task_id}")
+        self.task_id = task_id
+        self._train_loader = None
+        self._val_loader = None
+        self._test_loader = None
+
+    def get_all_task_loaders(
+        self, split: TaskSplit = TaskSplit.TEST
+    ) -> list[DataLoader]:
+        """Get dataloaders for all tasks (useful for evaluation)."""
+        loaders = []
+        for task_id in range(self.num_tasks):
+            self.set_task(task_id)
+            loaders.append(self.get_dataloader(split))
+        return loaders
+
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        """Evaluate on the current task."""
+        if self.task_id is None:
+            raise ValueError("task_id must be set before evaluation")
+        return super().evaluate(model, split, max_batches)
+
+    def evaluate_all_tasks(
+        self, model: nn.Module, split: TaskSplit = TaskSplit.TEST
+    ) -> list[Metrics]:
+        """Evaluate model on all tasks."""
+        results = []
+        for task_id in range(self.num_tasks):
             self.set_task(task_id)
             results.append(self.evaluate(model, split))
         return results

@@ -28,6 +28,7 @@ from computronium.core.continual.arms import (
 from computronium.core.continual.constants import (
     CL_CLASSES_PER_TASK,
     CL_NUM_TASKS,
+    SPLIT_MNIST_TASKS,
 )
 from computronium.core.continual.metrics import CLConfig, CLMetrics, compute_cl_metrics
 from computronium.core.continual.stability import (
@@ -37,7 +38,7 @@ from computronium.core.continual.stability import (
 )
 from computronium.core.continual.training import _lwf_train_step, _si_train_step
 from computronium.domains.base import TaskSplit
-from computronium.domains.vision import SplitMNIST
+from computronium.domains.vision import SplitMNIST, PermutedMNIST
 
 if TYPE_CHECKING:
     from computronium.core.continual.system import ContinualJointSystem
@@ -68,13 +69,24 @@ _EVAL_BATCH_SIZE = 256
 def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]:
     """Create train and test data loaders for all tasks."""
     task_loaders = []
-    for task_id in range(CL_NUM_TASKS):
-        task = SplitMNIST(
-            task_id=task_id,
-            batch_size=config.batch_size,
-            device=device_str,
-            num_workers=config.num_workers,
-        )
+    for task_id in range(config.num_tasks):
+        if config.num_tasks == 5 and config.classes_per_task == 2:
+            # SplitMNIST
+            task = SplitMNIST(
+                task_id=task_id,
+                batch_size=config.batch_size,
+                device=device_str,
+                num_workers=config.num_workers,
+            )
+        else:
+            # PermutedMNIST or other multi-task vision
+            task = PermutedMNIST(
+                task_id=task_id,
+                num_tasks=config.num_tasks,
+                batch_size=config.batch_size,
+                device=device_str,
+                num_workers=config.num_workers,
+            )
         task.setup()
         loader = task.get_dataloader(TaskSplit.TRAIN)
         if isinstance(loader.sampler, RandomSampler):
@@ -84,13 +96,22 @@ def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]
         task_loaders.append(loader)
 
     test_loaders = []
-    for task_id in range(CL_NUM_TASKS):
-        task = SplitMNIST(
-            task_id=task_id,
-            batch_size=_EVAL_BATCH_SIZE,
-            device=device_str,
-            num_workers=config.num_workers,
-        )
+    for task_id in range(config.num_tasks):
+        if config.num_tasks == 5 and config.classes_per_task == 2:
+            task = SplitMNIST(
+                task_id=task_id,
+                batch_size=_EVAL_BATCH_SIZE,
+                device=device_str,
+                num_workers=config.num_workers,
+            )
+        else:
+            task = PermutedMNIST(
+                task_id=task_id,
+                num_tasks=config.num_tasks,
+                batch_size=_EVAL_BATCH_SIZE,
+                device=device_str,
+                num_workers=config.num_workers,
+            )
         task.setup()
         test_loaders.append(task.get_dataloader(TaskSplit.TEST))
 
@@ -107,6 +128,7 @@ def _arm_backprop(
             config.output_dim,
             device,
             config.lr,
+            classes_per_task=config.classes_per_task,
         ),
         {},
     )
@@ -120,6 +142,7 @@ def _arm_local(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _Ar
             config.output_dim,
             device,
             config.lr,
+            classes_per_task=config.classes_per_task,
         ),
         {},
     )
@@ -135,6 +158,7 @@ def _arm_local_ewc(
         device,
         config.lr,
         config.ewc_lambda,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"update": update}
 
@@ -149,6 +173,7 @@ def _arm_backprop_ewc(
         device,
         config.lr,
         config.ewc_lambda,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"update": update}
 
@@ -161,6 +186,7 @@ def _arm_ewc(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmE
         device,
         config.ewc_lambda,
         config.lr,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"update": update}
 
@@ -173,6 +199,7 @@ def _arm_si(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmEx
         device,
         config.lr,
         config.si_xi,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"si": si}
 
@@ -187,6 +214,7 @@ def _arm_replay(
         device,
         config.replay_capacity,
         config.lr,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"buffer": buffer}
 
@@ -198,6 +226,7 @@ def _arm_lwf(config: CLConfig, device: str) -> tuple[ContinualJointSystem, _ArmE
         config.output_dim,
         device,
         config.lr,
+        classes_per_task=config.classes_per_task,
     )
     return model, {"lwf_loss": lwf_loss}
 
@@ -212,6 +241,7 @@ def _arm_fast_weights(
             config.output_dim,
             device,
             config.lr,
+            classes_per_task=config.classes_per_task,
         ),
         {},
     )
@@ -226,6 +256,7 @@ def _arm_matched(plasticity: str) -> _ArmBuilder:
                 config.hidden_dim,
                 config.output_dim,
                 device,
+                classes_per_task=config.classes_per_task,
             ),
             {},
         )
@@ -353,6 +384,7 @@ def _evaluate_task(
     test_loader,
     eval_task_id: int,
     device: torch.device,
+    classes_per_task: int,
 ) -> float:
     """Evaluate model on a single task."""
     model.set_task(eval_task_id)
@@ -364,11 +396,11 @@ def _evaluate_task(
             x = x.view(x.shape[0], -1).to(device)
             y = y.to(device)
             logits = model(x, task_id=eval_task_id)
-            task_start = eval_task_id * CL_CLASSES_PER_TASK
-            task_end = task_start + CL_CLASSES_PER_TASK
+            task_start = eval_task_id * classes_per_task
+            task_end = task_start + classes_per_task
             task_logits = logits[:, task_start:task_end]
             pred = task_logits.argmax(dim=1)
-            local_y = y % CL_CLASSES_PER_TASK
+            local_y = y % classes_per_task
             correct += (pred == local_y).sum().item()
             total += y.shape[0]
     return correct / total if total > 0 else 0.0
@@ -380,10 +412,11 @@ def _evaluate_tasks_so_far(
     task_id: int,
     device: torch.device,
     accuracy_matrix: list[list[float]],
+    classes_per_task: int,
 ) -> None:
     """Evaluate on all tasks up to current task_id."""
     for eval_task_id in range(task_id + 1):
-        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device)
+        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task)
         accuracy_matrix[eval_task_id][task_id] = acc
 
 
@@ -393,10 +426,11 @@ def _evaluate_periodic_tasks(
     eval_task: int,
     device: torch.device,
     accuracy_matrix: list[list[float]],
+    classes_per_task: int,
 ) -> None:
     """Evaluate on tasks up to eval_task (for task-free protocol)."""
     for eval_task_id in range(eval_task + 1):
-        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device)
+        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task)
         accuracy_matrix[eval_task_id][eval_task] = acc
 
 
@@ -416,7 +450,7 @@ def _run_task_incremental_protocol(
     stability_verdicts: list,
 ) -> None:
     """Run task-incremental continual learning protocol."""
-    for task_id in range(CL_NUM_TASKS):
+    for task_id in range(config.num_tasks):
         model.set_task(task_id)
         _apply_task_boundary_setup(arm_name, model, extra)
 
@@ -442,7 +476,7 @@ def _run_task_incremental_protocol(
                 _run_replay_training(arm_name, model, extra, config)
 
         _update_arm_importance(arm_name, model, extra)
-        _evaluate_tasks_so_far(model, test_loaders, task_id, device, accuracy_matrix)
+        _evaluate_tasks_so_far(model, test_loaders, task_id, device, accuracy_matrix, config.classes_per_task)
 
 
 def _run_task_free_protocol(
@@ -461,11 +495,11 @@ def _run_task_free_protocol(
     stability_verdicts: list,
 ) -> None:
     """Run task-free continual learning protocol."""
-    all_loaders = [iter(task_loaders[i]) for i in range(CL_NUM_TASKS)]
+    all_loaders = [iter(task_loaders[i]) for i in range(config.num_tasks)]
     total_batches = config.epochs_per_task * max(len(l) for l in task_loaders)
 
     for batch_idx in range(total_batches):
-        task_id = batch_idx % CL_NUM_TASKS
+        task_id = batch_idx % config.num_tasks
         model.set_task(task_id)
 
         try:
@@ -487,11 +521,11 @@ def _run_task_free_protocol(
         _update_replay_buffer(arm_name, extra, x, y, task_id)
         _run_replay_training(arm_name, model, extra, config)
 
-        if batch_idx % (total_batches // CL_NUM_TASKS) == 0:
-            eval_task = batch_idx // (total_batches // CL_NUM_TASKS)
-            if eval_task < CL_NUM_TASKS:
+        if batch_idx % (total_batches // config.num_tasks) == 0:
+            eval_task = batch_idx // (total_batches // config.num_tasks)
+            if eval_task < config.num_tasks:
                 _evaluate_periodic_tasks(
-                    model, test_loaders, eval_task, device, accuracy_matrix
+                    model, test_loaders, eval_task, device, accuracy_matrix, config.classes_per_task
                 )
 
 
@@ -507,7 +541,7 @@ def _finalize_metrics(
 ) -> CLMetrics:
     """Compute and finalize CL metrics."""
     final_metrics = compute_cl_metrics(
-        model, test_loaders, CL_NUM_TASKS - 1, accuracy_matrix
+        model, test_loaders, config.num_tasks - 1, accuracy_matrix, config.classes_per_task
     )
     final_metrics.total_time_s = total_time
     final_metrics.stability_verdicts = stability_verdicts
@@ -546,7 +580,7 @@ def run_continual_learning(
     model, extra = _create_arm(arm_name, config, device_str)
     guard, transition_fn, guard_context = _setup_stability_guard(config, model)
 
-    accuracy_matrix = [[0.0 for _ in range(CL_NUM_TASKS)] for _ in range(CL_NUM_TASKS)]
+    accuracy_matrix = [[0.0 for _ in range(config.num_tasks)] for _ in range(config.num_tasks)]
     stability_verdicts: list = []
     start_time = time.perf_counter()
 

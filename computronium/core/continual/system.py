@@ -24,8 +24,8 @@ class ContinualJointSystem(nn.Module):
     """Joint system adapted for continual learning with 10-class output.
 
     Uses task masking instead of task-specific heads. The joint system
-    outputs 10-class logits (matching MNIST 10 digits), and we mask
-    the loss to the current task's 2 classes.
+    outputs total_classes logits (task_id * classes_per_task), and we mask
+    the loss to the current task's classes_per_task classes.
 
     Maintains plastic state (ψ) across training steps for ψ/θ decoupling.
     """
@@ -38,6 +38,7 @@ class ContinualJointSystem(nn.Module):
         credit: CreditAssignment | object = None,
         update: ParameterUpdate | object = None,
         plasticity: PlasticityPrimitive | object = None,
+        classes_per_task: int = 2,
     ):
         super().__init__()
         # Backward compat: if first arg is a joint_system object, extract components
@@ -63,11 +64,14 @@ class ContinualJointSystem(nn.Module):
         # Current task
         self.current_task = 0
 
+        # Classes per task for loss masking
+        self.classes_per_task = classes_per_task
+
         # Plastic state (ψ) - maintained across steps for fast weights
         self._psi: dict[str, Tensor] | None = None
 
     @classmethod
-    def from_joint_system(cls, joint_system) -> ContinualJointSystem:
+    def from_joint_system(cls, joint_system, classes_per_task: int = 2) -> ContinualJointSystem:
         """Create from a composed JointSystem."""
         return cls(
             substrate=joint_system.substrate,
@@ -76,6 +80,7 @@ class ContinualJointSystem(nn.Module):
             credit=joint_system.credit,
             update=joint_system.update,
             plasticity=joint_system.plasticity,
+            classes_per_task=classes_per_task,
         )
 
     @property
@@ -237,7 +242,7 @@ class ContinualJointSystem(nn.Module):
         task_id = task_id if task_id is not None else self.current_task
         from computronium.core.continual.training import run_continual_train_step
 
-        metrics, self._psi = run_continual_train_step(self, x, y, task_id, self._psi)
+        metrics, self._psi = run_continual_train_step(self, x, y, task_id, self._psi, self.classes_per_task)
         return metrics
 
     def set_task(self, task_id: int) -> None:

@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
-from computronium.core.continual.constants import CL_CLASSES_PER_TASK
+
 from computronium.core.pipeline import forward_pass
 from computronium.ontology import Phase, SystemState
 from computronium.state import CompositeState
@@ -185,13 +185,14 @@ def run_continual_train_step(
     y: Tensor,
     task_id: int,
     psi: dict[str, Tensor] | None = None,
+    classes_per_task: int = 2,
 ) -> tuple[dict[str, float], dict[str, Tensor] | None]:
     """Execute one training step through the joint system with task-masked loss and plasticity stepping.
 
-    The joint system outputs 10-class logits. We mask the loss to only the
-    current task's 2 classes (task_id * 2 : task_id * 2 + 2).
+    The joint system outputs total_classes logits. We mask the loss to only the
+    current task's classes_per_task classes.
 
-    The labels y are already 0/1 (local to the task) from SplitMNIST.
+    The labels y are already local to the task (0 to classes_per_task-1).
 
     This uses the joint system's credit assignment and parameter update,
     ensuring ψ/θ decoupling (FastWeightPlasticity) and other components
@@ -201,8 +202,8 @@ def run_continual_train_step(
         Tuple of (metrics, updated_psi)
     """
     local_y = y
-    task_start = task_id * CL_CLASSES_PER_TASK
-    task_end = task_start + CL_CLASSES_PER_TASK
+    task_start = task_id * classes_per_task
+    task_end = task_start + classes_per_task
 
     # Get the joint system components
     substrate = joint_system.substrate

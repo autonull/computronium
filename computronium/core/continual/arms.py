@@ -63,6 +63,7 @@ def _compose_credit_arm(
     hidden_dim: int,
     output_dim: int,
     device: str,
+    classes_per_task: int = 2,
 ) -> ContinualJointSystem:
     """Compose one arm from the shared stack plus its credit and update."""
     substrate, geometry = _mlp_stack(input_dim, hidden_dim, output_dim, device)
@@ -74,7 +75,7 @@ def _compose_credit_arm(
         credit,
         update,
     )
-    return ContinualJointSystem.from_joint_system(joint).to(device)
+    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
 
 
 def create_local_arm(
@@ -83,6 +84,7 @@ def create_local_arm(
     output_dim: int = CL_TOTAL_CLASSES,
     device: str = "cpu",
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> ContinualJointSystem:
     """PEPITA (local, two-pass) credit with a plain update."""
     return _compose_credit_arm(
@@ -92,6 +94,7 @@ def create_local_arm(
         hidden_dim,
         output_dim,
         device,
+        classes_per_task=classes_per_task,
     )
 
 
@@ -102,6 +105,7 @@ def create_local_ewc_arm(
     device: str = "cpu",
     lr: float = 0.001,
     ewc_lambda: float = 1000.0,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, ElasticConsolidationUpdate]:
     """PEPITA credit composed with EWC consolidation (local × EWC)."""
     update = ElasticConsolidationUpdate(
@@ -116,6 +120,7 @@ def create_local_ewc_arm(
         hidden_dim,
         output_dim,
         device,
+        classes_per_task=classes_per_task,
     )
     return model, update
 
@@ -127,6 +132,7 @@ def create_backprop_ewc_arm(
     device: str = "cpu",
     lr: float = 0.001,
     ewc_lambda: float = 1000.0,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, ElasticConsolidationUpdate]:
     """Exact-gradient credit composed with EWC: the strong retention baseline."""
     update = ElasticConsolidationUpdate(
@@ -141,6 +147,7 @@ def create_backprop_ewc_arm(
         hidden_dim,
         output_dim,
         device,
+        classes_per_task=classes_per_task,
     )
     return model, update
 
@@ -151,6 +158,7 @@ def create_fast_weight_arm(
     output_dim: int = CL_TOTAL_CLASSES,  # 10 classes
     device: str = "cpu",
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> ContinualJointSystem:
     """Create FastWeightPlasticity arm (ψ/θ decoupling).
 
@@ -178,7 +186,7 @@ def create_fast_weight_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, plasticity, credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint).to(device)
+    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
 
 
 def create_ewc_arm(
@@ -188,6 +196,7 @@ def create_ewc_arm(
     device: str = "cpu",
     ewc_lambda: float = 1000.0,
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, ElasticConsolidationUpdate]:
     """Create ElasticConsolidationUpdate (EWC) arm.
 
@@ -213,7 +222,7 @@ def create_ewc_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, NullPlasticity(), credit, update
     )
-    system = ContinualJointSystem.from_joint_system(joint).to(device)
+    system = ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
 
     # Return the update object for consolidation at task boundaries
     return system, update
@@ -240,6 +249,7 @@ def create_backprop_arm(
     output_dim: int = CL_TOTAL_CLASSES,
     device: str = "cpu",
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> ContinualJointSystem:
     """Create Backprop+SGD control arm."""
     substrate, geometry, dynamics, credit, update = _backprop_components(
@@ -248,7 +258,7 @@ def create_backprop_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, NullPlasticity(), credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint).to(device)
+    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
 
 
 def create_plasticity_arm(
@@ -257,6 +267,7 @@ def create_plasticity_arm(
     hidden_dim: int = 256,
     output_dim: int = CL_TOTAL_CLASSES,
     device: str = "cpu",
+    classes_per_task: int = 2,
 ) -> ContinualJointSystem:
     """Create a Backprop arm whose only difference from the control is plasticity.
 
@@ -282,7 +293,7 @@ def create_plasticity_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, psi, credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint).to(device)
+    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
 
 
 def create_replay_arm(
@@ -292,9 +303,10 @@ def create_replay_arm(
     device: str = "cpu",
     buffer_capacity: int = 5000,
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, ReplayBuffer]:
     """Create replay buffer arm (matched total memory)."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr)
+    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
     # Fast weight plasticity has ~512 * 4 bytes * batch_size = ~2KB per sample
     # Match replay buffer capacity to equivalent memory
     buffer = ReplayBuffer(buffer_capacity, (input_dim,), torch.device(device))
@@ -307,9 +319,10 @@ def create_lwf_arm(
     output_dim: int = CL_TOTAL_CLASSES,
     device: str = "cpu",
     lr: float = 0.001,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, LwFLoss]:
     """Create LwF arm."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr)
+    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
     lwf_loss = LwFLoss(temperature=2.0, lambda_lwf=1.0)
     return system, lwf_loss
 
@@ -321,9 +334,10 @@ def create_si_arm(
     device: str = "cpu",
     lr: float = 0.001,
     xi: float = 0.1,
+    classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, SynapticIntelligence]:
     """Create Synaptic Intelligence arm."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr)
+    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
     si = SynapticIntelligence(system, xi=xi)
     return system, si
 
