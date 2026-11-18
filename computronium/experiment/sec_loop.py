@@ -96,7 +96,11 @@ def run_r1_track(
                 metrics: CLMetrics = run_continual_learning(arm_name, config)
 
                 # Extract final accuracy (average over all 5 tasks)
-                final_acc = sum(metrics.final_accuracies) / len(metrics.final_accuracies) if metrics.final_accuracies else 0.0
+                final_acc = (
+                    sum(metrics.final_accuracies) / len(metrics.final_accuracies)
+                    if metrics.final_accuracies
+                    else 0.0
+                )
                 avg_forgetting = metrics.avg_forgetting
 
                 credit_results.append(final_acc)
@@ -142,10 +146,18 @@ def run_r1_track(
     local_worst = min(local_results) if local_results else 0.0
     backprop_worst = min(backprop_results) if backprop_results else 0.0
     local_mean = sum(local_results) / len(local_results) if local_results else 0.0
-    backprop_mean = sum(backprop_results) / len(backprop_results) if backprop_results else 0.0
+    backprop_mean = (
+        sum(backprop_results) / len(backprop_results) if backprop_results else 0.0
+    )
 
-    local_forgetting_mean = sum(local_forgetting) / len(local_forgetting) if local_forgetting else 1.0
-    backprop_forgetting_mean = sum(backprop_forgetting) / len(backprop_forgetting) if backprop_forgetting else 1.0
+    local_forgetting_mean = (
+        sum(local_forgetting) / len(local_forgetting) if local_forgetting else 1.0
+    )
+    backprop_forgetting_mean = (
+        sum(backprop_forgetting) / len(backprop_forgetting)
+        if backprop_forgetting
+        else 1.0
+    )
 
     gap_worst = local_worst - backprop_worst
     gap_mean = local_mean - backprop_mean
@@ -174,8 +186,12 @@ def run_r1_track(
         "cells": results,
     }
 
-    logger.info(f"R1 complete: kill_rule={kill_rule_triggered}, surprise={surprise}, local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
-    logger.info(f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}")
+    logger.info(
+        f"R1 complete: kill_rule={kill_rule_triggered}, surprise={surprise}, local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}"
+    )
+    logger.info(
+        f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}"
+    )
     return result_summary
 
 
@@ -248,7 +264,11 @@ def run_r2_track(
                 metrics: CLMetrics = run_continual_learning(arm_name, config)
 
                 # Extract final accuracy (average over all 20 tasks)
-                final_acc = sum(metrics.final_accuracies) / len(metrics.final_accuracies) if metrics.final_accuracies else 0.0
+                final_acc = (
+                    sum(metrics.final_accuracies) / len(metrics.final_accuracies)
+                    if metrics.final_accuracies
+                    else 0.0
+                )
                 avg_forgetting = metrics.avg_forgetting
 
                 credit_results.append(final_acc)
@@ -294,10 +314,18 @@ def run_r2_track(
     local_worst = min(local_results) if local_results else 0.0
     backprop_worst = min(backprop_results) if backprop_results else 0.0
     local_mean = sum(local_results) / len(local_results) if local_results else 0.0
-    backprop_mean = sum(backprop_results) / len(backprop_results) if backprop_results else 0.0
+    backprop_mean = (
+        sum(backprop_results) / len(backprop_results) if backprop_results else 0.0
+    )
 
-    local_forgetting_mean = sum(local_forgetting) / len(local_forgetting) if local_forgetting else 1.0
-    backprop_forgetting_mean = sum(backprop_forgetting) / len(backprop_forgetting) if backprop_forgetting else 1.0
+    local_forgetting_mean = (
+        sum(local_forgetting) / len(local_forgetting) if local_forgetting else 1.0
+    )
+    backprop_forgetting_mean = (
+        sum(backprop_forgetting) / len(backprop_forgetting)
+        if backprop_forgetting
+        else 1.0
+    )
 
     gap_worst = local_worst - backprop_worst
     gap_mean = local_mean - backprop_mean
@@ -326,8 +354,12 @@ def run_r2_track(
         "cells": results,
     }
 
-    logger.info(f"R2 complete: local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
-    logger.info(f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}")
+    logger.info(
+        f"R2 complete: local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}"
+    )
+    logger.info(
+        f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}"
+    )
     return result_summary
 
 
@@ -381,7 +413,11 @@ def get_legal_coordinate_for_primitive(
         return None
 
     # Check task family compatibility
-    if entry.task_families and "vision" not in entry.task_families and task_id in {"mnist", "cifar10", "split_mnist"}:
+    if (
+        entry.task_families
+        and "vision" not in entry.task_families
+        and task_id in {"mnist", "cifar10", "split_mnist"}
+    ):
         # Primitive not declared for vision tasks
         return None
 
@@ -394,7 +430,14 @@ def get_legal_coordinate_for_primitive(
 
     # Add geometry-specific params based on the geometry being used
     geometry = defaults["geometry"]
-    if geometry in {"feedforward", "recurrent", "conv", "graph", "causal_transformer", "attention"}:
+    if geometry in {
+        "feedforward",
+        "recurrent",
+        "conv",
+        "graph",
+        "causal_transformer",
+        "attention",
+    }:
         params["geometry.hidden_dim"] = P0_HIDDEN_DIM
         params["geometry.depth"] = 2
     elif geometry in {"tile", "tile_mesh"}:
@@ -413,9 +456,20 @@ def get_legal_coordinate_for_primitive(
 
     # Add credit-specific params for local credits
     credit = defaults["credit"]
-    if credit in {"local_supervision", "local_goodness", "local_contrastive", "thermodynamic_contrast",
-                  "random_projections", "target_inversion", "pepita", "pc_alm", "forward_tangent",
-                  "score_function", "zeroth_order", "surrogate"}:
+    if credit in {
+        "local_supervision",
+        "local_goodness",
+        "local_contrastive",
+        "thermodynamic_contrast",
+        "random_projections",
+        "target_inversion",
+        "pepita",
+        "pc_alm",
+        "forward_tangent",
+        "score_function",
+        "zeroth_order",
+        "surrogate",
+    }:
         params["credit.feedback_scale"] = 0.01
 
     coord = Coordinate(
@@ -449,19 +503,27 @@ def run_p0_track(
     if map_path.exists():
         map_data = json.loads(map_path.read_text())
         for prim_id, entry in map_data.get("primitives", {}).items():
-            if entry.get("last_screened") and entry.get("status") in {"pass", "defect", "unavailable", "coordinate"}:
+            if entry.get("last_screened") and entry.get("status") in {
+                "pass",
+                "defect",
+                "unavailable",
+                "coordinate",
+            }:
                 screened_primitives.add(prim_id)
 
     # Filter to delta: unscreened, defect, or failed (from map status)
     delta_entries = [
-        e for e in census_entries
+        e
+        for e in census_entries
         if e.id not in screened_primitives or e.screen_status in {"defect", "failed"}
     ]
 
     # Limit to max_primitives
     delta_entries = delta_entries[:max_primitives]
 
-    logger.info(f"P0 delta: {len(delta_entries)} primitives to screen (from {len(census_entries)} total)")
+    logger.info(
+        f"P0 delta: {len(delta_entries)} primitives to screen (from {len(census_entries)} total)"
+    )
 
     results: list[dict[str, Any]] = []
     pass_count = 0
@@ -508,7 +570,11 @@ def run_p0_track(
 
             # Gate: PASS = above chance + 2σ, no crash, finite loss
             chance = 0.1  # MNIST 10-class chance
-            if val_acc > chance + 0.02 and loss < float("inf") and not torch.isnan(torch.tensor(loss)):
+            if (
+                val_acc > chance + 0.02
+                and loss < float("inf")
+                and not torch.isnan(torch.tensor(loss))
+            ):
                 status = "PASS"
                 pass_count += 1
             else:
@@ -576,7 +642,9 @@ def run_p0_track(
         "cells": results,
     }
 
-    logger.info(f"P0 complete: screened={total}, pass={pass_count}, defect={defect_count}, unavailable={unavailable_count}, coordinate={coordinate_count}, pause_R={pause_r}")
+    logger.info(
+        f"P0 complete: screened={total}, pass={pass_count}, defect={defect_count}, unavailable={unavailable_count}, coordinate={coordinate_count}, pause_R={pause_r}"
+    )
     return result_summary
 
 
@@ -644,7 +712,11 @@ def run_p1_track(
 
         # Surprise: paired effect > 2δ (simplified: mean > chance + 2σ)
         mean_acc = sum(seed_results) / len(seed_results) if seed_results else 0.0
-        std_acc = (sum((x - mean_acc) ** 2 for x in seed_results) / len(seed_results)) ** 0.5 if len(seed_results) > 1 else 0.0
+        std_acc = (
+            (sum((x - mean_acc) ** 2 for x in seed_results) / len(seed_results)) ** 0.5
+            if len(seed_results) > 1
+            else 0.0
+        )
         chance = 0.1
         delta = std_acc
         effect = mean_acc - chance
@@ -679,7 +751,14 @@ def run_p1_track(
 # Portfolio & Map Updates
 # ============================================================
 
-def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | None, p0_result: dict | None, p1_result: dict | None) -> None:
+
+def update_portfolio(
+    out_dir: Path,
+    r1_result: dict | None,
+    r2_result: dict | None,
+    p0_result: dict | None,
+    p1_result: dict | None,
+) -> None:
     """Update portfolio.json with track results."""
     portfolio_path = out_dir / "portfolio.json"
 
@@ -706,7 +785,9 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
                     "surprise": r1_result["surprise"],
                 }
                 track["budget_used"]["cells"] = len(r1_result["cells"])
-                track["budget_used"]["seeds"] = len({c["seed"] for c in r1_result["cells"]})
+                track["budget_used"]["seeds"] = len({
+                    c["seed"] for c in r1_result["cells"]
+                })
                 track["contention"] = False
                 break
 
@@ -725,7 +806,9 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
                     "surprise": r2_result["surprise"],
                 }
                 track["budget_used"]["cells"] = len(r2_result["cells"])
-                track["budget_used"]["seeds"] = len({c["seed"] for c in r2_result["cells"]})
+                track["budget_used"]["seeds"] = len({
+                    c["seed"] for c in r2_result["cells"]
+                })
                 track["contention"] = False
                 break
 
@@ -768,7 +851,12 @@ def update_cell_log(out_dir: Path, all_results: list[dict]) -> None:
     logger.info(f"Cell log updated: {cell_log_path} (+{len(all_results)} entries)")
 
 
-def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_result: dict | None, p1_result: dict | None = None) -> None:
+def update_map(
+    out_dir: Path,
+    census_entries: list[PrimitiveCensusEntry],
+    p0_result: dict | None,
+    p1_result: dict | None = None,
+) -> None:
     """Update map.json with P0 screening and P1 confirmation results."""
     map_path = out_dir / "map.json"
 
@@ -815,7 +903,10 @@ def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_res
                 map_entry["p1_seeds"] = cell.get("seed_results", [])
                 # Update best_coordinate with P1 mean if it's a surprise
                 if cell.get("surprise", False):
-                    map_entry["best_coordinate"] = {"val_acc": cell.get("mean_acc", 0.0), "p1_confirmed": True}
+                    map_entry["best_coordinate"] = {
+                        "val_acc": cell.get("mean_acc", 0.0),
+                        "p1_confirmed": True,
+                    }
 
     map_path.write_text(json.dumps(map_data, indent=2, default=str))
     logger.info(f"Map updated: {map_path}")
@@ -825,17 +916,38 @@ def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_res
 # Main Loop
 # ============================================================
 
+
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="SEC Loop - result-first capability harvest")
-    parser.add_argument("--track", choices=["R1", "R2", "P0", "P1", "all"], default="all", help="Track to run")
-    parser.add_argument("--breadth", choices=["delta", "full"], default="delta", help="Breadth screen mode")
+    parser = argparse.ArgumentParser(
+        description="SEC Loop - result-first capability harvest"
+    )
+    parser.add_argument(
+        "--track",
+        choices=["R1", "R2", "P0", "P1", "all"],
+        default="all",
+        help="Track to run",
+    )
+    parser.add_argument(
+        "--breadth",
+        choices=["delta", "full"],
+        default="delta",
+        help="Breadth screen mode",
+    )
     parser.add_argument("--max-cells", type=int, default=12, help="Max cells for R1/R2")
-    parser.add_argument("--max-primitives", type=int, default=6, help="Max primitives for P0")
+    parser.add_argument(
+        "--max-primitives", type=int, default=6, help="Max primitives for P0"
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
-    parser.add_argument("--device", type=str, default="auto", help="Device (auto, cpu, cuda)")
-    parser.add_argument("--p1-from-map", action="store_true", help="Run P1 on PASS primitives from map.json (not just current P0 run)")
+    parser.add_argument(
+        "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
+    )
+    parser.add_argument(
+        "--p1-from-map",
+        action="store_true",
+        help="Run P1 on PASS primitives from map.json (not just current P0 run)",
+    )
     args = parser.parse_args()
 
     out_dir = args.out
@@ -862,7 +974,12 @@ def main() -> None:
 
     # Run P0 if requested
     if args.track in {"P0", "all"} and args.breadth == "delta":
-        p0_result = run_p0_track(out_dir, census_entries, max_primitives=args.max_primitives, device=args.device)
+        p0_result = run_p0_track(
+            out_dir,
+            census_entries,
+            max_primitives=args.max_primitives,
+            device=args.device,
+        )
         all_results.extend(p0_result["cells"])
 
     # Determine P0 passes for P1
@@ -872,11 +989,19 @@ def main() -> None:
         map_path = out_dir / "map.json"
         if map_path.exists():
             map_data = json.loads(map_path.read_text())
-            p0_passes = [k for k, v in map_data.get("primitives", {}).items() if v.get("status") == "pass"]
+            p0_passes = [
+                k
+                for k, v in map_data.get("primitives", {}).items()
+                if v.get("status") == "pass"
+            ]
             logger.info(f"P1 from map: {len(p0_passes)} PASS primitives")
     else:
         # Use passes from current P0 run
-        p0_passes = [c["primitive"] for c in (p0_result["cells"] if p0_result else []) if c["status"] == "PASS"]
+        p0_passes = [
+            c["primitive"]
+            for c in (p0_result["cells"] if p0_result else [])
+            if c["status"] == "PASS"
+        ]
 
     # Run P1 if there are passes
     if args.track in {"P1", "all"} and p0_passes:
@@ -891,13 +1016,21 @@ def main() -> None:
     # Print summary (raw metrics for human review)
     print("\n=== SEC Loop Summary ===")
     if r1_result:
-        print(f"R1: gap_worst={r1_result['gap_worst']:.4f}, local_worst={r1_result['local_worst']:.4f}, backprop_worst={r1_result['backprop_worst']:.4f}, local_forgetting={r1_result['local_forgetting_mean']:.4f}, backprop_forgetting={r1_result['backprop_forgetting_mean']:.4f}, kill_triggered={r1_result['kill_rule_triggered']}, surprise={r1_result['surprise']}")
+        print(
+            f"R1: gap_worst={r1_result['gap_worst']:.4f}, local_worst={r1_result['local_worst']:.4f}, backprop_worst={r1_result['backprop_worst']:.4f}, local_forgetting={r1_result['local_forgetting_mean']:.4f}, backprop_forgetting={r1_result['backprop_forgetting_mean']:.4f}, kill_triggered={r1_result['kill_rule_triggered']}, surprise={r1_result['surprise']}"
+        )
     if r2_result:
-        print(f"R2: gap_worst={r2_result['gap_worst']:.4f}, local_worst={r2_result['local_worst']:.4f}, backprop_worst={r2_result['backprop_worst']:.4f}, local_forgetting={r2_result['local_forgetting_mean']:.4f}, backprop_forgetting={r2_result['backprop_forgetting_mean']:.4f}, kill_triggered={r2_result['kill_rule_triggered']}, surprise={r2_result['surprise']}")
+        print(
+            f"R2: gap_worst={r2_result['gap_worst']:.4f}, local_worst={r2_result['local_worst']:.4f}, backprop_worst={r2_result['backprop_worst']:.4f}, local_forgetting={r2_result['local_forgetting_mean']:.4f}, backprop_forgetting={r2_result['backprop_forgetting_mean']:.4f}, kill_triggered={r2_result['kill_rule_triggered']}, surprise={r2_result['surprise']}"
+        )
     if p0_result:
-        print(f"P0: pass={p0_result['pass']}, defect={p0_result['defect']}, unavailable={p0_result['unavailable']}, coordinate={p0_result['coordinate']}, pause_R={p0_result['pause_r']}")
+        print(
+            f"P0: pass={p0_result['pass']}, defect={p0_result['defect']}, unavailable={p0_result['unavailable']}, coordinate={p0_result['coordinate']}, pause_R={p0_result['pause_r']}"
+        )
     if p1_result:
-        print(f"P1: confirmed={p1_result['confirmed']}, surprises={p1_result['surprises']}")
+        print(
+            f"P1: confirmed={p1_result['confirmed']}, surprises={p1_result['surprises']}"
+        )
 
     # Surprise flags (recorded for review meeting)
     if r1_result and r1_result.get("surprise"):
@@ -905,7 +1038,9 @@ def main() -> None:
     if r2_result and r2_result.get("surprise"):
         print("\n⚡ R2 SURPRISE FLAG: gap ≥ 5 pp — review for promotion")
     if p1_result and p1_result.get("surprises", 0) > 0:
-        print(f"\n⚡ P1 SURPRISE FLAG: {p1_result['surprises']} primitive(s) confirmed — review")
+        print(
+            f"\n⚡ P1 SURPRISE FLAG: {p1_result['surprises']} primitive(s) confirmed — review"
+        )
 
 
 if __name__ == "__main__":
