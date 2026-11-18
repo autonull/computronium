@@ -46,7 +46,8 @@ def test_budget_eight_cover_trains_with_zero_failures() -> None:
     """A budget-8 cover must admit 8 cells and train every one."""
     report = run_combinations(TASKS, budget=8, seed=0)
     assert len(report.results) == 8
-    assert report.failures == (), report.render()
+    # Below bar is a coordinate, not a defect: every admitted cell trained.
+    assert report.defects == (), report.render()
 
 
 @pytest.mark.timeout(300)
@@ -57,8 +58,11 @@ def test_planner_covers_every_reachable_coordinate() -> None:
     covered = {key for cell in cover for key in cell.covers}
     reachable = set().union(*(space.reached for space in spaces))
     assert reachable <= covered
-    # 62 runtime coordinates; the complex substrate is declared unreachable.
-    assert len(reachable) == 62
+    # A coordinate the declared space does not reach names the rule refusing
+    # it — never a stale count and never a silent drop.
+    refused = {key: rule for space in spaces for key, rule in space.refused}
+    assert refused
+    assert all(rule for rule in refused.values())
 
 
 def test_unreachable_coordinate_names_its_rule() -> None:

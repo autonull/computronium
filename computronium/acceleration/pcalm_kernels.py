@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Protocol, cast
 import torch
 from torch import Tensor, nn
 
+from computronium.core.losses import class_one_hot
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -38,9 +40,7 @@ if TYPE_CHECKING:
 
 def _one_hot(target: Tensor, like: Tensor) -> Tensor:
     if target.dim() == 1:
-        out = torch.zeros_like(like)
-        out.scatter_(1, target.unsqueeze(1), 1.0)
-        return out
+        return class_one_hot(target, like)
     return target
 
 

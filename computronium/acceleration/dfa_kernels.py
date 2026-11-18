@@ -22,6 +22,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.losses import one_hot_like
 from computronium.core.utils.activations import (
     apply_activation_derivative,
     get_activation,
@@ -135,15 +136,7 @@ class DFAKernelBackend:
         nudged_output = nudged_activations[-1]
 
         # Apply beta nudge to output (matching InstantaneousDynamics)
-        if y.dim() == 1:
-            target_vec = (
-                torch.nn.functional
-                .one_hot(y, num_classes=nudged_output.shape[1])
-                .float()
-                .to(device=nudged_output.device, dtype=nudged_output.dtype)
-            )
-        else:
-            target_vec = y.to(device=nudged_output.device, dtype=nudged_output.dtype)
+        target_vec = one_hot_like(y, nudged_output)
 
         nudged_output_nudged = nudged_output + beta * (target_vec - nudged_output)
 

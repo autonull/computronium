@@ -19,6 +19,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.losses import one_hot_like
 from computronium.core.utils.activations import get_activation
 
 if TYPE_CHECKING:
@@ -185,16 +186,7 @@ class TPKernelBackend:
 
         # Apply nudge to output layer if target provided (after settling)
         if target is not None:
-            if target.dim() == 1:
-                target_one_hot = (
-                    torch.nn.functional
-                    .one_hot(target, num_classes=acts[-1].shape[1])
-                    .float()
-                    .to(device=acts[-1].device, dtype=acts[-1].dtype)
-                )
-            else:
-                target_one_hot = target.to(device=acts[-1].device, dtype=acts[-1].dtype)
-            acts[-1] += beta * (target_one_hot - acts[-1])
+            acts[-1] += beta * (one_hot_like(target, acts[-1]) - acts[-1])
 
         return acts
 
@@ -282,14 +274,8 @@ class TPKernelBackend:
             List of targets [t_0, t_1, ..., t_L] where t_L = one-hot(y)
             and t_l is target for activation l (same shape as activations[l])
         """
-        out_dim = activations[-1].shape[-1]
         targets: list[Tensor | None] = [None] * len(activations)
-        targets[-1] = (
-            torch.nn.functional
-            .one_hot(y, num_classes=out_dim)
-            .float()
-            .to(device=activations[-1].device, dtype=activations[-1].dtype)
-        )
+        targets[-1] = one_hot_like(y, activations[-1])
 
         # Get weight names in order (layer_0_weight, layer_1_weight, ...)
         # The forward_layers list is already in order

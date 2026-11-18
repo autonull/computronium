@@ -73,7 +73,12 @@ from computronium.experiment.schema.registries import (
 from computronium.ontology.system import (
     NCA_CELL_MODE_CREDITS,
     NONLAYERED_GEOMETRIES,
+    PREDICTIVE_SETTLING_CREDITS,
+    QUANTUM_DYNAMICS,
+    RECURRENT_DYNAMICS,
     SETTLING_DYNAMICS,
+    SPIKE_INTEGRATION_CREDITS,
+    THERMO_CREDIT_DYNAMICS,
 )
 
 # =============================================================================
@@ -321,7 +326,7 @@ _PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
 # agreement rule is written over one-hot targets (the psi family) or over a
 # label channel and a candidate sweep (local_contrastive), so a continuous
 # target is a refusal, not a runtime error. Measured 2026-11-14: nine
-# regression cells failed on exactly these three rows (§8, regression lane).
+# regression cells failed on exactly these rows (§8, regression lane).
 CLASS_TARGET_ONLY: frozenset[tuple[StructuralAxis, str]] = frozenset({
     (StructuralAxis.CREDIT, "local_contrastive"),
     (StructuralAxis.CREDIT, "score_function"),
@@ -1233,17 +1238,7 @@ CONSTRAINTS = [
         description="Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics",
         predicate=or_(
             not_(in_(var("geometry"), const("recurrent"))),
-            in_(
-                var("dynamics"),
-                const([
-                    "energy_minimization",
-                    "predictive_settling",
-                    "error_predictive_coding",
-                    "pc_alm",
-                    "diffusion",
-                    "instantaneous",
-                ]),
-            ),
+            in_(var("dynamics"), const(sorted(RECURRENT_DYNAMICS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1404,10 +1399,7 @@ CONSTRAINTS = [
         description="Spike integration dynamics requires temporal trace or target inversion credit",
         predicate=or_(
             not_(eq(var("dynamics"), const("spike_integration"))),
-            in_(
-                var("credit"),
-                const(["temporal_trace", "spiking", "target_inversion", "target_prop"]),
-            ),
+            in_(var("credit"), const(sorted(SPIKE_INTEGRATION_CREDITS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1424,15 +1416,7 @@ CONSTRAINTS = [
                     const(["predictive_settling", "error_predictive_coding"]),
                 )
             ),
-            in_(
-                var("credit"),
-                const([
-                    "thermodynamic_contrast",
-                    "equilibrium",
-                    "local_goodness",
-                    "forward_only",
-                ]),
-            ),
+            in_(var("credit"), const(sorted(PREDICTIVE_SETTLING_CREDITS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1542,16 +1526,7 @@ CONSTRAINTS = [
         description="Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics",
         predicate=or_(
             not_(in_(var("credit"), const(["thermodynamic_contrast", "equilibrium"]))),
-            in_(
-                var("dynamics"),
-                const([
-                    "energy_minimization",
-                    "predictive_settling",
-                    "error_predictive_coding",
-                    "lazy",
-                    "pc_alm",
-                ]),
-            ),
+            in_(var("dynamics"), const(sorted(THERMO_CREDIT_DYNAMICS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1630,10 +1605,7 @@ CONSTRAINTS = [
         description="Quantum substrate requires energy_minimization, instantaneous, or diffusion dynamics",
         predicate=or_(
             not_(eq(var("substrate"), const("quantum"))),
-            in_(
-                var("dynamics"),
-                const(["energy_minimization", "instantaneous", "diffusion"]),
-            ),
+            in_(var("dynamics"), const(sorted(QUANTUM_DYNAMICS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
-    Any,
     Final,
     Protocol,
     Self,
@@ -305,186 +304,49 @@ COORDINATE_TOLERANCES: dict[tuple[str, str], tuple[float, float]] = {
 DEFAULT_TOLERANCES: tuple[float, float] = (0.1, 1e-3)
 
 
-# ============================================================
-# Valid Combinations Data (Module-level constants for valid_combinations)
-# ============================================================
-
-# The six preset lists below are derived from the config classmethods, so they
-# cannot drift from the primitive registry. A hardcoded list is a second source
-# of truth: it silently drops primitives (the AutoScientist never sees them).
-# The lists are simple: one representative per (axis) value.
-
-
-def _asdict(preset: Any) -> dict[str, object]:
-    from dataclasses import asdict
-    from enum import Enum
-
-    raw = asdict(preset)
-    out: dict[str, object] = {}
-    for key, value in raw.items():
-        if value is None:
-            continue
-        # The composite config stores StrEnums under axis-prefixed names
-        # (``substrate_type``/``plasticity_type``); the fast filter uses ``type``.
-        if key in {"substrate_type", "plasticity_type"}:
-            key = "type"
-        if isinstance(value, Enum):
-            value = value.value
-        out[key] = value
-    return out
-
-
-_SUBSTRATES: list[dict[str, object]] = [
-    _asdict(getattr(SubstrateConfig, name)())
-    for name in (
-        "analog",
-        "complex",
-        "digital",
-        "memristive",
-        "neuromorphic",
-        "optical",
-        "quantum",
-        "sparse",
-        "ternary",
-    )
-]
-
-_GEOMETRIES: list[dict[str, object]] = [
-    _asdict(GeometryConfig.attention(input_dim=784, output_dim=10, hidden_dim=64)),
-    _asdict(
-        GeometryConfig.causal_transformer(
-            vocab_size=256, d_model=64, n_layers=2, n_heads=4, seq_len=32
-        )
-    ),
-    _asdict(GeometryConfig.conv(input_dim=784, output_dim=10)),
-    _asdict(
-        GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128))
-    ),
-    _asdict(
-        GeometryConfig.graph(input_dim=784, output_dim=10, edge_index=[[0, 1], [1, 0]])
-    ),
-    _asdict(GeometryConfig.nca(channels=1)),
-    _asdict(GeometryConfig.ntm(input_dim=784, output_dim=10)),
-    _asdict(GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(256,))),
-    _asdict(GeometryConfig.routing(input_dim=784, output_dim=10, hidden_dims=(256,))),
-    _asdict(GeometryConfig.spatial_lattice(input_dim=784, output_dim=10)),
-    _asdict(GeometryConfig.tile(input_dim=784, output_dim=10, num_layers=4)),
-    _asdict(GeometryConfig.tile_mesh(input_dim=784, output_dim=10, num_layers=4)),
-]
-
-_DYNAMICS_OPTIONS: list[dict[str, object]] = [
-    _asdict(getattr(StateDynamicsConfig, name)())
-    for name in (
-        "diffusion",
-        "energy_minimization",
-        "error_predictive_coding",
-        "instantaneous",
-        "lazy",
-        "pc_alm",
-        "predictive_settling",
-        "spike_integration",
-    )
-]
-
-_PLASTICITIES: list[dict[str, object]] = [
-    _asdict(getattr(PlasticityConfig, name)())
-    for name in (
-        "conflict_adaptive",
-        "fast_weights",
-        "null",
-        "routing",
-        "rule_state",
-        "substrate_coupled",
-        "temporal_psi",
-    )
-]
-
-_CREDITS: list[dict[str, object]] = [
-    _asdict(getattr(CreditAssignmentConfig, name)())
-    for name in (
-        "eligibility_prop",
-        "forward_tangent",
-        "gradient",
-        "homeostatic",
-        "hybrid",
-        "local_contrastive",
-        "local_goodness",
-        "local_supervision",
-        "pc_alm",
-        "pepita",
-        "random_projections",
-        "rtrl_reference",
-        "score_function",
-        "surrogate",
-        "target_inversion",
-        "temporal_trace",
-        "thermodynamic_contrast",
-        "unbiased_rtrl",
-        "zeroth_order",
-    )
-]
-
-_UPDATES: list[dict[str, object]] = [
-    _asdict(getattr(ParameterUpdateConfig, name)())
-    for name in (
-        "adafactor",
-        "adam",
-        "bayesian_online",
-        "cascade_synapse",
-        "elastic_consolidation",
-        "euclidean",
-        "lion",
-        "local_adam",
-        "mean_norm",
-        "muon",
-        "natural_gradient",
-        "ortho_adam",
-        "quantized_adam",
-        "riemannian_orthogonal",
-        "role_split",
-        "schedule_free",
-        "spectral_constrained",
-        "synaptic_intelligence",
-        "unit_rms",
-    )
-]
-
-# Pre-computed validation rule sets for fast filtering.
-# These MUST mirror the full validators (`_validate_*`); a mismatch re-derives
-# legality from a second table, which silently drops valid combinations.
-_RECURRENT_DYNAMICS = {
+# The axis-value compatibility tables. Each is the one table for its rule:
+# ``SystemConfig.validate`` reads it and the declarative constraint row is
+# its projection (``seed_registries`` builds the predicate from the same
+# tuple), so the planner and the trainer cannot disagree.
+RECURRENT_DYNAMICS: Final[frozenset[str]] = frozenset({
     "energy_minimization",
     "predictive_settling",
     "error_predictive_coding",
     "pc_alm",
     "diffusion",
     "instantaneous",
-}
-_THERMO_CREDIT_DYNAMICS = {
+})
+THERMO_CREDIT_DYNAMICS: Final[frozenset[str]] = frozenset({
     "energy_minimization",
     "predictive_settling",
     "error_predictive_coding",
     "lazy",
     "pc_alm",
-}
-_SPIKE_INTEGRATION_CREDITS = {
+})
+SPIKE_INTEGRATION_CREDITS: Final[frozenset[str]] = frozenset({
     "temporal_trace",
     "spiking",
     "target_inversion",
     "target_prop",
-}
-# tile/tile_mesh are in NONLAYERED_GEOMETRIES, which forbids every
-# SETTLING_DYNAMICS (energy_minimization included) — only instantaneous is legal.
-_TILE_MESH_DYNAMICS = {"instantaneous"}
-_QUANTUM_DYNAMICS = {"energy_minimization", "instantaneous", "diffusion"}
-_PREDICTIVE_SETTLING_CREDITS = {
+})
+QUANTUM_DYNAMICS: Final[frozenset[str]] = frozenset({
+    "energy_minimization",
+    "instantaneous",
+    "diffusion",
+})
+PREDICTIVE_SETTLING_CREDITS: Final[frozenset[str]] = frozenset({
     "thermodynamic_contrast",
     "equilibrium",
     "local_goodness",
     "forward_only",
-}
+})
 
 __all__ = [
+    "PREDICTIVE_SETTLING_CREDITS",
+    "QUANTUM_DYNAMICS",
+    "RECURRENT_DYNAMICS",
+    "SPIKE_INTEGRATION_CREDITS",
+    "THERMO_CREDIT_DYNAMICS",
     "ModelAdapter",
     "Phase",
     "System",
@@ -589,7 +451,7 @@ class SystemConfig:
     def _require_when(
         self,
         condition: bool,
-        allowed_values: set[str],
+        allowed_values: Collection[str],
         axis_name: str,
         actual_value: str,
         context: str = "",
@@ -658,14 +520,7 @@ class SystemConfig:
         """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
         self._require_when(
             condition=self.geometry.topology_type in {"recurrent"},
-            allowed_values={
-                "energy_minimization",
-                "predictive_settling",
-                "error_predictive_coding",
-                "pc_alm",
-                "diffusion",
-                "instantaneous",
-            },
+            allowed_values=RECURRENT_DYNAMICS,
             axis_name="dynamics.dynamics_type",
             actual_value=self.dynamics.dynamics_type,
             context=f"recurrent geometry (topology_type={self.geometry.topology_type!r})",
@@ -705,12 +560,7 @@ class SystemConfig:
         """Spike integration dynamics requires temporal trace or target inversion credit."""
         self._require_when(
             condition=self.dynamics.dynamics_type == "spike_integration",
-            allowed_values={
-                "temporal_trace",
-                "spiking",
-                "target_inversion",
-                "target_prop",
-            },
+            allowed_values=SPIKE_INTEGRATION_CREDITS,
             axis_name="credit.credit_type",
             actual_value=self.credit.credit_type,
             context="spike integration dynamics",
@@ -721,12 +571,7 @@ class SystemConfig:
         self._require_when(
             condition=self.dynamics.dynamics_type
             in {"predictive_settling", "error_predictive_coding"},
-            allowed_values={
-                "thermodynamic_contrast",
-                "equilibrium",
-                "local_goodness",
-                "forward_only",
-            },
+            allowed_values=PREDICTIVE_SETTLING_CREDITS,
             axis_name="credit.credit_type",
             actual_value=self.credit.credit_type,
             context=f"{self.dynamics.dynamics_type} dynamics",
@@ -794,13 +639,7 @@ class SystemConfig:
     def _validate_thermodynamic_contrast_dynamics(self) -> None:
         """Thermodynamic contrast credit requires energy-based or PC-family dynamics."""
         if self.credit.credit_type in {"thermodynamic_contrast", "equilibrium"}:
-            if self.dynamics.dynamics_type not in {
-                "energy_minimization",
-                "predictive_settling",
-                "error_predictive_coding",
-                "lazy",
-                "pc_alm",
-            }:
+            if self.dynamics.dynamics_type not in THERMO_CREDIT_DYNAMICS:
                 raise ValueError(
                     f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "
                     f"requires energy-based or PC-family dynamics, got {self.dynamics.dynamics_type!r}"
@@ -880,11 +719,7 @@ class SystemConfig:
     def _validate_quantum_substrate_dynamics(self) -> None:
         """Quantum substrate requires compatible dynamics and beta matching."""
         if self.substrate.precision == "complex64":
-            if self.dynamics.dynamics_type not in {
-                "energy_minimization",
-                "instantaneous",
-                "diffusion",
-            }:
+            if self.dynamics.dynamics_type not in QUANTUM_DYNAMICS:
                 raise ValueError(
                     f"Quantum substrate requires energy_minimization, instantaneous, "
                     f"or diffusion dynamics, got {self.dynamics.dynamics_type!r}"
@@ -1158,91 +993,6 @@ class SystemConfig:
                 "Consider EuclideanUpdate with momentum.",
                 self.dynamics.momentum,
             )
-
-    @classmethod
-    def valid_combinations(cls) -> list[dict[str, dict[str, object]]]:
-        """Return all valid 6-D coordinate combinations for AutoScientist.
-
-        Returns:
-            List of dicts, each representing a valid combination of
-            substrate, geometry, dynamics, plasticity, credit, update.
-            These are the coordinates that pass cross-axis validation.
-        """
-        from itertools import product
-
-        combinations = [
-            {
-                "substrate": sub,
-                "geometry": geom,
-                "dynamics": dyn,
-                "plasticity": plas,
-                "credit": cred,
-                "update": upd,
-            }
-            for sub, geom, dyn, plas, cred, upd in product(
-                _SUBSTRATES,
-                _GEOMETRIES,
-                _DYNAMICS_OPTIONS,
-                _PLASTICITIES,
-                _CREDITS,
-                _UPDATES,
-            )
-            if cls._is_valid_combination(sub, geom, dyn, cred)
-        ]
-
-        return combinations
-
-    @classmethod
-    def _is_valid_combination(
-        cls,
-        substrate: dict[str, object],
-        geometry: dict[str, object],
-        dynamics: dict[str, object],
-        credit: dict[str, object],
-    ) -> bool:
-        """Check if a combination passes all hard validation rules.
-
-        This mirrors the validation logic in SystemConfig.validate() but
-        operates on raw config dicts for fast filtering during AutoScientist
-        candidate generation.
-        """
-        geo_type = geometry["topology_type"]
-        dyn_type = dynamics["dynamics_type"]
-        cred_type = credit["credit_type"]
-        sub_precision = substrate["precision"]
-
-        validators: list[tuple[bool, bool]] = [
-            # (condition, should_pass)
-            (
-                geo_type in {"recurrent"},
-                dyn_type in _RECURRENT_DYNAMICS,
-            ),
-            (
-                cred_type in {"thermodynamic_contrast", "equilibrium"},
-                dyn_type in _THERMO_CREDIT_DYNAMICS,
-            ),
-            (dyn_type == "spike_integration", cred_type in _SPIKE_INTEGRATION_CREDITS),
-            (geo_type in {"tile_mesh", "tile"}, dyn_type in _TILE_MESH_DYNAMICS),
-            (sub_precision == "complex64", dyn_type in _QUANTUM_DYNAMICS),
-            (
-                dyn_type == "predictive_settling",
-                cred_type in _PREDICTIVE_SETTLING_CREDITS,
-            ),
-            (
-                # Mirror `_validate_gradient_credit_instantaneous_recurrent`:
-                # instantaneous + gradient on RECURRENT geometry only (separate
-                # output projections now include head in the forward pass, so the
-                # old output-proj rule is deliberately absent).
-                dyn_type == "instantaneous"
-                and geo_type == "recurrent"
-                and cred_type in {"gradient", "backprop"},
-                False,
-            ),
-        ]
-
-        return all(
-            not condition or should_pass for condition, should_pass in validators
-        )
 
 
 # ============================================================

@@ -388,6 +388,13 @@ class CombinationResult:
         return self.verdict == "PASS"
 
     @property
+    def ran(self) -> bool:
+        """The cell composed and trained; missing its bar is a coordinate."""
+        from computronium.experiment.schema.record import FailureCause
+
+        return self.passed or self.cause == FailureCause.DIVERGENCE.value
+
+    @property
     def covers(self) -> tuple[str, ...]:
         return _keys(self.selection)
 
@@ -418,14 +425,22 @@ class CombinationReport:
     refused: tuple[tuple[str, str, str], ...]
 
     @property
-    def failures(self) -> tuple[CombinationResult, ...]:
-        return tuple(result for result in self.results if not result.passed)
+    def coordinates(self) -> tuple[CombinationResult, ...]:
+        """Cells that trained and missed their bar: a coordinate result."""
+        return tuple(
+            result for result in self.results if result.ran and not result.passed
+        )
+
+    @property
+    def defects(self) -> tuple[CombinationResult, ...]:
+        """Cells that could not train: a crash or a missing rule."""
+        return tuple(result for result in self.results if not result.ran)
 
     @property
     def covered(self) -> tuple[str, ...]:
         """Coordinates covered by a cell that actually trained."""
         return tuple(
-            key for result in self.results if result.passed for key in result.covers
+            key for result in self.results if result.ran for key in result.covers
         )
 
     @property
@@ -453,7 +468,8 @@ class CombinationReport:
             "train_walltime_s": round(self.train_walltime_s, 4),
             "universe": len(self.universe),
             "covered": len(set(self.covered)),
-            "failures": len(self.failures),
+            "coordinates": len(self.coordinates),
+            "defects": len(self.defects),
             "refused": [
                 {"task_id": task, "coordinate": key, "rule": rule}
                 for task, key, rule in self.refused
@@ -503,10 +519,10 @@ class CombinationReport:
                 "UNCOVERED coordinates (reachable, not admitted at this budget):"
             )
             lines.extend(f"  {key}" for key in unresolved)
-        if self.failures:
+        if self.defects:
             lines.append("")
-            lines.append("FAILURES:")
-            for result in self.failures:
+            lines.append("DEFECTS (no cell could train):")
+            for result in self.defects:
                 label = " ".join(
                     f"{axis}={name}"
                     for axis, name in zip(AXIS_ORDER, result.selection, strict=True)

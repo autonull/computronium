@@ -289,11 +289,10 @@ def test_target_kind_is_joined_from_the_loss_inventory() -> None:
         for spec in AXES_REGISTRIES[axis]
         if spec.target_kind == "class_index"
     }
-    assert class_only == {
-        ("credit", "local_contrastive"),
-        ("plasticity", "temporal_psi"),
-        ("plasticity", "conflict_adaptive"),
-    }
+    from computronium.experiment.schema.seed_registries import CLASS_TARGET_ONLY
+
+    # The declared table is the one source; the axis rows are its projection.
+    assert class_only == {(axis.value, name) for axis, name in CLASS_TARGET_ONLY}
     assert all(
         LOSS_INVENTORY[kind].target in {"class_index", "continuous"}
         for kind in LOSS_INVENTORY

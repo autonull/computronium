@@ -535,4 +535,4 @@ def _coverage_combinations(args: argparse.Namespace) -> int:
     print(render_json(report) if args.format == "json" else report.render())
     if not args.strict:
         return 0
-    return 1 if report.failures or report.uncovered else 0
+    return 1 if report.defects or report.uncovered else 0

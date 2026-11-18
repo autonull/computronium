@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.losses import class_one_hot
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -83,13 +85,13 @@ def output_target(y: Tensor, like: Tensor) -> Tensor:
 
     A *class index* target becomes one-hot. A float target of the output's own
     element count is the value itself (a regression target or soft labels), so
-    it is returned as the output's shape — the convention
-    ``_settle_kernel._one_hot`` uses for the settle nudge, applied to the
-    credit laws so a continuous lane reads the same target everywhere.
+    it is returned as the output's shape — the convention the settle nudge
+    uses for the same target, applied to the credit laws so a continuous lane
+    reads the same target everywhere.
     """
     if y.numel() == like.numel():
         return y.to(like.dtype).reshape(like.shape)
-    return torch.nn.functional.one_hot(y, num_classes=like.shape[-1]).to(like.dtype)
+    return class_one_hot(y, like)
 
 
 def _propagate_targets(

@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Final
 import torch
 from torch import Tensor
 
+from computronium.core.losses import class_one_hot
+
 if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.substrate import Substrate
@@ -115,16 +117,7 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
         return target
     if target.numel() == like.numel():
         return target.reshape(like.shape)
-    if target.dim() == 1:
-        out = torch.zeros_like(like)
-        out.scatter_(1, target.unsqueeze(1), 1.0)
-        return out
-    flat = target.reshape(-1)
-    out = torch.zeros(
-        (flat.numel(), like.shape[-1]), dtype=like.dtype, device=like.device
-    )
-    out.scatter_(1, flat.unsqueeze(1), 1.0)
-    return out.view(*target.shape, like.shape[-1])
+    return class_one_hot(target, like)
 
 
 def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
@@ -155,7 +148,7 @@ def nudged_output(out: Tensor, target: Tensor, beta: float) -> Tensor:
             "must match the output"
         )
         raise ValueError(msg)
-    onehot = _one_hot(target.clamp_min(0), out)
+    onehot = class_one_hot(target, out)
     valid = (target >= 0).unsqueeze(-1).to(out.dtype)
     return out + beta * valid * (onehot - out)
 

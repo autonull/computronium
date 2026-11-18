@@ -1,5 +1,5 @@
 # TODO94 — SEC Loop v2: Result-First Capability Harvest
-**Status:** 2026-11-17 · **v2** — Session 1 complete. Loop runs end-to-end: R1 (defect verdict), P0 (1 PASS, 5 UNAVAILABLE), P1 (0 surprises). Artifacts: census.json, portfolio.json, cells.jsonl, map.json.
+**Status:** 2026-11-18 · **v2** — Session 11: R4 defect fixed at its one source; 128-cell gate has 0 defects and 0 uncovered (69 covered, 7 coordinates); R1's first two duplicate engines removed. Artifacts: census.json, portfolio.json, cells.jsonl, map.json.
 
 **Two principles**
 1. **Breadth feeds the result.** P0 exists to find candidates and defects, not to replace the real experiment.
@@ -800,3 +800,54 @@ primitives on a proxy and reporting the proxy as capability.
 
 The map is now honest about *which boxes exist*. It is still not a measurement
 of the thesis. The next move is R1, then R5.
+---
+
+### Session 11 — 2026-11-18 (R4 fixed at its one source; R3 gate clean)
+
+**Decision:** the scale gate's single `runtime_error` — is it a fixable
+mechanism? Two actions: (a) guard the one class-index→one-hot form, (b) classify
+below-bar as a coordinate. Error costs: a defect hides in a "coordinate" row if
+(a) is skipped; a fake defect hides the map if (b) is skipped. Stop when the
+128-cell gate reports `defects=0`, `uncovered=0`.
+
+**Experiment:** `comp coverage combinations --task iris --task mnist --task
+cora --budget 128 --strict`
+**Box:** 3 tasks × the greedy cover (18 cells), 1 epoch, 1 batch, seed 0, CPU,
+param budget 50k.
+**Rung / stop:** rung 0 (wiring) + at-scale smoke; stop = the verdict lands.
+**Result:** before 47 covered, 7 failures = 6 divergence + 1 `runtime_error`;
+after **69 covered, 0 defects, 7 coordinates, 0 uncovered**,
+`train_walltime_s 33.0`, `scan_walltime_s 9.7`, 3.05M probes.
+**Triage:** the crash was a **defect** — the mask sentinel (`-100`) reached a
+`scatter_` as a class index (`index -100 is out of bounds for dimension 1 with
+size 7`), not the credit/update. The six below-bar cells are **coordinates**,
+not defects.
+**Fixes Applied:**
+- One class-index form: `core.losses.class_one_hot` (sentinel row stays free)
+  and `one_hot_like`. `_settle_kernel._one_hot`, `_utils.output_target`, the
+  credit laws, and six acceleration lanes read it; a literal scatter is gone.
+- The report now classifies: `defects` (no cell could train) vs `coordinates`
+  (trained, missed the bar); `--strict` fails on defects or uncovered, so the
+  exit code no longer calls a coordinate a failure.
+- R1 first step: `valid_combinations()`/`_is_valid_combination` (a second
+  matrix and six preset lists in `system.py`) deleted — no callers.
+- R1 second step: five axis-value tables lifted into `system.py` as the one
+  table, read by `validate()` and projected into the registry rows
+  (`RECURRENT_DYNAMICS`, `THERMO_CREDIT_DYNAMICS`,
+  `SPIKE_INTEGRATION_CREDITS`, `PREDICTIVE_SETTLING_CREDITS`,
+  `QUANTUM_DYNAMICS`).
+- Locks: `test_masked_target_lock.py` (sentinel free, measured graph cell
+  trains); `test_legality_single_source_lock.py` (each row is the table, and
+  removing a value stops the refusal); the stale `62` and the second class-only
+  list in `test_combination_smoke_lock.py` / `test_regression_target_lock.py`
+  now read the declaration.
+
+**Next Experiment:**
+- **R1 (remaining):** the rows still literal for attention credits,
+  transformer pairing, the local family, `pc_alm`, NCA/NTM fast weights, and
+  nonlayered — lift each into a `system.py` table as above. `_compile_expr`
+  compiles 9 of ~30 DSL nodes: `le/ge/ne/implies` in a row is a planner crash
+  waiting for the first caller.
+- **R2 (remaining):** the `core/local_learning` and `core/plasticity` lanes
+  still build their own one-hot; bind them to `class_one_hot`.
+- **R5:** screen on the thesis task (batch 1, EWC, SplitMNIST), not MNIST.

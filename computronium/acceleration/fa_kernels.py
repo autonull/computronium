@@ -26,6 +26,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.losses import one_hot_like
 from computronium.core.utils.activations import (
     apply_activation_derivative,
     get_activation,
@@ -140,15 +141,7 @@ class FAKernelBackend:
         _, activations = self.forward(x)
         # Compute error
         output = activations[-1]
-        if y.dim() == 1:
-            target_vec = (
-                torch.nn.functional
-                .one_hot(y, num_classes=output.shape[1])
-                .float()
-                .to(device=output.device, dtype=output.dtype)
-            )
-        else:
-            target_vec = y.to(device=output.device, dtype=output.dtype)
+        target_vec = one_hot_like(y, output)
         error = target_vec - output
         # Run contrastive backward
         gradients = self.backward_contrastive(activations, activations, beta=1.0)

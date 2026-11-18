@@ -23,11 +23,13 @@ __all__ = [
     "LossKind",
     "LossSpec",
     "accuracy_tensor",
+    "class_one_hot",
     "compute_accuracy",
     "compute_loss",
     "cross_entropy",
     "fold_time",
     "mean_squared_error",
+    "one_hot_like",
     "perplexity",
     "reshape_for_cross_entropy",
 ]
@@ -59,6 +61,39 @@ def cross_entropy(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
 def mean_squared_error(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
     """Mean squared error over a continuous, value-valued target."""
     return torch.nn.functional.mse_loss(preds, targets.float())
+
+
+def class_one_hot(target: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
+    """One-hot a class-index target into ``like``'s class dimension.
+
+    ``like.shape[:-1]`` is the target's index layout (``[B]``, ``[B, T]``,
+    ``[N]``) and ``like.shape[-1]`` the class count. An entry below zero is
+    the cross-entropy ignore sentinel: it names no class, so its row stays
+    free rather than indexing out of bounds.
+    """
+    index = target.clamp_min(0)
+    classes = like.shape[-1]
+    if target.dim() == 1:
+        hot = torch.zeros_like(like)
+        hot.scatter_(1, index.unsqueeze(1), 1.0)
+    else:
+        flat = torch.zeros(
+            (index.numel(), classes), dtype=like.dtype, device=like.device
+        )
+        flat.scatter_(1, index.reshape(-1, 1), 1.0)
+        hot = flat.view(*target.shape, classes)
+    return hot * (target >= 0).unsqueeze(-1).to(hot.dtype)
+
+
+def one_hot_like(target: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
+    """The dense target a nudge reads in ``like``'s class dimension.
+
+    A 1-D target is class indices (one-hot, sentinel rows free); a target
+    already in the activations' layout is cast to their dtype and device.
+    """
+    if target.dim() == 1:
+        return class_one_hot(target, like)
+    return target.to(device=like.device, dtype=like.dtype)
 
 
 # The one declared loss inventory: a task's ``loss_kind`` names a row here, and

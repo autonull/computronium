@@ -29,6 +29,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.losses import one_hot_like
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -87,9 +88,7 @@ class BackpropKernelBackend:
         # Forward pass
         output, activations = self.forward(x)
         # Compute error
-        error = torch.nn.functional.one_hot(y, num_classes=output.shape[1]).float().to(
-            device=output.device, dtype=output.dtype
-        ) - torch.softmax(output, dim=-1)
+        error = one_hot_like(y, output) - torch.softmax(output, dim=-1)
         # Backward pass
         gradients = self.backward(activations, error)
         # Apply updates

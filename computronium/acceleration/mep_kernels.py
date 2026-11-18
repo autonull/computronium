@@ -22,6 +22,7 @@ from computronium.acceleration.kernel_backend import (
     linear_views,
 )
 from computronium.acceleration.triton_kernels import MEP_TritonOps
+from computronium.core.losses import one_hot_like
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -101,15 +102,7 @@ class MEPKernelBackend:
         # Nudged phase: forward pass with output nudging
         nudged_states = self._forward_chain(x)
         # Nudge output toward target
-        if y.dim() == 1:
-            target_vec = (
-                torch.nn.functional
-                .one_hot(y, num_classes=nudged_states[-1].shape[1])
-                .float()
-                .to(device=self._device, dtype=self._dtype)
-            )
-        else:
-            target_vec = y.to(device=self._device, dtype=self._dtype)
+        target_vec = one_hot_like(y, nudged_states[-1])
         nudged_states[-1] += self._beta * (target_vec - nudged_states[-1])
         # Contrastive update
         gradients = self.contrastive_update(free_states, nudged_states)
@@ -382,15 +375,7 @@ class O1MemoryEPv2KernelBackend:
         # Nudged phase: forward pass with output nudging
         nudged_states = self._forward_chain(x)
         # Nudge output toward target
-        if y.dim() == 1:
-            target_vec = (
-                torch.nn.functional
-                .one_hot(y, num_classes=nudged_states[-1].shape[1])
-                .float()
-                .to(device=self._device, dtype=self._dtype)
-            )
-        else:
-            target_vec = y.to(device=self._device, dtype=self._dtype)
+        target_vec = one_hot_like(y, nudged_states[-1])
         nudged_states[-1] += self._beta * (target_vec - nudged_states[-1])
         # Contrastive update
         gradients = self.compute_update(free_states, nudged_states)

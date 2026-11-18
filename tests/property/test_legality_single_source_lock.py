@@ -107,3 +107,109 @@ def test_references_params_is_the_only_traversal() -> None:
     assert references_params(var("output_dim"))
     assert references_params(has_key(var("params"), const("residual")))
     assert not references_params(var("credit"))
+
+
+# The axis-value tables the validators and the declarative rows share: one
+# table per rule, projected into the planner's predicate. A literal set on
+# either side is the second copy this test exists to catch.
+_SHARED_TABLES = (
+    ("RECURRENT_DYNAMICS", "recurrent_geometry_dynamics", 2, {"geometry": "recurrent"}),
+    (
+        "THERMO_CREDIT_DYNAMICS",
+        "thermodynamic_contrast_dynamics",
+        2,
+        {"credit": "thermodynamic_contrast"},
+    ),
+    (
+        "SPIKE_INTEGRATION_CREDITS",
+        "spike_integration_credit",
+        4,
+        {"dynamics": "spike_integration"},
+    ),
+    (
+        "PREDICTIVE_SETTLING_CREDITS",
+        "predictive_settling_credit",
+        4,
+        {"dynamics": "predictive_settling"},
+    ),
+    (
+        "QUANTUM_DYNAMICS",
+        "quantum_substrate_dynamics",
+        2,
+        {"substrate": "quantum"},
+    ),
+)
+_AXIS_FIELDS = ("substrate", "geometry", "dynamics", "plasticity", "credit", "update")
+
+
+def _values(index: int, overrides: dict[str, str]) -> tuple[str, ...]:
+    values = [
+        "digital",
+        "feedforward",
+        "instantaneous",
+        "null",
+        "gradient",
+        "euclidean",
+    ]
+    for field, value in overrides.items():
+        values[_AXIS_FIELDS.index(field)] = value
+    return (*values, "")
+
+
+def _candidates(index: int) -> list[str]:
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+
+    axis = StructuralAxis(_AXIS_FIELDS[index])
+    return [spec.name for spec in AXES_REGISTRIES[axis].values()]
+
+
+@pytest.mark.parametrize(
+    ("table", "rule_name", "index", "overrides"),
+    _SHARED_TABLES,
+    ids=[case[0] for case in _SHARED_TABLES],
+)
+def test_the_declared_row_is_the_shared_table(
+    table: str,
+    rule_name: str,
+    index: int,
+    overrides: dict[str, str],
+) -> None:
+    """The row's verdict is membership in the table, for every axis value."""
+    from computronium.experiment.kernel.search_space import (
+        _compiled_void_constraints,
+    )
+
+    seed_all_registries()
+    rule = dict(_compiled_void_constraints()[0])[rule_name]
+    allowed = getattr(system_module, table)
+    for value in _candidates(index):
+        values = _values(index, {**overrides, _AXIS_FIELDS[index]: value})
+        assert rule(values) is (value in allowed), (table, value)
+
+
+def test_removing_a_value_from_the_table_stops_the_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runtime validator reads the table, not a literal of its own."""
+    from computronium.ontology.dynamics import StateDynamicsConfig
+    from computronium.ontology.geometry import GeometryConfig
+
+    monkeypatch.setattr(
+        system_module, "RECURRENT_DYNAMICS", frozenset({"instantaneous"})
+    )
+
+    def recurrent(dynamics: str) -> SystemConfig:
+        return SystemConfig(
+            substrate=SubstrateConfig.digital(),
+            geometry=GeometryConfig.recurrent(
+                input_dim=784, output_dim=10, hidden_dims=(16,)
+            ),
+            dynamics=getattr(StateDynamicsConfig, dynamics)(),
+            plasticity=PlasticityConfig.null(),
+            credit=CreditAssignmentConfig.homeostatic(),
+            update=ParameterUpdateConfig.euclidean(),
+        )
+
+    recurrent("instantaneous").validate()
+    with pytest.raises(ValueError, match=r"requires one of \['instantaneous'\]"):
+        recurrent("diffusion").validate()

@@ -23,6 +23,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     linear_views,
 )
+from computronium.core.losses import one_hot_like
 
 if TYPE_CHECKING:
     from computronium.ontology import System
@@ -162,13 +163,7 @@ class PCKernelBackend:
 
         # Clamp output to target if provided
         if y is not None:
-            y_onehot = (
-                torch.nn.functional
-                .one_hot(y, num_classes=mu[-1].shape[1])
-                .float()
-                .to(device=self._device, dtype=self._dtype)
-            )
-            mu[-1] = y_onehot
+            mu[-1] = one_hot_like(y, mu[-1])
 
         infer_steps = steps or self._infer_steps
         W = [layer.weight.data for layer in self._layers]

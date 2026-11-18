@@ -11,7 +11,12 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
-from computronium.core.losses import cross_entropy, mean_squared_error
+from computronium.core.losses import (
+    class_one_hot,
+    cross_entropy,
+    mean_squared_error,
+    one_hot_like,
+)
 from computronium.ontology._utils import (
     PoolContext,
     _acts_list,
@@ -134,7 +139,7 @@ def _fold_cell_targets(
         return None
     if acts[-2].shape != (batch, channels * n_cells):
         return None
-    out_target = torch.nn.functional.one_hot(y, num_classes=acts[-1].shape[-1]).float()
+    out_target = class_one_hot(y, acts[-1])
     state_target = (
         (out_target @ geometry.params[weight_names[2]])
         .view(batch, channels, n_cells)
@@ -1599,10 +1604,7 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
         # nudged differential is β·(onehot − logits) under
         # InstantaneousDynamics — dominated by the constant one-hot term,
         # which carries no per-sample error information.
-        e1 = (
-            torch.nn.functional.one_hot(y, out.shape[-1]).to(out.dtype)
-            - torch.softmax(out, dim=-1)
-        ).detach()
+        e1 = (one_hot_like(y, out) - torch.softmax(out, dim=-1)).detach()
         learned = self.config.learned_feedback
         if learned:
             self._update_learned_feedback(free_acts, e1, weight_names, n_trans)
