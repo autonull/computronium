@@ -380,8 +380,36 @@ def get_legal_coordinate_for_primitive(
 ) -> Coordinate | None:
     """Build a minimal legal coordinate for a primitive.
 
+    Tries compatible companion axes to find a legal box.
     Returns None if no legal box exists (mark as UNAVAILABLE).
     """
+    # Known compatible companion axes for each primitive
+    # Format: {primitive_key: {companion_axis: value}}
+    COMPANION_COMPAT = {
+        # Substrates that need specific dynamics
+        "neuromorphic": {"dynamics": "energy_minimization"},
+        # Geometries that need specific dynamics
+        "recurrent": {"dynamics": "energy_minimization"},
+        "graph": {"dynamics": "instantaneous"},  # needs edge_index at runtime
+        # Dynamics that need specific credits
+        "predictive_settling": {"credit": "thermodynamic_contrast"},
+        "error_predictive_coding": {"credit": "thermodynamic_contrast"},
+        "spike_integration": {"credit": "target_inversion"},
+        "diffusion": {"geometry": "recurrent", "credit": "target_inversion"},
+        "pc_alm": {"credit": "thermodynamic_contrast"},
+        # Credits that need specific dynamics
+        "thermodynamic_contrast": {"dynamics": "energy_minimization"},
+        "pc_alm": {"dynamics": "energy_minimization"},  # pc_alm credit needs energy_minimization dynamics
+        # Credits that need specific geometries
+        "surrogate": {"geometry": "routing"},
+        # Routing geometry needs surrogate credit
+        "routing": {"credit": "surrogate"},
+        # Plasticity.routing needs surrogate credit
+        "routing": {"credit": "surrogate"},
+        # Conflict-adaptive plasticity replaces readout -> incompatible with gradient
+        "conflict_adaptive": None,  # Mark as UNAVAILABLE with gradient
+    }
+
     # Default primitives for each axis
     defaults = {
         "substrate": "digital",
@@ -407,6 +435,14 @@ def get_legal_coordinate_for_primitive(
     # entry.id format: "primitive.substrate.digital" -> key is "digital"
     primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
     defaults[axis] = primitive_key
+
+    # Apply companion compatibility overrides
+    if primitive_key in COMPANION_COMPAT:
+        compat = COMPANION_COMPAT[primitive_key]
+        if compat is None:
+            return None  # Explicitly incompatible
+        for comp_axis, comp_value in compat.items():
+            defaults[comp_axis] = comp_value
 
     # Check availability
     if not entry.available:
@@ -509,13 +545,14 @@ def run_p0_track(
     census_entries: list[PrimitiveCensusEntry],
     max_primitives: int = 6,
     device: str = "auto",
+    breadth: str = "delta",
 ) -> dict[str, Any]:
-    """Run Track P0: Delta breadth screen for unscreened/changed/failed primitives.
+    """Run Track P0: Breadth screen for primitives.
 
-    Only screens primitives with screen_status in {unscreened, defect, failed}.
-    Reads screening status from map.json (last_screened) and census (available).
+    Delta mode: only unscreened, defect, or failed primitives.
+    Full mode: all primitives (re-screen everything).
     """
-    logger.info("Starting Track P0: Delta breadth screen")
+    logger.info(f"Starting Track P0: {breadth} breadth screen")
 
     # Load map to check which primitives have been screened
     map_path = out_dir / "map.json"
@@ -531,18 +568,21 @@ def run_p0_track(
             }:
                 screened_primitives.add(prim_id)
 
-    # Filter to delta: unscreened, defect, or failed (from map status)
-    delta_entries = [
-        e
-        for e in census_entries
-        if e.id not in screened_primitives or e.screen_status in {"defect", "failed"}
-    ]
+    if breadth == "delta":
+        # Filter to delta: unscreened, defect, or failed (from map status)
+        entries_to_screen = [
+            e
+            for e in census_entries
+            if e.id not in screened_primitives or e.screen_status in {"defect", "failed"}
+        ]
+    else:  # full
+        entries_to_screen = list(census_entries)
 
     # Limit to max_primitives
-    delta_entries = delta_entries[:max_primitives]
+    entries_to_screen = entries_to_screen[:max_primitives]
 
     logger.info(
-        f"P0 delta: {len(delta_entries)} primitives to screen (from {len(census_entries)} total)"
+        f"P0 {breadth}: {len(entries_to_screen)} primitives to screen (from {len(census_entries)} total)"
     )
 
     results: list[dict[str, Any]] = []
@@ -567,7 +607,7 @@ def run_p0_track(
         checkpoint_every_n=0,
     )
 
-    for entry in delta_entries:
+    for entry in entries_to_screen:
         logger.info(f"P0 screening: {entry.id}")
 
         coord = get_legal_coordinate_for_primitive(entry)
@@ -646,7 +686,7 @@ def run_p0_track(
             results.append(result)
             defect_count += 1
 
-    total = len(delta_entries)
+    total = len(entries_to_screen)
     defect_rate = defect_count / total if total > 0 else 0.0
     pause_r = defect_rate > 0.2
 
@@ -993,12 +1033,13 @@ def main() -> None:
         all_results.extend(r2_result["cells"])
 
     # Run P0 if requested
-    if args.track in {"P0", "all"} and args.breadth == "delta":
+    if args.track in {"P0", "all"}:
         p0_result = run_p0_track(
             out_dir,
             census_entries,
             max_primitives=args.max_primitives,
             device=args.device,
+            breadth=args.breadth,
         )
         all_results.extend(p0_result["cells"])
 
