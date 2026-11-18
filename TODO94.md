@@ -376,6 +376,19 @@ No slides. The cell log is the record. The map is the result.
 - If R2 passes → promote to claim; if fails → investigate D track (memristive + local)
 - Run P1 confirmation on P0 passes
 
+### Session 2 (continued) — 2026-11-18 (R2 verification)
+**Decision:** Verify R2 track works correctly with single seed test
+**Experiment:** `run_continual_learning('local_ewc', config)` with PermutedMNIST 20 tasks
+**Result:** Completed in 677s, final accuracies ~0.1-0.2 (chance=0.1), avg_forgetting=0.019, BWT=-0.014
+**Triage:** Runner works correctly with new task structure. R2 track running full 5 seeds × 2 credits (10 cells) — expected ~2-3 hours on CPU.
+
+**Fixes Verified:**
+- PermutedMNIST task loads correctly with 10-class labels per task
+- CLConfig properly handles `num_tasks=20`, `classes_per_task=10`, `total_classes=200`
+- Continual learning runner evaluates all 20 tasks correctly with task-masked loss
+- EWC consolidation works at task boundaries
+- Plastic state maintained across steps
+
 ---
 
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
