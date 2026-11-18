@@ -1,12 +1,14 @@
 # TODO94 — SEC Loop v2: Result-First Capability Harvest
-**Status:** 2026-11-18 · **v2** — Session 12: R1 complete (every listed rule is one
-table, projected into its planner row); R1b complete (the planner compiles every
-axis-tuple node and names the row it cannot decide); R2 measured (0 cells
-admitted by `validate()` are refused by the settle kernel); R6 complete
-(`_is_valid_combination` stub and `validate_campaign_design` NameError deleted).
-R5 (screen on the thesis task) is the one remaining item. Gate: 73 declared,
-69 covered, 4 refused by a rule, **0 uncovered, 0 defects**. Artifacts:
-census.json, portfolio.json, cells.jsonl, map.json.
+**Status:** 2026-11-18 · **v2** — Session 12: R1 structurally complete (every
+listed rule is one table pair); R1b complete (the planner compiles every
+axis-tuple node and names the row it cannot decide); R2 downgraded (2 rules are
+crash-backed, 6 are unmeasured, 3 never uniquely refuse); R6 complete. An exact redundancy audit of 32
+void rows over 2,068,416 axis combinations found **3 rows are never the sole
+refuser and 2 never fire at all**; the two vacuous rows are deleted. R5 (screen
+on the thesis task) is the one planned experiment left, and **rule necessity is
+now the open question in R2**. Gate: 73 declared, 69 covered, 4 refused by a
+rule, **0 uncovered, 0 defects**. Artifacts: census.json, portfolio.json,
+cells.jsonl, map.json.
 
 **Two principles**
 1. **Breadth feeds the result.** P0 exists to find candidates and defects, not to replace the real experiment.
@@ -20,10 +22,12 @@ census.json, portfolio.json, cells.jsonl, map.json.
 |---|---|---|---|
 | R1 | one legality table | **green** — 13 rule rows, each a projection of a `system.py` table pair; the six literals are gone and the two fast-weight rows merged | `pytest tests/property/test_legality_single_source_lock.py -q` |
 | R1b | `_compile_expr` | **green** — compiles `Ne/Lt/Le/Ge/Implies`; an undecidable node fails with the row's name; every params-free VOID row compiles | `pytest tests/property/test_legality_compile_lock.py -q` |
-| R2 | every axis `raise` is a declaration | **measured** — 0 admitted (geometry × 7 settling dynamics × 6 credits) pairs lack a layer stack; the remaining 27 raises are state/config checks, not axis values | `pytest tests/property/test_settling_layer_lock.py -q` |
+| R2 | every axis `raise` is a declaration | **partial** — 0 admitted (geometry × 7 settling dynamics × 6 credits) pairs lack a layer stack; but only 2 of the 11 lifted rules are crash-backed, 6 are unmeasured, 3 never uniquely refuse (table below) | a discriminating cell per unproven rule: the 1-batch box scores every control at chance |
+| R7 | a declared refusal is measured, not asserted | **open — new**: 3 rows are never the sole refuser, 2 were vacuously true (deleted), 6 rules have no discriminating cell | `pytest tests/property/test_legality_compile_lock.py -k constant` plus the table below |
 | R3 | scale gate | **green**: 0 defects, 0 uncovered, 69 covered, 4 refused | `comp coverage combinations --task iris --task mnist --task cora --budget 128 --strict` |
 | R4 | concrete defects | **green** — the mask sentinel is free at `core.losses.class_one_hot` | `pytest tests/property/test_masked_target_lock.py -q` |
-| R5 | screen on the thesis task | **open — the remaining item** | P0 box must be batch-1 SplitMNIST + EWC (the R1 box), not single-task MNIST |
+| R5 | screen on the thesis task | **open — the remaining experiment** | P0 box must be batch-1 SplitMNIST + EWC (the R1 box), not single-task MNIST |
+| R8 | the 6 unmeasured rules | **open** — each is a candidate restraint | one cell per rule at a box (batch_limit 0 or more epochs) where the gradient control is above chance |
 | R6 | no second tables | **green** — `_is_valid_combination` (always-True stub) deleted; `validate_campaign_design` no longer reads a name it never bound | `rg "_is_valid_combination\|one_hot" computronium/core computronium/experiment computronium/ontology` |
 
 ### R1 — the tables (one per rule, both sides read it)
@@ -43,6 +47,24 @@ census.json, portfolio.json, cells.jsonl, map.json.
 | `NO_FAST_WEIGHT_GEOMETRIES` | `fast_weight_plasticity_geometry` (was two rows) | `_validate_fast_weight_plasticity_geometry` |
 | `NONLAYERED_GEOMETRIES` / `SETTLING_DYNAMICS` | `nonlayered_geometry_dynamics` | `_validate_nonlayered_geometry_dynamics` |
 | `NCA_CELL_MODE_CREDITS` | `nca_instantaneous_<credit>` | `_validate_nca_cell_mode_credits` |
+
+**Necessity audit (exact, 2,068,416 axis combinations, 32 void rows):**
+
+| Verdict | Rows | Evidence |
+|---|---|---|
+| crash-backed | `nonlayered_geometry_dynamics`, `transformer_pairing_credit` | with the validator disabled the cell still fails: `TypeError: Energy-based settling requires a layered geometry`, and `runtime_error` on the transformer cell |
+| crash-backed (one branch) | `recurrent_geometry_dynamics` | `lazy` dynamics raises `TypeError: does not support recurrent geometry`; its `spike_integration` branch is untested, and its `instantaneous` branch is owned by `recurrent_instantaneous_gradient_credit` |
+| live, unmeasured | `thermodynamic_contrast_dynamics`, `spike_integration_credit`, `predictive_settling_credit`, `local_contrastive_geometry`, `pc_alm_dynamics`, `quantum_substrate_dynamics` | with the validator disabled the cell composes and trains (0.03–0.09) — but the control is also 0.09375, so the number decides nothing |
+| live but never sole refuser | `fast_weight_plasticity_geometry` (98,496 refused, **0** sole), `attention_geometry_compatibility` (27,216 / **0**), `nca_instantaneous_pc_alm` (1,134 / **0**) | another rule (dynamics×plasticity, local-stack, `pc_alm_credit_dynamics`) refuses every one first |
+| **deleted — vacuous** | `substrate_geometry_compatibility`, `credit_update_compatibility` | 0 refusals: one compared `substrate` with itself, one tested credit `"backprop"`, which the vocabulary does not contain |
+
+**The dry-run is not evidence.** With a rule's validator disabled, all 7
+screened cells composed and passed the dry-run gate — but the *controls* at the
+same box (gradient/feedforward, thermo/energy_min, local_goodness/predictive,
+pepita/instantaneous, spike/temporal_trace) also scored `val_acc=0.09375` with
+`cause=divergence`. At 1 epoch × 1 batch the box has no discriminating power:
+the "restraint" reading and the "chance-level" reading are the same number.
+A rule is unmeasured until a cell at a box whose control is above chance.
 
 **Two dead declarations, recorded, not fixed:**
 - `pc_alm_credit_dynamics` has no runtime validator. Adding one refuses every
@@ -76,13 +98,13 @@ failures — gallery provenance digests, README build, banned phrases in
 ```python
 while budget_remaining():
     # 1. Result-first track: one external objective, every session
-    R = run_result_track()               # default R1: batch-1 accuracy/retention
+    R = run_result_track()  # default R1: batch-1 accuracy/retention
 
     # 2. Delta breadth: only unscreened / changed / failed primitives
-    P0 = screen_delta_primitives()       # 1 seed, PASS / DEFECT / UNAVAILABLE
+    P0 = screen_delta_primitives()  # 1 seed, PASS / DEFECT / UNAVAILABLE
 
     # 3. Confirmation: only P0 passes; 3 seeds; only this stage can surprise
-    P1 = confirm(P0.passes)              # effect > 2δ, 3 seeds, paired
+    P1 = confirm(P0.passes)  # effect > 2δ, 3 seeds, paired
 
     # 4. Promotion: R or P1 surprise -> claim rung; rewrite portfolio
     if R.is_surprise() or P1.is_surprise():
@@ -211,9 +233,9 @@ without oversubscribing it.
 
 ```python
 workers = min(
-    cpu_cap,       # CPU: min(6, os.cpu_count() - 1); GPU: 1-4 contexts
-    memory_cap,    # CPU RAM or GPU free memory; reserve 2 GB
-    task_cap,      # from the task's declared ceiling
+    cpu_cap,  # CPU: min(6, os.cpu_count() - 1); GPU: 1-4 contexts
+    memory_cap,  # CPU RAM or GPU free memory; reserve 2 GB
+    task_cap,  # from the task's declared ceiling
 )
 ```
 
@@ -956,9 +978,13 @@ probe: 11 geometries × 7 settling dynamics × 6 credits (462 compositions),
   the comparison/logical nodes; `_is_valid_combination` (an always-`True` stub)
   and `validate_campaign_design`'s unbound `invalid_combos` are gone. The second
   was a live `NameError` on the campaign CLI path, not a dead branch.
-- **R2 — coordinate, with two dead declarations named.** Every remaining raise
-  is a state/config check, not an axis value. Two declared rows can never fire
-  (see the Next table); one of them must own the NCA-`pc_alm` refusal.
+- **R2 — downgraded from coordinate to open.** The layer class is clean (0
+  admitted-but-unlayered pairs), but 3 of the 11 lifted rules are never the
+  sole refuser, 3 have no measurement, and 2 rows were vacuously true and are
+  deleted. My first "6 restraints" reading is **retracted**: the control cells
+  at the same box also score chance, so that screen could not decide.
+- **R7 — new, from this audit.** 5 of 32 rows never uniquely refuse; a row is
+  a comment until a cell at a discriminating box shows why.
 - **R5 — the one open item.** No number moved, by design: the map still
   measures single-task MNIST while the thesis lives at batch 1.
 
@@ -980,6 +1006,68 @@ probe: 11 geometries × 7 settling dynamics × 6 credits (462 compositions),
 - Locks extended: the single-source lock's 12-case table projection; the new
   compile lock; the new settling-layer lock; the width-contract fast-weight
   fixture split into reachable (nca/ntm) and named-refusal (tile/tile_mesh).
+
+### Session 12b — 2026-11-18 (are these rules necessary?)
+
+**Decision:** the user's challenge — test whether each lifted rule is necessary,
+not whether it is a table. Two actions: (a) disable each rules' validator and
+ask the trainer, (b) test the rows for redundancy by exact enumeration. Error
+costs: a rule with no mechanism is a restraint that hides a capability; a rule
+whose only evidence is a crash at 1 batch is unproven. Stop when each rule has
+a named mechanism or is marked unmeasured.
+
+**Experiments:**
+1. `_compose_rejection` with each validator no-op'd, on the refused
+   coordinate (12 cases) — separates compose/settle crashes from clean composes.
+2. `cell_record` 1 epoch × 1 batch on the 7 "clean" cases + 5 legal controls.
+3. Exact redundancy: 32 void rows × 2,068,416 axis combinations; count
+   refusals and how often a row is the *sole* refuser.
+
+**Result:**
+- 2 rules fail with their own mechanism when disabled: `nonlayered` settling
+  (`TypeError`), transformer pairing (`runtime_error`). `recurrent` is
+  crash-backed on its `lazy` branch only. The `quantum` probe composes and runs
+  (`lazy`, `energy_minimization` both clean), so it is **not** crash-backed.
+- 7 "clean" cells all scored `val_acc` 0.03–0.09 — and all 5 controls scored
+  `0.09375` with `cause=divergence`. **The screen had no power.**
+- Two of the 12 disabled-validator probes were not isolated: the attention case
+  was still refused by the local-stack rule (and is dead by inclusion), the
+  recurrent `instantaneous` case by `recurrent_instantaneous_gradient_credit`.
+- Redundancy: `fast_weight_plasticity_geometry` 0/98,496 sole; `attention_
+  geometry_compatibility` 0/27,216 sole (its 4 credits are a strict subset of
+  `LOCAL_STACK_CREDITS`); `nca_instantaneous_pc_alm` 0/1,134 sole;
+  `substrate_geometry_compatibility` 0 refusals; `credit_update_compatibility`
+  0 refusals (`"backprop"` is not in the credit vocabulary).
+
+**Triage:**
+- **Defect (deleted):** the two vacuous rows. One compared `substrate` with
+  itself; the other guarded a value that cannot occur. Both came from the
+  bulk rewrite of the old pair-list matrix (`5371ea34`), not from a measurement.
+- **Dead by inclusion (kept, status recorded):** the three rows above. Each is
+  a real capability fact (attention shape, fast-weight layout, NCA cell mode)
+  whose refusal another rule currently owns. They become live only if the
+  blocking rule is relaxed — which is the capability they wait for.
+- **Unmeasured (six rules):** thermo×instantaneous, spike×gradient,
+  predictive×gradient, local×recurrent, pc_alm×gradient, quantum×lazy. None
+  has a cell above chance; none has a crash. Each is a candidate restraint.
+- **Retraction:** "R2 measured" was too strong. The layer class is measured;
+  the rule class is not.
+
+**What would overturn each rule:**
+
+| Rule | Overturned by |
+|---|---|
+| `local_contrastive_geometry` | a local-family credit written over `RecurrentGeometry._layers` (one `_stack` cast is the only blocker) |
+| `thermodynamic_contrast_dynamics` | one cell at a box whose gradient control is above chance; if the credit's `free − nudged` signal trains under instantaneous, the rule is a restraint |
+| `spike_integration_credit` | a surrogate-through-spikes path, or a cell showing gradient credit produces a non-zero above-chance update under spike dynamics |
+| `predictive_settling_credit` | same: gradient through a settled predictive pass |
+| `pc_alm_dynamics` | a cell with gradient + pc_alm showing above-chance training (the completion is already a dual write) |
+| `transformer_pairing_credit` | a credit that pairs a weight with its *consumed* act (`gradient` does; the two refused credits could be rewritten to) |
+| `attention_geometry_compatibility` | relaxing `LOCAL_STACK_GEOMETRIES` (dead today, then live) |
+| `fast_weight_plasticity_geometry` | a settling dynamic on `nca`/`ntm`/`tile`/`tile_mesh` (dead today, then live) |
+| `nca_instantaneous_pc_alm` | a runtime `pc_alm_credit_dynamics` check (then this row is unreachable) |
+| `quantum_substrate_dynamics` | a quantum cell whose `lazy`/`pc_alm`/`spike` path trains above chance; the substrate only changes the energy model there (same class as `ntm_substrate_inert`) |
+| `recurrent_geometry_dynamics` | making the recurrent weight part of the feedforward loss graph under instantaneous |
 
 **Next Experiment (R5 — the only open item):**
 ```

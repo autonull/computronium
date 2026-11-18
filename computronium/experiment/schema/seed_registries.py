@@ -1175,19 +1175,6 @@ CONSTRAINTS = [
     # Void constraints (logical infeasibility — globally suppressive at S4)
     # proof_kind: TYPE_MISMATCH | RESOURCE | LOGICAL
     ConstraintSpec(
-        name="substrate_geometry_compatibility",
-        kind=ConstraintKind.VOID,
-        description="Digital substrate incompatible with analog-only substrates",
-        predicate=not_(
-            and_(
-                eq(var("substrate"), const("digital")),
-                in_(var("substrate"), const(["analog", "optical", "quantum"])),
-            )
-        ),
-        proof_kind=ProofKind.LOGICAL,
-        origin="DECLARED",
-    ),
-    ConstraintSpec(
         name="dynamics_plasticity_compatibility",
         kind=ConstraintKind.VOID,
         description="Instantaneous dynamics cannot use fast-weight plasticity",
@@ -1195,27 +1182,6 @@ CONSTRAINTS = [
             and_(
                 eq(var("dynamics"), const("instantaneous")),
                 eq(var("plasticity"), const("fast_weights")),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
-    ConstraintSpec(
-        name="credit_update_compatibility",
-        kind=ConstraintKind.VOID,
-        description="Backprop credit requires Euclidean or compatible update rule",
-        predicate=not_(
-            and_(
-                eq(var("credit"), const("backprop")),
-                not_in(
-                    var("update"),
-                    const([
-                        "euclidean",
-                        "muon",
-                        "natural_gradient",
-                        "riemannian_orthogonal",
-                    ]),
-                ),
             )
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,

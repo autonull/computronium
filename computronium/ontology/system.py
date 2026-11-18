@@ -504,7 +504,6 @@ class SystemConfig:
         # Special case validations
         self._validate_gradient_credit_beta_clamp()
         self._validate_gradient_credit_instantaneous_recurrent()
-        self._validate_gradient_credit_instantaneous_output_proj()
         self._validate_per_element_displacement_step_size()
         self._validate_energy_minimization_momentum_update()
 
@@ -968,44 +967,6 @@ class SystemConfig:
                 "feedforward pass). Use energy_minimization, predictive_settling, "
                 "error_predictive_coding, pc_alm, or diffusion dynamics instead."
             )
-
-    def _validate_gradient_credit_instantaneous_output_proj(self) -> None:
-        """Gradient/backprop credit with instantaneous dynamics on geometries with
-        separate output projections (head/output_proj) fails because the projection
-        weights are not connected in the feedforward loss graph when settle is detached.
-
-        Standard FeedforwardGeometry and RecurrentGeometry do NOT have separate
-        output projections - their output layer is the last Linear layer in the
-        stack. Only these geometries have separate heads:
-        - ConvGeometry: has _head
-        - AttentionGeometry: has _output_projection
-        - CausalTransformerGeometry: has _output_projection
-        - SpatialLattice3DGeometry: has _output_projection
-        - TileGeometry/TileMesh: have output projection
-        """
-        # GradientCredit/BackpropCredit with instantaneous dynamics on certain
-        # geometries was historically problematic, but causal_transformer with
-        # patch embedding now includes head in forward_with_intermediates.
-        # if (
-        #     self.dynamics.dynamics_type == "instantaneous"
-        #     and self.geometry.topology_type
-        #     in {
-        #         "attention",
-        #         "causal_transformer",
-        #         "spatial_lattice",
-        #         "tile",
-        #         "tile_mesh",
-        #         "conv",
-        #     }
-        #     and self.credit.credit_type in {"gradient", "backprop"}
-        # ):
-        #     raise ValueError(
-        #         f"GradientCredit/BackpropCredit with instantaneous dynamics on "
-        #         f"{self.geometry.topology_type!r} geometry cannot compute gradients "
-        #         f"for output projection/head weights (not in feedforward pass when "
-        #         f"settle is detached). Use energy_minimization, predictive_settling, "
-        #         f"error_predictive_coding, pc_alm, or diffusion dynamics instead."
-        #     )
 
     def _validate_per_element_displacement_step_size(self) -> None:
         """Per-element-displacement update rules warn on gradient-relative step_size range."""

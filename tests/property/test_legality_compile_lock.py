@@ -96,6 +96,38 @@ def test_comparison_nodes_decide_like_the_dsl(expr, values, expected) -> None:
     assert _compile_expr(expr)(values) is expected
 
 
+def test_no_declared_row_is_a_constant() -> None:
+    """A row that answers the same for every axis value is not a rule.
+
+    Two rows answered ``True`` for all 2,068,416 axis combinations: one
+    compared ``substrate`` with itself, one tested a credit name the vocabulary
+    does not contain (TODO94 S12). Neither could ever fire, so neither was the
+    refusal its name promised.
+    """
+    from itertools import product
+
+    from computronium.experiment.kernel.search_space import _compile_expr
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+
+    seed_all_registries()
+    fields = ("substrate", "geometry", "dynamics", "plasticity", "credit", "update")
+    values = [
+        [spec.name for spec in AXES_REGISTRIES[StructuralAxis(field)].values()]
+        for field in fields
+    ]
+    for constraint in CONSTRAINTS_REGISTRY.values():
+        if constraint.kind != ConstraintKind.VOID or constraint.predicate is None:
+            continue
+        if references_params(constraint.predicate):
+            continue
+        if "task" in str(constraint.predicate):
+            continue
+        rule = _compile_expr(constraint.predicate)
+        answers = {bool(rule((*vals, ""))) for vals in product(*values)}
+        assert answers != {True}, f"{constraint.name} refuses no coordinate"
+        assert answers != {False}, f"{constraint.name} refuses every coordinate"
+
+
 def test_a_decision_node_names_its_constraint() -> None:
     """A row the axis tuple cannot decide fails with its own name."""
     from computronium.experiment.kernel.search_space import _compiled_void_constraints
