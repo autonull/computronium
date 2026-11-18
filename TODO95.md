@@ -111,76 +111,75 @@ numbers.
 
 ## 4. Roadmap, in order
 
-Order by dependency: a map of unread boxes is not a map (P0); a slice whose
-control is at chance cannot label anything (P1); only then is a census meaningful
-(P2); interactions require a fixed base (P3); the deep dive is chosen by the map
-(P4); the external path and public artifacts follow (P5).
+Order by dependency: a row without its run is not reproducible (P0b); a slice
+whose control is at chance cannot label anything (P1); only then is a census
+meaningful (P2); interactions require a fixed base (P3); the deep dive is chosen
+by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
 
 ### Progress (session 13, 2026-11-18)
 
 | Step | State | Evidence / next |
 |---|---|---|
 | P0a inventory | **done** | census v3: 75 rows (73 axis + 2 gaps); `test_inventory_single_source`; `schema/primitives.py` deleted |
-| P0b record | open | `Schedule` has no `batch_size`; a claim cannot be checked against its run |
+| P0b record | **next** | schema change; unblocks claim checks and the replay hash |
 | P0.5 defects | **done** | six chance rows measured at 375/150k; `mean_norm` step fixed (`3558a59e`); spectral/elastic ladder open |
 | P0.75 binding | **done** | `sec_binding.py`; every cell carries `binding`; `test_binding_condition` |
 | P1 calibrate | partial | vision base: control 0.8914, 7.7 s/cell. Tabular/graph/sequence bases open |
-| P2 census | partial | 75 rows: 61 measured (31 bound, 30 inert), 8 defect, 6 refused, 0 missing; `own-knobs` open |
+| P2 census | partial | 75 rows: 61 measured (31 bound, 30 inert), 8 defect, 6 refused, 0 missing; `own-knobs` after P0b |
 | P3–P5 | open | P3 needs P2's variance; P4 is chosen by P3; P5 is the external path |
 
 The census's base is `mnist`, 1 epoch, 375 batches, 150k params, seed 0. Every
 defect names its mechanism in `map.json`: 3 sequence credits cannot read a
 vision shape, 5 rows exceed the parameter ceiling. A 60 s per-primitive cap
 refuses `natural_gradient` (no epoch inside the cap) — a cost defect, not a
-verdict. Next: the own-knobs pass (30 inert rows), P0b, the three family bases.
+verdict. The map is a map of *one box*, so the next sessions are ordered by
+what it cannot answer:
 
-### P0a — One inventory (no training; 1 session) ✅
+1. **P0b, no training** — one record schema; `batch_size` alone refuses a
+   claim; every row carries a replay hash.
+2. **Own-knobs, 10–15 min GPU** — the 30 inert rows bind, or keep a named
+   unmet condition.
+3. **One family base (`iris`)** — a cheap control and measured cost; then `cora`
+   if the graph path needs it.
+4. **P3** — the census variance picks the pair; 1 seed per cell, 3 for the top
+   interactions.
+5. **P4, one claim** — today's candidates are defect probes: `diffusion` 0.116
+   at 136 s, `conv` 0.122 at 41 s, `spike_integration` 0.132 at 34 s.
 
-**Decision:** can the census see every primitive? Today 62 of 75.
-**Deliverable:** `build_census` reads `AXES_REGISTRIES` (73) plus the spec-only
-rows (2), and prints its total. The 11 credits/updates that `ALL_PRIMITIVES`
-drops are included; `closed_form_ridge` and `noisy` are entries with
-`available=False` and the reason "no config classmethod — a capability gap",
-which is their honest state. `ALL_PRIMITIVES` is deleted; the axis registry is
-the only list.
-**Gate:** `test_inventory_single_source`: the census total == 75 and every axis
-row has an entry.
-**Done when:** the census prints 75 and the two gaps are named.
+Do not run another sweep at the MNIST box: it adds rows, not answers.
+
+### P0a — One inventory (no training; done) ✅
+
+**Landed:** `build_census` reads `AXES_REGISTRIES` (73) plus 2 spec-only rows;
+the census prints 75. `noisy` and `closed_form_ridge` are `available=False`
+with "no config classmethod — a capability gap". `ALL_PRIMITIVES` is deleted;
+the axis registry is the only list.
+**Gate:** `test_inventory_single_source` (75 total; every axis row an entry).
 
 ### P0b — One box, one record (schema change; 1 session)
 
 **Decision:** can a claim be checked against its run? Today no.
 **Deliverable:** `Schedule` gains `batch_size`, `steps_per_task`; the CL runner
-builds one; the `sec_loop` JSONL becomes a `Record` (or gains the same fields);
-`ThresholdRegistration` gains a `schedule` block and stops discarding box fields.
+builds one; the `sec_loop` JSONL becomes a `Record` carrying the box and the
+replay hash; `ThresholdRegistration` stops discarding box fields.
 **Gate:** `test_box_identity`: changing `batch_size` alone refuses the claim.
 **Done when:** one record schema, one box type, and a claim that names its box.
 
-### P0.5 — The defect queue (before the census; ~1 h) ✅
+### P0.5 — The defect queue (before the census) ✅
 
-**Decision:** are the five chance-level update rows defects rather than results?
-**Deliverable (measured 2026-11-18):** the 32-batch box was the first defect
-(375 batches: `adam` 0.927, `lion` 0.914); the 10k ceiling was the second
-(118,282 parameters, now 150k); `mean_norm`'s default step was the third
-(0.01 → 0.887 at 1e-3). Re-measured, all six are `MEASURED` — no verdict.
-`spectral_constrained` and `elastic_consolidation` measured 0.626 at their
-defaults: a number, and a candidate for a step-size ladder, not a verdict.
-**Also:** `closed_form_ridge` and `noisy` are named capability gaps in the
-census, not aliased onto an axis row; `split_mnist` has its domain.
-**Gate:** `test_spec_composes`, `test_binding_condition`, and the five cells'
-verdicts.
-**Done when:** each near-chance row is a defect probe with a name, or a
-measurement at its own declared default — never an unexamined label.
+**Landed:** the 32-batch box (`adam` 0.198) and the 10k ceiling (118,282
+params) were defects, not results; at 375 batches / 150k they measure
+(`adam` 0.927, `lion` 0.914); `mean_norm`'s default step was 10× too large
+(0.01 → 0.887 at 1e-3); `spectral_constrained` and `elastic_consolidation`
+measure 0.626 — a step ladder, not a verdict. `split_mnist` has its domain.
 
 ### P0.75 — Declare the binding conditions (no compute; 1 hour) ✅
 
-**Decision:** for each axis, what must be true for it to bind?
-**Deliverable:** a binding condition per axis: substrate (substrate-sensitive
-metric/task: bit-width, energy, spike timing), credit (label channel),
-update (own step size), dynamics (a settle), plasticity (a ψ lifecycle),
-geometry (a layer/cell/graph form). The map labels a slice whose condition is
-unmet `inert`, and the substrate/credit slices are chosen to meet it.
-**Done when:** no axis is "measured" by a box where it cannot act.
+**Landed:** `sec_binding.py` declares one condition per axis — substrate: a
+substrate-sensitive ruler; credit: a label channel; update: its own step size;
+dynamics: a settle; plasticity: a ψ lifecycle; geometry: a layer/cell/graph form.
+Every cell carries `binding: bound|inert` and the reason.
+**Done when:** an inert slice is never a result about its axis.
 
 ### P1 — Calibrate the box (pilot, ~30 min)
 
@@ -189,10 +188,10 @@ family, and what does a cell cost?
 **Deliverable:** one base box per family (vision, tabular, graph, sequence):
 `batch_size`, `steps/task`, `epochs`, chosen so the control is above chance
 and the cell is ≤ ~2 min. Publish `cells/hour`, measured, not estimated.
-**Box:** MNIST at 1 epoch, batch 32 (control ≈ 0.85–0.95 measured today);
-digits and iris need more steps or they stay at chance — the pilot says how many.
-**Gate:** the pilot prints control ± σ and the bar; a slice with a chance control
-is refused.
+**Box:** vision: `mnist`, 1 epoch, 375 batches, hidden 128, 150k, control
+0.8914, 5–60 s/cell. The next base is `iris` (tabular); graph and sequence
+follow.
+**Gate:** the pilot prints control ± σ; a slice with a chance control is refused.
 **Done when:** each family has a calibrated base and a measured cost per cell.
 
 ### P2 — The census (the first real map; ~2 h) ▶
@@ -207,21 +206,20 @@ refused counts per axis, and the defect list with mechanisms named.
 measured at its nearest legal box and marked `swapped`; each primitive is also
 measured at its own declared defaults and marked `own-knobs`. The measured base:
 375 batches, hidden 128, 150k ceiling, control 0.8914, 5–60 s/cell.
-**Open:** the own-knobs pass; the replay hash (rides P0b); swap labels on defect
-rows; the three non-vision family bases.
+**Open:** the own-knobs pass (after P0b); swap labels on defect rows; the replay
+hash (rides P0b); the three non-vision family bases.
 **Gate:** every row reproducible; every `fail` names a mechanism; the report
 prints the inventory count.
-**Done when:** the first map with no missing rows and no inflated status.
+**Done when:** one map with no missing rows, no inflated status, and every inert
+row named — the base-box map meets this; own-knobs extends it.
 
 ### P3 — The interaction slice (the map's structure; ~2 h)
 
 **Decision:** which axis pairs change each other at the fixed base?
 **Deliverable:** a factorial slice on the two axes with the most census variance
-(chosen by the census: credit × geometry, or **substrate × credit** when the
-substrate rows carry the variance — the substrate→algorithm question in
-`PURPOSE.md` §3 is exactly this pair). 1 seed each at the base, then the top
-interactions at 3 seeds. Reported as interaction effects with intervals, not a
-ranking.
+(the substrate × credit pair is `PURPOSE.md` §3's substrate→algorithm question;
+credit × geometry is the fallback). 1 seed each at the base, the top interactions
+at 3 seeds; interaction effects with intervals, not a ranking.
 **Box:** the P1 base, only the two varied axes changing.
 **Gate:** the control clears the bar in every cell; a pair with no power is
 marked, not reported.
@@ -231,23 +229,21 @@ about *which* axes matter together.
 ### P4 — The deep dive (the thesis, chosen by the map)
 
 **Decision:** which region deserves a matched, tuned comparison?
-**Deliverable:** the census's most surprising measurement (today the candidate
-is local credit at low batch) gets: a 3-point ladder per arm on its primary knob,
-then 5 paired seeds at matched boxes; pre-registered margin, fixed n, no peeking.
-**Box:** the family's base; a batch ladder `{1, 10, 32}` only if the map has
-measurements at batch 32.
+**Deliverable:** the census's most surprising measurement (today's candidates
+are defect probes: `diffusion` 0.116 at 136 s, `conv` 0.122 at 41 s): a 3-point
+ladder on its primary knob, then 5 paired seeds at matched boxes; pre-registered
+margin, fixed n, no peeking.
+**Box:** the candidate's own base; its knob ladder only if the map has a
+measurement there.
 **Gate:** the paired CI at `n_max`; the claim names its box.
 **Done when:** a claim, a coordinate, or a defect — and the map row is updated.
 
 ### P5 — The external path and public artifacts (staged)
 
 - `comp verify --primitive <name> --slice <family>` — the same scanner; a
-  stranger adds a credit through the documented ramp and holds a map row.
-- `tests/acceptance/test_extension_path.py` — the fake credit end to end.
-- Method cards from the map (`comp method-card`), recipes as tests, seed + box +
-  replay hash on every row.
-- A public slice: one family, one base, all 73 primitives, published with the
-  scanner and the records.
+  stranger adds a credit and holds a map row; `test_extension_path.py` end to end.
+- Method cards from the map; recipes as tests; seed + box + replay hash per row.
+- A public slice: one family, one base, all 73 primitives, with the records.
 
 ---
 
@@ -282,9 +278,11 @@ measurements at batch 32.
 - Full sweeps (the census is the sweep); 1-seed claims; walltime rankings;
   documents longer than 300 lines.
 
-**What could make this plan wrong:** if the calibrated base costs >5 min/cell,
-the census runs axis by axis; it already accumulates rows, so it is not a sweep.
-At the measured 5–60 s/cell, 73 rows are affordable.
+**What made this plan wrong once:** a retry chain spent a whole axis on one
+primitive, so the sweep was not affordable. The census now runs axis by axis and
+accumulates rows, and a 60 s per-primitive cap refuses a cell it cannot price.
+The remaining falsifier: a session that cannot name its claim before the first
+cell is a budget leak, not research.
 
 ## 7. Definition of done
 
