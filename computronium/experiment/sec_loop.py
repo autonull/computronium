@@ -12,25 +12,22 @@ Run:
 from __future__ import annotations
 
 import json
-import random
-import time
-from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
 from computronium.core.continual.metrics import CLConfig, CLMetrics
 from computronium.core.continual.runner import run_continual_learning
 from computronium.core.logging import get_logger
-from computronium.core.utils.device import get_device
-from computronium.experiment.kernel.evaluate import evaluate_cell, EvaluationError, CellEvaluation
+from computronium.experiment.kernel.evaluate import (
+    CellEvaluation,
+    EvaluationError,
+    evaluate_cell,
+)
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.sec_census import build_census, PrimitiveCensusEntry
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
+from computronium.experiment.sec_census import PrimitiveCensusEntry, build_census
 
 logger = get_logger(__name__)
 
@@ -122,7 +119,7 @@ def run_r1_track(
                 results.append(result_entry)
 
             except Exception as e:
-                logger.error(f"R1 cell failed: credit={credit_name}, seed={seed}, error={e}")
+                logger.exception(f"R1 cell failed: credit={credit_name}, seed={seed}")
                 result_entry = {
                     "track": "R1",
                     "credit": credit_name,
@@ -177,7 +174,7 @@ def run_r1_track(
         "cells": results,
     }
 
-    logger.info(f"R1 complete: verdict={verdict}, local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
+    logger.info(f"R1 complete: kill_rule={kill_rule_triggered}, surprise={surprise}, local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
     logger.info(f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}")
     return result_summary
 
@@ -274,7 +271,7 @@ def run_r2_track(
                 results.append(result_entry)
 
             except Exception as e:
-                logger.error(f"R2 cell failed: credit={credit_name}, seed={seed}, error={e}")
+                logger.exception(f"R2 cell failed: credit={credit_name}, seed={seed}")
                 result_entry = {
                     "track": "R2",
                     "credit": credit_name,
@@ -384,7 +381,7 @@ def get_legal_coordinate_for_primitive(
         return None
 
     # Check task family compatibility
-    if entry.task_families and "vision" not in entry.task_families and task_id in ("mnist", "cifar10", "split_mnist"):
+    if entry.task_families and "vision" not in entry.task_families and task_id in {"mnist", "cifar10", "split_mnist"}:
         # Primitive not declared for vision tasks
         return None
 
@@ -397,10 +394,10 @@ def get_legal_coordinate_for_primitive(
 
     # Add geometry-specific params based on the geometry being used
     geometry = defaults["geometry"]
-    if geometry in ("feedforward", "recurrent", "conv", "graph", "causal_transformer", "attention"):
+    if geometry in {"feedforward", "recurrent", "conv", "graph", "causal_transformer", "attention"}:
         params["geometry.hidden_dim"] = P0_HIDDEN_DIM
         params["geometry.depth"] = 2
-    elif geometry in ("tile", "tile_mesh"):
+    elif geometry in {"tile", "tile_mesh"}:
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
     elif geometry == "nca":
@@ -416,9 +413,9 @@ def get_legal_coordinate_for_primitive(
 
     # Add credit-specific params for local credits
     credit = defaults["credit"]
-    if credit in ("local_supervision", "local_goodness", "local_contrastive", "thermodynamic_contrast",
+    if credit in {"local_supervision", "local_goodness", "local_contrastive", "thermodynamic_contrast",
                   "random_projections", "target_inversion", "pepita", "pc_alm", "forward_tangent",
-                  "score_function", "zeroth_order", "surrogate"):
+                  "score_function", "zeroth_order", "surrogate"}:
         params["credit.feedback_scale"] = 0.01
 
     coord = Coordinate(
@@ -452,13 +449,13 @@ def run_p0_track(
     if map_path.exists():
         map_data = json.loads(map_path.read_text())
         for prim_id, entry in map_data.get("primitives", {}).items():
-            if entry.get("last_screened") and entry.get("status") in ("pass", "defect", "unavailable", "coordinate"):
+            if entry.get("last_screened") and entry.get("status") in {"pass", "defect", "unavailable", "coordinate"}:
                 screened_primitives.add(prim_id)
 
     # Filter to delta: unscreened, defect, or failed (from map status)
     delta_entries = [
         e for e in census_entries
-        if e.id not in screened_primitives or e.screen_status in ("defect", "failed")
+        if e.id not in screened_primitives or e.screen_status in {"defect", "failed"}
     ]
 
     # Limit to max_primitives
@@ -530,7 +527,7 @@ def run_p0_track(
             results.append(result)
 
         except EvaluationError as e:
-            logger.error(f"P0 cell failed: {entry.id}, error={e}")
+            logger.exception(f"P0 cell failed: {entry.id}")
             result = {
                 "track": "P0",
                 "primitive": entry.id,
@@ -553,7 +550,7 @@ def run_p0_track(
             unavailable_count += 1
         except Exception as e:
             # Other unexpected errors
-            logger.error(f"P0 cell failed: {entry.id}, error={e}")
+            logger.exception(f"P0 cell failed: {entry.id}")
             result = {
                 "track": "P0",
                 "primitive": entry.id,
@@ -709,7 +706,7 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
                     "surprise": r1_result["surprise"],
                 }
                 track["budget_used"]["cells"] = len(r1_result["cells"])
-                track["budget_used"]["seeds"] = len(set(c["seed"] for c in r1_result["cells"]))
+                track["budget_used"]["seeds"] = len({c["seed"] for c in r1_result["cells"]})
                 track["contention"] = False
                 break
 
@@ -728,7 +725,7 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
                     "surprise": r2_result["surprise"],
                 }
                 track["budget_used"]["cells"] = len(r2_result["cells"])
-                track["budget_used"]["seeds"] = len(set(c["seed"] for c in r2_result["cells"]))
+                track["budget_used"]["seeds"] = len({c["seed"] for c in r2_result["cells"]})
                 track["contention"] = False
                 break
 
@@ -854,17 +851,17 @@ def main() -> None:
     p1_result = None
 
     # Run R1 if requested
-    if args.track in ("R1", "all"):
+    if args.track in {"R1", "all"}:
         r1_result = run_r1_track(out_dir, census_entries, device=args.device)
         all_results.extend(r1_result["cells"])
 
     # Run R2 if requested
-    if args.track in ("R2", "all"):
+    if args.track in {"R2", "all"}:
         r2_result = run_r2_track(out_dir, census_entries, device=args.device)
         all_results.extend(r2_result["cells"])
 
     # Run P0 if requested
-    if args.track in ("P0", "all") and args.breadth == "delta":
+    if args.track in {"P0", "all"} and args.breadth == "delta":
         p0_result = run_p0_track(out_dir, census_entries, max_primitives=args.max_primitives, device=args.device)
         all_results.extend(p0_result["cells"])
 
@@ -882,7 +879,7 @@ def main() -> None:
         p0_passes = [c["primitive"] for c in (p0_result["cells"] if p0_result else []) if c["status"] == "PASS"]
 
     # Run P1 if there are passes
-    if args.track in ("P1", "all") and p0_passes:
+    if args.track in {"P1", "all"} and p0_passes:
         p1_result = run_p1_track(out_dir, p0_passes, census_entries, device=args.device)
         all_results.extend(p1_result["cells"])
 
