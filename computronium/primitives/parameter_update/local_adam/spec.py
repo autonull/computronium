@@ -35,4 +35,7 @@ Delta theta = -lr * m_hat / (sqrt(v_hat) + eps)
         "lamb",
         "parameter_update",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Local Adam; per-layer adaptive moments; no global state",
 )

@@ -32,4 +32,7 @@ Delta theta = -lr * sign(beta1*m + (1-beta1)g);  m <- beta2*m + (1-beta2)g
         "momentum",
         "parameter_update",
     ),
+    task_families=('vision', 'sequence'),
+    available=True,
+    capability_card="Lion optimizer; sign-based; memory efficient",
 )

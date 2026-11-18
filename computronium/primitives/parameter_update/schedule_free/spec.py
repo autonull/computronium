@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("no decreasing learning-rate schedule is read", "the evaluation point is the running average"),
     notes="The reference wraps ScheduleFreeUpdate; the kernel falls back to it until a fused device path lands.",
     tags=("schedule_free", "averaging", "parameter_update"),
+    task_families=("vision", "sequence"),
+    available=True,
+    capability_card="Schedule-free AdamW; no LR schedule; running average as evaluation point",
 )

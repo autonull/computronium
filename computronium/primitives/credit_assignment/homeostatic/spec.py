@@ -34,4 +34,7 @@ Weight scaling: w_ij *= target_norm / ‖w_i‖
         "synaptic_scaling",
         "stdp",
     ),
+    task_families=('vision', 'continual'),
+    available=True,
+    capability_card="Homeostatic credit; firing rate regularization; error-blind, measures chance by contract",
 )

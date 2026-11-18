@@ -137,3 +137,8 @@ class ImplementationSpec:
     # Future hooks
     tags: tuple[str, ...] = ()
     evidence_ids: tuple[str, ...] = ()
+
+    # SEC v2: primitive screening metadata (TODO94 §4)
+    task_families: tuple[str, ...] = ()
+    available: bool = True
+    capability_card: str = ""

@@ -28,4 +28,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Accelerated kernel could fuse gate logit update with routing selection.",
     tags=("routing", "gating", "sparse_routing", "conditional_computation", "moe"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Routing plasticity; Gumbel-Softmax gating; conditional computation",
 )

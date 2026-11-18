@@ -29,4 +29,7 @@ p = im2col(x);  h_i = fold(op(p, W_i) + b_i);  y = head(pool(h))
         "conv",
         "im2col",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Convolutional geometry; translation equivariance; spatial hierarchies",
 )

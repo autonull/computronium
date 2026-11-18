@@ -30,4 +30,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to ThermodynamicContrast ontology class. Kernel acceleration targets contrastive Hebbian computation.",
     tags=("equilibrium_propagation", "contrastive", "local_learning"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Thermodynamic contrast credit; energy-based; equilibrium propagation",
 )

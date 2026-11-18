@@ -34,4 +34,7 @@ v <- mu*v + g;  Delta theta = -lr * polar(v)  (exact SVD at ortho_steps=0)
         "orthogonal",
         "parameter_update",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Riemannian orthogonal update; Stiefel manifold; orthogonality constraint",
 )

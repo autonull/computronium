@@ -34,4 +34,7 @@ t_l = t_{l+1} @ W_{l+1}^T, ΔW_l = (acts_l - t_l)^T a_{l-1} / batch
         "target_prop",
         "transpose_feedback",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Target propagation via inverse mapping; layerwise targets; no backprop",
 )

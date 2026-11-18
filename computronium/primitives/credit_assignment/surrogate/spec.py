@@ -35,4 +35,7 @@ SPEC = ImplementationSpec(
         "temperature — the exact parabola has no derivative to estimate."
     ),
     tags=("surrogate", "straight_through", "gumbel", "top_k", "routing", "biased"),
+    task_families=('vision', 'neuromorphic'),
+    available=True,
+    capability_card="Surrogate gradient credit; for spiking networks; straight-through estimator",
 )

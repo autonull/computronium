@@ -35,4 +35,7 @@ x_aug = [x | onehot(y)];  a_pos, a_neg from label roll
         "forward_forward",
         "label_channel",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Local contrastive credit; positive/negative samples per layer; no global loss",
 )

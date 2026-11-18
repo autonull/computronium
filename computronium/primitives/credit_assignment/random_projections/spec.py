@@ -30,4 +30,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Accelerated kernel should preserve the pseudo-gradient within tolerance.",
     tags=("feedback_alignment", "dfa", "random_feedback"),
+    task_families=('vision', 'sequence', 'tabular'),
+    available=True,
+    capability_card="Feedback alignment with fixed random matrices; works without weight transport; biologically plausible",
 )

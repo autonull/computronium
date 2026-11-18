@@ -38,4 +38,7 @@ SPEC = ImplementationSpec(
         "stays hard. Kernel falls back to reference (Triton TODO)."
     ),
     tags=("routing", "moe", "top_k", "sparse_selection", "gating"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Routing plasticity; Gumbel-Softmax gating; conditional computation",
 )

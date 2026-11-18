@@ -30,4 +30,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Accelerated kernel should preserve the settled state within tolerance.",
     tags=("predictive_coding", "pcn", "settling"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Predictive coding settling; hierarchical prediction errors",
 )

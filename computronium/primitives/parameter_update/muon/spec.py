@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Uses exact SVD polar factor (ortho_steps=0) for full-spectrum whitening. Newton-Schulz iteration available as opt-in.",
     tags=("muon", "orthogonal_update", "riemannian_optimization"),
+    task_families=('vision', 'sequence'),
+    available=True,
+    capability_card="Muon (Momentum Orthogonal); orthogonalized momentum; fast convergence",
 )

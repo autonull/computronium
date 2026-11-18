@@ -32,4 +32,7 @@ SPEC = ImplementationSpec(
     notes="Accelerated kernel should preserve the pseudo-gradient within tolerance. "
     "Requires PCALMDynamics to provide dual_vars in state.metrics or state.dual_vars.",
     tags=("predictive_coding", "augmented_lagrangian", "local_learning", "hebbian"),
+    task_families=('vision',),
+    available=True,
+    capability_card="PC-ALM dynamics; augmented Lagrangian for predictive coding",
 )

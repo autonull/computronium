@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to EuclideanUpdate ontology class. Kernel acceleration targets momentum update and clipping.",
     tags=("sgd", "momentum", "euclidean", "parameter_update"),
+    task_families=('continual', 'vision', 'sequence', 'tabular', 'graph', 'rl'),
+    available=True,
+    capability_card="Euclidean SGD update; baseline for all optimizers",
 )

@@ -34,4 +34,7 @@ tau * dv/dt = -v + I; v = v + dt/tau * (-v + I)
         "izhikevich",
         "settling",
     ),
+    task_families=('neuromorphic', 'sequence'),
+    available=True,
+    capability_card="Spike integration dynamics; leaky integrate-and-fire; event-driven",
 )

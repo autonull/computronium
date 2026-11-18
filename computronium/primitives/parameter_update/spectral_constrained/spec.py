@@ -33,4 +33,7 @@ SPEC = ImplementationSpec(
         "update",
         "regularization",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Spectral constrained update; spectral norm regularization",
 )

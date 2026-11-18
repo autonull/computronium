@@ -32,4 +32,7 @@ Unitary evolution: U = exp(-iHt)
         "quantum",
         "unitary",
     ),
+    task_families=('scientific',),
+    available=True,
+    capability_card="Quantum substrate; superposition; entanglement; NISQ-era",
 )

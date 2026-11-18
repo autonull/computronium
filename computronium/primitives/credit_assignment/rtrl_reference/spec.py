@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the Jacobian is retained for every step", "the reference fixes the temporal credits' parity", "the learning signal comes from the readout alone"),
     notes="The reference wraps RTRLReference; the kernel falls back to it until a fused device path lands.",
     tags=("rtrl", "reference", "temporal", "credit"),
+    task_families=('sequence',),
+    available=True,
+    capability_card="Reference RTRL implementation; exact gradient for verification",
 )

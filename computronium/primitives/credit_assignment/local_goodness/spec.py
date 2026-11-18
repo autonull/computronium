@@ -30,4 +30,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Two modes: 'ff' (Forward-Forward) uses autograd of goodness contrast; 'lemma' uses closed-form fixed/learned feedback. Kernel acceleration available via ff_kernels Triton backends.",
     tags=("forward_forward", "lemma", "local_credit", "contrastive"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Forward-forward style local goodness; layerwise objectives; no backprop",
 )

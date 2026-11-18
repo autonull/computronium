@@ -25,4 +25,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to NullPlasticity ontology class. This is the identity primitive for plasticity axis.",
     tags=("null", "zero_extension", "identity", "plasticity"),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Zero-extension identity; always compatible; baseline for plasticity comparison",
 )

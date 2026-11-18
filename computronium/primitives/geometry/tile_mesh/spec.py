@@ -28,4 +28,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Accelerated kernel uses Triton for fused tile activity updates.",
     tags=("tilenet", "modular", "local_routing", "async"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Tile mesh; 2D grid of tiles; local connectivity",
 )

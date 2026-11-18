@@ -35,4 +35,7 @@ Delta theta_matrix = -ortho_lr * polar(m_hat) * |m_hat|/sqrt(v_hat);  vectors st
         "muon",
         "parameter_update",
     ),
+    task_families=('vision', 'sequence'),
+    available=True,
+    capability_card="Orthogonal Adam; maintains weight orthogonality; stability",
 )

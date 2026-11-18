@@ -32,4 +32,7 @@ dh = -∇E dt + sqrt(2·D)·dW
         "langevin",
         "stochastic",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Diffusion dynamics; denoising score matching; generative",
 )

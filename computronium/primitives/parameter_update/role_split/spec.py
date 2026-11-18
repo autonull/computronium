@@ -34,4 +34,7 @@ Delta theta_n = on_role.step(g_n) if n in role_names else other.step(g_n)
         "hybrid",
         "parameter_update",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Role-split update; separates feature/readout learning rates",
 )

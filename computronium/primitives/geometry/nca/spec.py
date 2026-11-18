@@ -31,4 +31,7 @@ State update: s ← s + mask · tanh(MLP(p)) · δ_scale
         "cellular_automaton",
         "emergent_spatial",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Neural Cellular Automata; local update rules; self-organization",
 )

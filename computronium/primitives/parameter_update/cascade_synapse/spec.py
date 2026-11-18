@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the cascade saturates at its level count", "a repeated direction decays the cascade"),
     notes="The reference wraps CascadeSynapsePlasticity; the kernel falls back to it until a fused device path lands.",
     tags=("cascade_synapse", "metaplastic", "parameter_update"),
+    task_families=("continual",),
+    available=True,
+    capability_card="Cascade synapse metaplasticity; multi-level state per parameter; saturating cascade",
 )

@@ -33,4 +33,7 @@ w ← clamp(w, −1, 1);  s ← s + N(0, noise_level)
         "analog",
         "noise",
     ),
+    task_families=("neuromorphic",),
+    available=True,
+    capability_card="Analog substrate; continuous values; noise and drift",
 )

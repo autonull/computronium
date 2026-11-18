@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the penalty vanishes at the task anchor", "the path integral lives in the optimizer state"),
     notes="The reference wraps SynapticIntelligenceUpdate; the kernel falls back to it until a fused device path lands.",
     tags=("synaptic_intelligence", "consolidation", "parameter_update"),
+    task_families=("continual",),
+    available=True,
+    capability_card="Synaptic Intelligence for continual learning; path integral importance; task anchor",
 )

@@ -32,4 +32,7 @@ SPEC = ImplementationSpec(
         "until a batched Triton jvp lands."
     ),
     tags=("forward_mode", "jvp", "pathwise", "unbiased", "estimator"),
+    task_families=('vision', 'sequence'),
+    available=True,
+    capability_card="Forward tangent (JVP) credit; unbiased gradient estimator; O(1) activation memory",
 )

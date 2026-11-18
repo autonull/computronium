@@ -33,4 +33,7 @@ Delta theta = -lr * m_hat / (sqrt(v_hat) + eps)
         "second_moment",
         "parameter_update",
     ),
+    task_families=('continual', 'vision', 'sequence', 'tabular', 'graph', 'rl'),
+    available=True,
+    capability_card="Adam optimizer; adaptive moments; de facto default",
 )

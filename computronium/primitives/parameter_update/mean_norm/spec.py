@@ -33,4 +33,7 @@ Delta theta = -lr * g / (mean|g| + eps) per tensor
         "natural_gradient",
         "parameter_update",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Mean-norm update; gradient normalization; stable training",
 )

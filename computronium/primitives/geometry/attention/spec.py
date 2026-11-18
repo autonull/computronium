@@ -31,4 +31,7 @@ h = x;  h ← h + MHA(LN(h));  h ← h + FFN(LN(h))
         "attention",
         "transformer",
     ),
+    task_families=('sequence', 'vision'),
+    available=True,
+    capability_card="Attention geometry; self-attention; global context",
 )

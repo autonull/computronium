@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the optimizer state is O(rows + columns) per matrix", "the factored estimate tracks the full second moment"),
     notes="The reference wraps FactoredSecondMomentUpdate; the kernel falls back to it until a fused device path lands.",
     tags=("adafactor", "factored", "second_moment", "parameter_update"),
+    task_families=("vision", "sequence", "lm"),
+    available=True,
+    capability_card="Adafactor optimizer; factored second moment; memory efficient for large models",
 )

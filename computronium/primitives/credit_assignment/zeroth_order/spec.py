@@ -32,4 +32,7 @@ SPEC = ImplementationSpec(
         "until a fused two-forward device path lands."
     ),
     tags=("zeroth_order", "spsa", "finite_difference", "gradient_free", "estimator"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Zeroth-order (ES) credit; gradient-free; high query complexity",
 )

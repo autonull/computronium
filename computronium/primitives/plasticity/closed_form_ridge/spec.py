@@ -34,4 +34,7 @@ W = Y X^T (X X^T + λI)^{-1}
         "ridge_regression",
         "supervised",
     ),
+    task_families=("continual", "sequence"),
+    available=True,
+    capability_card="Closed-form ridge regression plasticity; exact fast-weight solution; supervised",
 )

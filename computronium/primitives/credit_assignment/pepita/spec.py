@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Distinct from Forward-Forward: uses error signal, not label injection. Distinct from LEMMA: uses autograd of modulated pass, not closed-form per-layer update.",
     tags=("pepita", "local_learning", "error_modulated", "random_feedback", "autograd"),
+    task_families=('vision',),
+    available=True,
+    capability_card="PEPITA credit; predictive coding inspired; local updates",
 )

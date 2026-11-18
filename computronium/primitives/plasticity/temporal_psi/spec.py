@@ -34,4 +34,7 @@ M_t = (G_t + λ·mean(diag G_t)·I)⁻¹C_t
         "trace_decay",
         "task_switching",
     ),
+    task_families=('sequence',),
+    available=True,
+    capability_card="Temporal psi plasticity; time-varying plasticity coefficients",
 )

@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the variance falls on a constant gradient", "the variance floors at its declared minimum"),
     notes="The reference wraps BayesianOnlineUpdate; the kernel falls back to it until a fused device path lands.",
     tags=("bayesian_online", "von", "posterior", "parameter_update"),
+    task_families=("continual", "sequence"),
+    available=True,
+    capability_card="Bayesian online (VON) update; diagonal Gaussian posterior; variance adaptation",
 )

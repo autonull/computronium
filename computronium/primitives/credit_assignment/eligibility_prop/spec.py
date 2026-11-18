@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the learning signal comes from the readout alone", "the trace decays with α at every step", "no reverse-mode graph crosses the recurrence"),
     notes="The reference wraps EligibilityPropCredit; the kernel falls back to it until a fused device path lands.",
     tags=("eligibility_prop", "temporal", "trace", "credit"),
+    task_families=('sequence', 'continual'),
+    available=True,
+    capability_card="Eligibility propagation (e-prop); online credit for RNNs; biologically plausible",
 )

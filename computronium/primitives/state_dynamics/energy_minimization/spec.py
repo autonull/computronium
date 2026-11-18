@@ -35,4 +35,7 @@ Heavy-ball: v ← μ·v - η·∂F/∂s; s ← s + v
         "hopfield",
         "energy_based",
     ),
+    task_families=('vision', 'continual'),
+    available=True,
+    capability_card="Energy-based settling; free energy minimization; compatible with local credits",
 )

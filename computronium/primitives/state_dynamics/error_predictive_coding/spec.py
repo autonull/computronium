@@ -34,4 +34,7 @@ s_i = ŝ_i + ε_i,  ŝ_i = f_θ_i(s_{i−1})
         "predictive_coding",
         "epc",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Error predictive coding; separate error and value units",
 )

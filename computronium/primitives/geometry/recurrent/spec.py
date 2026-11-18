@@ -31,4 +31,7 @@ x_{t+1} = f(W x_t + U u_t + b)
         "recurrent",
         "energy_based",
     ),
+    task_families=('sequence', 'continual'),
+    available=True,
+    capability_card="Recurrent topology; hidden state carried across steps; compatible with e-prop, RTRL",
 )

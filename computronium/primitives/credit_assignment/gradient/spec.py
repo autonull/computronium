@@ -33,4 +33,7 @@ SPEC = ImplementationSpec(
         "autograd",
         "baseline",
     ),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Exact gradient baseline; works on all task families; reference for local credit comparison",
 )

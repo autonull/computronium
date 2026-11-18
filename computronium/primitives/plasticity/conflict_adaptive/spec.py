@@ -35,4 +35,7 @@ a_t = mean(argmax(h_t M_{t−1} + b_{t−1}) == y_t)
         "ridge",
         "continual",
     ),
+    task_families=('continual',),
+    available=True,
+    capability_card="Conflict-adaptive plasticity; detects interference; modulates learning",
 )

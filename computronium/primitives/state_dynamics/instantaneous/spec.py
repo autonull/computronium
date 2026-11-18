@@ -34,4 +34,7 @@ a_{l+1} = σ(W_l a_l + b_l)
         "backprop",
         "forward_forward",
     ),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Single-pass feedforward; compatible with gradient and local credits; baseline for settling dynamics",
 )

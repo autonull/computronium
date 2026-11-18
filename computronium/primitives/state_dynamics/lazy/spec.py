@@ -30,4 +30,7 @@ Gauss-Seidel sweep: a_l^{t+1} = f(a_l^t, a_{l-1}^{t+1}, a_{l+1}^t)
         "gauss_seidel",
         "eqprop",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Lazy dynamics; deferred computation; sparse updates",
 )

@@ -28,4 +28,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to NoisySubstrate. Kernel falls back to reference (Triton TODO).",
     tags=("substrate", "digital", "noise", "robustness"),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Digital substrate with configurable noise; robustness testing; zero noise = digital",
 )

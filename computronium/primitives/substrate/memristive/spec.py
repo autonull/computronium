@@ -33,4 +33,7 @@ V = IR; dG/dt = f(V, G)
         "ir-drop",
         "conductance",
     ),
+    task_families=('neuromorphic',),
+    available=True,
+    capability_card="Memristive substrate; resistive memory; conductance-based weights",
 )

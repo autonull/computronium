@@ -12,7 +12,7 @@ SPEC = ImplementationSpec(
     reference_entrypoint=(
         "computronium.primitives.credit_assignment.hybrid.reference.step"
     ),
-    kernel_entrypoint=("computronium.primitives.credit_assignment.hybrid.kernel.step"),
+    kernel_entrypoint=("computtronium.primitives.credit_assignment.hybrid.kernel.step"),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     status="kernel_unverified",
@@ -39,4 +39,7 @@ SPEC = ImplementationSpec(
         "backprop: the trunk never builds an autograd graph."
     ),
     tags=("hybrid", "local_learning", "lockstep", "random_feedback", "autograd"),
+    task_families=("vision", "sequence"),
+    available=True,
+    capability_card="Hybrid local+backprop; lockstep trunk with exact head gradients; reduced activation memory",
 )

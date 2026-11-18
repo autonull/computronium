@@ -33,4 +33,7 @@ x' = quantize(x, precision) + noise
         "digital",
         "quantization",
     ),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Standard digital substrate; compatible with all dynamics/credits/updates; precision/noise configurable",
 )

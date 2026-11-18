@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to SpatialLattice3DGeometry. Kernel falls back to reference (Triton TODO).",
     tags=("spatial", "lattice", "3d", "local_connectivity", "nca"),
+    task_families=('vision', 'scientific'),
+    available=True,
+    capability_card="Spatial lattice; grid-structured; PDE-style computation",
 )

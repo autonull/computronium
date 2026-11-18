@@ -32,4 +32,7 @@ operator_logits_{t+1} = decay·logits_t + controller(ψ_t, x_t)
         "z3",
         "operator_selection",
     ),
+    task_families=('continual',),
+    available=True,
+    capability_card="Rule-state plasticity; meta-learned update rules",
 )

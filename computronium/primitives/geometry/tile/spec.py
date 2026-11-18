@@ -30,4 +30,7 @@ h ← route_tiles(input), tile-local weights, layer-wise routing
         "tilenet",
         "modular",
     ),
+    task_families=('vision',),
+    available=True,
+    capability_card="Tile geometry; spatial tiling; weight sharing across tiles",
 )

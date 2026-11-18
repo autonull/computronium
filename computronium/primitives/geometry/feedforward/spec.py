@@ -28,4 +28,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to FeedforwardGeometry. Kernel falls back to reference (Triton TODO).",
     tags=("feedforward", "mlp", "dag", "sequential"),
+    task_families=("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    available=True,
+    capability_card="Standard feedforward DAG; compatible with all credits/dynamics/updates; depth/width configurable",
 )

@@ -1,5 +1,5 @@
 # TODO94 — SEC Loop v2: Result-First Capability Harvest
-**Status:** 2026-11-17 · **v1** — replaces TODO93. This is a live portfolio, not a document. The loop runs **one result-first track** and a **delta breadth screen** every session; only confirmed effects promote; coordinates and defects update the map.
+**Status:** 2026-11-17 · **v2** — Session 1 complete. Loop runs end-to-end: R1 (defect verdict), P0 (1 PASS, 5 UNAVAILABLE), P1 (0 surprises). Artifacts: census.json, portfolio.json, cells.jsonl, map.json.
 
 **Two principles**
 1. **Breadth feeds the result.** P0 exists to find candidates and defects, not to replace the real experiment.
@@ -293,6 +293,47 @@ After each session:
 5. Is the map complete? → publish; stop.
 
 No slides. The cell log is the record. The map is the result.
+
+---
+
+## 13. Session Log
+
+### Session 1 — 2026-11-17
+**Decision:** Run SEC loop end-to-end (R1 + P0 + P1) with 6 primitives.
+
+**Experiments:**
+1. `uv run python -m computronium.experiment.sec_census --out results/sec` — 62 primitives loaded
+2. `uv run python -m computronium.experiment.sec_init --out results/sec` — artifacts initialized
+3. `uv run python -m computronium.experiment.sec_loop --track R1 --out results/sec` — R1: local_ewc vs backprop_ewc on SplitMNIST, 5 seeds
+4. `uv run python -m computronium.experiment.sec_loop --track P0 --breadth delta --max-primitives 6 --out results/sec` — P0: 6 substrate primitives
+5. `uv run python -m computronium.experiment.sec_loop --track all --breadth delta --max-primitives 6 --out results/sec` — full loop
+
+**Box:** SplitMNIST, batch 32, 1 epoch/task, W=256, local×EWC vs backprop×EWC, 5 data-order seeds
+
+**Rung / stop:** R1 completed 5 seeds each (10 cells); P0 screened 6 primitives (1 PASS, 5 UNAVAILABLE); P1 confirmed 1 primitive (3 seeds)
+
+**Results:**
+- R1: local_ewc worst=0.929, backprop_ewc worst=0.953, gap=-0.024 (gap < 2 pp → **defect**, kill rule triggered)
+- R1 forgetting: local=0.016, backprop=0.004 (local ≤ backprop/2 = FALSE)
+- P0: primitive.substrate.digital PASS (val_acc=0.156), 5 substrates UNAVAILABLE
+- P1: 1 primitive confirmed, 0 surprises
+
+**Triage:**
+- R1 defect: local credit does NOT beat backprop at batch 1 with EWC (gap -2.4 pp). Kill rule triggered → stop thesis, publish negative
+- P0: 5 substrates unavailable (no legal box for vision tasks); only digital passes at chance level
+- No capability gaps identified that would fix R1
+
+**Fixes Applied:**
+- Added `task_families`, `available`, `capability_card` to all 62 primitive specs
+- Fixed duplicate field issues in 58 spec files
+- Registered `split_mnist` in task registry and factory
+- Implemented sec_census.py, sec_init.py, sec_loop.py, sec_watch.py
+- Used continual learning runner for proper multi-task evaluation
+
+**Next Experiment:**
+- R1 killed → publish negative result and map
+- Investigate R2 (20-task Permuted MNIST) or D track (memristive + local)
+- Expand P0 delta to screen more primitive axes (geometry, dynamics, credit, update, plasticity)
 
 ---
 

@@ -32,4 +32,7 @@ SPEC = ImplementationSpec(
         "until a fused sample/backprop path lands."
     ),
     tags=("score_function", "reinforce", "policy_gradient", "unbiased", "estimator"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Score function (REINFORCE) credit; high variance; baseline for comparison",
 )

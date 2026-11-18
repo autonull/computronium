@@ -34,4 +34,7 @@ SPEC = ImplementationSpec(
         "fisher",
         "parameter_update",
     ),
+    task_families=('vision', 'sequence'),
+    available=True,
+    capability_card="Natural gradient update; Fisher information geometry; invariant",
 )

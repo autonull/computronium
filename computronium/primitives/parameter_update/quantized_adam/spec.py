@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the optimizer state is 4× smaller than fp32 Adam", "the step is exact Adam on the dequantized moments"),
     notes="The reference wraps QuantizedStateUpdate; the kernel falls back to it until a fused device path lands.",
     tags=("quantized_adam", "int8", "blockwise", "parameter_update"),
+    task_families=("vision", "sequence"),
+    available=True,
+    capability_card="8-bit Adam; blockwise quantization; 4x memory reduction; exact on dequantized",
 )

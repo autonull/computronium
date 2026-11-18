@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to SparseSubstrate. Kernel falls back to reference (Triton TODO).",
     tags=("substrate", "digital", "sparse", "efficiency"),
+    task_families=('vision', 'graph'),
+    available=True,
+    capability_card="Sparse substrate; sparse weights/activations; structured sparsity",
 )

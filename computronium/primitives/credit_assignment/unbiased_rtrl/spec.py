@@ -19,4 +19,7 @@ SPEC = ImplementationSpec(
     invariants=("the estimate is unbiased over the sign/row draws", "the rank-1 factors share one scale", "the learning signal comes from the readout alone"),
     notes="The reference wraps UnbiasedOnlineRTRLCredit; the kernel falls back to it until a fused device path lands.",
     tags=("unbiased_rtrl", "uoro", "temporal", "credit"),
+    task_families=('sequence',),
+    available=True,
+    capability_card="Unbiased RTRL; exact online gradient for RNNs; high memory cost",
 )

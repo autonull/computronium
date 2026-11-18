@@ -31,4 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to TernarySubstrate. Kernel falls back to reference (Triton TODO).",
     tags=("substrate", "digital", "ternary", "quantization", "inference"),
+    task_families=('vision',),
+    available=True,
+    capability_card="Ternary substrate; {-1,0,1} weights; 2-bit quantization",
 )

@@ -34,4 +34,7 @@ SPEC = ImplementationSpec(
         "ewc",
         "fisher",
     ),
+    task_families=("continual",),
+    available=True,
+    capability_card="EWC for continual learning; Fisher information regularization; compatible with local and gradient credits",
 )
