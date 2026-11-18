@@ -727,3 +727,76 @@ exist*; it is still not a measurement of the thesis.
 
 The system is the portfolio. The loop is the process. The map is the result.
 The measurement must be on the task the claim is about.
+
+---
+
+### Session 10 — 2026-11-18 (Best recommendations)
+
+The defects found in Sessions 8–9 are all one shape: **legality is re-derived in
+three places** that must agree but don't.
+
+| Engine | Used by | Known defect |
+|---|---|---|
+| `seed_registries.py` void predicates | planner (`declared_space`, `plan_cover`) | missing `local_supervision` (fixed); still admits `local_supervision`+`ntm`? (fixed) |
+| `system.py` `_validate_*` methods | compose, trainer | missing `local_supervision` (fixed), no `surrogate` rule |
+| runtime `raise` in credit/dynamics code | training only | `graph`+`target_inversion` ("Class values must be non-negative", "index -100 out of bounds"), `graph`+`lion` |
+
+Measured defect rate (at-scale smoke, 18 cells): **7 failures — 6 train (below
+bar = COORDINATE), 1 real `runtime_error`** (`ternary/graph/spike_integration/
+fast_weights/target_inversion/lion`). The MNIST screen cannot see any of them:
+its one UNAVAILABLE is `graph`, which *composes* but cannot *train* on any
+non-graph task.
+
+#### Recommendations, in priority order
+
+**R1 — Collapse the three legality engines into one (highest leverage).**
+Make `SystemConfig.validate()` evaluate the declarative predicates in
+`seed_registries.py` (or generate the predicates from `validate()`). One table;
+the planner and the trainer read the same rules by construction. This removes
+the whole class of "unnecessary limitation / impossible promise" — not one
+instance of it.
+
+**R2 — Make every coordinate-boundary `raise` a declaration.**
+Every runtime `TypeError`/`ValueError` that names an axis (geometry, dynamics,
+credit, substrate, plasticity, update) must have a matching void predicate and a
+matching `_validate_*`. Internal state checks (e.g. "State must contain input
+'x'") stay runtime. The smoke at scale is the gate.
+
+**R3 — Run the defect gate at scale, on the task the primitive will be used on.**
+`run_combinations(task_ids, budget=128)` is the gate. Every `runtime_error`
+names a missing rule — fix it, re-run until zero. Every `below bar` is a
+COORDINATE result, not a defect — do not count it as failure. This is the only
+measurement that catches both directions: `graph`+`target_inversion` is admitted
+but untrainable; `graph`+`x` is refused for every non-graph task.
+
+**R4 — Fix the concrete defects the gate surfaces.**
+- `graph` + `target_inversion`: the credit reads class targets, but a graph
+  node set has no per-sample class axis. Either declare the rule or fix the
+  credit's class-index arithmetic (`index -100`, "Class values must be
+  non-negative").
+- `graph` + `lion`: same class-index bug in the update's loss path.
+- Whichever the scale gate surfaces next.
+
+**R5 — Then fix the process, not the manifestations.**
+P0 screens on single-task MNIST; the thesis is batch-1 continual learning.
+They do not correlate (PEPITA 0.86 → 0.25). Either screen on the thesis task
+(batch 1, EWC, SplitMNIST — ~260x slower per cell) or accept the R-track
+falsification and test a new thesis on its own task. Do not keep screening
+primitives on a proxy and reporting the proxy as capability.
+
+**R6 — Stop doing these.**
+- Maintaining a second compatibility table (my `COMPANION_COMPAT`, or any
+  table that duplicates the validator).
+- Treating `below bar` as a defect: it is a COORDINATE result.
+- Re-screening `graph` on MNIST (no edge_index) instead of a graph task.
+- Screening primitives on a task the thesis does not use.
+
+#### What is already done (committed `617257cb`)
+- Fast filter aligned with the validator on 4 axes; registry coverage 9,216 →
+  1.3M combos; `local_supervision` added to both declarers; invented table
+  removed; P0 walks candidates until one trains.
+- **P0: 47 PASS, 14 COORDINATE, 1 UNAVAILABLE (graph), 0 DEFECT. P1: 47
+  confirmed, 3 surprises** (adam, ortho_adam, lion).
+
+The map is now honest about *which boxes exist*. It is still not a measurement
+of the thesis. The next move is R1, then R5.
