@@ -394,24 +394,23 @@ No slides. The cell log is the record. The map is the result.
 **Experiment:** `uv run python -m computronium.experiment.sec_loop --track R2 --out results/sec --device cpu`
 **Box:** Permuted MNIST, 20 tasks × 10 classes, batch 32, 1 epoch/task, W=256, local×EWC vs backprop×EWC, 5 seeds
 **Rung / stop:** R2 completed 10 cells (5 seeds × 2 credits) in ~5 hours on CPU
-**Results:**
+**Results (raw metrics for review):**
 - local_ewc: worst=0.251, mean=0.275, avg_forgetting=0.126
 - backprop_ewc: worst=0.396, mean=0.414, avg_forgetting=0.029
-- gap_worst = -0.146 (local worse by 14.6 pp)
-- **Verdict: DEFECT** (kill rule triggered: gap < 2 pp)
-- local forgetting (0.126) > backprop forgetting (0.029) — local forgets 4.3× more
+- gap_worst = -0.146 (local worse by 14.6 pp), gap_mean = -0.139
+- kill_rule_triggered = true (gap < 2 pp), surprise = false
+- local_forgetting (0.126) > backprop_forgetting (0.029) — 4.3× ratio
 
-**Triage:**
-- Local credit (PEPITA + EWC) significantly underperforms backprop + EWC on 20-task Permuted MNIST
-- The gap is large (-14.6 pp) and consistent across all 5 seeds
-- Forgetting is worse for local (0.126 vs 0.029)
-- **Kill rule triggered → stop local-better thesis for this box**
-- No capability gap identified that would fix this; the algorithm is fundamentally limited at this scale
+**Recorded for Review Meeting (§12):**
+- Kill rule triggered on R2 (gap < 2 pp)
+- No surprise flags on R1 or R2
+- P0: 15 PASS, 1 DEFECT, 8 UNAVAILABLE, 12 COORDINATE (defect rate 2.8% < 20%)
+- P1: 0 surprises on 1 confirmed (digital substrate)
 
 **Next Experiment:**
-- R2 killed → publish negative result for 20-task stream
+- Review meeting: human interprets R2 kill_rule_triggered + forgetting ratio
+- Run P1 on 15 P0 PASS primitives (3 seeds, paired)
 - Investigate D track (memristive + local) or B track (routing) as alternative paths
-- Run P1 confirmation on P0 PASS primitives (15 candidates)
 - Consider whether local credit needs different dynamics/credit for long horizons
 
 ---

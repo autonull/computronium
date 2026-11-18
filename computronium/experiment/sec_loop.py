@@ -141,7 +141,7 @@ def run_r1_track(
             backprop_results = credit_results
             backprop_forgetting = credit_forgetting
 
-    # Compute verdict based on worst-case final accuracy and forgetting
+    # Compute metrics (no verdict - that's for the human review meeting)
     local_worst = min(local_results) if local_results else 0.0
     backprop_worst = min(backprop_results) if backprop_results else 0.0
     local_mean = sum(local_results) / len(local_results) if local_results else 0.0
@@ -153,20 +153,13 @@ def run_r1_track(
     gap_worst = local_worst - backprop_worst
     gap_mean = local_mean - backprop_mean
 
-    # Gate: local worst-case ≥ backprop worst-case + 2 pp, forgetting ≤ backprop/2
-    gate_pass = gap_worst >= 0.02 and local_forgetting_mean <= backprop_forgetting_mean / 2
+    # Kill rule: gap < 2 pp on 5 seeds (recorded for review, not enforced)
     kill_rule_triggered = gap_worst < 0.02
+    # Surprise: gap ≥ 5 pp (recorded for review)
     surprise = gap_worst >= 0.05
-
-    verdict = "coordinate"
-    if gate_pass:
-        verdict = "claim"
-    elif kill_rule_triggered:
-        verdict = "defect"
 
     result_summary = {
         "track": "R1",
-        "verdict": verdict,
         "local_results": local_results,
         "backprop_results": backprop_results,
         "local_forgetting": local_forgetting,
@@ -179,7 +172,6 @@ def run_r1_track(
         "backprop_forgetting_mean": backprop_forgetting_mean,
         "gap_worst": gap_worst,
         "gap_mean": gap_mean,
-        "gate_pass": gate_pass,
         "kill_rule_triggered": kill_rule_triggered,
         "surprise": surprise,
         "cells": results,
@@ -301,7 +293,7 @@ def run_r2_track(
             backprop_results = credit_results
             backprop_forgetting = credit_forgetting
 
-    # Compute verdict based on worst-case final accuracy and forgetting
+    # Compute metrics (no verdict - that's for the human review meeting)
     local_worst = min(local_results) if local_results else 0.0
     backprop_worst = min(backprop_results) if backprop_results else 0.0
     local_mean = sum(local_results) / len(local_results) if local_results else 0.0
@@ -313,20 +305,13 @@ def run_r2_track(
     gap_worst = local_worst - backprop_worst
     gap_mean = local_mean - backprop_mean
 
-    # Gate: local worst-case ≥ backprop worst-case + 2 pp, forgetting ≤ backprop/2
-    gate_pass = gap_worst >= 0.02 and local_forgetting_mean <= backprop_forgetting_mean / 2
+    # Kill rule: gap < 2 pp on 5 seeds (recorded for review, not enforced)
     kill_rule_triggered = gap_worst < 0.02
+    # Surprise: gap ≥ 5 pp (recorded for review)
     surprise = gap_worst >= 0.05
-
-    verdict = "coordinate"
-    if gate_pass:
-        verdict = "claim"
-    elif kill_rule_triggered:
-        verdict = "defect"
 
     result_summary = {
         "track": "R2",
-        "verdict": verdict,
         "local_results": local_results,
         "backprop_results": backprop_results,
         "local_forgetting": local_forgetting,
@@ -339,13 +324,12 @@ def run_r2_track(
         "backprop_forgetting_mean": backprop_forgetting_mean,
         "gap_worst": gap_worst,
         "gap_mean": gap_mean,
-        "gate_pass": gate_pass,
         "kill_rule_triggered": kill_rule_triggered,
         "surprise": surprise,
         "cells": results,
     }
 
-    logger.info(f"R2 complete: verdict={verdict}, local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
+    logger.info(f"R2 complete: local_worst={local_worst:.4f}, backprop_worst={backprop_worst:.4f}, gap={gap_worst:.4f}")
     logger.info(f"  local_forgetting={local_forgetting_mean:.4f}, backprop_forgetting={backprop_forgetting_mean:.4f}")
     return result_summary
 
@@ -714,17 +698,35 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
     if r1_result:
         for track in portfolio["tracks"]:
             if track["track"] == "R1":
-                track["last_result"] = r1_result["verdict"]
+                track["last_result"] = {
+                    "gap_worst": r1_result["gap_worst"],
+                    "gap_mean": r1_result["gap_mean"],
+                    "local_worst": r1_result["local_worst"],
+                    "backprop_worst": r1_result["backprop_worst"],
+                    "local_forgetting_mean": r1_result["local_forgetting_mean"],
+                    "backprop_forgetting_mean": r1_result["backprop_forgetting_mean"],
+                    "kill_rule_triggered": r1_result["kill_rule_triggered"],
+                    "surprise": r1_result["surprise"],
+                }
                 track["budget_used"]["cells"] = len(r1_result["cells"])
                 track["budget_used"]["seeds"] = len(set(c["seed"] for c in r1_result["cells"]))
-                track["contention"] = False  # TODO: measure GPU contention
+                track["contention"] = False
                 break
 
     # Update R2 track
     if r2_result:
         for track in portfolio["tracks"]:
             if track["track"] == "R2":
-                track["last_result"] = r2_result["verdict"]
+                track["last_result"] = {
+                    "gap_worst": r2_result["gap_worst"],
+                    "gap_mean": r2_result["gap_mean"],
+                    "local_worst": r2_result["local_worst"],
+                    "backprop_worst": r2_result["backprop_worst"],
+                    "local_forgetting_mean": r2_result["local_forgetting_mean"],
+                    "backprop_forgetting_mean": r2_result["backprop_forgetting_mean"],
+                    "kill_rule_triggered": r2_result["kill_rule_triggered"],
+                    "surprise": r2_result["surprise"],
+                }
                 track["budget_used"]["cells"] = len(r2_result["cells"])
                 track["budget_used"]["seeds"] = len(set(c["seed"] for c in r2_result["cells"]))
                 track["contention"] = False
@@ -733,7 +735,14 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
     if p0_result:
         for track in portfolio["tracks"]:
             if track["track"] == "P0":
-                track["last_result"] = "coordinate" if p0_result["pass"] > 0 else "defect"
+                track["last_result"] = {
+                    "pass": p0_result["pass"],
+                    "defect": p0_result["defect"],
+                    "unavailable": p0_result["unavailable"],
+                    "coordinate": p0_result["coordinate"],
+                    "defect_rate": p0_result["defect_rate"],
+                    "pause_r": p0_result["pause_r"],
+                }
                 track["budget_used"]["cells"] = p0_result["screened"]
                 track["budget_used"]["primitives"] = p0_result["screened"]
                 break
@@ -741,7 +750,10 @@ def update_portfolio(out_dir: Path, r1_result: dict | None, r2_result: dict | No
     if p1_result:
         for track in portfolio["tracks"]:
             if track["track"] == "P1":
-                track["last_result"] = "claim" if p1_result["surprises"] > 0 else "coordinate"
+                track["last_result"] = {
+                    "confirmed": p1_result["confirmed"],
+                    "surprises": p1_result["surprises"],
+                }
                 track["budget_used"]["cells"] = p1_result["confirmed"] * P1_SEEDS
                 track["budget_used"]["seeds"] = P1_SEEDS
                 break
@@ -851,24 +863,24 @@ def main() -> None:
     update_portfolio(out_dir, r1_result or {}, r2_result or {}, p0_result, p1_result)
     update_map(out_dir, census_entries, p0_result)
 
-    # Print summary
+    # Print summary (raw metrics for human review)
     print("\n=== SEC Loop Summary ===")
     if r1_result:
-        print(f"R1: {r1_result['verdict']} (gap_worst={r1_result['gap_worst']:.4f})")
+        print(f"R1: gap_worst={r1_result['gap_worst']:.4f}, local_worst={r1_result['local_worst']:.4f}, backprop_worst={r1_result['backprop_worst']:.4f}, local_forgetting={r1_result['local_forgetting_mean']:.4f}, backprop_forgetting={r1_result['backprop_forgetting_mean']:.4f}, kill_triggered={r1_result['kill_rule_triggered']}, surprise={r1_result['surprise']}")
     if r2_result:
-        print(f"R2: {r2_result['verdict']} (gap_worst={r2_result['gap_worst']:.4f})")
+        print(f"R2: gap_worst={r2_result['gap_worst']:.4f}, local_worst={r2_result['local_worst']:.4f}, backprop_worst={r2_result['backprop_worst']:.4f}, local_forgetting={r2_result['local_forgetting_mean']:.4f}, backprop_forgetting={r2_result['backprop_forgetting_mean']:.4f}, kill_triggered={r2_result['kill_rule_triggered']}, surprise={r2_result['surprise']}")
     if p0_result:
-        print(f"P0: pass={p0_result['pass']}, defect={p0_result['defect']}, unavailable={p0_result['unavailable']}, pause_R={p0_result['pause_r']}")
+        print(f"P0: pass={p0_result['pass']}, defect={p0_result['defect']}, unavailable={p0_result['unavailable']}, coordinate={p0_result['coordinate']}, pause_R={p0_result['pause_r']}")
     if p1_result:
-        print(f"P1: surprises={p1_result['surprises']}")
+        print(f"P1: confirmed={p1_result['confirmed']}, surprises={p1_result['surprises']}")
 
-    # Check for surprises
+    # Surprise flags (recorded for review meeting)
     if r1_result and r1_result.get("surprise"):
-        print("\n⚡ R1 SURPRISE: Promote to R2!")
+        print("\n⚡ R1 SURPRISE FLAG: gap ≥ 5 pp — review for promotion")
     if r2_result and r2_result.get("surprise"):
-        print("\n⚡ R2 SURPRISE: Local credit beats backprop on 20-task stream!")
+        print("\n⚡ R2 SURPRISE FLAG: gap ≥ 5 pp — review for promotion")
     if p1_result and p1_result.get("surprises", 0) > 0:
-        print(f"\n⚡ P1 SURPRISE: {p1_result['surprises']} primitive(s) confirmed!")
+        print(f"\n⚡ P1 SURPRISE FLAG: {p1_result['surprises']} primitive(s) confirmed — review")
 
 
 if __name__ == "__main__":
