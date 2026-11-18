@@ -280,3 +280,13 @@ the audit that invalidated it, and the replacement metric.
 | Replacement metric | The fix queue is the trunk's **depth** (12g): a deeper residual stack (L=16, W=1024) and a third screen seed at the residual arm. "A wider trunk" is retired as the trigger; width is priced at the pilot box. |
 | Status | corrected — T6g priced the geometry; the depth is the fix queue |
 | Commit | this commit |
+
+| Field | Correction 29 — a sequence task is schedulable, and the layout is one rule |
+|---|---|
+| Original claim | The temporal axis was wired (TODO93 §19 row 6): the geometry unrolled `x (time, batch, input)`, the loader yielded that layout, and the trainer folded it — so the axis was reachable. |
+| Original metric | Reachability was measured from a fixture (`validation/temporal_ladder.py`), and the declared space counted a cell as legal from the task's shape and target kind alone. |
+| Audited procedure | A smoke cell for `delayed_cue` from the declared space, and the space itself: `delayed_cue` was not in `SUPPORTED_TASKS` (no enriched row, so `geometry_hint` read `None` and the smoke trained the alphabetically-first geometry, `attention`), the space admitted 131,958 cells of which most could not read a time-major batch, it admitted a sequence credit on a flat task (which the composer then gave a time axis the loader does not emit), and the stability probe reshaped `(12, 64, 10)` into `(12, 640)` — a 768-row Jacobian at 25 s/cell, linearizing a state with no settled fixed point. |
+| Affected conclusions | The axis's reachability, not its measurements: e-prop 0.355/0.356 vs floor 0.25 and the exact reference 0.285 stand. `batch_layout` is a task declaration (`DomainTask`, `TaskShape`) and `BATCH_LAYOUT_RULE` refuses both directions by name; the probe keeps the axis; the settle Jacobian refuses a time-major state. |
+| Replacement metric | The declared space enumerates **7,938 cells** (all recurrent, all sequence credits) from 27,216 probes in 0.19 s; the smoke cell **PASSes** at val_acc 0.176 against bar 0.10 in 0.17 s; the flat tasks (iris, mnist) lose every sequence credit and their refusal names the rule. |
+| Status | corrected — the axis is reachable from a run; the fixture was a rung-2 viability check, not the capability |
+| Commit | this commit |

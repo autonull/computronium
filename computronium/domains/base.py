@@ -5,6 +5,7 @@ Base classes for Domain Abstraction Layer.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Literal
 
 import torch
 from torch import nn
@@ -14,6 +15,7 @@ from computronium.core.losses import LossKind, compute_accuracy
 
 __all__ = [
     "Batch",
+    "BatchLayout",
     "DomainSpec",
     "DomainTask",
     "DomainType",
@@ -44,6 +46,10 @@ class DomainType(StrEnum):
 # Canonical alias — prefer ``TaskType`` for function signatures that
 # accept/return a task-type value; ``DomainType`` remains the full enum.
 TaskType = DomainType
+
+# A loader emits ``(batch, features)`` by default; a time-major loader emits
+# ``(time, batch, features)`` and only a geometry with a time axis reads it.
+type BatchLayout = Literal["flat", "time_major"]
 
 
 class TaskSplit(StrEnum):
@@ -126,7 +132,7 @@ class Metrics:
         )
 
 
-class DomainTask(ABC):
+class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
     """
     Abstract base class for domain tasks.
 
@@ -263,6 +269,18 @@ class DomainTask(ABC):
     def loss_kind(self) -> LossKind:
         """The declared loss row this task optimizes (see ``LOSS_INVENTORY``)."""
         return LossKind.CROSS_ENTROPY
+
+    @property
+    def batch_layout(self) -> BatchLayout:
+        """The batch layout this task's loader emits.
+
+        ``"flat"`` batches are ``(batch, features)``; a ``"time_major"`` batch
+        is ``(time, batch, features)``/``(time, batch)`` and only a geometry
+        that owns the time axis can read it. The task declaring its own layout
+        is the single source: the declared space refuses a cell that disagrees
+        with it, instead of discovering the mismatch inside the cell.
+        """
+        return "flat"
 
     def compute_loss(
         self, outputs: torch.Tensor, targets: torch.Tensor

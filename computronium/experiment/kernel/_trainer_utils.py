@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import tempfile
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -266,13 +267,19 @@ def _val_batches(task: Any, limit: int | None) -> Any | None:
         return None
 
 
-def _sample_inputs(task: Any, device: str) -> tuple[torch.Tensor | None, int]:
-    """One flattened training batch, on ``device``, and its sample count.
+def _sample_inputs(
+    task: Any, device: str, *, time_major: bool = False
+) -> tuple[torch.Tensor | None, int]:
+    """One training batch, on ``device``, and its sample count.
 
     Returns ``(None, n)`` for a PyG batch: its node matrix is not a batch-free
     input — the readout is pooled and aggregation needs that batch's edges — so
     a caller that only has the rows must skip the free-phase probes instead of
     running node-mode geometry over a foreign edge index.
+
+    ``time_major`` keeps a ``(time, batch, features)`` batch whole: its leading
+    axis is the state's, and reshaping it into rows both hides the axis from the
+    geometry and recounts the batch (measured: 12x640 into a 10-wide input).
     """
     try:
         batch = next(iter(task.get_dataloader("train")))
@@ -299,7 +306,10 @@ def _sample_inputs(task: Any, device: str) -> tuple[torch.Tensor | None, int]:
     # Handle graph tasks: sample_x is a PyG Data/Batch object
     if hasattr(sample_x, "x") and hasattr(sample_x, "edge_index"):
         return None, int(getattr(sample_x, "num_graphs", 1))
-    flat = sample_x.to(device).reshape(sample_x.shape[0], -1)
+    batch_x = sample_x.to(device)
+    if time_major and batch_x.dim() == 3:
+        return batch_x, math.prod(batch_x.shape[:2])
+    flat = batch_x.reshape(batch_x.shape[0], -1)
     return flat, flat.shape[0]
 
 

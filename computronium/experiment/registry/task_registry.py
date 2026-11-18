@@ -592,6 +592,36 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         tags=("memory", "sequence", "copy"),
         description="Neural Turing Machine copy task",
     ),
+    "delayed_cue": TaskSpecEnriched(
+        name="delayed_cue",
+        domain=DomainType.MEMORY,
+        input_shape=(10,),
+        output_dim=10,
+        cost_class=CostClass.CHEAP,
+        primary_objective="validation_accuracy",
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="recurrent",
+        typical_batch_size=64,
+        typical_lr=1e-1,
+        tags=("memory", "sequence", "temporal"),
+        description="Delayed cue over a noisy stream (time-major batches)",
+    ),
     "tiny_shakespeare": TaskSpecEnriched(
         name="tiny_shakespeare",
         domain=DomainType.LANGUAGE,

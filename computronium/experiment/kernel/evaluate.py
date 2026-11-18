@@ -27,7 +27,7 @@ from computronium.core.system_trainer import (
     DistributedSystemTrainer,
     SystemTrainer,
 )
-from computronium.domains.base import TaskSplit
+from computronium.domains.base import BatchLayout, TaskSplit
 from computronium.experiment.kernel._metrics import (
     compute_energy_metrics,
     compute_plasticity_metrics,
@@ -217,6 +217,9 @@ class TaskShape:
     # primitive on a continuous target; the planner must not have to try the
     # cell to learn that (measured 2026-11-14, TODO91 §8 regression lane).
     target_kind: Literal["class_index", "continuous"] = "class_index"
+    # The layout the task's loader emits: a time-major batch carries a leading
+    # time axis, so the declared space refuses a cell that has none.
+    batch_layout: BatchLayout = "flat"
 
     @property
     def input_dim(self) -> int:
@@ -238,6 +241,7 @@ def _task_shape(task: Any) -> TaskShape:
         input_shape=shape,
         output_dim=int(task.output_dim),
         target_kind=LOSS_INVENTORY[task.loss_kind].target,
+        batch_layout=task.batch_layout,
     )
 
 
@@ -379,7 +383,10 @@ def _post_training_metrics(
     if hasattr(cell.system.geometry, "to"):
         cell.system.geometry.to(resolved_device)
 
-    sample_x, sample_count = _sample_inputs(task, resolved_device)
+    from computronium.ontology.geometry import is_sequence_geometry
+
+    sequence = is_sequence_geometry(cell.system.geometry)
+    sample_x, sample_count = _sample_inputs(task, resolved_device, time_major=sequence)
     # A PyG batch has no batch-free input, so the free-phase probes (settle
     # telemetry, Jacobian) are not defined for it; the energy estimate is.
     if sample_x is not None:

@@ -133,6 +133,19 @@ def _target_compatible(axis: str, name: str, target_kind: str) -> bool:
     return _is_target_lane_compatible(axis, name, target_kind)
 
 
+def _layout_compatible(axis: str, name: str, batch_layout: str) -> bool:
+    """Whether the axis row reads this task's batch layout.
+
+    Read from ``search_space``, beside the target-lane rule, so the planner and
+    the declared-space command refuse a cell by the same rule.
+    """
+    from computronium.experiment.kernel.search_space import (
+        _is_batch_layout_compatible,
+    )
+
+    return _is_batch_layout_compatible(axis, name, batch_layout)
+
+
 def _refutation(
     axis: str,
     name: str,
@@ -203,6 +216,7 @@ def _declared_names(
             name
             for name in names[axis]
             if not _target_compatible(axis, name, shape.target_kind)
+            or not _layout_compatible(axis, name, shape.batch_layout)
         )
         for axis in AXIS_ORDER
     }
@@ -244,6 +258,7 @@ def declared_space(
         task_shape,
     )
     from computronium.experiment.kernel.search_space import (
+        BATCH_LAYOUT_RULE,
         TARGET_LANE_RULE,
         _compiled_void_constraints,
         _void_pass,
@@ -277,7 +292,11 @@ def declared_space(
             continue
         axis, name = key.split("=", 1)
         if name in target_refused[axis]:
-            reason = TARGET_LANE_RULE
+            reason = (
+                BATCH_LAYOUT_RULE
+                if not _layout_compatible(axis, name, shape.batch_layout)
+                else TARGET_LANE_RULE
+            )
         elif name not in axes[GEOMETRY_INDEX] and axis == "geometry":
             reason = SHAPE_RULE
         else:

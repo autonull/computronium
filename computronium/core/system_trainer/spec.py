@@ -151,6 +151,18 @@ def error_blind_credit(credit: str) -> bool:
     return bool(getattr(instance, "error_blind", False))
 
 
+def sequence_credit(credit: str) -> bool:
+    """Whether a credit declares that it reads a time-major state.
+
+    Reads the config classmethod's ``requires_sequence`` field, the declaration
+    the composer uses to give the geometry its time axis. The declared space
+    reads this one, so a task that emits ``(time, batch, features)`` is matched
+    with a credit that reads it.
+    """
+    factory = getattr(CreditAssignmentConfig, credit, None)
+    return bool(factory().requires_sequence) if factory is not None else False
+
+
 def credit_identity_card(credit: str) -> object | None:
     """The identity card of the implementation ``credit`` names, or ``None``."""
     instance = _credit_instance(credit)

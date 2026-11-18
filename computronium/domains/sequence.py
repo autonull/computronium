@@ -25,6 +25,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from computronium.core.losses import accuracy_tensor, fold_time
 from computronium.domains.base import (
+    BatchLayout,
     DomainSpec,
     DomainTask,
     DomainType,
@@ -145,6 +146,11 @@ class SequenceTask(DomainTask):
     @property
     def domain_type(self) -> DomainType:
         return DomainType.MEMORY
+
+    @property
+    def batch_layout(self) -> BatchLayout:
+        """``SequenceBatches`` transposes the loader's time axis first."""
+        return "time_major"
 
     @property
     def spec(self) -> DomainSpec:

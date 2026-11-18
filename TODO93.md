@@ -1,5 +1,6 @@
 # TODO93 — Local learning that wins on the hardware people own
-**Status:** 2026-11-17 · **v32 — the temporal axis is wired, end to end, and its first cell trains (a capability; the ladder is a rung-2 viability check, not a verdict): the sequence geometry's time axis, a time-major loader, the trainer's per-step loss, and the config gate landed as one build; the rung-2 ladder reads `eligibility_prop` at 0.355/0.356, above floor 0.25 (chance 0.10) on a delayed-cue task, with the exact RTRL reference at 0.285 proving the box learns.** The build also fixed a landed primitive's shape defect: `EligibilityPropCredit`'s trace accumulator was `zeros_like(trace)` — a per-sample `(batch, hidden, input)` tensor that broadcast through `allclose` and through the update's momentum buffer; the gradient is now `(hidden, input)` and the credit lock asserts every gradient's shape (a broadcast can no longer pass). Locks: the geometry's unroll is the equations, the credit reads that unroll (a spy fails if a second copy returns), a 2-D state and a non-sequence geometry are refused by name, the loader's cue/label contract, the time-axis loss fold, and the capability card (0.355 > 0.25). Artifacts: `results/t93_temporal/temporal_ladder.{json,md}`; replay `uv run python -m computronium.validation.temporal_ladder --replay`. **Next session (capability order, not a claim): the temporal task's schedulable registration (1b), then the deeper residual trunk as a selectable trunk geometry (12g), then the streaming task family's ≥20-task protocol. Measurements on these rows are rung 0–2 viability checks (it is wired, it trains, it survives its knob), never a verdict.**
+**Status:** 2026-11-17 · **v33 — the time axis is reachable from a run (a capability, not a verdict): `delayed_cue` is a schedulable task, its enriched row declares the axis, and the declared space enumerates only the cells that read it.** The registration needed two fixes the fixture hid: the declared space admitted a cell whose credit does not read a time-major batch (and admitted a sequence credit on a flat task), so `BatchLayout` is now a declared task fact and one rule refuses both directions by name; and the stability probe reshaped the `(time, batch, features)` batch into rows (a 768-row Jacobian, 25 s/cell) and linearized a state that has no fixed point, so the probe now keeps the axis and the Jacobian refuses a time-major state. Measured: 7,938 declared cells (27,216 probes in 0.19 s), smoke cell 0.17 s → **PASS** at val_acc 0.176 against bar 0.10 (chance), the flat tasks lose every sequence credit (iris/mnist: 0 of them admitted). 7 locks; `README` regenerated (29 tasks). **Next session (capability order, not a claim): the deeper residual trunk (12g) as a selectable trunk geometry, then the streaming task family's ≥20-task protocol, then hygiene.** Measurements on these rows are rung 0–2 viability checks, never a verdict.
+**Status (v32, historical):** 2026-11-17 · **v32 — the temporal axis is wired, end to end, and its first cell trains (a capability; the ladder is a rung-2 viability check, not a verdict): the sequence geometry's time axis, a time-major loader, the trainer's per-step loss, and the config gate landed as one build; the rung-2 ladder reads `eligibility_prop` at 0.355/0.356, above floor 0.25 (chance 0.10) on a delayed-cue task, with the exact RTRL reference at 0.285 proving the box learns.** The build also fixed a landed primitive's shape defect: `EligibilityPropCredit`'s trace accumulator was `zeros_like(trace)` — a per-sample `(batch, hidden, input)` tensor that broadcast through `allclose` and through the update's momentum buffer; the gradient is now `(hidden, input)` and the credit lock asserts every gradient's shape (a broadcast can no longer pass). Locks: the geometry's unroll is the equations, the credit reads that unroll (a spy fails if a second copy returns), a 2-D state and a non-sequence geometry are refused by name, the loader's cue/label contract, the time-axis loss fold, and the capability card (0.355 > 0.25). Artifacts: `results/t93_temporal/temporal_ladder.{json,md}`; replay `uv run python -m computronium.validation.temporal_ladder --replay`. **Next session (capability order, not a claim): the temporal task's schedulable registration (1b), then the deeper residual trunk as a selectable trunk geometry (12g), then the streaming task family's ≥20-task protocol. Measurements on these rows are rung 0–2 viability checks (it is wired, it trains, it survives its knob), never a verdict.**
 **Status (v31, historical):** 2026-11-17 · **v31 — the trunk's geometry is priced at the pilot box: the residual skip is the first real gain, a coordinate, not the claim. T6g read three geometries at L=8/B=8192 against floor 0.408: the residual stack 0.312/0.336 (+15.8 pp from the registered 0.166 at 1.06× activation bytes and 1.00× the weights; its third seed 0.272), the wide trunk 0.199/0.210 (+3.9 pp at 1.72× bytes and 3.33× weights), and both together 0.290/0.329 (+14.4 pp at the same 1.72×), so **width is priced and the skip is the mechanism's first gain**: the next edge is a deeper residual stack (the skip's gain compounds with depth) or a third seed at the residual arm (its confirmation reads 3.2σ below the screen). The split's position, the trunk's step, its direction, and now its geometry are all priced, so A's claim is blocked on the trunk's depth, not on another knob at this box. Every verdict the plan recorded as a refusal is a defect probe with a fix queue (CORRECTION 25/27); the work program is the new primitives, in capability order: **the temporal axis's sequence geometry + loader** (`EligibilityPropCredit`/`UnbiasedOnlineRTRLCredit`/`RTRLReference` are landed and lock at cos 0.979; the loader is the gap), the streaming lifts, and the deeper residual trunk as track A's fix. The estimator family, routing, and the split's position/step/direction/geometry are landed (4 identity cards, 4 credit primitive rows, 1 geometry row, 11 parity/mechanism locks, 8 capability cards; §18/§19). Memory is an instrument (`c=4.1`, peak, checkpointing), not the queue. No track is closed by a low cell: T6c/T6a/T6a₂/T6d/T6e/T6f/T6g/F1/D2/B1 are defect probes with named fixes. Next session: the temporal axis's loader (§8.1 order 1).**
 T1 + T4a + T4c + T4b + T3 + T3b + T6 + B1 + C1 + C2 + E1 + D1 + D2 + F1 + T6a
 + T6a₂ + T6d + T6e + T6f + T6g + estimator family + routing
@@ -44,8 +45,10 @@ geometry: the residual skip is the first real gain (+15.8 pp at 1.06× activatio
 bytes), width adds nothing (wide 0.204; wide+residual 0.309 at 1.72×), and the
 confirmation seed reads 0.272 against the screen 0.324.** The estimator family
 and routing landed (§19 rows 1–4), and the temporal axis's sequence build
-landed 2026-11-17 (rung 2 reads e-prop 0.355/0.356); the session order is
-the deeper residual trunk inside A, then the temporal task's schedulable row.
+landed 2026-11-17 (rung 2 reads e-prop 0.355/0.356), and its schedulable row
+landed the same day (7,938 declared cells; the smoke PASSes at 0.176 vs bar
+0.10), so the session order is the deeper residual trunk inside A, then the
+streaming family.
 
 **Routing landed (2026-11-17).** `SurrogateCredit` differentiates a hard top-k
 selection through its straight-through forward: `w = topk(softmax(g/τ))/k`;
@@ -338,8 +341,8 @@ hard top-k `RoutingGeometry`, row 4), and the split's position, the trunk's
 step, the trunk's direction, and its geometry are priced (T6e/T6f/T6g: the
 residual skip gains 15.8 pp at 1.06× bytes, width is priced); the temporal
 axis's sequence build **landed 2026-11-17** (§19 row 6, 0.355/0.356 vs floor
-0.25), so the next session is the deeper residual trunk (12g), then the
-temporal task's schedulable row (1b), then the streaming lifts. The rows above are
+0.25) and its schedulable row landed 2026-11-17 (§8.1 row 1b), so the next
+session is the deeper residual trunk (12g), then the streaming lifts. The rows above are
 measurements, not conclusions: each ⛔ row is a defect probe with the fix that
 widens the system (§0.6). F2 and D3 are defect fixes inside their tracks, not
 gates on the program.
@@ -1208,6 +1211,7 @@ is the only one that needs five paired seeds on a real task.
 | 0a ✅ | **P0 — estimator family** (landed 2026-11-17) | `ontology/credit/_estimators.py` + `primitives/credit_assignment/{forward_tangent,score_function,zeroth_order}/`; three identity cards, registry rows, parity locks (§19, §18) | each primitive trains a 128-sample separable task above chance (0.914/0.914/0.781 vs 0.5); parity 0.50/0.972/0.9995; variance falls ~21× from 1→16; dispatch and identity locks pass |
 | 0b ✅ | **P1 — routing** (landed 2026-11-17) | `SurrogateCredit` + `RoutingGeometry` (`GeometryConfig.routing`): credit and geometry primitive rows, registry/dispatch wiring (§19 row 4) | a hard top-1 selection trains with no soft relaxation (capability card 0.6875, 1 epoch); the surrogate is exactly the STE gradient and tracks the smoothed reference (cos >0.9); the true hard gradient is zero a.e. |
 | 0c | **P0c — the split's position and the trunk's step** (landed 2026-11-17, T6e) | `validation/hybrid_update.py --split`; `split_layer` on the last Linear, then `trunk_lr` (a decoupled trunk LR) | **priced at the pilot box** (defect probe): the readout-only head 0.132 vs the registered 0.166 (−3.4 pp) and the trunk's step 0.3/1/3 → 0.105/0.132/0.103 against floor 0.408, at 1.06× memory; T6f then priced the direction (orthogonal −0.1 pp, learned −2.1 pp at 1.17× walltime) with no movement at the box, so the trunk's geometry (12f) is the fix queue |
+| 1b ✅ | **Temporal — the task's schedulable registration** | `domains/registry.py` + `registry/task_registry.py` (an enriched `delayed_cue` row, `geometry_hint="recurrent"`); `DomainTask.batch_layout` + `TaskShape.batch_layout` + `BATCH_LAYOUT_RULE`; the probe and the settle operator keep the time axis; landed 2026-11-17 | **landed**: `delayed_cue` enters `SUPPORTED_TASKS`; its declared space enumerates **7,938 cells (all recurrent, all sequence credits)** from 27,216 probes in 0.19 s, and the flat tasks lose every sequence credit; its smoke cell **PASSes at the bar** (val_acc 0.176 > 0.10 chance) in 0.17 s; 7 locks (`test_sequence_task_lock.py`); CORRECTION 29 |
 | 1 ✅ | A — `backprop+ckpt` | landed 2026-11-15 | checkpointed grads ≡ plain under dropout; segments=√L; epoch peak 3894 MB < 6554 MB at L=64/W=1024/B=8192 |
 | 2 ✅ | A — lockstep two-pass FF/PEPITA | landed 2026-11-16 | deltas ≡ store-all at `atol=0`; peak flat 66.3 / 58.5 MB at L=4→32 |
 | 3 ✅ | A — hybrid trunk + head | landed 2026-11-16 | parity max\|Δ\| = 0.0; head ≡ backprop; trunk flat 81.0 MB |
@@ -1237,7 +1241,9 @@ numbers stand as measurements; the verdict words do not. Each carries its named
 defect and the capability the fix unlocks (§0.6). Rows 0a–0c are the new order:
 primitives first; row 12g (the trunk's depth) is the edge T6g's coordinate
 names, and the temporal axis's sequence build landed 2026-11-17 (rung 2
-reads e-prop above the floor; the task's schedulable row is §8.1 row 1b).
+reads e-prop above the floor; the task's schedulable row, §8.1 row 1b, landed
+the same day: the axis is reachable from a run, and the flat tasks refuse the
+credits that would read a time axis they do not emit).
 
 **What the next session must not re-derive:** the decomposition API
 (`EpochResource.{params,optimizer,activations,auxiliary,cpu_rss}_mb`,
@@ -1532,6 +1538,7 @@ is a side track.
 | 2026-11-17 | A | T6f: the trunk's direction (orthogonal rotation, ridge-fitted B) at the pilot box | 9 measured cells in 5 calls (2 directions × 2 seeds + reference/baseline + 1 confirmation) | val_acc vs the ckpt's minus δ (floor 0.408); activation ratio vs 1.0; walltime per cell | CIFAR-10 10k/10k, L=8, W=1024, B=8192, 200 steps, LR 0.3, norm-matched B, seeds 21/22 + 23, RTX 3080 10 GiB (515-589 MB) | **priced (defect probe)**: reference 0.419/0.416; draw 0.163/0.169; orthogonal 0.160/0.170 (−0.1 pp; sd 0.7 pp), learned 0.145/0.144 (−2.1 pp; sd 0.03 pp) at 1.17× walltime, confirmation 0.164; 1.06× activation bytes → **the fix queue is the trunk's geometry** (CORRECTION 27); the temporal axis is next | T6f |
 | 2026-11-17 | A | T6g geometry probe (12f's lead): residual, wide, and both together at the pilot box | 11 measured cells (2 reference + 2 baseline + 3 geometries × 2 seeds + 1 confirmation) | val acc on the full 10k test split (1σ ≈ 0.3 pp); activation bytes vs the reference's; weight count at 4 B/weight; floor = reference − 1 pp | CIFAR-10 10k/10k, L=8, B=8192, W=1024 and W=2048, 200 steps, LR 0.3, seeds 21/22 + 23, RTX 3080 10 GiB (516–1077 MB) | **priced (defect probe)**: residual 0.312/0.336 (+15.8 pp; sd 1.6 pp; confirmation 0.272) at 1.06× bytes and 1.00× weights; wide 0.199/0.210 (+3.9 pp) at 1.72×/3.33×; residual+wide 0.290/0.329 (+14.4 pp) at 1.72×; reference 0.418/0.416; registered 0.163/0.169 → **the skip is the mechanism's first real gain, width is priced**, the confirmation's spread is wider than the screen | 12f ✅ |
 | 2026-11-17 | T | temporal axis build: sequence geometry, time-major loader, per-step loss, and the e-prop rung ladder | 6 cells (4 LR + 1 confirmation + 1 exact reference) | val acc over the task's 512 held-out cues (1σ ≈ 2.1 pp); chance 0.10; floor 0.25; update norm > 0 | delayed cue, T=12, B=64, d=10, hidden=32, 1024/512, 3 epochs, LR 1e-3…3e-1, seeds 71/72, CPU | **coordinate at rung 2**: e-prop 0.340/0.355 at LR 0.1/0.3, confirmation 0.356; exact reference 0.285; 6 cells in 20 s; **defect fixed** (e-prop's `(batch, hidden, input)` accumulator broadcast through `allclose` and the momentum buffer) | §19 row 6 ✅ |
+| 2026-11-17 | T | schedulable registration: the axis reachable from a run (`delayed_cue` + the batch-layout rule) | 7 locks; 1 declared space (27,216 probes); 1 smoke cell; 2 probe paths | declared cells vs the loader's layout (both directions); val_acc vs the chance bar; walltime per cell | delayed cue, T=12, B=64, d=10, hidden=32, 1024/512, 1 epoch, 1 batch, seed 0, CPU; iris/mnist as the flat controls | **landed**: 7,938 declared cells (all recurrent + sequence credits) from 27,216 probes in 0.19 s; smoke **PASS** at 0.176 vs bar 0.10 in 0.17 s; flat tasks refuse every sequence credit; **two defects fixed** (the declared space admitted a credit/layout mismatch both ways; the stability probe reshaped a time-major batch into a 768-row Jacobian and linearized a state with no fixed point) | §8.1 row 1b ✅ |
 | 2026-11-17 | — | primitive program: all ten §19 rows (4 credits, 6 updates) | 10 rows, 7 new locks, 44 targeted tests | capability: each primitive instantiates, trains a fixture, and carries its lock | one session | **landed** (capability program, CORRECTION 25): a plan-wide capability row, no verdict | §19 rows 5–8 ✅ |
 | — | A | memory frontier (2 budgets, dominance/hypervolume) | — | acc @ matched memory / iso-walltime; binding share; forward-eq; δ | — | claim run parked: T6d/T6e/T6f/T6g priced the update, the position, the step, the direction, and the geometry; the trunk's depth (12g) is track A's next edge; T6c's re-open is a side track | the trunk's depth |
 | — | C | plasticity + retention (SI/cascade baselines) | — | final-task acc; BWT; avg_forgetting; buffer size; k×params | — | — | C1 |
@@ -1548,8 +1555,8 @@ swept to pass, a verdict that closes a mechanism.
 
 | Rank | Track | Capability at stake | Next rung cost | Evidence today |
 |---|---|---|---|---|
-| 1 | **P0b** the hybrid's depth | does the hybrid reach parity with a deeper residual stack? | 1 session (12g) | T6g priced the geometry: the residual skip gains +15.8 pp at 1.06× bytes and the confirmation reads 0.272; width is priced (+3.9 pp at 1.72×); the depth is the next edge |
-| 2 ✅ | **Temporal** | does the system have a sequence axis at all? | landed 2026-11-17 (§19 row 6 + §8.1 row 1) | the geometry's time axis, the time-major loader, and the per-step loss landed; rung 2 reads e-prop 0.355/0.356 vs floor 0.25 (reference 0.285) and the e-prop shape defect is fixed. Next: the task's schedulable row (1b) |
+| 1 | **P0b** the hybrid's depth | does the hybrid reach parity with a deeper residual stack? | 1 session (12g) | T6g priced the geometry: the residual skip gains +15.8 pp at 1.06× bytes and the confirmation reads 0.272; width is priced (+3.9 pp at 1.72×); the depth is the next edge. The temporal row is closed (1b landed), so this is the only open capability at the top of the queue |
+| 2 ✅ | **Temporal** | does the system have a sequence axis a run can reach? | landed 2026-11-17 (§19 row 6 + §8.1 rows 1, 1b) | the geometry's time axis, the time-major loader, the per-step loss, and the schedulable row landed; rung 2 reads e-prop 0.355/0.356 vs floor 0.25 (reference 0.285), the e-prop shape defect is fixed, and the declared space admits only cells that read the loader's layout (7,938 cells; the smoke PASSes at 0.176 vs bar 0.10) |
 | 3 | **P1** routing | can the system train a hard top-k selection without a soft relaxation? | 1 session (the B1 ladder) | **landed** — `SurrogateCredit` + `RoutingGeometry` (§19 row 4); the B1 STE-gap screen is the next measurement |
 | 4 | **A/F/D** defect rows | the geometry, the composition, the programming budget | trigger-gated fixes | measurements stand, verdicts do not (CORRECTION 25) |
 
@@ -1642,9 +1649,10 @@ per session.
   direction were priced 2026-11-17 (T6e/T6f). The **temporal axis** landed
   2026-11-17 (§19 row 6), and the primitive program landed every §19 row
   (5–8 included), T6g priced the trunk's geometry (the residual skip is a
-  coordinate), and the temporal axis's sequence build landed (0.355/0.356), so
-  the next session is the trunk's depth (12g), then the task's schedulable row
-  (1b); then the SEC ladder per probe. The prior measurements are defect probes, not
+  coordinate), and the temporal axis's sequence build and its schedulable row
+  landed (0.355/0.356; 7,938 cells; the smoke PASSes at 0.176 vs bar 0.10), so
+  the next session is the trunk's depth (12g), then the streaming family; then
+  the SEC ladder per probe. The prior measurements are defect probes, not
   gates: T6c/T6d localized the split, T6e priced its position and the step,
   T6f priced the direction, B1 the missing surrogate (now landed), D2 the
   unpriced programming budget, F1 the untrainable deep box.
@@ -1683,8 +1691,8 @@ per session.
   walltime against floor 0.408, no movement at the box), and **T6g priced the
   trunk's geometry** (the residual skip gains 15.8 pp at 1.06× bytes,
   confirmation 0.272; width adds nothing at 1.72×), so **the trunk's depth**
-  (12g) is track A's next edge and the **temporal axis's schedulable row**
-  (1b) is the next registration. **Routing landed
+  (12g) is track A's next edge; the **temporal axis's schedulable row**
+  (1b) landed the same day. **Routing landed
   2026-11-17:**
   `SurrogateCredit` (STE) + `RoutingGeometry` (hard top-k), 7 locks, one
   capability card (0.6875, 1 epoch); the forward-tangent × recurrent-LSTM and
@@ -1694,8 +1702,8 @@ per session.
   mechanism; T6f then priced the direction (orthogonal −0.1 pp, learned −2.1 pp
   at 1.17× walltime) and refused it; T6g then priced the geometry (the
   residual skip gains 15.8 pp, width is priced), so the **trunk's depth**
-  (12g) is the defect fix and the **temporal axis's schedulable row** (1b) is
-  the session order. Open:
+  (12g) is the defect fix; the **temporal axis's schedulable row** (1b)
+  landed. Open:
   the 1-batch causal-transformer smoke cell is below the 0.1 ruler (pre-existing;
   §14 fix queue).
 - If a steering rule fires, rewrite §0 and §14 in the same commit that records the
@@ -1704,7 +1712,7 @@ per session.
 ## 17. Review answers (resolved)
 | Q | Answer |
 |---|---|
-| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v32 start: the **temporal task's schedulable row (1b)**, then the deeper residual trunk (12g) as a selectable geometry, then the streaming task family; the **temporal axis's sequence build** landed 2026-11-17 (rung 2 reads e-prop 0.355/0.356 vs floor 0.25). The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3), routing (`SurrogateCredit` + `RoutingGeometry`, row 4), and the hybrid's split position, trunk step, and direction (§8.1 rows 12d–12e) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, T6e priced the position and the step, T6f the direction (all priced; none moves the cell, so the geometry is the fix queue), B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6e's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
+| 1. Order | **Capability order, rewritten every session (§14)**, not a DAG. v33 start: the **deeper residual trunk (12g)** as a selectable geometry, then the streaming task family; the **temporal axis's sequence build** and its **schedulable row** landed 2026-11-17 (rung 2 reads e-prop 0.355/0.356 vs floor 0.25; the declared space admits only a cell that reads the loader's layout, 7,938 cells, and the smoke PASSes at 0.176 vs bar 0.10). The estimator family (`ForwardTangentCredit`, `ScoreFunctionCredit`, `ZerothOrderCredit`, §19 rows 1–3), routing (`SurrogateCredit` + `RoutingGeometry`, row 4), and the hybrid's split position, trunk step, and direction (§8.1 rows 12d–12e) landed 2026-11-17. Every earlier "refusal" is a defect probe (CORRECTION 25): T6c/T6d localized the split, T6e priced the position and the step, T6f the direction (all priced; none moves the cell, so the geometry is the fix queue), B1 the missing surrogate (now landed), D2 the unpriced programming budget, F1 the untrainable deep box. Memory is an instrument: T6a₂'s 0.46× bar and T6e's 1.06× at L=8 are measurements, not the queue. No claim run is scheduled; the primitives are the work. |
 | 2. Task | CIFAR-10, **fixed 10k-image train subset + full test** (`CostClass.EXPENSIVE`; data cached at `data/cifar-10-batches-py`). Depth/width/batch are hyperparameters and run settings, not registry axes. Synthetic depth task only for instrument acceptance. Normalization fixed across arms: LayerNorm or none — BatchNorm is non-local and breaks batch-1 streaming. W1/W2 are relative claims; the absolute vision bar does not apply. |
 | 3. Checkpointing | **Landed (T4b).** `core/gradient_checkpointing.py` + `FeedforwardGeometry.set_gradient_checkpointing`, √L segments split at Linear starts, `use_reentrant=False`, `preserve_rng_state=True`, geometry forward only; grads bit-exact under dropout and the arm fits L=64 at W=1024/B=8192. |
 | 4. P1 scope | Three publishables first, then any credit the new primitives add. The complexity-audit column is part of every row; reproduce the published protocol and record σ. |
@@ -2668,6 +2676,58 @@ dispatcher entry and exports.
   0.324 screen (sd 0.016) — the seed spread is wider than the ladder's, so
   12g prices it before any claim.
 
+### Landed 2026-11-17 (the schedulable time axis — what the code actually did)
+
+The temporal build left the axis reachable only from its fixture: `delayed_cue`
+was missing from `SUPPORTED_TASKS`, the enriched registry had no row for it,
+and nothing declared that its loader emits `(time, batch, features)`. The
+registration is four changes, each a declaration the next reader cannot guess:
+
+1. **The task is schedulable.** `SUPPORTED_TASKS` gains `delayed_cue`, and
+   `TASK_ENRICHMENTS` gains one row (`DomainType.MEMORY`, input `(10,)`,
+   10 classes, `CostClass.CHEAP`, `geometry_hint="recurrent"`, chance bar
+   from `output_dim`). The row is what the smoke's hinted selection and the
+   gate's ruler read; without it both silently fell back to a default.
+2. **The loader's layout is declared, and one rule refuses both directions.**
+   `DomainTask.batch_layout` (`"flat"` by default; `SequenceTask` overrides
+   `"time_major"`) travels into `TaskShape.batch_layout`, and
+   `BATCH_LAYOUT_RULE` (`search_space._is_batch_layout_compatible`) requires
+   `sequence_credit(credit) == (batch_layout == "time_major")` — the credit's
+   own config declaration, read by `core/system_trainer/spec.py::sequence_credit`
+   beside `error_blind_credit`. `_is_geometry_task_compatible` gains the
+   geometry half: a time-major task composes only with a geometry that owns
+   the time axis. The rule runs in the planner's iterator and in
+   `declared_space`, so the refusal is named before a cell is trained.
+   Measured: `delayed_cue` **7,938 cells, all recurrent and all sequence
+   credits**, from 27,216 probes in 0.19 s (was 131,958 cells, most of them
+   cells that would die at the first Linear); iris and mnist lose every
+   sequence credit, and `credit=eligibility_prop` is refused there by name.
+3. **The probes keep the time axis.** `_sample_inputs` reshaped a 3-D batch to
+   `(time, batch·features)`, so the free-settle probe passed `(12, 640)` into a
+   geometry that reads `(12, 64, 10)` — the warning "free settle telemetry
+   failed" on every cell. `_sample_inputs(..., time_major=...)` now returns the
+   batch whole and counts `time·batch` samples; `_post_training_metrics` reads
+   the layout from `is_sequence_geometry`, and `probe.py` does the same.
+4. **The settle Jacobian refuses a time-major state.** The Jacobian probe
+   linearized the unrolled state as if its time axis were the batch — 768 rows,
+   three `torch.autograd.jacobian` calls, **25 s per cell** — because
+   `settle_step_operator_at_state` read `h.shape[1]` (the batch) as the hidden
+   width. A time-major state has no settled fixed point, so the operator now
+   returns `None` and the cell reports settle telemetry only: **0.17 s**.
+
+**Locks** (`tests/property/test_sequence_task_lock.py`, 7): the task is
+schedulable and its row declares the axis; the declared space admits only
+cells that read the layout; a flat task refuses a sequence credit by the same
+rule; the loader emits the rank its declaration names (`delayed_cue` 3, iris 2);
+the smoke cell reports a bar verdict (`PASS`, geometry recurrent, a sequence
+credit) with no runtime failure; the settle operator refuses a time-major state.
+`README.md` regenerated (29 tasks).
+
+**Measured smoke cell.** `('digital', 'recurrent', 'instantaneous', 'null',
+'eligibility_prop', 'adam')`: val_acc **0.176** against bar **0.10** (chance) in
+**0.17 s** — the axis is reachable from a run, and its bar verdict is the
+gate's, not a claim.
+
 ### Landed 2026-11-17 (the temporal sequence build — what the code actually did)
 
 `SequenceTask` / `SequenceBatches` (`domains/sequence.py`), the geometry's
@@ -2717,6 +2777,12 @@ in the pipeline, the trainer's no-flatten/batch rule, and the temporal-credit
 config gate), its 7 locks, the rung-2 ladder with a measured **promote**, and
 the e-prop accumulator defect (the shape lock now catches a broadcast).
 
+**Landed 2026-11-17 (later):** the schedulable registration — `delayed_cue`
+in `SUPPORTED_TASKS` + one enriched row, `DomainTask.batch_layout` /
+`TaskShape.batch_layout` / `BATCH_LAYOUT_RULE`, the probe and the settle
+Jacobian keeping the time axis, 7 locks, and the regenerated `README` (29
+tasks). The smoke cell PASSes at 0.176 vs bar 0.10 in 0.17 s.
+
 **Known pre-existing failures (30, not this session's):** 22
 `test_gallery_provenance_lock` env-hash rows, `readme_build_lock`,
 `regression_target_lock`, `rng_seed_lock` (three older tests),
@@ -2724,6 +2790,21 @@ the e-prop accumulator defect (the shape lock now catches a broadcast).
 dedup), `combination_smoke_lock`, `search_space_diverse_sampling_lock`.
 They were measured on a clean HEAD before this session and are the hygiene
 pass's queue.
+
+**Defects the ticket found (named, not fixed):**
+1. **The smoke gate is a coin flip.** `test_smoke_all_tasks` is red for 14 of
+   29 tasks because one batch at one epoch lands at chance: `mnist` reads
+   0.0938 against bar 0.10 in the suite and passes alone (the task cache's
+   shuffle order is not frozen). The smoke's PASS is therefore a sample, not a
+   predicate. Fix: `n>1` batches and a seeded shuffle, or a smoke-specific
+   bar (`completed and finite`, with the chance bar reserved for the 200-step
+   cell). Recorded for the hygiene pass; it is the reason §8.1 row 1b's
+   "bar verdict" is read as PASS-or-named-FAIL, not as a claim.
+   The suite read 13 red of 28 before this ticket and 14 red of 29 after:
+   `delayed_cue` passes, and `mnist` flipped in-suite (0.0938) while passing
+   alone (its loader's shuffle is not generator-seeded, so the batch order
+   follows the process's RNG state). Both rows have the same cause, and no
+   other lock moved.
 
 **Tooling defect found:** `pyproject.toml`'s `[tool.ruff.lint] ignore` list
 uses pylint names that the older ruff rejected; the current `uv run ruff
@@ -2733,10 +2814,10 @@ check <path>` parses them, so the ratchet's scope is `uv run ruff check .`.
 
 | Order | Track | First command / file | Done when |
 |---|---|---|---|
-| 1 | **Temporal — the task's schedulable registration** (1b) | `domains/registry.py` + `experiment/registry/task_registry.py` (one enriched row for `delayed_cue`, `geometry_hint="recurrent"`); the smoke gate at one batch | `delayed_cue` enters `SUPPORTED_TASKS`, the declared space enumerates it, and its smoke cell reports a bar verdict — the axis is reachable from a run |
+| 1 ✅ | **Temporal — the task's schedulable registration** (1b) | `domains/registry.py` + `experiment/registry/task_registry.py` (one enriched row for `delayed_cue`, `geometry_hint="recurrent"`); `batch_layout` + `BATCH_LAYOUT_RULE`; landed 2026-11-17 | **landed**: 7,938 declared cells (all recurrent + sequence credits), smoke PASS at 0.176 vs bar 0.10 in 0.17 s, 7 locks |
 | 2 | **A — the deeper residual trunk** (capability) | `validation/hybrid_update.py --geometry` + `memory_frontier.build_arm` with L=16/W=1024; the geometry is a selection, not a claim run | a deeper residual trunk composes and trains (rung 0–1), then its 3-point viability check at rung 2; the capability is the artifact |
 | 3 | **Streaming — the long-stream task family** | a ≥20-task stream fixture + the SI/cascade/VON updates' shared protocol; the updates landed (§19 row 7) | one long-stream cell trains with each consolidation rule, so the family has a chance floor and a ruler |
-| 4 | Hygiene | the 30 pre-existing locks; the `_hybrid.py` branch contrast | each row records its named fix; the pre-existing set shrinks |
+| 4 | Hygiene | the 30 pre-existing locks; the 1-batch smoke's coin-flip gate; the `_hybrid.py` branch contrast | each row records its named fix; the pre-existing set shrinks |
 
 ## 19. Primitive work program (capability-first, ordered)
 **Framing.** The primitives are the work. Each row adds something the system
@@ -2747,10 +2828,13 @@ the ten credits that ship. No row is gated behind a measurement verdict
 is not progress"* is retired: it was the rule that made capability work depend
 on negative measurements.
 
-**Inventory (2026-11-17, after the temporal build). Every §19 row landed and
-the temporal credits are reachable from a task, not only from a fixture: the
-sequence geometry, the time-major loader, and the per-step loss landed (below);
-the task's schedulable registration is §8.1 row 1b.
+**Inventory (2026-11-17, after the schedulable registration). Every §19 row
+landed and the temporal credits are reachable from a task, not only from a
+fixture: the sequence geometry, the time-major loader, the per-step loss, and
+the task's schedulable registration (§8.1 row 1b, landed 2026-11-17) are the
+build. The declared space admits only a cell that reads the loader's layout, in
+both directions. The next rows are the trunk's depth (12g) and the streaming
+family's ≥20-task protocol.
 
 **Temporal axis — the build landed (2026-11-17).** The three credits were
 locked on the sequence contract while no pipeline ran it: `RecurrentGeometry`
@@ -2786,9 +2870,8 @@ epochs read 0.504 (the next rung prices the schedule, not the mechanism).
 `zeros_like(trace)` -- `(batch, hidden, input)` -- so `allclose` and the
 update's momentum buffer broadcast a per-sample tensor into a pass; the
 accumulator is now `(hidden, input)` and both credit locks assert every
-gradient's shape. **Open:** `delayed_cue` is a fixture, not yet a schedulable
-task (no `SUPPORTED_TASKS` row, so the declared space and the smoke gate do
-not see it); that registration is §8.1 row 1b.
+gradient's shape. **Closed 2026-11-17:** `delayed_cue` was a fixture; the schedulable row
+(§8.1 row 1b) landed — see "the schedulable time axis" above.
 
 **The program, ordered by capability per session.**
 
@@ -2888,7 +2971,7 @@ hard forward bit-identical; capability card **0.6875** > 0.6 (128 samples,
 | zeroth-order | SPSA 2 evals; antithetic ES; layerwise blocks | two forwards per step, no graph |
 | routing | STE; Gumbel-ST; perturbed top-k; z-loss load balance | no new state; the geometry gains a top-k gate — **STE landed 2026-11-17; Gumbel-ST/perturbed-k/z-loss are the ladder variants** |
 | layerwise | greedy layerwise; DGL; InfoPro; periodic global guidance | aux-head params enter the ruler |
-| temporal | e-prop; UORO rank-1; exact RTRL fixture | O(params) state; a sequence geometry + loader — **landed 2026-11-17** (`--replay`), schedulable row next |
+| temporal | e-prop; UORO rank-1; exact RTRL fixture | O(params) state; a sequence geometry + loader — **landed 2026-11-17** (`--replay`), and the schedulable row too (7,938 declared cells; smoke PASS at 0.176 vs bar 0.10) |
 | streaming | SI lift; Benna–Fusi cascade; VON | SI ≈ EWC at 5 tasks — the long-stream protocol (≥20) is the capability |
 | optimizer | Adafactor; 8-bit Adam; schedule-free | optimizer-state bytes enter the identity card |
 
@@ -2970,7 +3053,7 @@ binding point) now has two registered boxes and two rung-2 refusals: L=4→8
 the accuracy gap is the split, not the trunk's rule or its scale). The next
 defect fix is the **trunk's depth** (12g; T6g priced the geometry: the
 residual skip is a coordinate at 1.06× bytes), not a claim run; the session
-order is the trunk's depth (12g), then the temporal task's schedulable row. T6/T6a is no longer the critical path to a
+order is the trunk's depth (12g), then the streaming family. T6/T6a is no longer the critical path to a
 positive result: the
 hybrid has a landed wrapper, measured parity, a store-all reference fixture,
 and a depth-flat peak, but its accuracy is 17 pp below the baseline at the

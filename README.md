@@ -220,10 +220,10 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | 37 subcommands, 142 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains, 28 tasks |
+| **🚪 Entry Points** | 38 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
+| **🎯 Tasks & Data** | 7 domains, 29 tasks |
 | **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 48 constraints |
-| **🧬 6-Axis Ontology** | 9 substrates, 11 geometries, 8 dynamics, 7 plasticities, 10 credits, 12 updates = 57 primitives |
+| **🧬 6-Axis Ontology** | 9 substrates, 12 geometries, 8 dynamics, 5 plasticities, 19 credits, 18 updates = 71 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
 | **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
@@ -797,6 +797,7 @@ six-axis systems and assert real accuracies.
 | `loop` | Continuous engine-driven experiment loop (explore/exploit cycles) |
 | `baseline` | Online baseline discovery and registry |
 | `coverage` | Task/domain coverage: what has and has not been measured |
+| `gate` | Gates the repo evaluates as predicates: breadth exit (exit 1 on failure) |
 | `defect` | Defect constraint registry: list, cluster, and revoke constraints |
 | `schema` | Dump JSON schemas for RunSpec/Coordinate/Objectives |
 | `power-analysis` | Compute statistical power for experiment design (machine-readable) |
@@ -959,7 +960,7 @@ not a claim about anyone else's motives.
 - **Equal treatment of arms.** `docs/FAIRNESS_CONTRACT.md` (F-1…F-6,
   append-only) fixes data, budget, stopping rule, seeds and reporting. All
   comparisons are reported unfiltered, or a correction is named.
-- **Declared deviations.** 31 concrete credit,
+- **Declared deviations.** 46 concrete credit,
   update and plasticity primitives ship an `AlgorithmIdentityCard` with its paper
   citation and a *Deviations* column (`docs/IDENTITY_CARDS.md`, generated;
   `--strict` is a gate). The defensible statement is "independent
@@ -969,7 +970,7 @@ not a claim about anyone else's motives.
   fixed; every row carries `n` and `std`; an arm at chance is labelled
   `[at chance]`; and the run checks a known-good control arm before publishing
   the comparison.
-- **A corrections log.** 5 superseded measurements
+- **A corrections log.** 29 superseded measurements
   are recorded with the audit that invalidated them (`docs/CORRECTIONS.md`), and
   claims are held in a ledger outside the engine that produced them
   (`packages/ceec-core`).

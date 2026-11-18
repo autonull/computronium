@@ -269,6 +269,13 @@ def _is_geometry_task_compatible(
     if geometry == "causal_transformer":
         return rank >= 3 or domain == "language"
 
+    # A time-major loader emits ``(time, batch, features)``; only a geometry
+    # that owns the time axis unrolls it. Every other geometry reshapes the
+    # leading axis into features and dies inside its first Linear (measured:
+    # 12x640 into a 10-wide input).
+    if task_shape.batch_layout == "time_major":
+        return geometry == "recurrent"
+
     return True
 
 
@@ -283,6 +290,24 @@ def _task_domain(task_id: str | None) -> str | None:
 
 
 TARGET_LANE_RULE: Final = "class-index primitive on a continuous-target task"
+BATCH_LAYOUT_RULE: Final = "credit × task batch-layout disagreement"
+
+
+def _is_batch_layout_compatible(axis: str, name: str, batch_layout: str) -> bool:
+    """Whether an axis row reads the task's batch layout.
+
+    A time-major task's ``(time, batch, features)`` batch sets the geometry's
+    time axis from a credit that declares ``requires_sequence``; any other credit
+    declares a flat batch, so the geometry unrolls a 2-D input and the cell
+    dies. A flat task's loader gives ``(batch, features)``, so a sequence
+    credit expects an axis that is not there. Both directions are refused
+    here, by name, instead of inside the cell.
+    """
+    if axis != "credit":
+        return True
+    from computronium.core.system_trainer.spec import sequence_credit
+
+    return sequence_credit(name) == (batch_layout == "time_major")
 
 
 def _is_target_lane_compatible(axis: str, name: str, target_kind: str) -> bool:
@@ -308,6 +333,17 @@ def _target_lane_rule(coordinate: Coordinate, target_kind: str) -> str | None:
         name = getattr(coordinate, axis.value)
         if not _is_target_lane_compatible(axis.value, name, target_kind):
             return f"{TARGET_LANE_RULE}: {axis.value}={name}"
+    return None
+
+
+def _batch_layout_rule(coordinate: Coordinate, batch_layout: str) -> str | None:
+    """The batch-layout rule a six-axis coordinate violates, else ``None``."""
+    from computronium.experiment.schema.axis import StructuralAxis
+
+    for axis in StructuralAxis:
+        name = getattr(coordinate, axis.value)
+        if not _is_batch_layout_compatible(axis.value, name, batch_layout):
+            return f"{BATCH_LAYOUT_RULE}: {axis.value}={name}"
     return None
 
 
@@ -1163,6 +1199,13 @@ def iter_candidates(  # ruff: ignore[complex-structure]
                     void_cache.record_void(coordinate, schedule.task_id)
                 if rejections is not None:
                     rejections[lane] += 1
+                continue
+            layout = _batch_layout_rule(coordinate, task_shape.batch_layout)
+            if layout is not None:
+                if use_void_cache and void_cache:
+                    void_cache.record_void(coordinate, schedule.task_id)
+                if rejections is not None:
+                    rejections[layout] += 1
                 continue
 
         if check_composable and shape is not None:

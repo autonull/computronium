@@ -160,6 +160,22 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         300,
     ),
     (
+        "tests/property/test_sequence_task_lock.py::test_a_flat_task_refuses_a_sequence_credit_by_the_same_rule",
+        60,
+    ),
+    (
+        "tests/property/test_sequence_task_lock.py::test_delayed_cue_is_a_schedulable_task",
+        60,
+    ),
+    (
+        "tests/property/test_sequence_task_lock.py::test_the_declared_space_admits_only_a_cell_that_reads_the_time_axis",
+        60,
+    ),
+    (
+        "tests/property/test_sequence_task_lock.py::test_the_settle_jacobian_refuses_a_time_major_state",
+        60,
+    ),
+    (
         "tests/property/test_state_algebra_lock.py::test_type_checking_imports_are_not_called_at_runtime",
         300,
     ),

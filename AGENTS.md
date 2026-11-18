@@ -318,6 +318,7 @@ Error-blind credits (`homeostatic`, `temporal_trace`) never fail on accuracy: tr
 | D15: Composition ignored topology | `topology_type` from geometry, not axis value | Merge axis topology into geometry mapping | `_geometry_mapping` includes topology |
 | D16: Spatial facts guessed from width | `in_channels=3`, `input_hw=(28,28)` hardcoded | Derive from task's `input_shape` (channels first) | Pass `input_shape` through compose chain |
 | D17: Registered ≠ trainable | `tile`/`nca` compose then die at runtime | `available=False` + `unavailable_reason` | Search space filters unavailable |
+| D18: Composition ignored the loader's layout | `mm: mat1 and mat2 shapes cannot be multiplied (12x640 and 10x24)` — a time-major batch read as rows | The layout is undeclared; compose gives the geometry a time axis from the credit, not from the task | Declare `DomainTask.batch_layout`; carry it in `TaskShape`; refuse a credit that disagrees in the declared space (both directions) |
 | D24: `comp report` crashes empty store | Raw traceback on no data | Handle empty store gracefully | Guard before query |
 | D25: `--dry-run` writes store, silent | Creates `experiment.duckdb`, prints nothing | Dry-run before store create; print plan | Check `dry_run` first |
 | D26: Capability rows name dead tests | "Verified" capability = `pytest: no tests ran` | Fixture must contain case lock exists for | Lock fixture exercises the mechanism |

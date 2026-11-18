@@ -144,6 +144,11 @@ def settle_step_operator_at_state(
     hidden = settled_acts[1:-1]
     if not hidden:
         return None
+    if any(h.dim() != 2 for h in hidden):
+        # A time-major state is ``(time, batch, hidden)``: it has no settled
+        # fixed point to linearize (the unroll's axis is the state's), so the
+        # step Jacobian is undefined rather than a 768-row probe.
+        return None
     widths = tuple(h.shape[1] for h in hidden)
     input_act = settled_acts[0]
     output_act = settled_acts[-1]

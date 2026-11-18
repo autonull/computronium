@@ -106,12 +106,13 @@ def _compute_stability_metrics(
     from computronium.experiment.kernel.evaluate import (
         compute_stability_metrics as _compute_stability_metrics_impl,
     )
+    from computronium.ontology.geometry import is_sequence_geometry
 
     try:
         # Get a sample batch for stability analysis
         sample_batch = next(iter(handle.get_dataloader("train")))  # type: ignore[attr-defined]
         sample_x = sample_batch[0].to(device)
-        if sample_x.dim() > 2:
+        if sample_x.dim() > 2 and not is_sequence_geometry(system.geometry):  # type: ignore[attr-defined]
             sample_x = sample_x.reshape(sample_x.size(0), -1)
         metrics = _compute_stability_metrics_impl(system, sample_x)
         # Convert to dict[str, object] for return type compatibility

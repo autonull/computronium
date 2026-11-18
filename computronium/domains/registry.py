@@ -44,6 +44,7 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "sequential_mnist",
     # memory/sequence tasks
     "copy_task",
+    "delayed_cue",
     # language
     "tiny_shakespeare",
     "char_ngram",
