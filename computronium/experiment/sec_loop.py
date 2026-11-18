@@ -12,11 +12,10 @@ Run:
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-import torch
 
 from computronium.core.continual.metrics import CLConfig, CLMetrics
 from computronium.core.continual.runner import run_continual_learning
@@ -28,6 +27,7 @@ from computronium.experiment.kernel.evaluate import (
     evaluate_cell,
 )
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 from computronium.experiment.sec_census import PrimitiveCensusEntry, build_census
 
 logger = get_logger(__name__)
@@ -369,18 +369,29 @@ def run_r2_track(
 # ============================================================
 
 P0_EPOCHS = 1
-P0_BATCH_LIMIT = 32
+# 32 batches (1,024 samples) ranked cells by their default step size, not by
+# their mechanism: at 32 batches `adam` scored 0.198 and `euclidean` 0.540; at
+# 375 batches `adam` scored 0.695 and `euclidean` 0.424 (measured 2026-11-18).
+# A screen must run long enough for the slowest declared step size to move.
+P0_BATCH_LIMIT = 375
 P0_SEED = 0
 P0_HIDDEN_DIM = 128
-P0_PARAM_BUDGET = 10000
+# A 128-wide hidden layer composes 118,282 parameters; a 10k ceiling with a
+# 128-wide layer was an impossible box (measured 2026-11-18), and the screen
+# never checked it. The ceiling now fits the declared geometry.
+P0_PARAM_BUDGET = 150_000
 # How many compose-legal boxes to try per primitive before declaring it cannot
 # train. Most resolve on the first (base) box; a few need a companion swap.
 P0_MAX_COORDINATES = 24
 
 
-def _box_summary(coord: Coordinate) -> dict[str, str]:
-    """The structural axes of a screened box, for the cell log."""
-    return {
+def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[str, Any]:
+    """The box a cell was screened in: the six axes plus the schedule.
+
+    A row without its task, batch and step count cannot be reproduced and cannot
+    be compared with another row (TODO95 D2/D3).
+    """
+    box: dict[str, Any] = {
         "substrate": coord.substrate,
         "geometry": coord.geometry,
         "dynamics": coord.dynamics,
@@ -388,6 +399,30 @@ def _box_summary(coord: Coordinate) -> dict[str, str]:
         "credit": coord.credit,
         "update": coord.update,
     }
+    if schedule is not None:
+        box |= {
+            "task": schedule.task_id,
+            "epochs": schedule.epochs,
+            "batch_limit": schedule.batch_limit,
+            "seed": schedule.seed,
+            "param_budget": schedule.param_budget,
+        }
+    return box
+
+
+def _control_val_acc(schedule: Schedule, device: str) -> float | None:
+    """The base coordinate's own accuracy at this box: the ability ruler.
+
+    The gate bar is the task's chance rate, so a cell above it has cleared a
+    floor, not a capability. A map row is only readable beside this control:
+    the same box, the default six-axis coordinate, one seed.
+    """
+    try:
+        result = evaluate_cell(_coordinate(_AXIS_DEFAULTS), schedule)
+    except Exception:  # ruff: ignore[BLE001] - a broken control must not end the screen
+        logger.exception("P0 control cell failed at the box")
+        return None
+    return float(dict(result.metrics).get("val_acc", 0.0))
 
 
 _AXIS_FIELD = {
@@ -628,10 +663,10 @@ def run_p0_track(
     )
 
     results: list[dict[str, Any]] = []
-    pass_count = 0
+    measured_count = 0
     defect_count = 0
     unavailable_count = 0
-    coordinate_count = 0
+    box_defect_count = 0
 
     schedule = Schedule(
         fidelity="L0",
@@ -648,6 +683,9 @@ def run_p0_track(
         precision="fp32",
         checkpoint_every_n=0,
     )
+
+    control_acc = _control_val_acc(schedule, device)
+    logger.info(f"P0 control at this box: val_acc={control_acc}")
 
     for entry in entries_to_screen:
         logger.info(f"P0 screening: {entry.id}")
@@ -675,34 +713,38 @@ def run_p0_track(
             except (EvaluationError, ValueError) as exc:
                 last_error = exc
                 continue
-            except Exception as exc:  # noqa: BLE001 - one bad cell never ends the screen
+            except Exception as exc:  # ruff: ignore[BLE001] - one bad cell never ends the screen
                 last_error = exc
                 continue
 
             metrics = dict(eval_result.metrics)
-            val_acc = metrics.get("val_acc", 0.0)
-            loss = metrics.get("loss", float("inf"))
-            chance = 0.1  # MNIST 10-class chance
-            above = (
-                val_acc > chance + 0.02
-                and loss < float("inf")
-                and not torch.isnan(torch.tensor(loss))
+            val_acc = float(metrics.get("val_acc", 0.0))
+            loss = float(metrics.get("loss", float("inf")))
+            finite = math.isfinite(val_acc) and math.isfinite(loss)
+            within = eval_result.param_count <= P0_PARAM_BUDGET * (
+                1 + PARAM_BUDGET_TOLERANCE
             )
-            status = "PASS" if above else "COORDINATE"
-            if above:
-                pass_count += 1
-            else:
-                coordinate_count += 1
+            # A screen records; it never adjudicates. It emits the number, the
+            # box, the size and the cost, plus a DEFECT only for an execution
+            # fact (a crash or a non-finite metric). "Above chance" is not a
+            # capability, and a 1-seed cell is not a comparison (TODO95 §2).
             results.append({
                 "track": "P0",
                 "primitive": entry.id,
-                "status": status,
+                "status": "MEASURED" if finite else "DEFECT",
                 "val_acc": val_acc,
                 "loss": loss,
+                "param_count": eval_result.param_count,
+                "within_ceiling": within,
                 "metrics": metrics,
-                "box": _box_summary(coord),
+                "box": _box_summary(coord, schedule),
+                "control_val_acc": control_acc,
+                "defect": None if finite else "non-finite metric",
                 "walltime_s": eval_result.walltime_s,
             })
+            measured_count += 1
+            if not within:
+                box_defect_count += 1
             completed = True
             break
 
@@ -740,17 +782,20 @@ def run_p0_track(
     result_summary = {
         "track": "P0",
         "screened": total,
-        "pass": pass_count,
+        "measured": measured_count,
         "defect": defect_count,
         "unavailable": unavailable_count,
-        "coordinate": coordinate_count,
+        "box_defect": box_defect_count,
+        "control_val_acc": control_acc,
         "defect_rate": defect_rate,
         "pause_r": pause_r,
         "cells": results,
     }
 
     logger.info(
-        f"P0 complete: screened={total}, pass={pass_count}, defect={defect_count}, unavailable={unavailable_count}, coordinate={coordinate_count}, pause_R={pause_r}"
+        f"P0 complete: screened={total}, measured={measured_count}, "
+        f"defect={defect_count}, unavailable={unavailable_count}, "
+        f"box_defect={box_defect_count}"
     )
     return result_summary
 
@@ -923,10 +968,11 @@ def update_portfolio(
         for track in portfolio["tracks"]:
             if track["track"] == "P0":
                 track["last_result"] = {
-                    "pass": p0_result["pass"],
+                    "measured": p0_result["measured"],
                     "defect": p0_result["defect"],
                     "unavailable": p0_result["unavailable"],
-                    "coordinate": p0_result["coordinate"],
+                    "box_defect": p0_result["box_defect"],
+                    "control_val_acc": p0_result["control_val_acc"],
                     "defect_rate": p0_result["defect_rate"],
                     "pause_r": p0_result["pause_r"],
                 }
@@ -982,6 +1028,7 @@ def update_map(
                     "status": "unknown",
                     "family": entry.axis if entry else "unknown",
                     "box": {},
+                    "control_val_acc": None,
                     "ruler": "val_acc on mnist",
                     "best_coordinate": None,
                     "defect": None,
@@ -994,8 +1041,13 @@ def update_map(
             map_entry["last_screened"] = datetime.now().isoformat()
             if "box" in cell:
                 map_entry["box"] = cell["box"]
-            if cell["status"] in {"PASS", "COORDINATE"} and "val_acc" in cell:
-                map_entry["best_coordinate"] = {"val_acc": cell["val_acc"]}
+            map_entry["control_val_acc"] = cell.get("control_val_acc")
+            if cell["status"] == "MEASURED" and "val_acc" in cell:
+                map_entry["best_coordinate"] = {
+                    "val_acc": cell["val_acc"],
+                    "param_count": cell.get("param_count"),
+                    "within_ceiling": cell.get("within_ceiling"),
+                }
             elif cell["status"] == "DEFECT":
                 map_entry["defect"] = cell.get("error", "unknown")
 

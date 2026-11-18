@@ -364,6 +364,39 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         tags=("vision", "mnist", "classification"),
         description="MNIST handwritten digits",
     ),
+    # Split-MNIST is the batch-1 continual-learning thesis task. It had no
+    # domain, so it resolved to ``unknown`` and no gate bar: a domain filter
+    # could not see it and the gate could not bar it (TODO95 D9).
+    "split_mnist": TaskSpecEnriched(
+        name="split_mnist",
+        domain=DomainType.VISION,
+        input_shape=(1, 28, 28),
+        output_dim=10,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=1,
+        typical_lr=1e-3,
+        tags=("vision", "mnist", "continual", "classification"),
+        description="Split-MNIST (5 binary tasks, batch-1 continual setting)",
+    ),
     "fashion_mnist": TaskSpecEnriched(
         name="fashion_mnist",
         domain=DomainType.VISION,

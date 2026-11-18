@@ -684,7 +684,7 @@ def _determine_procedure_metadata() -> tuple[str, str, str]:
     )
 
 
-def _pass_bar(task_id: str) -> PassBar | None:
+def task_pass_bar(task_id: str) -> PassBar | None:
     """The task's gate ruler, or ``None`` when the registry declares none."""
     from computronium.experiment.registry.task_registry import (
         get_task_registry,
@@ -697,7 +697,7 @@ def _pass_bar(task_id: str) -> PassBar | None:
         return None
 
 
-def _clears_pass_bar(bar: PassBar, metrics: Mapping[str, float]) -> bool:
+def clears_task_bar(bar: PassBar, metrics: Mapping[str, float]) -> bool:
     """Whether the primary metric beats the task's chance/majority ruler.
 
     A missing or non-finite metric cannot clear a bar. Equality does not either:
@@ -904,10 +904,10 @@ def cell_record(
     payload["primary_metric"] = primary_key
     # The gate ruler travels with the record: a PASS is a comparison against a
     # declared chance/majority rate, not an unqualified "defect-free".
-    bar = _pass_bar(task_id)
+    bar = task_pass_bar(task_id)
     below_bar = (
         ""
-        if bar is None or _clears_pass_bar(bar, evaluation.metrics)
+        if bar is None or clears_task_bar(bar, evaluation.metrics)
         else (
             "below bar: "
             f"{bar.metric_key}="

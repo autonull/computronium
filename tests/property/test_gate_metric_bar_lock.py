@@ -15,8 +15,8 @@ import pytest
 
 from computronium.experiment.kernel.evaluate import (
     CellEvaluation,
-    _clears_pass_bar,
     cell_record,
+    clears_task_bar,
 )
 from computronium.experiment.registry.task_registry import (
     PassBar,
@@ -75,11 +75,11 @@ def test_the_ruler_is_the_task_s_chance_rate_not_the_domain_target() -> None:
 def test_direction_decides_which_side_of_the_bar_clears(
     bar: PassBar, measured: float, cleared: bool
 ) -> None:
-    assert _clears_pass_bar(bar, {bar.metric_key: measured}) is cleared
+    assert clears_task_bar(bar, {bar.metric_key: measured}) is cleared
 
 
 def test_a_missing_primary_metric_cannot_clear_a_bar() -> None:
-    assert _clears_pass_bar(PassBar("val_acc", "maximize", 0.5), {}) is False
+    assert clears_task_bar(PassBar("val_acc", "maximize", 0.5), {}) is False
 
 
 def _coordinate() -> Coordinate:

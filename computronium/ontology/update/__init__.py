@@ -228,7 +228,11 @@ class ParameterUpdateConfig:
     def mean_norm(
         cls,
         *,
-        step_size: float = 0.01,
+        # The rule normalizes every element to unit magnitude, so its step is
+        # an absolute displacement, not a gradient-scaled lr: 1e-2 diverged to
+        # chance (0.101) on MNIST at 375 batches; 1e-3 measured 0.923 in the
+        # same box (2026-11-18).
+        step_size: float = 1e-3,
         momentum: float = 0.9,
         ortho_steps: int = 5,
         spectral_norm: float = 1.0,
