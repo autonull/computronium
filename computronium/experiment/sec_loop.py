@@ -771,8 +771,8 @@ def update_cell_log(out_dir: Path, all_results: list[dict]) -> None:
     logger.info(f"Cell log updated: {cell_log_path} (+{len(all_results)} entries)")
 
 
-def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_result: dict | None) -> None:
-    """Update map.json with P0 screening results."""
+def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_result: dict | None, p1_result: dict | None = None) -> None:
+    """Update map.json with P0 screening and P1 confirmation results."""
     map_path = out_dir / "map.json"
 
     if map_path.exists():
@@ -805,6 +805,21 @@ def update_map(out_dir: Path, census_entries: list[PrimitiveCensusEntry], p0_res
             elif cell["status"] == "DEFECT":
                 map_entry["defect"] = cell.get("error", "unknown")
 
+    if p1_result:
+        for cell in p1_result["cells"]:
+            prim_id = cell["primitive"]
+            if prim_id in map_data["primitives"]:
+                map_entry = map_data["primitives"][prim_id]
+                map_entry["p1_confirmed"] = True
+                map_entry["p1_surprise"] = cell.get("surprise", False)
+                map_entry["p1_mean_acc"] = cell.get("mean_acc", 0.0)
+                map_entry["p1_effect"] = cell.get("effect", 0.0)
+                map_entry["p1_delta"] = cell.get("delta", 0.0)
+                map_entry["p1_seeds"] = cell.get("seed_results", [])
+                # Update best_coordinate with P1 mean if it's a surprise
+                if cell.get("surprise", False):
+                    map_entry["best_coordinate"] = {"val_acc": cell.get("mean_acc", 0.0), "p1_confirmed": True}
+
     map_path.write_text(json.dumps(map_data, indent=2, default=str))
     logger.info(f"Map updated: {map_path}")
 
@@ -823,6 +838,7 @@ def main() -> None:
     parser.add_argument("--max-primitives", type=int, default=6, help="Max primitives for P0")
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument("--device", type=str, default="auto", help="Device (auto, cpu, cuda)")
+    parser.add_argument("--p1-from-map", action="store_true", help="Run P1 on PASS primitives from map.json (not just current P0 run)")
     args = parser.parse_args()
 
     out_dir = args.out
@@ -852,8 +868,20 @@ def main() -> None:
         p0_result = run_p0_track(out_dir, census_entries, max_primitives=args.max_primitives, device=args.device)
         all_results.extend(p0_result["cells"])
 
-    # Run P1 if P0 had passes
-    p0_passes = [c["primitive"] for c in (p0_result["cells"] if p0_result else []) if c["status"] == "PASS"]
+    # Determine P0 passes for P1
+    p0_passes: list[str] = []
+    if args.p1_from_map:
+        # Read PASS primitives from map.json
+        map_path = out_dir / "map.json"
+        if map_path.exists():
+            map_data = json.loads(map_path.read_text())
+            p0_passes = [k for k, v in map_data.get("primitives", {}).items() if v.get("status") == "pass"]
+            logger.info(f"P1 from map: {len(p0_passes)} PASS primitives")
+    else:
+        # Use passes from current P0 run
+        p0_passes = [c["primitive"] for c in (p0_result["cells"] if p0_result else []) if c["status"] == "PASS"]
+
+    # Run P1 if there are passes
     if args.track in ("P1", "all") and p0_passes:
         p1_result = run_p1_track(out_dir, p0_passes, census_entries, device=args.device)
         all_results.extend(p1_result["cells"])
@@ -861,7 +889,7 @@ def main() -> None:
     # Update artifacts
     update_cell_log(out_dir, all_results)
     update_portfolio(out_dir, r1_result or {}, r2_result or {}, p0_result, p1_result)
-    update_map(out_dir, census_entries, p0_result)
+    update_map(out_dir, census_entries, p0_result, p1_result)
 
     # Print summary (raw metrics for human review)
     print("\n=== SEC Loop Summary ===")

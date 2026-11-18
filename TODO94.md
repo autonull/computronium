@@ -415,6 +415,34 @@ No slides. The cell log is the record. The map is the result.
 
 ---
 
+### Session 3 — 2026-11-18 (P1 confirmation on all PASS primitives)
+**Decision:** Run P1 confirmation (3 seeds, paired) on all 22 PASS primitives from map.json
+**Experiment:** `uv run python -m computronium.experiment.sec_loop --track P1 --p1-from-map --out results/sec --device cpu`
+**Box:** MNIST, 1 epoch, batch 1, 3 seeds, L0 fidelity, paired comparison vs chance
+**Rung / stop:** P1 completed 22 primitives × 3 seeds = 66 cells in ~10 min on CPU
+**Results:**
+- 22 confirmed, 3 surprises (effect > 2δ, paired interval excludes 0)
+- Surprises:
+  1. primitive.parameter_update.adam: mean=0.198, effect=0.098 (9.8 pp above chance)
+  2. primitive.parameter_update.ortho_adam: mean=0.302, effect=0.202 (20.2 pp above chance)
+  3. primitive.parameter_update.lion: mean=0.198, effect=0.098 (9.8 pp above chance)
+- All other primitives at or below chance (val_acc ~0.06-0.11)
+**Triage:**
+- P1 surprises are all parameter_update primitives (Adam, OrthoAdam, Lion)
+- These show real above-chance effects on MNIST at L0
+- Other axes (substrate, geometry, dynamics, plasticity, credit) show no confirmed effect at L0
+- Surprise flags recorded for review meeting → promote to P2 (5 seeds, pre-registered)
+**Fixes Applied:**
+- Added `--p1-from-map` flag to run P1 on map.json PASS primitives (not just current P0 run)
+- P1 correctly computes paired effect > 2δ criterion
+**Next Experiment:**
+- Review meeting: interpret P1 surprises (3 parameter_update primitives)
+- Pre-register P2 for the 3 surprises (5 seeds, matched budget)
+- Investigate D track (memristive + local) or B track (routing) as alternative paths
+- Consider whether local credit needs different dynamics/credit for long horizons
+
+---
+
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
 **Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`
