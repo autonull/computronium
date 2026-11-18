@@ -56,7 +56,7 @@ while budget_remaining():
 | Component | What It Replaces | First-Session Scope |
 |---|---|---|
 | **Unified cell log** (`results/sec/cells.jsonl`) | Per-track logs | Add `track`, `stage`, `box_hash`, `config_hash`, `contention` |
-| **Sequential cell runner** | One `measure_cell` per launch | Runs 4–8 cells in one process; one CUDA context; no `ProcessPool` + CUDA |
+| **Sequential cell runner** | One `measure_cell` per launch | Runs a batch of cells sequentially inside each worker; one CUDA context per GPU worker, one CPU process per CPU worker; no `ProcessPool` + CUDA |
 | **Portfolio store** (`results/sec/portfolio.json`) | TODO93 tables | Track, rank, kill rule, last result, budget used, `r_status` |
 | **Gate registry** | Ad-hoc gates | Registered predicates: `gate(name, cells) -> Verdict` |
 | **Surprise detector** | Manual §0.2 | Only P1/P2: paired 3-seed effect > 2δ; **never** from a 1-seed cell |
@@ -131,12 +131,45 @@ while budget_remaining():
 | Soft session cap | 3 hours; a slow session records `contention` and continues |
 | Cell watchdog | `max(3 × pilot, pilot + 15 min)`; if no step progress for 5 min → kill; else **defer**, don't fail |
 | Track watchdog | `max(3 × pilot, pilot + 20 min)`; defer, re-price next session |
-| GPU budget | `torch.cuda.set_per_process_memory_fraction(0.45)`; keep ≥2 GB free |
-| Parallelism | `MAX_PARALLEL = 2` processes, one CUDA context each; prefer sequential cells |
+| GPU budget | `torch.cuda.set_per_process_memory_fraction(fraction)`; keep ≥2 GB free; `fraction = (free_mb - reserve_mb) / total_mb / workers` |
+| Parallelism | **Backend- and task-dependent**; see §6.1. CPU: 4–6 workers; CUDA: 1–4 contexts by cell peak. Never hardcode 2. |
+| CPU workers | One process per worker, `OMP_NUM_THREADS=1`, `torch.set_num_threads(1)`; no oversubscription |
+| CUDA workers | One CUDA context per process; no `ProcessPoolExecutor` around CUDA; sequential cells inside a context |
 | OOM handling | Catch, free cache, halve batch or defer; never crash the loop |
 | Contention flag | If GPU util < 20% for >5 min, pause the track and switch to a CPU track |
 
 **Walltime is an outcome, not a verdict.** A cell is killed for no progress or a hard cap, not for being slower than a pilot measured on an idle machine.
+
+### 6.1 Concurrency Policy (backend × task)
+
+The worker count is **computed**, not a constant. The goal is to use the machine
+without oversubscribing it.
+
+```python
+workers = min(
+    cpu_cap,       # CPU: min(6, os.cpu_count() - 1); GPU: 1-4 contexts
+    memory_cap,    # CPU RAM or GPU free memory; reserve 2 GB
+    task_cap,      # from the task's declared ceiling
+)
+```
+
+| Backend | Task class | Workers | Why |
+|---|---|---|---|
+| CPU | tabular / small MLP / estimator | **4–6** (`min(6, cpu_count - 1)`) | memory-light, CPU-bound; one thread per worker |
+| CPU | sequence / recurrent / e-prop | **2–4** | per-cell state grows with `T`; less cache thrash |
+| CPU | substrate / NCA / graph | **2–4** | per-step kernels and per-cell state |
+| CUDA | small cell (`peak < 1 GB`) | **3–4** | fit the free memory; one context each |
+| CUDA | medium (`1–3 GB`) | **2–3** | reserve ≥2 GB |
+| CUDA | large (`> 3 GB`) | **1–2** | avoid OOM; sequential cells |
+| Mixed | CPU data/aux + GPU train | **CPU 4–6, GPU 1–2** | pipeline, not duplicate |
+
+**Task ceiling** (`spec.py` or `CellPlan.task_max_workers`): 6 small, 4 sequence, 2 large. A missing ceiling defaults to 4 and is a census defect to fix.
+
+**Rules**
+- CPU: one process per worker, `OMP_NUM_THREADS=1`, `torch.set_num_threads(1)`; no oversubscription.
+- CUDA: one context per process; never `ProcessPoolExecutor` around CUDA; cells are sequential inside a context.
+- Log `workers`, `backend`, `cell_peak_mb`, `task_class`, and the reason the cap bound.
+- `--workers auto` is the default; an explicit `--workers N` is a declared box and is honored.
 
 ---
 
@@ -153,7 +186,7 @@ uv run python -m computronium.experiment.sec_init --out results/sec
 
 # 2. Track R1: 5 seeds × 5 data orders (local×EWC vs backprop×EWC)
 uv run python -m computronium.experiment.sec_loop \
-  --track R1 --max-parallel 2 --max-cells 12 --out results/sec
+  --track R1 --workers auto --max-cells 12 --out results/sec
 
 # 3. Delta P0: 6 unscreened primitives only
 uv run python -m computronium.experiment.sec_loop \
@@ -227,7 +260,7 @@ uv run python -m computronium.experiment.sec_loop \
 | P0 not run / full sweep | Delta screen: unscreened/changed/failed only |
 | 1-cell surprise (`p<0.01`) | P0 PASS → P1 (3 seeds) → P2 (5 seeds); no 1-seed claims |
 | Walltime watchdogs | Step/forward-equivalent budgets; walltime reported, not ranked |
-| 4 parallel GPU contexts | 2 processes, one context each, 45% memory fraction |
+| Fixed 4 parallel GPU contexts | `workers = min(cpu, memory, task)`; CPU 4–6, CUDA 1–4 by cell peak |
 | Primitives gated by measurements | Primitives screened; measurements price capability |
 | Composition deferred | Track F is a rung-1 screen, run on demand |
 | Manual scoreboard | `map.json` auto-generated from cell log |
@@ -245,6 +278,8 @@ uv run python -m computronium.experiment.sec_loop \
 - Writing "refusal" as a verdict: only defect, coordinate, or claim.
 - Running claim tracks without R1/P1 evidence.
 - Adding new primitives while P0 has defects or R1 is unmeasured.
+- Hardcoding a worker count: CPU 4–6, CUDA 1–4 by cell peak.
+- Oversubscribing CPU workers (`OMP_NUM_THREADS=1` per process).
 
 ---
 
