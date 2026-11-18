@@ -368,12 +368,16 @@ def _run_replay_training(
 
 
 def _update_arm_importance(
-    arm_name: str, model: ContinualJointSystem, extra: _ArmExtra
+    arm_name: str, model: ContinualJointSystem, extra: _ArmExtra, task_id: int = 0
 ) -> None:
     """Update importance weights for EWC/SI at end of task."""
     update = extra.get("update")
     if update is not None:
-        update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
+        # For EWC: first consolidation (task 0) uses initial params as baseline
+        if task_id == 0 and "_ewc_initial_params" in extra:
+            update.consolidate(model.geometry.params, extra["_ewc_initial_params"])  # type: ignore[attr-defined]
+        else:
+            update.consolidate(model.geometry.params)  # type: ignore[attr-defined]
     si = extra.get("si")
     if si is not None:
         si.update_importance()  # type: ignore[attr-defined]
@@ -475,7 +479,7 @@ def _run_task_incremental_protocol(
                 _update_replay_buffer(arm_name, extra, x, y, task_id)
                 _run_replay_training(arm_name, model, extra, config)
 
-        _update_arm_importance(arm_name, model, extra)
+        _update_arm_importance(arm_name, model, extra, task_id)
         _evaluate_tasks_so_far(model, test_loaders, task_id, device, accuracy_matrix, config.classes_per_task)
 
 
@@ -578,11 +582,18 @@ def run_continual_learning(
 
     task_loaders, test_loaders = _create_task_loaders(config, device_str)
     model, extra = _create_arm(arm_name, config, device_str)
+    
+    # Capture initial parameters for EWC baseline (before any training)
+    initial_params = {k: v.clone().detach() for k, v in model.geometry.params.items()}
+    
     guard, transition_fn, guard_context = _setup_stability_guard(config, model)
 
     accuracy_matrix = [[0.0 for _ in range(config.num_tasks)] for _ in range(config.num_tasks)]
     stability_verdicts: list = []
     start_time = time.perf_counter()
+
+    # Pass initial_params to protocol for EWC first consolidation
+    extra["_ewc_initial_params"] = initial_params
 
     if protocol == "task_incremental":
         _run_task_incremental_protocol(

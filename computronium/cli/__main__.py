@@ -29,6 +29,8 @@ _INFORMATIONAL_WARNING_PATTERNS = (
     r"^PC-ALM beta mismatch:",
     r"^Diffusion dynamics \(Langevin\) with substrate",
     r"^update_type=.* per-element-displacement",
+    r"torch\.jit\.script is not supported",
+    r"register_new_resolver\(\) is deprecated",
 )
 for _pattern in _INFORMATIONAL_WARNING_PATTERNS:
     warnings.filterwarnings("ignore", message=_pattern, category=UserWarning)

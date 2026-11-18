@@ -41,7 +41,7 @@ logger = get_logger(__name__)
 R1_TASK = "split_mnist"
 R1_EPOCHS_PER_TASK = 1
 R1_BATCH_LIMIT = 32  # batch size 32
-R1_HIDDEN_DIM = 256
+R1_HIDDEN_DIM = 128  # minimal for MNIST
 R1_SEEDS = 5  # 5 data-order seeds
 R1_CREDITS = ("local_supervision", "gradient")  # local vs backprop
 
@@ -191,7 +191,7 @@ R2_NUM_TASKS = 20
 R2_CLASSES_PER_TASK = 10
 R2_EPOCHS_PER_TASK = 1
 R2_BATCH_LIMIT = 32
-R2_HIDDEN_DIM = 256
+R2_HIDDEN_DIM = 128  # minimal for MNIST
 R2_SEEDS = 5  # 5 data-order seeds
 R2_CREDITS = ("local_supervision", "gradient")  # local vs backprop
 
@@ -339,7 +339,7 @@ def run_r2_track(
 # ============================================================
 
 P0_EPOCHS = 1
-P0_BATCH_LIMIT = 1
+P0_BATCH_LIMIT = 32
 P0_SEED = 0
 P0_HIDDEN_DIM = 128
 P0_PARAM_BUDGET = 10000
