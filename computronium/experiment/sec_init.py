@@ -53,8 +53,16 @@ DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
         contention=False,
     ),
     TrackPortfolioEntry(
-        track="P0",
+        track="R2",
         rank=2,
+        kill_rule="worst-case gap < 2 pp on 5 seeds (20 tasks)",
+        last_result="unstarted",
+        budget_used={"cells": 0, "seeds": 0, "forward_equivalents": 0.0},
+        contention=False,
+    ),
+    TrackPortfolioEntry(
+        track="P0",
+        rank=3,
         kill_rule=">20% DEFECT → pause R, fix",
         last_result="unstarted",
         budget_used={"cells": 0, "primitives": 0},
@@ -62,7 +70,7 @@ DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
     ),
     TrackPortfolioEntry(
         track="P1",
-        rank=3,
+        rank=4,
         kill_rule="No effect → coordinate, not claim",
         last_result="unstarted",
         budget_used={"cells": 0, "seeds": 0},
