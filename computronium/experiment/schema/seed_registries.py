@@ -1670,7 +1670,7 @@ CONSTRAINTS = [
     ConstraintSpec(
         name="local_contrastive_geometry",
         kind=ConstraintKind.VOID,
-        description="Local contrastive/goodness/forward_only/pepita credit requires feedforward geometry",
+        description="Local contrastive/goodness/forward_only/pepita/supervision credit requires feedforward geometry",
         predicate=or_(
             not_(
                 in_(
@@ -1680,6 +1680,7 @@ CONSTRAINTS = [
                         "forward_only",
                         "pepita",
                         "local_contrastive",
+                        "local_supervision",
                     ]),
                 )
             ),

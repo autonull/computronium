@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
+    Any,
     Final,
     Protocol,
     Self,
@@ -308,94 +309,173 @@ DEFAULT_TOLERANCES: tuple[float, float] = (0.1, 1e-3)
 # Valid Combinations Data (Module-level constants for valid_combinations)
 # ============================================================
 
+# The six preset lists below are derived from the config classmethods, so they
+# cannot drift from the primitive registry. A hardcoded list is a second source
+# of truth: it silently drops primitives (the AutoScientist never sees them).
+# The lists are simple: one representative per (axis) value.
+
+
+def _asdict(preset: Any) -> dict[str, object]:
+    from dataclasses import asdict
+    from enum import Enum
+
+    raw = asdict(preset)
+    out: dict[str, object] = {}
+    for key, value in raw.items():
+        if value is None:
+            continue
+        # The composite config stores StrEnums under axis-prefixed names
+        # (``substrate_type``/``plasticity_type``); the fast filter uses ``type``.
+        if key in {"substrate_type", "plasticity_type"}:
+            key = "type"
+        if isinstance(value, Enum):
+            value = value.value
+        out[key] = value
+    return out
+
+
 _SUBSTRATES: list[dict[str, object]] = [
-    {"type": "digital", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
-    {
-        "type": "memristive",
-        "precision": "float32",
-        "noise_level": 0.01,
-        "sparsity": 0.0,
-    },
-    {
-        "type": "neuromorphic",
-        "precision": "float16",
-        "noise_level": 0.0,
-        "sparsity": 0.95,
-    },
-    {"type": "optical", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
-    {"type": "quantum", "precision": "complex64", "noise_level": 0.0, "sparsity": 0.0},
-    {"type": "sparse", "precision": "float32", "noise_level": 0.0, "sparsity": 0.8},
-    {"type": "ternary", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
+    _asdict(getattr(SubstrateConfig, name)())
+    for name in (
+        "analog",
+        "complex",
+        "digital",
+        "memristive",
+        "neuromorphic",
+        "optical",
+        "quantum",
+        "sparse",
+        "ternary",
+    )
 ]
 
 _GEOMETRIES: list[dict[str, object]] = [
-    {
-        "topology_type": "feedforward",
-        "input_dim": 784,
-        "output_dim": 10,
-        "hidden_dims": [256, 128],
-    },
-    {
-        "topology_type": "recurrent",
-        "input_dim": 784,
-        "output_dim": 10,
-        "hidden_dims": [256],
-    },
-    {
-        "topology_type": "tile_mesh",
-        "input_dim": 784,
-        "output_dim": 10,
-        "num_layers": 4,
-        "neurons_per_tile": 64,
-        "tiles_per_layer": 4,
-    },
+    _asdict(GeometryConfig.attention(input_dim=784, output_dim=10, hidden_dim=64)),
+    _asdict(
+        GeometryConfig.causal_transformer(
+            vocab_size=256, d_model=64, n_layers=2, n_heads=4, seq_len=32
+        )
+    ),
+    _asdict(GeometryConfig.conv(input_dim=784, output_dim=10)),
+    _asdict(
+        GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128))
+    ),
+    _asdict(
+        GeometryConfig.graph(input_dim=784, output_dim=10, edge_index=[[0, 1], [1, 0]])
+    ),
+    _asdict(GeometryConfig.nca(channels=1)),
+    _asdict(GeometryConfig.ntm(input_dim=784, output_dim=10)),
+    _asdict(GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(256,))),
+    _asdict(GeometryConfig.routing(input_dim=784, output_dim=10, hidden_dims=(256,))),
+    _asdict(GeometryConfig.spatial_lattice(input_dim=784, output_dim=10)),
+    _asdict(GeometryConfig.tile(input_dim=784, output_dim=10, num_layers=4)),
+    _asdict(GeometryConfig.tile_mesh(input_dim=784, output_dim=10, num_layers=4)),
 ]
 
 _DYNAMICS_OPTIONS: list[dict[str, object]] = [
-    {"dynamics_type": "energy_minimization", "max_steps": 20, "beta": 0.5},
-    {"dynamics_type": "predictive_settling", "max_steps": 20, "beta": 0.5},
-    {"dynamics_type": "spike_integration", "max_steps": 50, "beta": 0.5},
-    {"dynamics_type": "instantaneous", "max_steps": 1, "beta": 0.5},
-    {"dynamics_type": "diffusion", "max_steps": 100, "beta": 0.5},
+    _asdict(getattr(StateDynamicsConfig, name)())
+    for name in (
+        "diffusion",
+        "energy_minimization",
+        "error_predictive_coding",
+        "instantaneous",
+        "lazy",
+        "pc_alm",
+        "predictive_settling",
+        "spike_integration",
+    )
 ]
 
 _PLASTICITIES: list[dict[str, object]] = [
-    {"type": "null"},
-    {"type": "routing", "gate_dim": 64},
-    {
-        "type": "fast_weights",
-        "fast_weight_dim": 512,
-        "decay": 0.9,
-        "learning_rate": 0.1,
-    },
-    {"type": "substrate_coupled"},
+    _asdict(getattr(PlasticityConfig, name)())
+    for name in (
+        "conflict_adaptive",
+        "fast_weights",
+        "null",
+        "routing",
+        "rule_state",
+        "substrate_coupled",
+        "temporal_psi",
+    )
 ]
 
 _CREDITS: list[dict[str, object]] = [
-    {"credit_type": "thermodynamic_contrast", "beta": 0.5},
-    {"credit_type": "random_projections", "beta": 0.5},
-    {"credit_type": "local_goodness", "beta": 0.5},
-    {"credit_type": "temporal_trace", "beta": 0.5},
-    {"credit_type": "target_inversion", "beta": 0.5},
-    {"credit_type": "gradient", "beta": 0.5},
+    _asdict(getattr(CreditAssignmentConfig, name)())
+    for name in (
+        "eligibility_prop",
+        "forward_tangent",
+        "gradient",
+        "homeostatic",
+        "hybrid",
+        "local_contrastive",
+        "local_goodness",
+        "local_supervision",
+        "pc_alm",
+        "pepita",
+        "random_projections",
+        "rtrl_reference",
+        "score_function",
+        "surrogate",
+        "target_inversion",
+        "temporal_trace",
+        "thermodynamic_contrast",
+        "unbiased_rtrl",
+        "zeroth_order",
+    )
 ]
 
 _UPDATES: list[dict[str, object]] = [
-    {"update_type": "euclidean", "step_size": 0.01},
-    {"update_type": "adam", "step_size": 0.001},
-    {"update_type": "ortho_adam", "step_size": 0.001, "ortho_lr": 0.003},
-    {"update_type": "lion", "step_size": 0.003},
-    {"update_type": "riemannian_orthogonal", "step_size": 0.01},
-    {"update_type": "spectral_constrained", "step_size": 0.01},
-    {"update_type": "mean_norm", "step_size": 0.01},
-    {"update_type": "elastic_consolidation", "step_size": 0.01},
+    _asdict(getattr(ParameterUpdateConfig, name)())
+    for name in (
+        "adafactor",
+        "adam",
+        "bayesian_online",
+        "cascade_synapse",
+        "elastic_consolidation",
+        "euclidean",
+        "lion",
+        "local_adam",
+        "mean_norm",
+        "muon",
+        "natural_gradient",
+        "ortho_adam",
+        "quantized_adam",
+        "riemannian_orthogonal",
+        "role_split",
+        "schedule_free",
+        "spectral_constrained",
+        "synaptic_intelligence",
+        "unit_rms",
+    )
 ]
 
-# Pre-computed validation rule sets for fast filtering
-_RECURRENT_DYNAMICS = {"energy_minimization"}
-_THERMO_CREDIT_DYNAMICS = {"energy_minimization"}
-_SPIKE_INTEGRATION_CREDITS = {"temporal_trace", "target_inversion", "target_prop"}
-_TILE_MESH_DYNAMICS = {"energy_minimization", "instantaneous"}
+# Pre-computed validation rule sets for fast filtering.
+# These MUST mirror the full validators (`_validate_*`); a mismatch re-derives
+# legality from a second table, which silently drops valid combinations.
+_RECURRENT_DYNAMICS = {
+    "energy_minimization",
+    "predictive_settling",
+    "error_predictive_coding",
+    "pc_alm",
+    "diffusion",
+    "instantaneous",
+}
+_THERMO_CREDIT_DYNAMICS = {
+    "energy_minimization",
+    "predictive_settling",
+    "error_predictive_coding",
+    "lazy",
+    "pc_alm",
+}
+_SPIKE_INTEGRATION_CREDITS = {
+    "temporal_trace",
+    "spiking",
+    "target_inversion",
+    "target_prop",
+}
+# tile/tile_mesh are in NONLAYERED_GEOMETRIES, which forbids every
+# SETTLING_DYNAMICS (energy_minimization included) — only instantaneous is legal.
+_TILE_MESH_DYNAMICS = {"instantaneous"}
 _QUANTUM_DYNAMICS = {"energy_minimization", "instantaneous", "diffusion"}
 _PREDICTIVE_SETTLING_CREDITS = {
     "thermodynamic_contrast",
@@ -863,12 +943,19 @@ class SystemConfig:
                 )
 
     def _validate_local_contrastive_geometry(self) -> None:
-        """LocalContrastiveCredit (local_goodness, forward_only, pepita) requires FeedforwardGeometry."""
+        """Local credits that read a layer stack require FeedforwardGeometry.
+
+        ``LocalSupervisionCredit`` reads the Linear stack directly
+        (``_stack``), so it belongs here even though its name predates the
+        ``local_contrastive`` family — measured 2026-11-18: the planner admitted
+        ``digital/ntm/.../local_supervision/role_split`` and training failed.
+        """
         if self.credit.credit_type in {
             "local_goodness",
             "forward_only",
             "pepita",
             "local_contrastive",
+            "local_supervision",
         }:
             geom_type = getattr(self.geometry, "config", self.geometry).topology_type
             if geom_type not in {"feedforward"}:
@@ -1142,16 +1229,12 @@ class SystemConfig:
                 cred_type in _PREDICTIVE_SETTLING_CREDITS,
             ),
             (
+                # Mirror `_validate_gradient_credit_instantaneous_recurrent`:
+                # instantaneous + gradient on RECURRENT geometry only (separate
+                # output projections now include head in the forward pass, so the
+                # old output-proj rule is deliberately absent).
                 dyn_type == "instantaneous"
-                and geo_type
-                in {
-                    "attention",
-                    "causal_transformer",
-                    "spatial_lattice",
-                    "tile",
-                    "tile_mesh",
-                    "conv",
-                }
+                and geo_type == "recurrent"
                 and cred_type in {"gradient", "backprop"},
                 False,
             ),

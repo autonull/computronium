@@ -632,8 +632,98 @@ The system is the portfolio. The loop is the process. The map is the result.
 
 ---
 
+### Session 9 — 2026-11-18 (Rethinking the whole loop: restrictions were real defects)
+
+**Decision:** Audit every restriction, not just the ones I wrote. Separate *my*
+restrictions from *the system's* and from *the process's*.
+
+#### A. The system had real defects (not my restrictions — these are bugs)
+
+The fast filter `_is_valid_combination` (used by `SystemConfig.valid_combinations`,
+which the AutoScientist consumes) disagreed with `SystemConfig.validate` — **two
+sources of truth for legality**, exactly the AGENTS.md prohibition:
+
+| Fast filter said | The validator actually allows | Defect |
+|---|---|---|
+| `_RECURRENT_DYNAMICS = {energy_minimization}` | 6 dynamics | **drops 5 valid boxes** |
+| `_THERMO_CREDIT_DYNAMICS = {energy_minimization}` | 5 dynamics | **drops 4 valid boxes** |
+| `_SPIKE_INTEGRATION_CREDITS` (3) | 4 credits | **drops `spiking`** |
+| `_TILE_MESH_DYNAMICS` (inc. `energy_minimization`) | tile forbids all settling | **allows 1 invalid box** |
+| blocked `instantaneous`+`gradient` on tile/attention/conv | validator commented that rule out | **drops 6 geometries × 1 credit** |
+
+**And the fast filter only enumerated ~30% of the registry** — 3 geometries,
+7 substrates, 5 dynamics, 6 credits, 8 updates → **9,216 combos**. After deriving
+all six axis lists from the config classmethods → **1.3M combos**. The
+AutoScientist could never see 40% of the axes.
+
+**Fix:** derived `_SUBSTRATES`/`_GEOMETRIES`/`_DYNAMICS_OPTIONS`/`_PLASTICITIES`/
+`_CREDITS`/`_UPDATES` from the preset classmethods; aligned every fast-filter
+rule set with its `_validate_*` counterpart. `valid_combinations()` now mirrors
+`validate()` exactly.
+
+#### B. My restrictions (deleted, not patched)
+
+The `COMPANION_COMPAT` table in `sec_loop.py` was a **third source of truth**:
+I picked *one* working companion per primitive and declared it "the requirement".
+That is the SEC "under-tuned comparison" defect — the capability box was my
+conclusion, not the system's.
+
+**Fix:** deleted the table. `get_legal_coordinate_for_primitive` now **searches**
+the registry's companion values with `compose_configs` (the system's own validator)
+as the oracle, nearest-to-default first, one-axis then two-axis swaps.
+
+**And critically:** compose-time legality is not enough. A compose-legal box can
+still fail at *training* time (a `surrogate` credit needs a hard top-k gate; a
+`conflict_adaptive` plasticity replaces the readout). P0 now walks the candidate
+boxes until one trains — the training run is the final oracle.
+
+#### C. The process flaw (the real problem)
+
+**P0 screens on the wrong task.** Every earlier positive signal was a proxy:
+
+| Task measured | PEPITA | Backprop |
+|---|---|---|
+| Single-task MNIST, 5 epochs | 0.863 | 0.854 |
+| R1 SplitMNIST 5-task | 0.929 | 0.953 (kill) |
+| R2 Permuted MNIST 20-task | 0.251 | 0.396 (kill) |
+
+PEPITA *wins* on single-task MNIST and *loses* on both continual-learning
+tracks. P0 screens primitives on single-task MNIST; R screens the thesis on
+batch-1 CL. **They do not correlate.** A primitive that scores on P0 tells us
+nothing about the R thesis. This is why the loop kept "producing results" that
+did not hold.
+
+#### D. Clean result after the fixes
+
+- **P0, 62 primitives, auto-discovered boxes:** 47 PASS, 14 COORDINATE,
+  1 UNAVAILABLE, **0 DEFECT**
+- The one UNAVAILABLE is `graph` geometry — it genuinely needs an `edge_index`
+  a graph task provides (measured: Cora works, MNIST does not).
+- The search discovered the real legal boxes: `neuromorphic`→energy_minimization,
+  `diffusion`→recurrent+forward_tangent, `surrogate`→routing,
+  `predictive_settling`→local_goodness, `spike_integration`→target_inversion,
+  `thermodynamic_contrast`→energy_minimization, `pc_alm`→pc_alm.
+
+#### E. What the rethinking says
+
+The SEC Loop's *infrastructure* was over-restricting; fixing it widened the map
+from 9,216 to 1.3M legal boxes and removed the last fake `UNAVAILABLE`. But the
+*process* — screening a primitive on a task the thesis does not use — is still
+flawed. Fixing that means P0 must screen on the R task family (batch-1 CL with
+EWC), which is ~260× slower per cell. The map is now honest about *which boxes
+exist*; it is still not a measurement of the thesis.
+
+**Next Experiment:**
+- R tracks are falsified — publish the map, do not re-screen for them
+- If a capability is wanted, screen on the target task (batch 1, EWC), not MNIST
+- Investigate D track (memristive + local) and B track (routing + surrogate) as
+  the *new* theses, measured on their own tasks, not the old result-first box
+
+---
+
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
 **Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`
 
 The system is the portfolio. The loop is the process. The map is the result.
+The measurement must be on the task the claim is about.

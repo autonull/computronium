@@ -21,6 +21,7 @@ import torch
 from computronium.core.continual.metrics import CLConfig, CLMetrics
 from computronium.core.continual.runner import run_continual_learning
 from computronium.core.logging import get_logger
+from computronium.experiment.kernel.compose import compose_configs
 from computronium.experiment.kernel.evaluate import (
     CellEvaluation,
     EvaluationError,
@@ -372,91 +373,64 @@ P0_BATCH_LIMIT = 32
 P0_SEED = 0
 P0_HIDDEN_DIM = 128
 P0_PARAM_BUDGET = 10000
+# How many compose-legal boxes to try per primitive before declaring it cannot
+# train. Most resolve on the first (base) box; a few need a companion swap.
+P0_MAX_COORDINATES = 24
 
 
-def get_legal_coordinate_for_primitive(
-    entry: PrimitiveCensusEntry,
-    task_id: str = "mnist",
-) -> Coordinate | None:
-    """Build a minimal legal coordinate for a primitive.
-
-    Tries compatible companion axes to find a legal box.
-    Returns None if no legal box exists (mark as UNAVAILABLE).
-    """
-    # Known compatible companion axes for each primitive
-    # Format: {primitive_key: {companion_axis: value}}
-    COMPANION_COMPAT = {
-        # Substrates that need specific dynamics
-        "neuromorphic": {"dynamics": "energy_minimization"},
-        # Geometries that need specific dynamics
-        "recurrent": {"dynamics": "energy_minimization"},
-        "graph": {"dynamics": "instantaneous"},  # needs edge_index at runtime
-        # Dynamics that need specific credits
-        "predictive_settling": {"credit": "thermodynamic_contrast"},
-        "error_predictive_coding": {"credit": "thermodynamic_contrast"},
-        "spike_integration": {"credit": "target_inversion"},
-        "diffusion": {"geometry": "recurrent", "credit": "target_inversion"},
-        "pc_alm": {"credit": "thermodynamic_contrast"},
-        # Credits that need specific dynamics
-        "thermodynamic_contrast": {"dynamics": "energy_minimization"},
-        "pc_alm": {"dynamics": "energy_minimization"},  # pc_alm credit needs energy_minimization dynamics
-        # Credits that need specific geometries
-        "surrogate": {"geometry": "routing"},
-        # Routing geometry needs surrogate credit
-        "routing": {"credit": "surrogate"},
-        # Plasticity.routing needs surrogate credit
-        "routing": {"credit": "surrogate"},
-        # Conflict-adaptive plasticity replaces readout -> incompatible with gradient
-        "conflict_adaptive": None,  # Mark as UNAVAILABLE with gradient
+def _box_summary(coord: Coordinate) -> dict[str, str]:
+    """The structural axes of a screened box, for the cell log."""
+    return {
+        "substrate": coord.substrate,
+        "geometry": coord.geometry,
+        "dynamics": coord.dynamics,
+        "plasticity": coord.plasticity,
+        "credit": coord.credit,
+        "update": coord.update,
     }
 
-    # Default primitives for each axis
-    defaults = {
-        "substrate": "digital",
-        "geometry": "feedforward",
-        "dynamics": "instantaneous",
-        "plasticity": "null",
-        "credit": "gradient",
-        "update": "euclidean",
-    }
 
-    # Override with the primitive under test
-    axis_map = {
-        "substrate": "substrate",
-        "geometry": "geometry",
-        "state_dynamics": "dynamics",
-        "plasticity": "plasticity",
-        "credit_assignment": "credit",
-        "parameter_update": "update",
-    }
+_AXIS_FIELD = {
+    "substrate": "substrate",
+    "geometry": "geometry",
+    "state_dynamics": "dynamics",
+    "plasticity": "plasticity",
+    "credit_assignment": "credit",
+    "parameter_update": "update",
+}
 
-    axis = axis_map.get(entry.axis, entry.axis)
-    # Use the primitive key (from entry.id) not the display name
-    # entry.id format: "primitive.substrate.digital" -> key is "digital"
-    primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
-    defaults[axis] = primitive_key
+_AXIS_DEFAULTS = {
+    "substrate": "digital",
+    "geometry": "feedforward",
+    "dynamics": "instantaneous",
+    "plasticity": "null",
+    "credit": "gradient",
+    "update": "euclidean",
+}
 
-    # Apply companion compatibility overrides
-    if primitive_key in COMPANION_COMPAT:
-        compat = COMPANION_COMPAT[primitive_key]
-        if compat is None:
-            return None  # Explicitly incompatible
-        for comp_axis, comp_value in compat.items():
-            defaults[comp_axis] = comp_value
 
-    # Check availability
-    if not entry.available:
-        return None
+# Companion axes are enumerated from the registry, never hardcoded: a second
+# list would silently drop a primitive the system actually accepts. The
+# oracle is `compose_configs` (the system's own validator), not a table.
+def _axis_values(field: str) -> list[str]:
+    from computronium.experiment.schema.primitives import ALL_PRIMITIVES
 
-    # Build coordinate with minimal params - only set structural params that are
-    # universally required. Let the schema defaults handle geometry-specific params.
-    params: dict[str, Any] = {
-        "credit.lr": 0.01,
-        "update.lr": 0.01,
-    }
+    for axis, primitives in ALL_PRIMITIVES.items():
+        if _AXIS_FIELD.get(axis, axis) != field:
+            continue
+        default = _AXIS_DEFAULTS[field]
+        values = sorted(primitives)
+        if default in values:
+            values.remove(default)
+            values.insert(0, default)
+        return values
+    return [_AXIS_DEFAULTS[field]]
 
-    # Add geometry-specific params based on the geometry being used
-    geometry = defaults["geometry"]
+
+def _params_for(axes: dict[str, str]) -> dict[str, Any]:
+    """Structural hyperparameters a coordinate needs for the given axes."""
+    params: dict[str, Any] = {"credit.lr": 0.01, "update.lr": 0.01}
+    geometry = axes["geometry"]
     if geometry in {
         "feedforward",
         "recurrent",
@@ -471,33 +445,25 @@ def get_legal_coordinate_for_primitive(
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
     elif geometry == "nca":
-        # MNIST: 784 = 1*28*28, so use 1 channel, 28x28 grid
         params["geometry.grid_hw"] = (28, 28)
         params["geometry.input_dim"] = 1
     elif geometry == "spatial_lattice":
         params["geometry.lattice_dims"] = (8, 8)
     elif geometry == "routing":
-        # Routing geometry needs top-k gate parameters
         params["geometry.hidden_dim"] = P0_HIDDEN_DIM
         params["geometry.depth"] = 2
         params["geometry.num_experts"] = 8
         params["geometry.top_k"] = 2
-    elif geometry == "recurrent":
-        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
-        params["geometry.depth"] = 2
     elif geometry == "graph":
-        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
-        params["geometry.num_layers"] = 2
+        params["geometry.edge_index"] = [[0, 1], [1, 0]]
 
-    # Add dynamics-specific params
-    dynamics = defaults["dynamics"]
-    if dynamics == "energy_minimization":
-        params["dynamics.max_steps"] = 10
-        params["dynamics.convergence_threshold"] = 1e-3
-    elif dynamics == "predictive_settling":
-        params["dynamics.max_steps"] = 10
-        params["dynamics.step_size"] = 0.1
-    elif dynamics == "error_predictive_coding":
+    dynamics = axes["dynamics"]
+    if dynamics in {
+        "energy_minimization",
+        "predictive_settling",
+        "error_predictive_coding",
+        "pc_alm",
+    }:
         params["dynamics.max_steps"] = 10
         params["dynamics.step_size"] = 0.1
     elif dynamics == "spike_integration":
@@ -506,13 +472,8 @@ def get_legal_coordinate_for_primitive(
     elif dynamics == "diffusion":
         params["dynamics.step_size"] = 0.01
         params["dynamics.num_steps"] = 10
-    elif dynamics == "pc_alm":
-        params["dynamics.max_steps"] = 10
-        params["dynamics.step_size"] = 0.1
 
-    # Add credit-specific params for local credits
-    credit = defaults["credit"]
-    if credit in {
+    if axes["credit"] in {
         "local_supervision",
         "local_goodness",
         "local_contrastive",
@@ -527,17 +488,97 @@ def get_legal_coordinate_for_primitive(
         "surrogate",
     }:
         params["credit.feedback_scale"] = 0.01
+    return params
 
-    coord = Coordinate(
-        substrate=defaults["substrate"],
-        geometry=defaults["geometry"],
-        dynamics=defaults["dynamics"],
-        plasticity=defaults["plasticity"],
-        credit=defaults["credit"],
-        update=defaults["update"],
-        params=params,
+
+def _coordinate(axes: dict[str, str]) -> Coordinate:
+    return Coordinate(
+        substrate=axes["substrate"],
+        geometry=axes["geometry"],
+        dynamics=axes["dynamics"],
+        plasticity=axes["plasticity"],
+        credit=axes["credit"],
+        update=axes["update"],
+        params=_params_for(axes),
     )
-    return coord
+
+
+def _is_legal(coord: Coordinate) -> tuple[bool, str | None]:
+    """Ask the system's own validator whether this cell can exist."""
+    try:
+        compose_configs(
+            coordinate=coord,
+            geometry={},
+            input_shape=(1, 28, 28),
+            output_dim=10,
+        )
+        return True, None
+    except ValueError as exc:
+        return False, str(exc)
+    except Exception as exc:  # noqa: BLE001 - report, never crash the screen
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def _iter_legal_coordinates(
+    entry: PrimitiveCensusEntry,
+    limit: int = 64,
+) -> list[Coordinate]:
+    """Compose-legal boxes for a primitive, nearest-to-default first.
+
+    Base, then one-axis swaps, then two-axis swaps, deduplicated. ``compose_configs``
+    (the system's validator) is the only source of truth. Training-time contracts
+    (e.g. a surrogate credit needs a hard top-k gate) are *not* caught here — the
+    caller must still run ``evaluate_cell`` and fall through to the next candidate.
+    """
+    if not entry.available:
+        return []
+    primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
+    axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+    base = dict(_AXIS_DEFAULTS)
+    base[axis] = primitive_key
+
+    def emit(axes: dict[str, str]) -> Coordinate | None:
+        coord = _coordinate(axes)
+        ok, _ = _is_legal(coord)
+        return coord if ok else None
+
+    seen_keys: set[tuple[tuple[str, str], ...]] = set()
+    out: list[Coordinate] = []
+
+    def attempt(axes: dict[str, str]) -> None:
+        key = tuple(sorted(axes.items()))
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        coord = emit(axes)
+        if coord is not None:
+            out.append(coord)
+
+    attempt(base)
+    # Geometry and dynamics are the most common constraint axes; try them before
+    # substrate/plasticity/update so a training-time-only contract (e.g. a
+    # surrogate credit needing a hard top-k gate on `routing`) is reached while
+    # the candidate list is still short.
+    priority = ["geometry", "dynamics", "credit", "plasticity", "substrate", "update"]
+    companions = [a for a in priority if a in _AXIS_DEFAULTS and a != axis]
+    for comp in companions:
+        for value in _axis_values(comp):
+            attempt({**base, comp: value})
+    for i, first in enumerate(companions):
+        for second in companions[i + 1 :]:
+            for v1 in _axis_values(first):
+                for v2 in _axis_values(second):
+                    attempt({**base, first: v1, second: v2})
+    return out[:limit]
+
+
+def get_legal_coordinate_for_primitive(
+    entry: PrimitiveCensusEntry,
+    task_id: str = "mnist",
+) -> Coordinate | None:
+    """Nearest legal box for a primitive (compose-validated), or None."""
+    coords = _iter_legal_coordinates(entry, limit=1)
+    return coords[0] if coords else None
 
 
 def run_p0_track(
@@ -573,7 +614,8 @@ def run_p0_track(
         entries_to_screen = [
             e
             for e in census_entries
-            if e.id not in screened_primitives or e.screen_status in {"defect", "failed"}
+            if e.id not in screened_primitives
+            or e.screen_status in {"defect", "failed"}
         ]
     else:  # full
         entries_to_screen = list(census_entries)
@@ -610,80 +652,85 @@ def run_p0_track(
     for entry in entries_to_screen:
         logger.info(f"P0 screening: {entry.id}")
 
-        coord = get_legal_coordinate_for_primitive(entry)
-        if coord is None:
-            result = {
+        # Try compose-legal boxes nearest-to-default until one actually trains.
+        # A compose-legal box can still fail at training time (a surrogate credit
+        # with no hard top-k gate, a readout-replacing plasticity), so the
+        # training run is the final oracle.
+        candidates = _iter_legal_coordinates(entry, limit=P0_MAX_COORDINATES)
+        if not candidates:
+            results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": "UNAVAILABLE",
                 "reason": "no legal box or not available",
-            }
-            results.append(result)
+            })
             unavailable_count += 1
             continue
 
-        try:
-            eval_result: CellEvaluation = evaluate_cell(coord, schedule)
+        last_error: Exception | None = None
+        completed = False
+        for coord in candidates:
+            try:
+                eval_result: CellEvaluation = evaluate_cell(coord, schedule)
+            except (EvaluationError, ValueError) as exc:
+                last_error = exc
+                continue
+            except Exception as exc:  # noqa: BLE001 - one bad cell never ends the screen
+                last_error = exc
+                continue
+
             metrics = dict(eval_result.metrics)
             val_acc = metrics.get("val_acc", 0.0)
             loss = metrics.get("loss", float("inf"))
-
-            # Gate: PASS = above chance + 2σ, no crash, finite loss
             chance = 0.1  # MNIST 10-class chance
-            if (
+            above = (
                 val_acc > chance + 0.02
                 and loss < float("inf")
                 and not torch.isnan(torch.tensor(loss))
-            ):
-                status = "PASS"
+            )
+            status = "PASS" if above else "COORDINATE"
+            if above:
                 pass_count += 1
             else:
-                status = "COORDINATE"
                 coordinate_count += 1
-
-            result = {
+            results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": status,
                 "val_acc": val_acc,
                 "loss": loss,
                 "metrics": metrics,
+                "box": _box_summary(coord),
                 "walltime_s": eval_result.walltime_s,
-            }
-            results.append(result)
+            })
+            completed = True
+            break
 
-        except EvaluationError as e:
-            logger.exception(f"P0 cell failed: {entry.id}")
-            result = {
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "DEFECT",
-                "error": str(e),
-                "cause": e.cause,
-            }
-            results.append(result)
-            defect_count += 1
-        except ValueError as e:
-            # Validation errors (incompatible primitive combinations)
-            logger.warning(f"P0 validation failed: {entry.id}, error={e}")
-            result = {
+        if completed:
+            continue
+
+        # No compose-legal box trained. Distinguish a compose rejection (never
+        # should happen here — candidates are already compose-legal) from a
+        # training-time contract failure.
+        if isinstance(last_error, ValueError):
+            logger.warning(f"P0 all boxes rejected: {entry.id}, error={last_error}")
+            results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": "UNAVAILABLE",
-                "reason": f"validation: {e}",
-            }
-            results.append(result)
+                "reason": f"validation: {last_error}",
+            })
             unavailable_count += 1
-        except Exception as e:
-            # Other unexpected errors
-            logger.exception(f"P0 cell failed: {entry.id}")
-            result = {
+        else:
+            logger.exception(f"P0 every legal box failed to train: {entry.id}")
+            results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": "DEFECT",
-                "error": str(e),
-            }
-            results.append(result)
+                "error": str(last_error),
+                "cause": getattr(last_error, "cause", None),
+                "tried": len(candidates),
+            })
             defect_count += 1
 
     total = len(entries_to_screen)
@@ -945,8 +992,10 @@ def update_map(
             map_entry = map_data["primitives"][prim_id]
             map_entry["status"] = cell["status"].lower()
             map_entry["last_screened"] = datetime.now().isoformat()
-            if cell["status"] == "PASS":
-                map_entry["best_coordinate"] = {"val_acc": cell.get("val_acc", 0.0)}
+            if "box" in cell:
+                map_entry["box"] = cell["box"]
+            if cell["status"] in {"PASS", "COORDINATE"} and "val_acc" in cell:
+                map_entry["best_coordinate"] = {"val_acc": cell["val_acc"]}
             elif cell["status"] == "DEFECT":
                 map_entry["defect"] = cell.get("error", "unknown")
 
