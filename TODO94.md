@@ -1,5 +1,12 @@
 # TODO94 — SEC Loop v2: Result-First Capability Harvest
-**Status:** 2026-11-18 · **v2** — Session 11: R4 defect fixed at its one source; 128-cell gate has 0 defects and 0 uncovered (69 covered, 7 coordinates); R1's first two duplicate engines removed. Artifacts: census.json, portfolio.json, cells.jsonl, map.json.
+**Status:** 2026-11-18 · **v2** — Session 12: R1 complete (every listed rule is one
+table, projected into its planner row); R1b complete (the planner compiles every
+axis-tuple node and names the row it cannot decide); R2 measured (0 cells
+admitted by `validate()` are refused by the settle kernel); R6 complete
+(`_is_valid_combination` stub and `validate_campaign_design` NameError deleted).
+R5 (screen on the thesis task) is the one remaining item. Gate: 73 declared,
+69 covered, 4 refused by a rule, **0 uncovered, 0 defects**. Artifacts:
+census.json, portfolio.json, cells.jsonl, map.json.
 
 **Two principles**
 1. **Breadth feeds the result.** P0 exists to find candidates and defects, not to replace the real experiment.
@@ -7,17 +14,56 @@
 
 ---
 
-## Next (measured 2026-11-18, Session 11)
+## Next (measured 2026-11-18, Session 12)
 
 | # | Item | State | Next check |
 |---|---|---|---|
-| R1 | one legality table | 5 axis-value tables lifted; `valid_combinations` matrix deleted | rows still literal: attention credits, transformer pairing, the local family, `pc_alm`, NCA/NTM fast weights, nonlayered |
-| R1b | `_compile_expr` | compiles 9 of ~30 DSL nodes | add a row using `le`/`implies`, call the planner |
-| R2 | every axis `raise` is a declaration | open | `rg "raise (Value|Type)Error" computronium/ontology/{credit,dynamics,update}` |
-| R3 | scale gate | **green**: 0 defects, 0 uncovered, 69 covered | `comp coverage combinations --task iris --task mnist --task cora --budget 128 --strict` |
-| R4 | concrete defects | fixed — the `graph`+`target_inversion`/`lion` row was the nudge's ignore sentinel | `tests/property/test_masked_target_lock.py` |
-| R5 | screen on the thesis task | open | batch-1 SplitMNIST + EWC, not MNIST |
-| R6 | no second tables | five removed; one class-index form | `rg "one_hot" computronium/core computronium/ontology` |
+| R1 | one legality table | **green** — 13 rule rows, each a projection of a `system.py` table pair; the six literals are gone and the two fast-weight rows merged | `pytest tests/property/test_legality_single_source_lock.py -q` |
+| R1b | `_compile_expr` | **green** — compiles `Ne/Lt/Le/Ge/Implies`; an undecidable node fails with the row's name; every params-free VOID row compiles | `pytest tests/property/test_legality_compile_lock.py -q` |
+| R2 | every axis `raise` is a declaration | **measured** — 0 admitted (geometry × 7 settling dynamics × 6 credits) pairs lack a layer stack; the remaining 27 raises are state/config checks, not axis values | `pytest tests/property/test_settling_layer_lock.py -q` |
+| R3 | scale gate | **green**: 0 defects, 0 uncovered, 69 covered, 4 refused | `comp coverage combinations --task iris --task mnist --task cora --budget 128 --strict` |
+| R4 | concrete defects | **green** — the mask sentinel is free at `core.losses.class_one_hot` | `pytest tests/property/test_masked_target_lock.py -q` |
+| R5 | screen on the thesis task | **open — the remaining item** | P0 box must be batch-1 SplitMNIST + EWC (the R1 box), not single-task MNIST |
+| R6 | no second tables | **green** — `_is_valid_combination` (always-True stub) deleted; `validate_campaign_design` no longer reads a name it never bound | `rg "_is_valid_combination\|one_hot" computronium/core computronium/experiment computronium/ontology` |
+
+### R1 — the tables (one per rule, both sides read it)
+
+| Table (`system.py`) | Row (`seed_registries`) | Read by |
+|---|---|---|
+| `RECURRENT_DYNAMICS` | `recurrent_geometry_dynamics` | `_validate_recurrent_geometry_dynamics` |
+| `THERMO_CREDITS` / `THERMO_CREDIT_DYNAMICS` | `thermodynamic_contrast_dynamics` | `_validate_thermodynamic_contrast_dynamics` |
+| `SPIKE_INTEGRATION_CREDITS` | `spike_integration_credit` | `_validate_spike_integration_credit` |
+| `PREDICTIVE_SETTLING_CREDITS` | `predictive_settling_credit` | `_validate_predictive_settling_credit` |
+| `QUANTUM_DYNAMICS` | `quantum_substrate_dynamics` | `_validate_quantum_substrate_dynamics` |
+| `LOCAL_STACK_CREDITS` / `LOCAL_STACK_GEOMETRIES` | `local_contrastive_geometry` | `_validate_local_contrastive_geometry` |
+| `ATTENTION_INCOMPATIBLE_CREDITS` | `attention_geometry_compatibility` | `_validate_attention_geometry_compatibility` |
+| `TRANSFORMER_UNPAIRED_CREDITS` | `transformer_pairing_credit` | `_validate_transformer_pairing_credit` |
+| `PC_ALM_CREDITS` / `PC_ALM_GEOMETRIES` | `pc_alm_dynamics` | `_validate_pc_alm_dynamics` |
+| `PC_ALM_DUAL_CREDITS` / `PC_ALM_CREDIT_DYNAMICS` | `pc_alm_credit_dynamics` | none — declared only (see below) |
+| `NO_FAST_WEIGHT_GEOMETRIES` | `fast_weight_plasticity_geometry` (was two rows) | `_validate_fast_weight_plasticity_geometry` |
+| `NONLAYERED_GEOMETRIES` / `SETTLING_DYNAMICS` | `nonlayered_geometry_dynamics` | `_validate_nonlayered_geometry_dynamics` |
+| `NCA_CELL_MODE_CREDITS` | `nca_instantaneous_<credit>` | `_validate_nca_cell_mode_credits` |
+
+**Two dead declarations, recorded, not fixed:**
+- `pc_alm_credit_dynamics` has no runtime validator. Adding one refuses every
+  `pc_alm` credit under other dynamics, which makes the NCA row's `pc_alm`
+  member unreachable: `pc_alm` credit then needs `pc_alm` dynamics, and an NCA
+  refuses every settling dynamic. One of the two rows must own the refusal; the
+  next session decides, then deletes the loser.
+- `NO_FAST_WEIGHT_GEOMETRIES`'s `tile`/`tile_mesh` members cannot fire: tile
+  refuses every settling dynamic and instantaneous dynamics refuses fast
+  weights. The fixture pins the reachable refusal by name; the members stay as
+  the measured capability fact.
+
+### R2 — the 27 `raise (Value|Type)Error` sites, classified
+
+| Class | Sites | Verdict |
+|---|---|---|
+| axis value → geometry form | `energy_minimization`, `pc_alm`, `ePC`, `local_supervision`, `hybrid`, `surrogate`, `temporal` | declared: each has a table or a capability row; the layer ones are covered by `NONLAYERED_GEOMETRIES` |
+| geometry state (block view, `settle_blocks`) | tile settling | runtime state check, not an axis value |
+| config/state shape (`feedback_matrix`, dual-vars counter) | credit internals | runtime, decided once the config is composed |
+| missing input (`State must contain input 'x'`) | dynamics | runtime protocol check |
+| RL/task contract (`role_split` spec) | update | config check |
 
 **Known red, not this plan:** the property suite carries ~35 pre-existing
 failures — gallery provenance digests, README build, banned phrases in
@@ -869,3 +915,83 @@ not defects.
 - **R2 (remaining):** the `core/local_learning` and `core/plasticity` lanes
   still build their own one-hot; bind them to `class_one_hot`.
 - **R5:** screen on the thesis task (batch 1, EWC, SplitMNIST), not MNIST.
+
+---
+
+### Session 12 — 2026-11-18 (R1/R1b closed; R2 measured; R6 closed)
+
+**Decision:** the six rows Session 11 left literal — can each become a table the
+runtime validator and the planner row both read? And does the planner's compiler
+decide every node a declared row may use? Two actions: (a) lift the six rules
+into `system.py` tables and rewire both sides, (b) complete `_compile_expr` and
+make its failure name the row. Error costs: a missed literal is the same rule
+stated twice, so a later table edit silently disables one side; a missed node is
+a planner crash whose message names a Python type, not a rule. Stop when the
+lock's parametrized table check and the gate are green.
+
+**Experiment:**
+1. `pytest tests/property/test_legality_single_source_lock.py -q` — 12 rule
+   cases × every axis candidate (18 tests, 10.4 s).
+2. `pytest tests/property/test_legality_compile_lock.py -q` — 10 tests, 10.1 s.
+3. `pytest tests/property/test_settling_layer_lock.py -q` — 3 tests, 9.1 s.
+4. `pytest tests/property/test_width_contract_lock.py -q` — 15 tests, 10.6 s.
+5. `comp coverage combinations --task iris --task mnist --task cora
+   --budget 128 --strict` — exit 0.
+
+**Box:** 3 tasks (iris, mnist, cora), the greedy cover at budget 128, 1 epoch,
+1 batch, seed 0, CPU, param budget 50k. No training-knob change: this session
+edits declarations only.
+
+**Rung / stop:** rung 0 (wiring) for R1/R1b/R6; the scale smoke for R2.
+Stop = the gate verdict lands.
+
+**Result:** gate `73 declared, 69 covered, 4 refused by a rule, 0 uncovered`;
+`3,048,192 declared cells probed in 10.4 s; 18 admitted cells trained in 35.4 s`
+(exit 0). 18 + 10 + 3 + 15 tests green, plus 64 across the touched locks. R2
+probe: 11 geometries × 7 settling dynamics × 6 credits (462 compositions),
+**0** admitted by `validate()` on a geometry the settle kernel cannot layer.
+
+**Triage:**
+- **R1/R1b/R6 — fixed.** The rows read `system.py` tables; the compiler decides
+  the comparison/logical nodes; `_is_valid_combination` (an always-`True` stub)
+  and `validate_campaign_design`'s unbound `invalid_combos` are gone. The second
+  was a live `NameError` on the campaign CLI path, not a dead branch.
+- **R2 — coordinate, with two dead declarations named.** Every remaining raise
+  is a state/config check, not an axis value. Two declared rows can never fire
+  (see the Next table); one of them must own the NCA-`pc_alm` refusal.
+- **R5 — the one open item.** No number moved, by design: the map still
+  measures single-task MNIST while the thesis lives at batch 1.
+
+**Fixes Applied:**
+- `computronium/ontology/system.py` — 10 new tables (`LOCAL_STACK_CREDITS`,
+  `LOCAL_STACK_GEOMETRIES`, `ATTENTION_INCOMPATIBLE_CREDITS`,
+  `TRANSFORMER_UNPAIRED_CREDITS`, `PC_ALM_CREDITS`, `PC_ALM_GEOMETRIES`,
+  `PC_ALM_DUAL_CREDITS`, `PC_ALM_CREDIT_DYNAMICS`,
+  `NO_FAST_WEIGHT_GEOMETRIES`, `THERMO_CREDITS`); five validators now read
+  them; the two fast-weight validators merge into one.
+- `computronium/experiment/schema/seed_registries.py` — seven rows rewritten as
+  projections of those tables; two fast-weight rows merge into
+  `fast_weight_plasticity_geometry`.
+- `computronium/experiment/kernel/search_space.py` — `_compile_expr` handles
+  `Ne/Lt/Le/Ge/Implies`; an undecidable node names its constraint.
+- `computronium/experiment/execution/adaptive_budget.py`,
+  `computronium/experiment/design/campaign_dsl.py` — the always-`True` legality
+  stub and the `invalid_combos` `NameError` are deleted.
+- Locks extended: the single-source lock's 12-case table projection; the new
+  compile lock; the new settling-layer lock; the width-contract fast-weight
+  fixture split into reachable (nca/ntm) and named-refusal (tile/tile_mesh).
+
+**Next Experiment (R5 — the only open item):**
+```
+# The R5 deliverable is one edit: move the P0 box onto the R1 box.
+#   sec_loop.py `_iter_legal_coordinates` builds from `_AXIS_DEFAULTS` and the
+#   `task_id="mnist"` default of `get_legal_coordinate_for_primitive`; R1 is
+#   SplitMNIST, batch 1, EWC (`run_r1_track(out_dir, census, device)`).
+# 1. measure one cell at the R1 box: its cost prices the rung (2x watchdog).
+uv run python -c "from pathlib import Path; from computronium.experiment.sec_loop import run_r1_track; print(run_r1_track(Path('results/sec'), [], device='cpu'))"
+# 2. P0 delta against that box (unscreened/defect/changed rows only).
+uv run python -m computronium.experiment.sec_loop --track P0 --breadth delta --out results/sec
+```
+No `--task/--batch/--epochs` flags exist; the box is the module constant and
+the `task_id` default. A P0 pass earns P1 at 3 seeds — no 1-seed surprise.
+Decide the two dead declarations above before adding a table.

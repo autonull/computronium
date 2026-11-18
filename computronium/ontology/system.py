@@ -316,6 +316,10 @@ RECURRENT_DYNAMICS: Final[frozenset[str]] = frozenset({
     "diffusion",
     "instantaneous",
 })
+THERMO_CREDITS: Final[frozenset[str]] = frozenset({
+    "thermodynamic_contrast",
+    "equilibrium",
+})
 THERMO_CREDIT_DYNAMICS: Final[frozenset[str]] = frozenset({
     "energy_minimization",
     "predictive_settling",
@@ -340,13 +344,72 @@ PREDICTIVE_SETTLING_CREDITS: Final[frozenset[str]] = frozenset({
     "local_goodness",
     "forward_only",
 })
+# Credits that read a dense ``Linear`` stack directly (``_stack``). The local
+# family, plus ``local_supervision`` whose name predates it. Their only legal
+# geometry is ``LOCAL_STACK_GEOMETRIES``.
+LOCAL_STACK_CREDITS: Final[frozenset[str]] = frozenset({
+    "local_goodness",
+    "forward_only",
+    "pepita",
+    "local_contrastive",
+    "local_supervision",
+})
+LOCAL_STACK_GEOMETRIES: Final[frozenset[str]] = frozenset({"feedforward"})
+# Credits that pair each weight with the act it *produces* (target
+# propagation's transpose feedback, STDP's correlation). The causal
+# transformer's chain carries inputs only, so these have no partner act there.
+TRANSFORMER_UNPAIRED_CREDITS: Final[frozenset[str]] = frozenset({
+    "target_inversion",
+    "temporal_trace",
+})
+# Credits whose per-head form the multi-head attention mix breaks (measured
+# shape mismatch, TODO89).
+ATTENTION_INCOMPATIBLE_CREDITS: Final[frozenset[str]] = frozenset({
+    "pepita",
+    "local_goodness",
+    "local_contrastive",
+    "forward_only",
+})
+# PC-ALM's dual/ALM settle runs over these credits and layer stacks.
+PC_ALM_CREDITS: Final[frozenset[str]] = frozenset({
+    "pc_alm",
+    "thermodynamic_contrast",
+})
+PC_ALM_GEOMETRIES: Final[frozenset[str]] = frozenset({
+    "feedforward",
+    "recurrent",
+    "tile_mesh",
+})
+# The PC-ALM credit reads ``dual_vars``, which only ``pc_alm`` dynamics
+# writes; with any other dynamics it degenerates to a zero update.
+PC_ALM_DUAL_CREDITS: Final[frozenset[str]] = frozenset({"pc_alm"})
+PC_ALM_CREDIT_DYNAMICS: Final[frozenset[str]] = frozenset({"pc_alm"})
+# Fast-weight plasticity modulates per-sample activations ``[B, fw_dim]``;
+# these geometries give per-cell (nca/ntm) or tiled (tile/tile_mesh)
+# activations instead.
+NO_FAST_WEIGHT_GEOMETRIES: Final[frozenset[str]] = frozenset({
+    "nca",
+    "ntm",
+    "tile",
+    "tile_mesh",
+})
 
 __all__ = [
+    "ATTENTION_INCOMPATIBLE_CREDITS",
+    "LOCAL_STACK_CREDITS",
+    "LOCAL_STACK_GEOMETRIES",
+    "NO_FAST_WEIGHT_GEOMETRIES",
+    "PC_ALM_CREDITS",
+    "PC_ALM_CREDIT_DYNAMICS",
+    "PC_ALM_DUAL_CREDITS",
+    "PC_ALM_GEOMETRIES",
     "PREDICTIVE_SETTLING_CREDITS",
     "QUANTUM_DYNAMICS",
     "RECURRENT_DYNAMICS",
     "SPIKE_INTEGRATION_CREDITS",
+    "THERMO_CREDITS",
     "THERMO_CREDIT_DYNAMICS",
+    "TRANSFORMER_UNPAIRED_CREDITS",
     "ModelAdapter",
     "Phase",
     "System",
@@ -409,8 +472,7 @@ class SystemConfig:
         self._validate_nca_cell_mode_credits()
 
         # Geometry-Plasticity compatibility
-        self._validate_nca_ntm_fast_weight_plasticity()
-        self._validate_tile_fast_weight_plasticity()
+        self._validate_fast_weight_plasticity_geometry()
 
         # Credit-Geometry compatibility
         self._validate_local_contrastive_geometry()
@@ -578,22 +640,21 @@ class SystemConfig:
         )
 
     def _validate_pc_alm_dynamics(self) -> None:
-        """PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast) and layered geometry."""
-        if self.dynamics.dynamics_type == "pc_alm":
-            self._require_when(
-                condition=True,
-                allowed_values={"pc_alm", "thermodynamic_contrast"},
-                axis_name="credit.credit_type",
-                actual_value=self.credit.credit_type,
-                context="PC-ALM dynamics",
-            )
-            self._require_when(
-                condition=True,
-                allowed_values={"feedforward", "recurrent", "tile_mesh"},
-                axis_name="geometry.topology_type",
-                actual_value=self.geometry.topology_type,
-                context="PC-ALM dynamics requires layered geometry",
-            )
+        """PC-ALM dynamics requires its credit family and a layered geometry."""
+        self._require_when(
+            condition=self.dynamics.dynamics_type == "pc_alm",
+            allowed_values=PC_ALM_CREDITS,
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context="PC-ALM dynamics",
+        )
+        self._require_when(
+            condition=self.dynamics.dynamics_type == "pc_alm",
+            allowed_values=PC_ALM_GEOMETRIES,
+            axis_name="geometry.topology_type",
+            actual_value=self.geometry.topology_type,
+            context="PC-ALM dynamics requires layered geometry",
+        )
 
     def _validate_residual_connections(self) -> None:
         """Residual connections only supported on feedforward geometry."""
@@ -618,32 +679,28 @@ class SystemConfig:
                 f"{self.credit.credit_type} credit (cell-mode activations)"
             )
 
-    def _validate_nca_ntm_fast_weight_plasticity(self) -> None:
-        """NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity."""
-        if self.geometry.topology_type in {"nca", "ntm"}:
-            if self.plasticity.plasticity_type == "fast_weights":
-                raise ValueError(
-                    f"{self.geometry.topology_type.upper()} geometry has per-cell activations "
-                    f"incompatible with fast-weight plasticity (plasticity_type={self.plasticity.plasticity_type!r})"
-                )
-
-    def _validate_tile_fast_weight_plasticity(self) -> None:
-        """Tile/tile_mesh geometries with fast_weights require layout-aware modulation."""
-        if self.geometry.topology_type in {"tile", "tile_mesh"}:
-            if self.plasticity.plasticity_type == "fast_weights":
-                raise ValueError(
-                    f"{self.geometry.topology_type} geometry with fast-weight plasticity "
-                    f"requires layout-aware modulation (not yet supported)"
-                )
+    def _validate_fast_weight_plasticity_geometry(self) -> None:
+        """Fast-weight plasticity needs per-sample activations these geometries lack."""
+        self._forbid_when(
+            condition=self.geometry.topology_type in NO_FAST_WEIGHT_GEOMETRIES,
+            forbidden_values={"fast_weights"},
+            axis_name="plasticity.plasticity_type",
+            actual_value=self.plasticity.plasticity_type,
+            context=(
+                f"{self.geometry.topology_type!r} geometry gives per-cell or "
+                "tiled activations, not per-sample"
+            ),
+        )
 
     def _validate_thermodynamic_contrast_dynamics(self) -> None:
         """Thermodynamic contrast credit requires energy-based or PC-family dynamics."""
-        if self.credit.credit_type in {"thermodynamic_contrast", "equilibrium"}:
-            if self.dynamics.dynamics_type not in THERMO_CREDIT_DYNAMICS:
-                raise ValueError(
-                    f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "
-                    f"requires energy-based or PC-family dynamics, got {self.dynamics.dynamics_type!r}"
-                )
+        self._require_when(
+            condition=self.credit.credit_type in THERMO_CREDITS,
+            allowed_values=THERMO_CREDIT_DYNAMICS,
+            axis_name="dynamics.dynamics_type",
+            actual_value=self.dynamics.dynamics_type,
+            context=f"{self.credit.credit_type!r} credit reads an energy settle",
+        )
 
     # --- Beta Matching (Soft Constraints) ---
 
@@ -778,26 +835,15 @@ class SystemConfig:
                 )
 
     def _validate_local_contrastive_geometry(self) -> None:
-        """Local credits that read a layer stack require FeedforwardGeometry.
-
-        ``LocalSupervisionCredit`` reads the Linear stack directly
-        (``_stack``), so it belongs here even though its name predates the
-        ``local_contrastive`` family — measured 2026-11-18: the planner admitted
-        ``digital/ntm/.../local_supervision/role_split`` and training failed.
-        """
-        if self.credit.credit_type in {
-            "local_goodness",
-            "forward_only",
-            "pepita",
-            "local_contrastive",
-            "local_supervision",
-        }:
-            geom_type = getattr(self.geometry, "config", self.geometry).topology_type
-            if geom_type not in {"feedforward"}:
-                raise ValueError(
-                    f"LocalContrastiveCredit (credit_type={self.credit.credit_type!r}) "
-                    f"requires feedforward geometry, got {geom_type!r}"
-                )
+        """Credits that read a dense ``Linear`` stack require feedforward geometry."""
+        geom_type = getattr(self.geometry, "config", self.geometry).topology_type
+        self._require_when(
+            condition=self.credit.credit_type in LOCAL_STACK_CREDITS,
+            allowed_values=LOCAL_STACK_GEOMETRIES,
+            axis_name="geometry.topology_type",
+            actual_value=geom_type,
+            context=f"{self.credit.credit_type!r} credit reads the layer stack",
+        )
 
     def _validate_hybrid_geometry(self) -> None:
         """The hybrid's split is a dense stack boundary; refuse other shapes."""
@@ -811,20 +857,15 @@ class SystemConfig:
             )
 
     def _validate_attention_geometry_compatibility(self) -> None:
-        """Attention geometry has specific credit/update compatibility requirements."""
+        """Attention geometry refuses the credits whose per-head shape it breaks."""
         geom_type = getattr(self.geometry, "config", self.geometry).topology_type
-        if geom_type == "attention":
-            # PEPITA and local_goodness credits have known shape issues with attention
-            if self.credit.credit_type in {
-                "pepita",
-                "local_goodness",
-                "local_contrastive",
-                "forward_only",
-            }:
-                raise ValueError(
-                    f"Attention geometry incompatible with {self.credit.credit_type!r} credit "
-                    f"(known shape mismatch in multi-head attention)"
-                )
+        self._forbid_when(
+            condition=geom_type == "attention",
+            forbidden_values=ATTENTION_INCOMPATIBLE_CREDITS,
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context="known shape mismatch in multi-head attention",
+        )
 
     def _validate_transformer_pairing_credit(self) -> None:
         """Credits that pair a weight with the act it produces need a chain
@@ -839,15 +880,16 @@ class SystemConfig:
         the coordinate cannot train. Reject it here rather than let it
         crash on a shape mismatch mid-epoch.
         """
-        if self.credit.credit_type not in {"target_inversion", "temporal_trace"}:
+        if self.credit.credit_type not in TRANSFORMER_UNPAIRED_CREDITS:
             return
         geom_type = getattr(self.geometry, "config", self.geometry).topology_type
-        if geom_type == "causal_transformer":
-            raise ValueError(
-                f"{self.credit.credit_type!r} credit requires a geometry whose "
-                "activation chain pairs each weight with the act it produces; "
-                "the causal_transformer chain carries inputs only"
-            )
+        self._forbid_when(
+            condition=geom_type == "causal_transformer",
+            forbidden_values=TRANSFORMER_UNPAIRED_CREDITS,
+            axis_name="credit.credit_type",
+            actual_value=self.credit.credit_type,
+            context="the causal_transformer chain carries inputs only",
+        )
 
     def _validate_temporal_credit_sequence(self) -> None:
         """A temporal credit reads a time-major state; the geometry owns the axis.

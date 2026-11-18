@@ -322,35 +322,37 @@ def test_fast_weights_modulate_feature_truncate_pad() -> None:
     assert all(m.shape == a.shape for m, a in zip(modulated, activations))
 
 
-def test_void_constraint_removal_regression_nca_ntm() -> None:
-    """If the nca_ntm_fast_weight_plasticity validation is removed from SystemConfig.validate, the fixture must fail.
+@pytest.mark.parametrize(
+    ("geometry", "dynamics", "credit", "update"),
+    [
+        ("nca", "instantaneous", "temporal_trace", "adam"),
+        ("ntm", "instantaneous", "temporal_trace", "adam"),
+    ],
+)
+def test_void_constraint_removal_regression_fast_weights(
+    geometry: str, dynamics: str, credit: str, update: str
+) -> None:
+    """The fast-weight geometry rule is one declaration, and the lock is not a comment.
 
-    This test verifies the lock is not a comment (TODO46 D25).
-    It uses temporal_trace credit (not checked by dry-run gate, compatible with NCA+instantaneous)
-    and temporarily patches the validation method to always pass
-    AND removes the void constraint, then asserts the search space
-    then includes NCA+fast_weights for digits.
+    It removes the void row AND patches the matching runtime validator to a
+    no-op, then asserts the space admits the cell. If either copy returns, the
+    fixture passes on a coordinate the rule refuses, and this test fails
+    (TODO46 D25).
     """
     from computronium.experiment.schema.seed_registries import CONSTRAINTS_REGISTRY
     from computronium.ontology.system import SystemConfig
 
-    # Save originals
-    original_validate = SystemConfig._validate_nca_ntm_fast_weight_plasticity
-    original_constraint = None
-    for c in CONSTRAINTS_REGISTRY:
-        if c.name == "nca_ntm_fast_weight_plasticity":
-            original_constraint = c
-            break
+    rule = "fast_weight_plasticity_geometry"
+    original_validate = SystemConfig._validate_fast_weight_plasticity_geometry
+    original_constraint = CONSTRAINTS_REGISTRY.get(rule)
 
     def no_op_validate(self) -> None:
-        return None  # Always pass
+        return None
 
     try:
-        # Remove void constraint
         if original_constraint is not None:
-            CONSTRAINTS_REGISTRY.unregister(original_constraint.name)
-        # Patch validation
-        SystemConfig._validate_nca_ntm_fast_weight_plasticity = no_op_validate
+            CONSTRAINTS_REGISTRY.unregister(rule)
+        SystemConfig._validate_fast_weight_plasticity_geometry = no_op_validate
 
         from computronium.experiment.kernel import (
             search_space as search_space_module,
@@ -359,25 +361,22 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         search_space_module._composable_cache.clear()
         search_space_module._filter_axes_cache.clear()
 
-        # Use temporal_trace credit with instantaneous dynamics
-        # to bypass the dry-run gate (which only runs for random_projections/gradient)
-        # and satisfy NCA's instantaneous dynamics requirement
         coord = Coordinate(
             substrate="digital",
-            geometry="nca",
-            dynamics="instantaneous",
+            geometry=geometry,
+            dynamics=dynamics,
             plasticity="fast_weights",
-            credit="temporal_trace",
-            update="adam",
+            credit=credit,
+            update=update,
             params={},
         )
         result = _composable(coord, "digits", task_shape, 50000)
         assert result is True, (
-            "Lock broken: removing _validate_nca_ntm_fast_weight_plasticity "
-            "must make NCA+fast_weights pass for digits"
+            f"Lock broken: removing the fast-weight rule must make "
+            f"{geometry}+fast_weights pass for digits"
         )
     finally:
-        SystemConfig._validate_nca_ntm_fast_weight_plasticity = original_validate
+        SystemConfig._validate_fast_weight_plasticity_geometry = original_validate
         if original_constraint is not None:
             CONSTRAINTS_REGISTRY.register(original_constraint)
         from computronium.experiment.kernel import (
@@ -388,69 +387,25 @@ def test_void_constraint_removal_regression_nca_ntm() -> None:
         search_space_module._filter_axes_cache.clear()
 
 
-def test_void_constraint_removal_regression_tile() -> None:
-    """If the tile_fast_weight_plasticity validation is removed from SystemConfig.validate, the fixture must fail.
+@pytest.mark.parametrize("geometry", ["tile", "tile_mesh"])
+def test_tile_fast_weights_is_refused_by_a_named_rule(geometry: str) -> None:
+    """tile/tile_mesh cannot reach fast weights: two rules refuse it first.
 
-    This test verifies the lock is not a comment (TODO46 D25).
-    It uses thermodynamic_contrast credit (not checked by dry-run gate)
-    and temporarily patches the validation method to always pass
-    AND removes the void constraint, then asserts the search space
-    then includes Tile+fast_weights for digits.
+    The fast-weight geometry rule names them too, but no coordinate can test
+    that clause alone — a tile refuses every settling dynamic and
+    instantaneous dynamics refuses fast weights — so the fixture pins the
+    reachable refusal and its name instead of a clause that can never fire.
     """
-    from computronium.experiment.schema.seed_registries import CONSTRAINTS_REGISTRY
-    from computronium.ontology.system import SystemConfig
-
-    # Save originals
-    original_validate = SystemConfig._validate_tile_fast_weight_plasticity
-    original_constraint = None
-    for c in CONSTRAINTS_REGISTRY:
-        if c.name == "tile_fast_weight_plasticity":
-            original_constraint = c
-            break
-
-    def no_op_validate(self) -> None:
-        return None  # Always pass
-
-    try:
-        # Remove void constraint
-        if original_constraint is not None:
-            CONSTRAINTS_REGISTRY.unregister(original_constraint.name)
-        # Patch validation
-        SystemConfig._validate_tile_fast_weight_plasticity = no_op_validate
-
-        from computronium.experiment.kernel import (
-            search_space as search_space_module,
-        )
-
-        search_space_module._composable_cache.clear()
-        search_space_module._filter_axes_cache.clear()
-
-        # Use thermodynamic_contrast credit with energy_minimization dynamics
-        # to bypass the dry-run gate (which only runs for random_projections/gradient)
-        coord = Coordinate(
-            substrate="digital",
-            geometry="tile",
-            dynamics="energy_minimization",
-            plasticity="fast_weights",
-            credit="thermodynamic_contrast",
-            update="euclidean",
-            params={},
-        )
-        result = _composable(coord, "digits", task_shape, 50000)
-        assert result is True, (
-            "Lock broken: removing _validate_tile_fast_weight_plasticity "
-            "must make Tile+fast_weights pass for digits"
-        )
-    finally:
-        SystemConfig._validate_tile_fast_weight_plasticity = original_validate
-        if original_constraint is not None:
-            CONSTRAINTS_REGISTRY.register(original_constraint)
-        from computronium.experiment.kernel import (
-            search_space as search_space_module,
-        )
-
-        search_space_module._composable_cache.clear()
-        search_space_module._filter_axes_cache.clear()
+    coord = Coordinate(
+        substrate="digital",
+        geometry=geometry,
+        dynamics="instantaneous",
+        plasticity="fast_weights",
+        credit="gradient",
+        update="adam",
+        params={},
+    )
+    assert _composable(coord, "digits", task_shape, 50000) is False
 
 
 def test_fast_weights_with_compatible_geometry_accepted() -> None:

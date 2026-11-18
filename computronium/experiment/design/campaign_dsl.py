@@ -1012,33 +1012,14 @@ class DesignValidationResult:
 
 
 def validate_campaign_design(campaign: CampaignDSL) -> DesignValidationResult:
-    """Comprehensive design validation."""
-    from computronium.experiment.execution.adaptive_budget import _is_valid_combination
-
+    """Comprehensive design validation. Legality is compose-time, not here."""
     errors = []
     warnings = campaign.validate_design()
 
     design_matrix = campaign.design.generate_design_matrix()
     design_matrix_size = len(design_matrix)
 
-    invalid_combos = []
-    for row in design_matrix:
-        if not _is_valid_combination(
-            substrate=row.get("substrate", "digital"),
-            geometry=row.get("geometry", "feedforward"),
-            dynamics=row.get("dynamics", "energy_minimization"),
-            credit=row.get("credit", "gradient"),
-            update=row.get("update", "adam"),
-            plasticity=row.get("plasticity", "null"),
-        ):
-            invalid_combos.append(row)
-
-    if invalid_combos:
-        warnings.append(
-            f"{len(invalid_combos)} invalid combinations will be filtered at runtime"
-        )
-
-    n_cells = design_matrix_size - len(invalid_combos)
+    n_cells = design_matrix_size
     n_trials = campaign.hpo.n_trials
     n_seeds = campaign.hpo.n_seeds
     epochs = (

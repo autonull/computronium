@@ -6,24 +6,6 @@ from pathlib import Path
 from typing import Any
 
 
-def _is_valid_combination(
-    substrate: str,
-    geometry: str,
-    dynamics: str,
-    credit: str,
-    update: str,
-    plasticity: str,
-) -> bool:
-    """Check if a 6-axis combination is valid.
-
-    Legality has exactly one source: SystemConfig.validate reached through
-    _composable / compose_configs. This function is kept for backward
-    compatibility with campaign_dsl validation warnings but always returns True.
-    The constraint engine handles legality at runtime.
-    """
-    return True
-
-
 class BudgetStrategy(Enum):
     """Campaign strategy profiles."""
 

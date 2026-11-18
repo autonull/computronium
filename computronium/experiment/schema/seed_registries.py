@@ -71,14 +71,24 @@ from computronium.experiment.schema.registries import (
     register_stage,
 )
 from computronium.ontology.system import (
+    ATTENTION_INCOMPATIBLE_CREDITS,
+    LOCAL_STACK_CREDITS,
+    LOCAL_STACK_GEOMETRIES,
     NCA_CELL_MODE_CREDITS,
+    NO_FAST_WEIGHT_GEOMETRIES,
     NONLAYERED_GEOMETRIES,
+    PC_ALM_CREDIT_DYNAMICS,
+    PC_ALM_CREDITS,
+    PC_ALM_DUAL_CREDITS,
+    PC_ALM_GEOMETRIES,
     PREDICTIVE_SETTLING_CREDITS,
     QUANTUM_DYNAMICS,
     RECURRENT_DYNAMICS,
     SETTLING_DYNAMICS,
     SPIKE_INTEGRATION_CREDITS,
     THERMO_CREDIT_DYNAMICS,
+    THERMO_CREDITS,
+    TRANSFORMER_UNPAIRED_CREDITS,
 )
 
 # =============================================================================
@@ -1282,30 +1292,21 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Geometry-Plasticity: NCA/NTM geometries incompatible with fast-weight plasticity
-    # (NCA has per-cell activations [B*H*W, C], fast_weights expects per-sample [B, fw_dim])
+    # Geometry-Plasticity: fast-weight plasticity needs per-sample activations;
+    # nca/ntm give per-cell and tile/tile_mesh give tiled activations. The
+    # geometry set is the ontology's declared table, so the runtime refusal and
+    # this row cannot disagree.
     ConstraintSpec(
-        name="nca_ntm_fast_weight_plasticity",
+        name="fast_weight_plasticity_geometry",
         kind=ConstraintKind.VOID,
-        description="NCA/NTM geometries have per-cell activations incompatible with fast-weight plasticity",
-        predicate=not_(
-            and_(
-                in_(var("geometry"), const(["nca", "ntm"])),
-                eq(var("plasticity"), const("fast_weights")),
-            )
+        description=(
+            "Fast-weight plasticity needs per-sample activations; "
+            + ", ".join(sorted(NO_FAST_WEIGHT_GEOMETRIES))
+            + " geometries have per-cell or tiled activations instead"
         ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
-    # Geometry-Plasticity: tile/tile_mesh geometries with fast_weights need layout awareness
-    # (fast_weights modulation uses geometry layout for feature matching)
-    ConstraintSpec(
-        name="tile_fast_weight_plasticity",
-        kind=ConstraintKind.VOID,
-        description="Tile geometries with fast_weights require layout-aware modulation",
         predicate=not_(
             and_(
-                in_(var("geometry"), const(["tile", "tile_mesh"])),
+                in_(var("geometry"), const(sorted(NO_FAST_WEIGHT_GEOMETRIES))),
                 eq(var("plasticity"), const("fast_weights")),
             )
         ),
@@ -1421,19 +1422,26 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Dynamics-Credit-Geometry: pc_alm needs pc_alm/thermodynamic_contrast credit AND layered geometry
+    # Dynamics-Credit-Geometry: pc_alm needs its credit family AND a layered
+    # geometry. Both sets are the tables ``SystemConfig.validate`` reads.
     ConstraintSpec(
         name="pc_alm_dynamics",
         kind=ConstraintKind.VOID,
-        description="PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit and layered geometry",
+        description=(
+            "PC-ALM dynamics requires one of "
+            + ", ".join(sorted(PC_ALM_CREDITS))
+            + " credit and one of "
+            + ", ".join(sorted(PC_ALM_GEOMETRIES))
+            + " geometry"
+        ),
         predicate=and_(
             or_(
                 not_(eq(var("dynamics"), const("pc_alm"))),
-                in_(var("credit"), const(["pc_alm", "thermodynamic_contrast"])),
+                in_(var("credit"), const(sorted(PC_ALM_CREDITS))),
             ),
             or_(
                 not_(eq(var("dynamics"), const("pc_alm"))),
-                in_(var("geometry"), const(["feedforward", "recurrent", "tile_mesh"])),
+                in_(var("geometry"), const(sorted(PC_ALM_GEOMETRIES))),
             ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
@@ -1523,9 +1531,15 @@ CONSTRAINTS = [
     ConstraintSpec(
         name="thermodynamic_contrast_dynamics",
         kind=ConstraintKind.VOID,
-        description="Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics",
+        description=(
+            "Thermodynamic contrast/equilibrium credit ("
+            + ", ".join(sorted(THERMO_CREDITS))
+            + ") requires one of "
+            + ", ".join(sorted(THERMO_CREDIT_DYNAMICS))
+            + " dynamics"
+        ),
         predicate=or_(
-            not_(in_(var("credit"), const(["thermodynamic_contrast", "equilibrium"]))),
+            not_in(var("credit"), const(sorted(THERMO_CREDITS))),
             in_(var("dynamics"), const(sorted(THERMO_CREDIT_DYNAMICS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
@@ -1537,10 +1551,16 @@ CONSTRAINTS = [
     ConstraintSpec(
         name="pc_alm_credit_dynamics",
         kind=ConstraintKind.VOID,
-        description="PC-ALM credit requires pc_alm dynamics (the dual-variables carrier)",
+        description=(
+            "PC-ALM credit ("
+            + ", ".join(sorted(PC_ALM_DUAL_CREDITS))
+            + ") requires one of "
+            + ", ".join(sorted(PC_ALM_CREDIT_DYNAMICS))
+            + " dynamics (the dual-variables carrier)"
+        ),
         predicate=or_(
-            not_(eq(var("credit"), const("pc_alm"))),
-            eq(var("dynamics"), const("pc_alm")),
+            not_in(var("credit"), const(sorted(PC_ALM_DUAL_CREDITS))),
+            in_(var("dynamics"), const(sorted(PC_ALM_CREDIT_DYNAMICS))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1638,25 +1658,22 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Credit-Geometry: local contrastive needs feedforward geometry
+    # Credit-Geometry: the credits that read a dense Linear stack need
+    # feedforward geometry. ``LOCAL_STACK_CREDITS``/``LOCAL_STACK_GEOMETRIES``
+    # are the tables the runtime validator reads (TODO94 R1).
     ConstraintSpec(
         name="local_contrastive_geometry",
         kind=ConstraintKind.VOID,
-        description="Local contrastive/goodness/forward_only/pepita/supervision credit requires feedforward geometry",
+        description=(
+            "Credits that read the layer stack ("
+            + ", ".join(sorted(LOCAL_STACK_CREDITS))
+            + ") require one of "
+            + ", ".join(sorted(LOCAL_STACK_GEOMETRIES))
+            + " geometry"
+        ),
         predicate=or_(
-            not_(
-                in_(
-                    var("credit"),
-                    const([
-                        "local_goodness",
-                        "forward_only",
-                        "pepita",
-                        "local_contrastive",
-                        "local_supervision",
-                    ]),
-                )
-            ),
-            in_(var("geometry"), const("feedforward")),
+            not_in(var("credit"), const(sorted(LOCAL_STACK_CREDITS))),
+            in_(var("geometry"), const(sorted(LOCAL_STACK_GEOMETRIES))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1674,24 +1691,22 @@ CONSTRAINTS = [
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
-    # Credit-Geometry: attention geometry incompatible with certain credits
+    # Credit-Geometry: attention geometry refuses the credits whose per-head
+    # shape the multi-head mix breaks (``ATTENTION_INCOMPATIBLE_CREDITS``).
     ConstraintSpec(
         name="attention_geometry_compatibility",
         kind=ConstraintKind.VOID,
-        description="Attention geometry incompatible with pepita, local_goodness, local_contrastive, forward_only credit",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("attention")),
-                in_(
-                    var("credit"),
-                    const([
-                        "pepita",
-                        "local_goodness",
-                        "local_contrastive",
-                        "forward_only",
-                    ]),
-                ),
-            )
+        description=(
+            "Attention geometry incompatible with "
+            + ", ".join(sorted(ATTENTION_INCOMPATIBLE_CREDITS))
+            + " credit (shape mismatch in multi-head attention)"
+        ),
+        predicate=or_(
+            not_(eq(var("geometry"), const("attention"))),
+            not_in(
+                var("credit"),
+                const(sorted(ATTENTION_INCOMPATIBLE_CREDITS)),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -1702,12 +1717,17 @@ CONSTRAINTS = [
     ConstraintSpec(
         name="transformer_pairing_credit",
         kind=ConstraintKind.VOID,
-        description="Causal transformer incompatible with target_inversion, temporal_trace credit (no post-activation to pair)",
-        predicate=not_(
-            and_(
-                eq(var("geometry"), const("causal_transformer")),
-                in_(var("credit"), const(["target_inversion", "temporal_trace"])),
-            )
+        description=(
+            "Causal transformer incompatible with "
+            + ", ".join(sorted(TRANSFORMER_UNPAIRED_CREDITS))
+            + " credit (no post-activation to pair)"
+        ),
+        predicate=or_(
+            not_(eq(var("geometry"), const("causal_transformer"))),
+            not_in(
+                var("credit"),
+                const(sorted(TRANSFORMER_UNPAIRED_CREDITS)),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",

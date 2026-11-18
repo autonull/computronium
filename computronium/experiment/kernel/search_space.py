@@ -67,15 +67,20 @@ _AXIS_INDICES: Final = {
 }
 
 
-def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: ignore[complex-structure, too-many-return-statements]
+def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
     """Compile a legality DSL expression to a function of the axis-value tuple."""
     from computronium.experiment.legality.dsl import (
         And,
         Const,
         Eq,
+        Ge,
         Gt,
         HasKey,
+        Implies,
         In,
+        Le,
+        Lt,
+        Ne,
         Not,
         NotIn,
         Or,
@@ -108,10 +113,27 @@ def _compile_expr(expr: Expr) -> Callable[[tuple[str, ...]], Any]:  # ruff: igno
         case Gt(left=left, right=right):
             lf, rf = _compile_expr(left), _compile_expr(right)
             return lambda vals: lf(vals) > rf(vals)
+        case Ge(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) >= rf(vals)
+        case Lt(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) < rf(vals)
+        case Le(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) <= rf(vals)
+        case Ne(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: lf(vals) != rf(vals)
+        case Implies(left=left, right=right):
+            lf, rf = _compile_expr(left), _compile_expr(right)
+            return lambda vals: (not lf(vals)) or rf(vals)
         case HasKey():
             return lambda _vals: True
         case _:
-            raise ValueError(f"Unknown expr type: {type(expr)}")
+            raise ValueError(
+                f"{type(expr).__name__} is not decidable on the axis tuple"
+            )
 
 
 def _compiled_void_constraints() -> tuple[
@@ -137,7 +159,13 @@ def _compiled_void_constraints() -> tuple[
         pred = constraint.predicate
         if pred is None or references_params(pred):
             continue
-        entry = (constraint.name, _compile_expr(pred))
+        try:
+            compiled = _compile_expr(pred)
+        except ValueError as exc:
+            raise ValueError(
+                f"void constraint {constraint.name!r} cannot be compiled: {exc}"
+            ) from exc
+        entry = (constraint.name, compiled)
         (dep if "task" in str(pred) else indep).append(entry)
     return indep, dep
 

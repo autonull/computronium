@@ -18,7 +18,9 @@ Each test fails if a second copy returns.
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -110,39 +112,145 @@ def test_references_params_is_the_only_traversal() -> None:
 
 
 # The axis-value tables the validators and the declarative rows share: one
-# table per rule, projected into the planner's predicate. A literal set on
-# either side is the second copy this test exists to catch.
-_SHARED_TABLES = (
-    ("RECURRENT_DYNAMICS", "recurrent_geometry_dynamics", 2, {"geometry": "recurrent"}),
-    (
-        "THERMO_CREDIT_DYNAMICS",
+# table per rule, projected into the planner's predicate. A literal set on the
+# trigger side or the axis side is the second copy this test exists to catch.
+#
+# Each case is one clause of a VOID row: ``trigger axis in trigger values
+# implies dependent axis (in | not in) table``. ``trigger`` and ``table`` are
+# read from ``computronium.ontology.system`` at call time, so the test fails
+# when the row and the table disagree in either direction.
+@dataclass(frozen=True)
+class _RuleCase:
+    rule: str
+    trigger_axis: str
+    trigger_values: str
+    dependent_axis: str
+    table: str
+    polarity: Literal["in", "not_in"]
+    base: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def id(self) -> str:
+        return f"{self.rule}:{self.table}"
+
+
+_RULE_CASES = (
+    _RuleCase(
+        "recurrent_geometry_dynamics",
+        "geometry",
+        "RECURRENT_TRIGGER",
+        "dynamics",
+        "RECURRENT_DYNAMICS",
+        "in",
+    ),
+    _RuleCase(
         "thermodynamic_contrast_dynamics",
-        2,
-        {"credit": "thermodynamic_contrast"},
+        "credit",
+        "THERMO_CREDITS",
+        "dynamics",
+        "THERMO_CREDIT_DYNAMICS",
+        "in",
     ),
-    (
-        "SPIKE_INTEGRATION_CREDITS",
+    _RuleCase(
         "spike_integration_credit",
-        4,
-        {"dynamics": "spike_integration"},
+        "dynamics",
+        "SPIKE_TRIGGER",
+        "credit",
+        "SPIKE_INTEGRATION_CREDITS",
+        "in",
     ),
-    (
-        "PREDICTIVE_SETTLING_CREDITS",
+    _RuleCase(
         "predictive_settling_credit",
-        4,
-        {"dynamics": "predictive_settling"},
+        "dynamics",
+        "PREDICTIVE_TRIGGER",
+        "credit",
+        "PREDICTIVE_SETTLING_CREDITS",
+        "in",
     ),
-    (
-        "QUANTUM_DYNAMICS",
+    _RuleCase(
         "quantum_substrate_dynamics",
-        2,
-        {"substrate": "quantum"},
+        "substrate",
+        "QUANTUM_TRIGGER",
+        "dynamics",
+        "QUANTUM_DYNAMICS",
+        "in",
+    ),
+    _RuleCase(
+        "local_contrastive_geometry",
+        "credit",
+        "LOCAL_STACK_CREDITS",
+        "geometry",
+        "LOCAL_STACK_GEOMETRIES",
+        "in",
+    ),
+    _RuleCase(
+        "attention_geometry_compatibility",
+        "geometry",
+        "ATTENTION_TRIGGER",
+        "credit",
+        "ATTENTION_INCOMPATIBLE_CREDITS",
+        "not_in",
+    ),
+    _RuleCase(
+        "transformer_pairing_credit",
+        "geometry",
+        "TRANSFORMER_TRIGGER",
+        "credit",
+        "TRANSFORMER_UNPAIRED_CREDITS",
+        "not_in",
+    ),
+    _RuleCase(
+        "pc_alm_dynamics",
+        "dynamics",
+        "PC_ALM_TRIGGER",
+        "credit",
+        "PC_ALM_CREDITS",
+        "in",
+        {"credit": "pc_alm"},
+    ),
+    _RuleCase(
+        "pc_alm_dynamics",
+        "dynamics",
+        "PC_ALM_TRIGGER",
+        "geometry",
+        "PC_ALM_GEOMETRIES",
+        "in",
+        {"credit": "pc_alm"},
+    ),
+    _RuleCase(
+        "pc_alm_credit_dynamics",
+        "credit",
+        "PC_ALM_DUAL_CREDITS",
+        "dynamics",
+        "PC_ALM_CREDIT_DYNAMICS",
+        "in",
+    ),
+    _RuleCase(
+        "fast_weight_plasticity_geometry",
+        "geometry",
+        "NO_FAST_WEIGHT_GEOMETRIES",
+        "plasticity",
+        "FAST_WEIGHT_TRIGGER",
+        "not_in",
     ),
 )
+
+# Trigger sets that are a literal of the row (one value or the dependent axis'
+# forbidden row) rather than a shared table.
+_LITERAL_TRIGGERS = {
+    "RECURRENT_TRIGGER": frozenset({"recurrent"}),
+    "SPIKE_TRIGGER": frozenset({"spike_integration"}),
+    "PREDICTIVE_TRIGGER": frozenset({"predictive_settling", "error_predictive_coding"}),
+    "QUANTUM_TRIGGER": frozenset({"quantum"}),
+    "ATTENTION_TRIGGER": frozenset({"attention"}),
+    "TRANSFORMER_TRIGGER": frozenset({"causal_transformer"}),
+    "PC_ALM_TRIGGER": frozenset({"pc_alm"}),
+    "FAST_WEIGHT_TRIGGER": frozenset({"fast_weights"}),
+}
 _AXIS_FIELDS = ("substrate", "geometry", "dynamics", "plasticity", "credit", "update")
 
 
-def _values(index: int, overrides: dict[str, str]) -> tuple[str, ...]:
+def _values(overrides: dict[str, str]) -> tuple[str, ...]:
     values = [
         "digital",
         "feedforward",
@@ -151,40 +259,53 @@ def _values(index: int, overrides: dict[str, str]) -> tuple[str, ...]:
         "gradient",
         "euclidean",
     ]
-    for field, value in overrides.items():
-        values[_AXIS_FIELDS.index(field)] = value
+    for axis_name, value in overrides.items():
+        values[_AXIS_FIELDS.index(axis_name)] = value
     return (*values, "")
 
 
-def _candidates(index: int) -> list[str]:
+def _candidates(axis: str) -> list[str]:
     from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 
-    axis = StructuralAxis(_AXIS_FIELDS[index])
-    return [spec.name for spec in AXES_REGISTRIES[axis].values()]
+    return [spec.name for spec in AXES_REGISTRIES[StructuralAxis(axis)].values()]
 
 
-@pytest.mark.parametrize(
-    ("table", "rule_name", "index", "overrides"),
-    _SHARED_TABLES,
-    ids=[case[0] for case in _SHARED_TABLES],
-)
-def test_the_declared_row_is_the_shared_table(
-    table: str,
-    rule_name: str,
-    index: int,
-    overrides: dict[str, str],
-) -> None:
-    """The row's verdict is membership in the table, for every axis value."""
+def _table(name: str) -> frozenset[str]:
+    literal = _LITERAL_TRIGGERS.get(name)
+    return literal if literal is not None else getattr(system_module, name)
+
+
+@pytest.mark.parametrize("case", _RULE_CASES, ids=[case.id for case in _RULE_CASES])
+def test_the_declared_row_is_the_shared_table(case: _RuleCase) -> None:
+    """The row's verdict is the table's membership, for every axis value."""
     from computronium.experiment.kernel.search_space import (
         _compiled_void_constraints,
     )
 
     seed_all_registries()
-    rule = dict(_compiled_void_constraints()[0])[rule_name]
-    allowed = getattr(system_module, table)
-    for value in _candidates(index):
-        values = _values(index, {**overrides, _AXIS_FIELDS[index]: value})
-        assert rule(values) is (value in allowed), (table, value)
+    rule = dict(_compiled_void_constraints()[0])[case.rule]
+    trigger = _table(case.trigger_values)
+    table = _table(case.table)
+    assert trigger, case
+    trigger_values = (*sorted(trigger), _off_trigger(case))
+    for value in trigger_values:
+        for candidate in _candidates(case.dependent_axis):
+            values = _values(
+                case.base | {case.trigger_axis: value, case.dependent_axis: candidate}
+            )
+            member = candidate in table
+            expected = member if case.polarity == "in" else not member
+            if values[_AXIS_FIELDS.index(case.trigger_axis)] not in trigger:
+                expected = True
+            assert rule(values) is expected, (case.id, value, candidate)
+
+
+def _off_trigger(case: _RuleCase) -> str:
+    """A trigger-axis candidate that does not trigger the rule."""
+    trigger = _table(case.trigger_values)
+    return next(
+        value for value in _candidates(case.trigger_axis) if value not in trigger
+    )
 
 
 def test_removing_a_value_from_the_table_stops_the_refusal(

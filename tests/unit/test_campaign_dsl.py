@@ -10,7 +10,10 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from computronium.experiment.design.campaign_dsl import CampaignDSL
+from computronium.experiment.design.campaign_dsl import (
+    CampaignDSL,
+    validate_campaign_design,
+)
 
 _AXES = ("substrate", "geometry", "dynamics", "plasticity", "credit", "update")
 
@@ -84,3 +87,10 @@ def test_adaptive_budget_plan_reads_block_shape() -> None:
     plan = _spec().to_adaptive_budget_plan()
     assert plan.epochs == 3
     assert plan.n_seeds == 2
+
+
+def test_design_validation_counts_every_declared_cell() -> None:
+    """Design legality is compose-time; this pass counts, it does not re-derive."""
+    validation = validate_campaign_design(_spec())
+    assert validation.design_matrix_size >= 1
+    assert validation.valid is True
