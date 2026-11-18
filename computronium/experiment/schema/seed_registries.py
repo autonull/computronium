@@ -94,7 +94,7 @@ from computronium.ontology.system import (
 # =============================================================================
 # AXIS PRIMITIVES — Seed AXES_REGISTRIES with AxisSpec for each primitive
 # Required for codegen (WP11.2) - listings, validators, stubs, flag tables
-# Sources: primitives.ALL_PRIMITIVES (primitive ids per axis) +
+# Sources: the axis definitions below (primitive ids per axis) +
 # config-class hyperparameters() for availability/topology params.
 # =============================================================================
 

@@ -116,18 +116,33 @@ control is at chance cannot label anything (P1); only then is a census meaningfu
 (P2); interactions require a fixed base (P3); the deep dive is chosen by the map
 (P4); the external path and public artifacts follow (P5).
 
-**First session:** the box is calibrated (control 0.8914, ~5–8 s/cell) and rows
-carry their box, so the session is **P0a + P2** (inventory, then census). P0b
-(Schedule/Record) is a schema change and follows in its own session.
+### Progress (session 13, 2026-11-18)
 
-### P0a — One inventory (no training; 1 session)
+| Step | State | Evidence / next |
+|---|---|---|
+| P0a inventory | **done** | census v3: 75 rows (73 axis + 2 gaps); `test_inventory_single_source`; `schema/primitives.py` deleted |
+| P0b record | open | `Schedule` has no `batch_size`; a claim cannot be checked against its run |
+| P0.5 defects | **done** | six chance rows measured at 375/150k; `mean_norm` step fixed (`3558a59e`); spectral/elastic ladder open |
+| P0.75 binding | **done** | `sec_binding.py`; every cell carries `binding`; `test_binding_condition` |
+| P1 calibrate | partial | vision base: control 0.8914, 7.7 s/cell. Tabular/graph/sequence bases open |
+| P2 census | partial | 75 rows: 61 measured (31 bound, 30 inert), 8 defect, 6 refused, 0 missing; `own-knobs` open |
+| P3–P5 | open | P3 needs P2's variance; P4 is chosen by P3; P5 is the external path |
+
+The census's base is `mnist`, 1 epoch, 375 batches, 150k params, seed 0. Every
+defect names its mechanism in `map.json`: 3 sequence credits cannot read a
+vision shape, 5 rows exceed the parameter ceiling. A 60 s per-primitive cap
+refuses `natural_gradient` (no epoch inside the cap) — a cost defect, not a
+verdict. Next: the own-knobs pass (30 inert rows), P0b, the three family bases.
+
+### P0a — One inventory (no training; 1 session) ✅
 
 **Decision:** can the census see every primitive? Today 62 of 75.
 **Deliverable:** `build_census` reads `AXES_REGISTRIES` (73) plus the spec-only
 rows (2), and prints its total. The 11 credits/updates that `ALL_PRIMITIVES`
 drops are included; `closed_form_ridge` and `noisy` are entries with
 `available=False` and the reason "no config classmethod — a capability gap",
-which is their honest state. `ALL_PRIMITIVES` becomes a projection or is deleted.
+which is their honest state. `ALL_PRIMITIVES` is deleted; the axis registry is
+the only list.
 **Gate:** `test_inventory_single_source`: the census total == 75 and every axis
 row has an entry.
 **Done when:** the census prints 75 and the two gaps are named.
@@ -141,7 +156,7 @@ builds one; the `sec_loop` JSONL becomes a `Record` (or gains the same fields);
 **Gate:** `test_box_identity`: changing `batch_size` alone refuses the claim.
 **Done when:** one record schema, one box type, and a claim that names its box.
 
-### P0.5 — The defect queue (before the census; ~1 h)
+### P0.5 — The defect queue (before the census; ~1 h) ✅
 
 **Decision:** are the five chance-level update rows defects rather than results?
 **Deliverable (measured 2026-11-18):** the 32-batch box was the first defect
@@ -150,15 +165,14 @@ builds one; the `sec_loop` JSONL becomes a `Record` (or gains the same fields);
 (0.01 → 0.887 at 1e-3). Re-measured, all six are `MEASURED` — no verdict.
 `spectral_constrained` and `elastic_consolidation` measured 0.626 at their
 defaults: a number, and a candidate for a step-size ladder, not a verdict.
-**Also:** reconcile the inventory — add `closed_form_ridge` and `noisy` to their
-axis rows (or delete their specs and capability rows), and give `split_mnist`
-its domain.
+**Also:** `closed_form_ridge` and `noisy` are named capability gaps in the
+census, not aliased onto an axis row; `split_mnist` has its domain.
 **Gate:** `test_spec_composes`, `test_binding_condition`, and the five cells'
 verdicts.
 **Done when:** each near-chance row is a defect probe with a name, or a
 measurement at its own declared default — never an unexamined label.
 
-### P0.75 — Declare the binding conditions (no compute; 1 hour)
+### P0.75 — Declare the binding conditions (no compute; 1 hour) ✅
 
 **Decision:** for each axis, what must be true for it to bind?
 **Deliverable:** a binding condition per axis: substrate (substrate-sensitive
@@ -181,18 +195,20 @@ digits and iris need more steps or they stay at chance — the pilot says how ma
 is refused.
 **Done when:** each family has a calibrated base and a measured cost per cell.
 
-### P2 — The census (the first real map; ~2 h)
+### P2 — The census (the first real map; ~2 h) ▶
 
 **Decision:** of 73 primitives, which train at their slice's base, which need a
 swap, which fail, and at what cost?
-**Deliverable:** `map.json` v3: 73 rows with `status` ∈ {measured, defect,
+**Deliverable:** `map.json` v3: 75 rows with `status` ∈ {measured, defect,
 refused, unmeasured}, base box, task, rule, control, resource vector.
 Unmeasured rows are `unmeasured`, not absent. A short report: measured/defect/
 refused counts per axis, and the defect list with mechanisms named.
 **Box:** the P1 base for MNIST; a primitive that is illegal at the base is
 measured at its nearest legal box and marked `swapped`; each primitive is also
 measured at its own declared defaults and marked `own-knobs`. The measured base:
-375 batches, hidden 128, 150k ceiling, control 0.8914, ~5–8 s/cell.
+375 batches, hidden 128, 150k ceiling, control 0.8914, 5–60 s/cell.
+**Open:** the own-knobs pass; the replay hash (rides P0b); swap labels on defect
+rows; the three non-vision family bases.
 **Gate:** every row reproducible; every `fail` names a mechanism; the report
 prints the inventory count.
 **Done when:** the first map with no missing rows and no inflated status.
@@ -238,36 +254,24 @@ measurements at batch 32.
 ## 5. The scan protocol (one page)
 
 1. **One base per slice.** Only the varied axis changes; any other difference is
-   `swapped`.
+   `swapped`. A viability box (each primitive at its own defaults) and a
+   comparison box (one fixed knob for all) are different instruments; publish
+   both.
 2. **Control first.** The published control at the base must clear the bar; else
-   `chance`, no status.
+   `chance`, no status. A slice whose control is at chance is refused before it
+   is priced.
 3. **Cheapest falsifier.** 1 seed screens; 3 seeds confirm an interaction; 5
-   paired seeds carry a claim.
-4. **Budget in cells and steps.** Walltime is reported, never used to rank.
-5. **Price from a pilot.** The watchdog is 2× the measured cell.
-6. **Every row reproducible.** Task + box + seed + ruler + replay hash.
-7. **A negative is a row**; a fail names its mechanism; `refused` carries a
-   trigger.
-
----
-
-## 5.5 The research protocol (allocation)
-
-1. **Cheap tasks first.** The registry has 14 cheap, 14 medium, 2 expensive
-   tasks; the census uses cheap, the interaction slice cheap/medium, the deep
-   dive medium. The expensive two need a declared budget and a stop rule.
-2. **Screen at the viability box, compare at the comparison box.** A primitive
-   that fails at its own defaults is a defect probe; a primitive that moves
-   between slices is an interaction.
-3. **Successive halving.** 1 seed for screening, promote the top fraction to 3,
-   then 5 paired for a claim. Budget in cells and steps; walltime is reported.
-4. **Price from a pilot.** The watchdog is 2x the measured cell; a slice whose
-   control is at chance is refused before it is priced.
-5. **The map allocates.** The census's variance decides the interaction pair;
+   paired seeds carry a claim. Cheap tasks first (14 cheap, 14 medium, 2
+   expensive; the expensive two need a declared budget and a stop rule).
+4. **Budget in cells and steps.** Walltime is reported, never used to rank. The
+   watchdog is 2× the measured cell, not a clock.
+5. **Every row reproducible.** Task + box + seed + ruler + replay hash.
+6. **A negative is a row**; a fail names its mechanism; `refused` carries a
+   trigger and an owner. The defect queue is the map's backlog, not a separate
+   document.
+7. **The map allocates.** The census's variance decides the interaction pair;
    the interaction's strongest effect decides the deep-dive region. No plan
    order overrides the map's own ranking.
-6. **Every refusal and every failure has a trigger and an owner.** The defect
-   queue is the map's backlog, not a separate document.
 
 ## 6. What we stop doing
 
@@ -278,22 +282,18 @@ measurements at batch 32.
 - Full sweeps (the census is the sweep); 1-seed claims; walltime rankings;
   documents longer than 300 lines.
 
----
+**What could make this plan wrong:** if the calibrated base costs >5 min/cell,
+the census runs axis by axis; it already accumulates rows, so it is not a sweep.
+At the measured 5–60 s/cell, 73 rows are affordable.
 
-## 7. What could make this plan wrong
+## 7. Definition of done
 
-| Assumption | Falsifier | Then |
-|---|---|---|
-| 73 rows are affordable | the calibrated base costs >5 min/cell | 3 sessions, axis by axis; the map accumulates, it is not a sweep |
-
----
-## 8. Definition of done
-
-- One inventory (73) projected into census, map, README and method cards.
+- One inventory (75 census rows: 73 composable + 2 named gaps) projected into
+  census, map, README and method cards.
 - Every map row carries its task, base box, ruler, control and cost.
 - Each family has a calibrated base with a measured cells/hour.
-- No `pass` below control + 2σ; no missing row; no `swapped` row labelled
-  comparable.
+- No `measured` row called viable; no missing row; no `swapped` row labelled
+  comparable; an inert row is never a result about its axis.
 - One interaction result about which axes matter together.
 - One deep dive chosen by the map, with a pre-registered claim or coordinate.
 - A stranger adds a primitive and holds a map row without reading internals.

@@ -12,7 +12,9 @@ Run:
 from __future__ import annotations
 
 import json
+import logging
 import math
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,7 @@ from computronium.experiment.kernel.evaluate import (
 )
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
+from computronium.experiment.sec_binding import binding_reason
 from computronium.experiment.sec_census import PrimitiveCensusEntry, build_census
 
 logger = get_logger(__name__)
@@ -383,6 +386,14 @@ P0_PARAM_BUDGET = 150_000
 # How many compose-legal boxes to try per primitive before declaring it cannot
 # train. Most resolve on the first (base) box; a few need a companion swap.
 P0_MAX_COORDINATES = 24
+# A swap chain is not a fair search: one slow primitive can spend the axis's
+# whole watchdog on 24 training attempts. The cap is a refusal (a box
+# statement), not a verdict, and it is 8× the measured 375-batch cell.
+P0_PRIMITIVE_BUDGET_S = 60.0
+# The base box shares one step size and one geometry width across primitives.
+# A primitive's own declared defaults are the `own-knobs` pass (TODO95 P2);
+# until that pass runs, an update row is `inert` (an update needs its own step).
+P0_OWN_KNOBS = False
 
 
 def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[str, Any]:
@@ -419,10 +430,27 @@ def _control_val_acc(schedule: Schedule, device: str) -> float | None:
     """
     try:
         result = evaluate_cell(_coordinate(_AXIS_DEFAULTS), schedule)
-    except Exception:  # ruff: ignore[BLE001] - a broken control must not end the screen
+    except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
         logger.exception("P0 control cell failed at the box")
         return None
     return float(dict(result.metrics).get("val_acc", 0.0))
+
+
+def _ruler(task_id: str) -> tuple[str, str]:
+    """The task's primary metric key and the ruler string a map row carries."""
+    from computronium.experiment.registry.task_registry import TaskRegistry
+
+    spec = TaskRegistry().get(task_id)
+    objective = next(
+        (obj for obj in spec.objectives if obj.name == spec.primary_objective), None
+    )
+    key = (objective.payload_key if objective is not None else None) or "val_acc"
+    chance = (
+        f", chance {1 / spec.output_dim:.3f}"
+        if spec.output_dim and spec.domain.value in {"vision", "tabular"}
+        else ""
+    )
+    return key, f"{key} on {task_id} (primary {spec.primary_objective}{chance})"
 
 
 _AXIS_FIELD = {
@@ -448,18 +476,16 @@ _AXIS_DEFAULTS = {
 # list would silently drop a primitive the system actually accepts. The
 # oracle is `compose_configs` (the system's own validator), not a table.
 def _axis_values(field: str) -> list[str]:
-    from computronium.experiment.schema.primitives import ALL_PRIMITIVES
+    from computronium.experiment.schema.axis import AXES_REGISTRIES
 
-    for axis, primitives in ALL_PRIMITIVES.items():
-        if _AXIS_FIELD.get(axis, axis) != field:
-            continue
-        default = _AXIS_DEFAULTS[field]
-        values = sorted(primitives)
-        if default in values:
-            values.remove(default)
-            values.insert(0, default)
-        return values
-    return [_AXIS_DEFAULTS[field]]
+    default = _AXIS_DEFAULTS[field]
+    values = sorted(
+        name for name, spec in AXES_REGISTRIES[field].items() if spec.available
+    )
+    if default in values:
+        values.remove(default)
+        values.insert(0, default)
+    return values
 
 
 def _params_for(axes: dict[str, str]) -> dict[str, Any]:
@@ -663,10 +689,6 @@ def run_p0_track(
     )
 
     results: list[dict[str, Any]] = []
-    measured_count = 0
-    defect_count = 0
-    unavailable_count = 0
-    box_defect_count = 0
 
     schedule = Schedule(
         fidelity="L0",
@@ -685,10 +707,13 @@ def run_p0_track(
     )
 
     control_acc = _control_val_acc(schedule, device)
+    criterion, ruler = _ruler(schedule.task_id)
     logger.info(f"P0 control at this box: val_acc={control_acc}")
 
     for entry in entries_to_screen:
         logger.info(f"P0 screening: {entry.id}")
+        axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+        primitive_key = entry.id.split(".")[-1]
 
         # Try compose-legal boxes nearest-to-default until one actually trains.
         # A compose-legal box can still fail at training time (a surrogate credit
@@ -696,24 +721,56 @@ def run_p0_track(
         # training run is the final oracle.
         candidates = _iter_legal_coordinates(entry, limit=P0_MAX_COORDINATES)
         if not candidates:
+            inert = binding_reason(
+                axis,
+                primitive_key,
+                criterion=criterion,
+                own_knobs=P0_OWN_KNOBS,
+            )
             results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": "UNAVAILABLE",
                 "reason": "no legal box or not available",
+                "ruler": ruler,
+                "binding": "inert" if inert else "bound",
+                "binding_reason": inert,
             })
-            unavailable_count += 1
             continue
 
         last_error: Exception | None = None
         completed = False
+        started = time.monotonic()
+        deadline = started + P0_PRIMITIVE_BUDGET_S
+
+        def within_budget() -> bool:
+            return time.monotonic() < deadline
+
+        params = {
+            "deadline_check": within_budget,
+            "deadline_check_every_n_steps": 1,
+        }
+        timed_out = False
+        tried = 0
         for coord in candidates:
+            if not within_budget():
+                timed_out = True
+                break
+            tried += 1
             try:
-                eval_result: CellEvaluation = evaluate_cell(coord, schedule)
-            except (EvaluationError, ValueError) as exc:
+                eval_result: CellEvaluation = evaluate_cell(
+                    coord, schedule, params=params
+                )
+            except EvaluationError as exc:
+                last_error = exc
+                if getattr(exc, "cause", None) == "timeout":
+                    timed_out = True
+                    break
+                continue
+            except ValueError as exc:
                 last_error = exc
                 continue
-            except Exception as exc:  # ruff: ignore[BLE001] - one bad cell never ends the screen
+            except Exception as exc:  # ruff: ignore[blind-except] - one bad cell never ends the screen
                 last_error = exc
                 continue
 
@@ -724,31 +781,65 @@ def run_p0_track(
             within = eval_result.param_count <= P0_PARAM_BUDGET * (
                 1 + PARAM_BUDGET_TOLERANCE
             )
+            defect = (
+                None
+                if finite and within
+                else (
+                    "non-finite metric"
+                    if not finite
+                    else f"param_count {eval_result.param_count} over ceiling"
+                )
+            )
+            inert = binding_reason(
+                axis,
+                primitive_key,
+                criterion=criterion,
+                own_knobs=P0_OWN_KNOBS,
+            )
             # A screen records; it never adjudicates. It emits the number, the
             # box, the size and the cost, plus a DEFECT only for an execution
-            # fact (a crash or a non-finite metric). "Above chance" is not a
-            # capability, and a 1-seed cell is not a comparison (TODO95 §2).
+            # fact (a crash, a non-finite metric, a ceiling violation).
+            # "Above chance" is not a capability, and a 1-seed cell is not a
+            # comparison (TODO95 §2). `binding` says whether the varied axis
+            # could act at this box; an inert row is not a result about it.
             results.append({
                 "track": "P0",
                 "primitive": entry.id,
-                "status": "MEASURED" if finite else "DEFECT",
+                "status": "DEFECT" if defect else "MEASURED",
                 "val_acc": val_acc,
                 "loss": loss,
                 "param_count": eval_result.param_count,
                 "within_ceiling": within,
                 "metrics": metrics,
                 "box": _box_summary(coord, schedule),
+                "ruler": ruler,
                 "control_val_acc": control_acc,
-                "defect": None if finite else "non-finite metric",
+                "binding": "inert" if inert else "bound",
+                "binding_reason": inert,
+                "swapped": getattr(coord, axis) != primitive_key,
+                "defect": defect,
                 "walltime_s": eval_result.walltime_s,
             })
-            measured_count += 1
-            if not within:
-                box_defect_count += 1
             completed = True
             break
 
         if completed:
+            continue
+
+        elapsed = time.monotonic() - started
+        if timed_out:
+            logger.warning(f"P0 candidate budget spent: {entry.id}, {elapsed:.0f}s")
+            results.append({
+                "track": "P0",
+                "primitive": entry.id,
+                "status": "UNAVAILABLE",
+                "reason": (
+                    f"cost cap: {elapsed:.0f}s over {P0_PRIMITIVE_BUDGET_S:.0f}s "
+                    f"after {tried}/{len(candidates)} boxes; "
+                    f"last error: {last_error}"
+                ),
+                "ruler": ruler,
+            })
             continue
 
         # No compose-legal box trained. Distinguish a compose rejection (never
@@ -762,20 +853,31 @@ def run_p0_track(
                 "status": "UNAVAILABLE",
                 "reason": f"validation: {last_error}",
             })
-            unavailable_count += 1
         else:
             logger.exception(f"P0 every legal box failed to train: {entry.id}")
+            inert = binding_reason(
+                axis,
+                primitive_key,
+                criterion=criterion,
+                own_knobs=P0_OWN_KNOBS,
+            )
             results.append({
                 "track": "P0",
                 "primitive": entry.id,
                 "status": "DEFECT",
                 "error": str(last_error),
                 "cause": getattr(last_error, "cause", None),
+                "ruler": ruler,
+                "binding": "inert" if inert else "bound",
+                "binding_reason": inert,
                 "tried": len(candidates),
             })
-            defect_count += 1
 
     total = len(entries_to_screen)
+    measured_count = sum(1 for cell in results if cell["status"] == "MEASURED")
+    defect_count = sum(1 for cell in results if cell["status"] == "DEFECT")
+    unavailable_count = sum(1 for cell in results if cell["status"] == "UNAVAILABLE")
+    box_defect_count = sum(1 for cell in results if cell.get("within_ceiling") is False)
     defect_rate = defect_count / total if total > 0 else 0.0
     pause_r = defect_rate > 0.2
 
@@ -787,6 +889,8 @@ def run_p0_track(
         "unavailable": unavailable_count,
         "box_defect": box_defect_count,
         "control_val_acc": control_acc,
+        "ruler": ruler,
+        "base_box": _box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
         "defect_rate": defect_rate,
         "pause_r": pause_r,
         "cells": results,
@@ -1004,73 +1108,160 @@ def update_cell_log(out_dir: Path, all_results: list[dict]) -> None:
     logger.info(f"Cell log updated: {cell_log_path} (+{len(all_results)} entries)")
 
 
+def _map_row(
+    entry: PrimitiveCensusEntry, cell: dict[str, Any] | None
+) -> dict[str, Any]:
+    """One map row: the primitive, its task, ruler, box, control and resources.
+
+    The row always exists. A row with no cell is `unmeasured`; a row the
+    pipeline refused carries its reopen trigger; a row that ran carries the
+    number and the box beside it (TODO95 P2).
+    """
+    row: dict[str, Any] = {
+        "primitive": entry.id,
+        "axis": entry.axis,
+        "capability": entry.capability_card,
+        "status": "unmeasured",
+        "binding": None,
+        "binding_reason": None,
+        "task": None,
+        "ruler": None,
+        "rule": None,
+        "box": {},
+        "control": None,
+        "measurement": None,
+        "resource": {},
+        "swapped": False,
+        "defect": None,
+        "trigger": None,
+        "last_screened": None,
+    }
+    if not entry.available:
+        row["status"] = "refused"
+        row["trigger"] = entry.unavailable_reason
+        return row
+    if cell is None:
+        return row
+
+    status = {
+        "MEASURED": "measured",
+        "DEFECT": "defect",
+        "UNAVAILABLE": "refused",
+    }[cell["status"]]
+    row["status"] = status
+    row["last_screened"] = datetime.now().isoformat()
+    row["trigger"] = cell.get("reason")
+    row["defect"] = cell.get("defect") or cell.get("error")
+    if "box" in cell:
+        box = cell["box"]
+        row["box"] = box
+        row["task"] = box.get("task")
+        row["binding"] = cell.get("binding")
+        row["binding_reason"] = cell.get("binding_reason")
+        row["swapped"] = cell.get("swapped", False)
+        row["rule"] = (
+            "nearest-legal swap" if row["swapped"] else "base box, one axis varied"
+        )
+        row["ruler"] = cell.get("ruler")
+        row["control"] = {"val_acc": cell.get("control_val_acc")}
+        row["resource"] = {
+            "walltime_s": cell.get("walltime_s"),
+            "param_count": cell.get("param_count"),
+            "within_ceiling": cell.get("within_ceiling"),
+        }
+    if status == "measured":
+        row["measurement"] = {
+            "val_acc": cell.get("val_acc"),
+            "loss": cell.get("loss"),
+        }
+    return row
+
+
 def update_map(
     out_dir: Path,
     census_entries: list[PrimitiveCensusEntry],
     p0_result: dict | None,
     p1_result: dict | None = None,
 ) -> None:
-    """Update map.json with P0 screening and P1 confirmation results."""
+    """Write map.json v3: one row per censused primitive, never a missing row."""
     map_path = out_dir / "map.json"
+    cells = {cell["primitive"]: cell for cell in (p0_result or {}).get("cells", [])}
 
+    # The map accumulates: an axis-by-axis run replaces its own rows and keeps
+    # the rows an earlier v3 run measured. A v2 map is not merged — its rows
+    # carry a different box and a different status taxonomy.
+    previous: dict[str, dict] = {}
     if map_path.exists():
-        map_data = json.loads(map_path.read_text())
-    else:
-        map_data = {"primitives": {}}
+        prior = json.loads(map_path.read_text())
+        if prior.get("version") == "SEC-v3":
+            previous = prior.get("primitives", {})
 
-    if p0_result:
-        for cell in p0_result["cells"]:
-            prim_id = cell["primitive"]
-            if prim_id not in map_data["primitives"]:
-                entry = next((e for e in census_entries if e.id == prim_id), None)
-                map_data["primitives"][prim_id] = {
-                    "primitive": prim_id,
-                    "status": "unknown",
-                    "family": entry.axis if entry else "unknown",
-                    "box": {},
-                    "control_val_acc": None,
-                    "ruler": "val_acc on mnist",
-                    "best_coordinate": None,
-                    "defect": None,
-                    "capability": entry.capability_card if entry else "",
-                    "last_screened": datetime.now().isoformat(),
-                }
-
-            map_entry = map_data["primitives"][prim_id]
-            map_entry["status"] = cell["status"].lower()
-            map_entry["last_screened"] = datetime.now().isoformat()
-            if "box" in cell:
-                map_entry["box"] = cell["box"]
-            map_entry["control_val_acc"] = cell.get("control_val_acc")
-            if cell["status"] == "MEASURED" and "val_acc" in cell:
-                map_entry["best_coordinate"] = {
-                    "val_acc": cell["val_acc"],
-                    "param_count": cell.get("param_count"),
-                    "within_ceiling": cell.get("within_ceiling"),
-                }
-            elif cell["status"] == "DEFECT":
-                map_entry["defect"] = cell.get("error", "unknown")
+    primitives: dict[str, dict] = {}
+    for entry in census_entries:
+        cell = cells.get(entry.id)
+        row = _map_row(entry, cell)
+        if cell is None and entry.id in previous:
+            row = previous[entry.id]
+        primitives[entry.id] = row
 
     if p1_result:
         for cell in p1_result["cells"]:
-            prim_id = cell["primitive"]
-            if prim_id in map_data["primitives"]:
-                map_entry = map_data["primitives"][prim_id]
-                map_entry["p1_confirmed"] = True
-                map_entry["p1_surprise"] = cell.get("surprise", False)
-                map_entry["p1_mean_acc"] = cell.get("mean_acc", 0.0)
-                map_entry["p1_effect"] = cell.get("effect", 0.0)
-                map_entry["p1_delta"] = cell.get("delta", 0.0)
-                map_entry["p1_seeds"] = cell.get("seed_results", [])
-                # Update best_coordinate with P1 mean if it's a surprise
-                if cell.get("surprise", False):
-                    map_entry["best_coordinate"] = {
-                        "val_acc": cell.get("mean_acc", 0.0),
-                        "p1_confirmed": True,
-                    }
+            row = primitives.get(cell["primitive"])
+            if row is not None:
+                row["confirmation"] = {
+                    "seeds": cell.get("seed_results"),
+                    "mean_acc": cell.get("mean_acc"),
+                    "std_acc": cell.get("delta"),
+                }
 
+    by_axis: dict[str, dict[str, int]] = {}
+    for row in primitives.values():
+        counts = by_axis.setdefault(row["axis"], {})
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+
+    control = (p0_result or {}).get("control_val_acc")
+    base = (p0_result or {}).get("base_box", {})
+    map_data = {
+        "version": "SEC-v3",
+        "updated": datetime.now().isoformat(),
+        "inventory": {
+            "total": len(census_entries),
+            "available": sum(1 for entry in census_entries if entry.available),
+            "control_val_acc": control,
+        },
+        "base": base,
+        "by_axis": by_axis,
+        "primitives": primitives,
+    }
     map_path.write_text(json.dumps(map_data, indent=2, default=str))
-    logger.info(f"Map updated: {map_path}")
+    logger.info(f"Map updated: {map_path} ({len(primitives)} rows)")
+    _print_map_report(map_data)
+
+
+def _print_map_report(map_data: dict[str, Any]) -> None:
+    """The census's short report: counts per axis, and every defect's mechanism."""
+    print("\n=== SEC map: census report ===")
+    inventory = map_data["inventory"]
+    print(
+        f"Inventory: {inventory['total']} primitives, "
+        f"{inventory['available']} available; "
+        f"control val_acc={inventory['control_val_acc']}"
+    )
+    for axis, counts in sorted(map_data["by_axis"].items()):
+        detail = ", ".join(
+            f"{status}={count}" for status, count in sorted(counts.items())
+        )
+        print(f"  {axis:22} {detail}")
+    defects = [
+        row for row in map_data["primitives"].values() if row["status"] == "defect"
+    ]
+    for row in defects:
+        print(f"  defect: {row['primitive']} — {row['defect']}")
+    refused = [
+        row for row in map_data["primitives"].values() if row["status"] == "refused"
+    ]
+    for row in refused:
+        print(f"  refused: {row['primitive']} — {row['trigger']}")
 
 
 # ============================================================
@@ -1081,6 +1272,11 @@ def update_map(
 def main() -> None:
     import argparse
 
+    # A census of 75 rows runs for minutes; without a handler its INFO
+    # heartbeat is dropped and the only poll is the GPU meter.
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     parser = argparse.ArgumentParser(
         description="SEC Loop - result-first capability harvest"
     )
@@ -1099,6 +1295,12 @@ def main() -> None:
     parser.add_argument("--max-cells", type=int, default=12, help="Max cells for R1/R2")
     parser.add_argument(
         "--max-primitives", type=int, default=6, help="Max primitives for P0"
+    )
+    parser.add_argument(
+        "--axis",
+        action="append",
+        choices=["substrate", "geometry", "dynamics", "plasticity", "credit", "update"],
+        help="Screen only this axis (repeatable); the map keeps earlier rows",
     )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument(
@@ -1135,39 +1337,44 @@ def main() -> None:
 
     # Run P0 if requested
     if args.track in {"P0", "all"}:
+        entries_to_screen = [
+            entry
+            for entry in census_entries
+            if not args.axis or entry.axis in args.axis
+        ]
         p0_result = run_p0_track(
             out_dir,
-            census_entries,
+            entries_to_screen,
             max_primitives=args.max_primitives,
             device=args.device,
             breadth=args.breadth,
         )
         all_results.extend(p0_result["cells"])
 
-    # Determine P0 passes for P1
-    p0_passes: list[str] = []
+    # Determine measured primitives to confirm (3 seeds), where the axis binds
+    p0_candidates: list[str] = []
     if args.p1_from_map:
-        # Read PASS primitives from map.json
         map_path = out_dir / "map.json"
         if map_path.exists():
             map_data = json.loads(map_path.read_text())
-            p0_passes = [
+            p0_candidates = [
                 k
                 for k, v in map_data.get("primitives", {}).items()
-                if v.get("status") == "pass"
+                if v.get("status") == "measured" and v.get("binding") == "bound"
             ]
-            logger.info(f"P1 from map: {len(p0_passes)} PASS primitives")
+            logger.info(f"P1 from map: {len(p0_candidates)} measured, bound primitives")
     else:
-        # Use passes from current P0 run
-        p0_passes = [
+        p0_candidates = [
             c["primitive"]
             for c in (p0_result["cells"] if p0_result else [])
-            if c["status"] == "PASS"
+            if c["status"] == "MEASURED" and c.get("binding") == "bound"
         ]
 
-    # Run P1 if there are passes
-    if args.track in {"P1", "all"} and p0_passes:
-        p1_result = run_p1_track(out_dir, p0_passes, census_entries, device=args.device)
+    # Run P1 if there are candidates
+    if args.track in {"P1", "all"} and p0_candidates:
+        p1_result = run_p1_track(
+            out_dir, p0_candidates, census_entries, device=args.device
+        )
         all_results.extend(p1_result["cells"])
 
     # Update artifacts
@@ -1187,7 +1394,11 @@ def main() -> None:
         )
     if p0_result:
         print(
-            f"P0: pass={p0_result['pass']}, defect={p0_result['defect']}, unavailable={p0_result['unavailable']}, coordinate={p0_result['coordinate']}, pause_R={p0_result['pause_r']}"
+            f"P0: measured={p0_result['measured']}, "
+            f"defect={p0_result['defect']}, "
+            f"refused={p0_result['unavailable']}, "
+            f"box_defect={p0_result['box_defect']}, "
+            f"pause_R={p0_result['pause_r']}"
         )
     if p1_result:
         print(
