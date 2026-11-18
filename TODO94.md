@@ -543,3 +543,50 @@ No slides. The cell log is the record. The map is the result.
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`
 
 The system is the portfolio. The loop is the process. The map is the result.
+
+---
+
+### Session 7 — 2026-11-18 (Removed fake restrictions, clean P0 sweep)
+**Decision:** Remove all hardcoded compatibility hacks from `get_legal_coordinate_for_primitive` — let the system's own validation catch real incompatibilities
+**Action:** Deleted 50+ lines of hardcoded rules (surrogate→routing, thermodynamic_contrast→energy_minimization, spike_integration→neuromorphic, predictive_settling→thermodynamic_contrast, conflict_adaptive→unavailable, etc.)
+
+**Clean P0 Results (full sweep, no restrictions):**
+- **39 PASS** — valid coordinates, above chance on single-task MNIST
+- **11 COORDINATE** — trains but below threshold
+- **9 UNAVAILABLE** — system validation rejects default companion axes:
+  - neuromorphic substrate (needs temporal dynamics)
+  - recurrent geometry (needs energy_minimization/predictive_settling/... dynamics)
+  - graph geometry (needs edge_index)
+  - predictive_settling/error_predictive_coding/spike_integration/diffusion/pc_alm dynamics (need compatible credits)
+  - thermodynamic_contrast credit (needs energy-based/PC-family dynamics)
+- **3 DEFECT** — system validation rejects during training:
+  - routing geometry + gradient credit (no hard top-k gate)
+  - conflict_adaptive plasticity + gradient credit (replaces readout)
+  - surrogate credit + feedforward geometry (no hard top-k gate)
+
+**Key Insight:** The UNAVAILABLE/DEFECT are **real system-enforced incompatibilities**, not my fake rules. The system validates axis combinations correctly.
+
+**FUNDAMENTAL PROBLEM IDENTIFIED:**
+- P0 screens on **single-task MNIST (batch 32, 1 epoch)**
+- Thesis tests on **batch-1 continual learning (SplitMNIST/Permuted MNIST)**
+- These don't correlate: PEPITA = 0.86 on MNIST → 0.25 on Permuted MNIST 20-task
+- Most PASS primitives at chance (~0.1) on single-task MNIST
+
+**R Tracks Already Falsified:**
+| Track | Local Worst | Backprop Worst | Gap | Kill Rule |
+|-------|-------------|----------------|-----|-----------|
+| R1 (SplitMNIST) | 0.929 | 0.953 | -2.4 pp | **TRIGGERED** |
+| R2 (Permuted MNIST 20-task) | 0.251 | 0.396 | -14.6 pp | **TRIGGERED** |
+
+**Next Experiment Options:**
+1. **Accept falsification** — publish negative result, move to different thesis
+2. **Change P0 screening** — screen on SplitMNIST batch 1 EWC (match R1 conditions)
+3. **Different thesis** — test routing+surrogate (B track), memristive+local (D track), PEPITA with SI/LwF/Replay
+
+---
+
+**Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
+**Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
+**Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`
+
+The system is the portfolio. The loop is the process. The map is the result.
