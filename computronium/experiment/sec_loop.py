@@ -421,6 +421,47 @@ def get_legal_coordinate_for_primitive(
         # Primitive not declared for vision tasks
         return None
 
+    # Handle known incompatible primitive combinations by adjusting companion axes
+    # Surrogate credit REQUIRES routing geometry (hard top-k gate)
+    if defaults["credit"] == "surrogate" and defaults["geometry"] != "routing":
+        defaults["geometry"] = "routing"
+    # Routing geometry REQUIRES surrogate credit (hard top-k blocks gradient)
+    if defaults["geometry"] == "routing" and defaults["credit"] == "gradient":
+        defaults["credit"] = "surrogate"
+    # Thermodynamic contrast REQUIRES energy_minimization dynamics
+    if (
+        defaults["credit"] == "thermodynamic_contrast"
+        and defaults["dynamics"] != "energy_minimization"
+    ):
+        defaults["dynamics"] = "energy_minimization"
+    # Fast weights plasticity works best with energy_minimization dynamics
+    if (
+        defaults["plasticity"] == "fast_weights"
+        and defaults["dynamics"] != "energy_minimization"
+    ):
+        defaults["dynamics"] = "energy_minimization"
+    # Spike integration dynamics needs neuromorphic substrate or compatible setup
+    if (
+        defaults["dynamics"] == "spike_integration"
+        and defaults["substrate"] == "digital"
+    ):
+        defaults["substrate"] = "neuromorphic"
+    # Predictive settling and error predictive coding dynamics require compatible credits
+    if (
+        defaults["dynamics"] in ("predictive_settling", "error_predictive_coding")
+        and defaults["credit"] == "gradient"
+    ):
+        defaults["credit"] = "thermodynamic_contrast"
+    # PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit
+    if defaults["dynamics"] == "pc_alm" and defaults["credit"] == "gradient":
+        defaults["credit"] = "thermodynamic_contrast"
+    # Conflict-adaptive plasticity replaces readout -> incompatible with gradient credit
+    if (
+        defaults["plasticity"] == "conflict_adaptive"
+        and defaults["credit"] == "gradient"
+    ):
+        return None  # Mark as UNAVAILABLE
+
     # Build coordinate with minimal params - only set structural params that are
     # universally required. Let the schema defaults handle geometry-specific params.
     params: dict[str, Any] = {
@@ -444,15 +485,44 @@ def get_legal_coordinate_for_primitive(
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
     elif geometry == "nca":
-        params["geometry.grid_hw"] = (16, 16)
+        # MNIST: 784 = 1*28*28, so use 1 channel, 28x28 grid
+        params["geometry.grid_hw"] = (28, 28)
+        params["geometry.input_dim"] = 1
     elif geometry == "spatial_lattice":
         params["geometry.lattice_dims"] = (8, 8)
+    elif geometry == "routing":
+        # Routing geometry needs top-k gate parameters
+        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
+        params["geometry.depth"] = 2
+        params["geometry.num_experts"] = 8
+        params["geometry.top_k"] = 2
+    elif geometry == "recurrent":
+        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
+        params["geometry.depth"] = 2
+    elif geometry == "graph":
+        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
+        params["geometry.num_layers"] = 2
 
     # Add dynamics-specific params
     dynamics = defaults["dynamics"]
     if dynamics == "energy_minimization":
         params["dynamics.max_steps"] = 10
         params["dynamics.convergence_threshold"] = 1e-3
+    elif dynamics == "predictive_settling":
+        params["dynamics.max_steps"] = 10
+        params["dynamics.step_size"] = 0.1
+    elif dynamics == "error_predictive_coding":
+        params["dynamics.max_steps"] = 10
+        params["dynamics.step_size"] = 0.1
+    elif dynamics == "spike_integration":
+        params["dynamics.tau"] = 20.0
+        params["dynamics.dt"] = 1.0
+    elif dynamics == "diffusion":
+        params["dynamics.step_size"] = 0.01
+        params["dynamics.num_steps"] = 10
+    elif dynamics == "pc_alm":
+        params["dynamics.max_steps"] = 10
+        params["dynamics.step_size"] = 0.1
 
     # Add credit-specific params for local credits
     credit = defaults["credit"]

@@ -495,6 +495,41 @@ No slides. The cell log is the record. The map is the result.
 
 ---
 
+### Session 6 — 2026-11-18 (Primitive compatibility fixes & breadth expansion)
+**Decision:** Fix incompatible primitive combinations and expand P0 screening across all 62 primitives
+**Fixes Applied:**
+1. **NCA geometry**: Fixed grid_hw from (16,16) to (28,28) with input_dim=1 for MNIST (784=1×28×28) → PASS (0.774)
+2. **Routing geometry**: Added num_experts=8, top_k=2 params; fixed surrogate credit pairing (requires routing geometry) → PASS (0.604 with surrogate)
+3. **Predictive settling / Error predictive coding / PC-ALM dynamics**: Added step_size params; fixed credit compatibility (require thermodynamic_contrast/equilibrium/local_goodness/forward_only, not gradient) → PASS (0.507, 0.673)
+4. **Fast weights plasticity**: Added energy_minimization dynamics requirement → PASS (0.477)
+5. **Substrate-coupled / Rule-state / Temporal-psi plasticity**: Added vision task_families → PASS (0.625, 0.625, 0.498)
+6. **Thermodynamic contrast credit**: Added energy_minimization dynamics requirement → PASS (0.327)
+7. **Elastic consolidation update**: Added vision task_families → PASS (0.161)
+8. **Analog / Optical / Complex substrates**: Added vision task_families → PASS (0.582, 0.623, 0.625)
+9. **NTM geometry**: Added vision task_families → PASS (0.184)
+10. **Conflict-adaptive plasticity**: Marked UNAVAILABLE with gradient credit (replaces readout, breaks gradient reachability)
+
+**P0 Results (after fixes):** 38 PASS, 17 COORDINATE, 7 UNAVAILABLE, 0 DEFECT
+**P1 Confirmation (38 PASS primitives, 3 seeds):** 3 surprises (same 3 parameter_update: adam, ortho_adam, lion)
+**New primitives confirmed working:** NCA, routing, predictive_settling, pc_alm, fast_weights, substrate_coupled, rule_state, temporal_psi, thermodynamic_contrast, elastic_consolidation, analog, optical, complex, ntm
+
+**UNAVAILABLE (legitimate - require specific companion axes):**
+- neuromorphic substrate (needs spike_integration/energy_minimization/diffusion dynamics)
+- quantum substrate (fundamentally incompatible with standard training)
+- recurrent geometry (needs energy_minimization/predictive_settling/error_predictive_coding/pc_alm/diffusion dynamics)
+- graph geometry (needs edge_index)
+- spike_integration dynamics (needs spiking/target_inversion/target_prop/temporal_trace credit)
+- diffusion dynamics (incompatible with gradient credit)
+- conflict_adaptive plasticity (replaces readout, breaks gradient reachability)
+
+**Next Experiment:**
+- Run R1/R2 tracks with PEPITA (already done - kill rules triggered)
+- Investigate D track (memristive + local) or B track (routing + surrogate) for long-horizon CL
+- Test PEPITA with different consolidation (SI, LwF, Replay) instead of EWC
+- Pre-register P2 for 3 parameter_update surprises (5 seeds, matched budget)
+
+---
+
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
 **Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`

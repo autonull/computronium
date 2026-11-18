@@ -32,7 +32,7 @@ Complex-valued operations via phase interference
         "optical",
         "phase",
     ),
-    task_families=('scientific',),
+    task_families=('scientific', 'vision'),
     available=True,
     capability_card="Optical substrate; interferometric; phase/amplitude encoding",
 )

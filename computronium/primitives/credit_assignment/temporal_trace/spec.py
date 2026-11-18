@@ -33,7 +33,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Supports rate-coded surrogate and timing-asymmetric STDP modes. Kernel falls back to reference.",
     tags=("stdp", "spike_timing", "temporal_credit"),
-    task_families=('sequence', 'continual'),
+    task_families=('sequence', 'continual', 'vision'),
     available=True,
     capability_card="STDP-style temporal trace; eligibility traces for credit; online learning",
 )

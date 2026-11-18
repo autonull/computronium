@@ -33,7 +33,7 @@ Spike-based computation with event-driven updates.
         "spikes",
         "async",
     ),
-    task_families=('neuromorphic',),
+    task_families=('neuromorphic', 'vision'),
     available=True,
     capability_card="Neuromorphic substrate; event-driven; spiking; low power",
 )

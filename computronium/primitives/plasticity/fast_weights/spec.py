@@ -28,7 +28,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Accelerated kernel could fuse Hebbian update with projection.",
     tags=("fast_weights", "hebbian", "associative_memory", "episode_local"),
-    task_families=('sequence', 'continual'),
+    task_families=('sequence', 'continual', 'vision'),
     available=True,
     capability_card="Fast weights plasticity; short-term memory; associative recall",
 )

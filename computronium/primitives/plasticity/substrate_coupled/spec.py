@@ -33,7 +33,7 @@ Plasticity coupled to substrate physics (e.g., memristive conductance).
         "coupled",
         "memristive",
     ),
-    task_families=('neuromorphic',),
+    task_families=('neuromorphic', 'vision'),
     available=True,
     capability_card="Substrate-coupled plasticity; device physics drives updates",
 )

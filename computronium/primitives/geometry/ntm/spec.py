@@ -32,7 +32,7 @@ Write: m_s ← m_s ⊙ (1 - w_s ⊙ e) + w_s ⊙ a
         "external_memory",
         "content_addressing",
     ),
-    task_families=('sequence',),
+    task_families=('sequence', 'vision'),
     available=True,
     capability_card="Neural Turing Machine; external memory; differentiable addressing",
 )

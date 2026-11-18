@@ -34,7 +34,7 @@ h_0 = embed(ids);  h_B = block_B(h_{B−1});  logits = h_B W_out
         "causal",
         "language_model",
     ),
-    task_families=('sequence', 'lm'),
+    task_families=('sequence', 'lm', 'vision'),
     available=True,
     capability_card="Causal transformer; attention with causal mask; autoregressive",
 )

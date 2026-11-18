@@ -29,7 +29,7 @@ Graph message passing: h_i = σ(Σ_{j∈N(i)} W_{ij} h_j + b_i)
         "graph",
         "predictive_coding",
     ),
-    task_families=('graph',),
+    task_families=('graph', 'vision'),
     available=True,
     capability_card="Graph geometry; message passing; node/edge features",
 )

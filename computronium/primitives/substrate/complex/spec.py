@@ -31,7 +31,7 @@ SPEC = ImplementationSpec(
     ),
     notes="Reference implementation delegates to ComplexSubstrate. Kernel falls back to reference (Triton TODO).",
     tags=("substrate", "digital", "complex", "holomorphic", "phase"),
-    task_families=('scientific',),
+    task_families=('scientific', 'vision'),
     available=True,
     capability_card="Complex-valued substrate; phase and magnitude; quantum-inspired",
 )
