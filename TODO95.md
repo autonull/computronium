@@ -116,23 +116,30 @@ control is at chance cannot label anything (P1); only then is a census meaningfu
 (P2); interactions require a fixed base (P3); the deep dive is chosen by the map
 (P4); the external path and public artifacts follow (P5).
 
-### P0 — One inventory, one box, one record (no training; 1 session)
+**First session:** the box is calibrated (control 0.8914, ~5–8 s/cell) and rows
+carry their box, so the session is **P0a + P2** (inventory, then census). P0b
+(Schedule/Record) is a schema change and follows in its own session.
 
-**Decision:** can a map row be reproduced from itself? Today no.
-**Deliverable:**
-- `AXES_REGISTRIES` → the inventory; `ALL_PRIMITIVES` becomes a projection
-  (or is deleted); census, map, `sec_loop` and the README counts are projections
-  (73 rows, not 62).
-- `Schedule` gains `batch_size`, `steps_per_task`, `seeds`; the CL runner and
-  the kernel both build one; the map row stores it, task included.
-- One record: the `sec_loop` JSONL line becomes a `Record` (or gains the same
-  fields) — one schema, not two.
-- Status vocabulary printed by the map, with `swapped` and `chance` as
-  first-class states.
-**Gate:** `pytest tests/property/test_inventory_single_source.py
-tests/property/test_box_identity.py`.
-**Done when:** 73 rows, each carrying task + box + ruler; changing the batch
-alone makes the row non-comparable.
+### P0a — One inventory (no training; 1 session)
+
+**Decision:** can the census see every primitive? Today 62 of 75.
+**Deliverable:** `build_census` reads `AXES_REGISTRIES` (73) plus the spec-only
+rows (2), and prints its total. The 11 credits/updates that `ALL_PRIMITIVES`
+drops are included; `closed_form_ridge` and `noisy` are entries with
+`available=False` and the reason "no config classmethod — a capability gap",
+which is their honest state. `ALL_PRIMITIVES` becomes a projection or is deleted.
+**Gate:** `test_inventory_single_source`: the census total == 75 and every axis
+row has an entry.
+**Done when:** the census prints 75 and the two gaps are named.
+
+### P0b — One box, one record (schema change; 1 session)
+
+**Decision:** can a claim be checked against its run? Today no.
+**Deliverable:** `Schedule` gains `batch_size`, `steps_per_task`; the CL runner
+builds one; the `sec_loop` JSONL becomes a `Record` (or gains the same fields);
+`ThresholdRegistration` gains a `schedule` block and stops discarding box fields.
+**Gate:** `test_box_identity`: changing `batch_size` alone refuses the claim.
+**Done when:** one record schema, one box type, and a claim that names its box.
 
 ### P0.5 — The defect queue (before the census; ~1 h)
 
@@ -184,7 +191,8 @@ Unmeasured rows are `unmeasured`, not absent. A short report: measured/defect/
 refused counts per axis, and the defect list with mechanisms named.
 **Box:** the P1 base for MNIST; a primitive that is illegal at the base is
 measured at its nearest legal box and marked `swapped`; each primitive is also
-measured at its own declared defaults and marked `own-knobs`.
+measured at its own declared defaults and marked `own-knobs`. The measured base:
+375 batches, hidden 128, 150k ceiling, control 0.8914, ~5–8 s/cell.
 **Gate:** every row reproducible; every `fail` names a mechanism; the report
 prints the inventory count.
 **Done when:** the first map with no missing rows and no inflated status.
@@ -267,8 +275,8 @@ measurements at batch 32.
   measurement (the factory is green).
 - Reporting a map with missing rows, one ruler for all families, or a
   near-chance cell called `pass`.
-- Full sweeps (the census is the sweep, stratified by legality); 1-seed claims;
-  walltime rankings; documents longer than 300 lines.
+- Full sweeps (the census is the sweep); 1-seed claims; walltime rankings;
+  documents longer than 300 lines.
 
 ---
 
@@ -276,13 +284,9 @@ measurements at batch 32.
 
 | Assumption | Falsifier | Then |
 |---|---|---|
-| The map is the product | no slice yields a viable region beyond the known ones; the map is a legality audit with cost | publish the legality + cost map; it is still the first of its kind |
-| A common base exists per family | no box lets a control clear the bar within 2 min | shrink the task (subset, 3 classes) or accept a 10-min cell; the box is declared |
 | 73 rows are affordable | the calibrated base costs >5 min/cell | 3 sessions, axis by axis; the map accumulates, it is not a sweep |
-| The interaction slice is the next question | the census shows one axis dominates (no interaction) | the structure is "this axis dominates"; that is a result, and P4 uses it |
 
 ---
-
 ## 8. Definition of done
 
 - One inventory (73) projected into census, map, README and method cards.
