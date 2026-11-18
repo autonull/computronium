@@ -585,6 +585,53 @@ The system is the portfolio. The loop is the process. The map is the result.
 
 ---
 
+### Session 8 — 2026-11-18 (Companion compatibility table + full breadth sweep)
+**Decision:** Replace hardcoded if/else chains with declarative COMPANION_COMPAT table; run full breadth sweep
+**Action:** Added declarative table mapping each primitive to required companion axes; removed 50+ lines of hardcoded logic
+
+**COMPANION_COMPAT Table:**
+| Primitive | Requires | Notes |
+|-----------|----------|-------|
+| neuromorphic | dynamics=energy_minimization | Only works with energy_minimization |
+| recurrent | dynamics=energy_minimization | Only works with energy_minimization |
+| graph | dynamics=instantaneous | Needs edge_index at runtime |
+| predictive_settling | credit=thermodynamic_contrast | Incompatible with gradient |
+| error_predictive_coding | credit=thermodynamic_contrast | Incompatible with gradient |
+| spike_integration | credit=target_inversion | Works on digital substrate |
+| diffusion | geometry=recurrent, credit=target_inversion | Requires recurrent geometry |
+| pc_alm (dynamics) | credit=thermodynamic_contrast | Incompatible with gradient |
+| thermodynamic_contrast | dynamics=energy_minimization | Incompatible with instantaneous |
+| pc_alm (credit) | dynamics=energy_minimization | Incompatible with instantaneous |
+| surrogate | geometry=routing | Requires hard top-k gate |
+| routing (geometry) | credit=surrogate | Gradient blocked by hard top-k |
+| routing (plasticity) | credit=surrogate | Same as geometry |
+| conflict_adaptive | None (UNAVAILABLE) | Replaces readout, breaks gradient |
+
+**P0 Full Sweep Results (62 primitives):**
+- **46 PASS** — valid coordinates, above chance on MNIST
+- **13 COORDINATE** — trains but below threshold
+- **2 UNAVAILABLE** — graph geometry (needs edge_index at runtime), conflict_adaptive plasticity (explicitly incompatible)
+- **1 DEFECT** — plasticity.routing (hangs with routing geometry + surrogate credit)
+
+**P1 Confirmation (46 PASS primitives, 3 seeds):**
+- **46 confirmed**, **3 surprises** (adam, ortho_adam, lion parameter_update)
+- Same 3 optimizer surprises as before — no new surprises from newly-fixed primitives
+
+**Key Insight:** The UNAVAILABLE/DEFECT are **real system-enforced incompatibilities** with clear mechanistic reasons. The COMPANION_COMPAT table captures the valid pairings so P0 finds legal boxes automatically.
+
+**FUNDAMENTAL PROBLEM REMAINS:**
+- P0 screens on **single-task MNIST (batch 32, 1 epoch)**
+- Thesis tests on **batch-1 continual learning**
+- No correlation: PEPITA = 0.86 on MNIST → 0.25 on Permuted MNIST 20-task
+- R1/R2 kill rules **triggered** (thesis falsified)
+
+**Next Experiment Options:**
+1. **Accept falsification** — publish negative result, move to different thesis
+2. **Change P0 screening** — screen on SplitMNIST batch 1 EWC (match R1 conditions)
+3. **Different thesis** — test routing+surrogate (B track), memristive+local (D track), PEPITA with SI/LwF/Replay
+
+---
+
 **Start:** `uv run python -m computronium.experiment.sec_census --out results/sec`
 **Run:** `uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --max-cells 12`
 **Watch:** `uv run python -m computronium.experiment.sec_watch --port 8080`
