@@ -6,6 +6,7 @@ instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
+**Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion ladder on vision: capability gap (transpose feedback vanishes; val_acc=0.119 ≈ chance 0.10). Works on graph family (0.68 @ 6 epochs). Needs feedback alignment or learned inverses for vision.
 
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
@@ -26,7 +27,7 @@ question.
 | S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
 | S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
 | S5b | Screen graph family primitives | ✅ DONE (9 measured) |
-| S5c | First ladder (target_inversion on vision) | ⏳ NEXT |
+| S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — capability gap (works on graph, vanishing targets on vision) |
 | S6 | Audit with `scripts/audit.py` | ⏳ PENDING |
 
 ---
@@ -223,7 +224,7 @@ three of the eleven near-chance rows. Run them before any 1-epoch ladder.
 
 | Primitive | Primary knob | Ladder | If all fail → triage |
 |---|---|---|---|
-| `credit.target_inversion` | target steps, lr | 3 × 1 seed + 1 confirm | defect: target/readout |
+| `credit.target_inversion` | feedback_scale, lr | 3 × 1 seed + 1 confirm | capability gap: transpose feedback vanishes on vision; works on graph (0.68 @ 6 epochs). Needs feedback alignment (random B) or learned inverses for vision. |
 | `credit.random_projections` | feedback scale, lr | 3 × 1 seed | capability gap: width/params |
 | `credit.forward_tangent` | JVP scale, lr | 3 × 1 seed | gap: memory vs accuracy |
 | `credit.zeroth_order` | perturbations, lr | 3 × 1 seed | gap: sample efficiency |
@@ -283,7 +284,7 @@ companion's number, not a verdict on the primitive.
 | `rtrl_reference` | refused | — |  | R+K+F |
 | `score_function` | measured | bound | 0.732 | R+K+L |
 | `surrogate` | defect | bound |  | R+K+CAP |
-| `target_inversion` | measured | bound | 0.119 | R+K+L |
+| `target_inversion` | measured | bound | 0.119 (vision) / 0.68 (graph) | R+K+L (vision: capability gap) |
 | `temporal_trace` | measured | inert | 0.122 | R+K+I |
 | `thermodynamic_contrast` | measured | bound | 0.782 | R+K+L |
 | `unbiased_rtrl` | refused | — |  | R+K+F |
@@ -569,9 +570,11 @@ uv run python -m pytest tests/property/test_legality_compile_lock.py \
 #    graph batching; conv/pc_alm/EPC one-step probes
 uv run python scripts/probes/test_one_step_wiring.py
 
-# 3. First family base (graph) + first ladder (target_inversion) (NEXT)
+# 3. First ladder (target_inversion) — TRIAGED as capability gap on vision
+#    (transpose feedback vanishes; works on graph 0.68 @ 6 epochs)
+#    Next: ladder on graph family or implement feedback alignment for vision
 uv run python -m computronium.experiment.sec_loop \
-  --track P0 --out results/sec --own-knobs --axis credit
+  --track P0 --out results/sec --own-knobs --axis credit --task cora
 
 # 4. Audit
 uv run python scripts/audit.py

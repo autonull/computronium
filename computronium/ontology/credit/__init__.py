@@ -2695,7 +2695,9 @@ class TargetInversionCredit:
             pre, post = pair
             delta = post - tgt  # [batch, out]
             # pseudo_grad = delta^T @ pre / batch -> [out, in]
-            grads.append(delta.T @ pre / pre.shape[0])
+            grad = delta.T @ pre / pre.shape[0]
+            # Apply feedback_scale to compensate for vanishing targets in transpose feedback
+            grads.append(grad * self.config.feedback_scale)
 
         return grads
 
