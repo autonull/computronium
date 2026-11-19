@@ -101,6 +101,10 @@ _PRECISION_TO_NUMERIC: dict[str, NumericRepresentation] = {
 
 _TYPE_TO_DEVICE: dict[str, DeviceModel] = {
     "digital": DeviceModel.DIGITAL,
+    # A noisy digital substrate is the digital device with additive state
+    # noise; without its row the post-training objective spec dies on a
+    # KeyError and the cell has no number at all.
+    "noisy": DeviceModel.DIGITAL,
     "analog": DeviceModel.ANALOG,
     "memristive": DeviceModel.MEMRISTIVE,
     "neuromorphic": DeviceModel.NEUROMORPHIC,

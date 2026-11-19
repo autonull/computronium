@@ -54,7 +54,11 @@ from computronium.experiment.sec_census import (
     PrimitiveCensusEntry,
     build_census,
 )
-from computronium.experiment.sec_pilot import resource_vector
+from computronium.experiment.sec_pilot import (
+    base_schedule,
+    calibrate_control,
+    resource_vector,
+)
 
 logger = get_logger(__name__)
 
@@ -423,23 +427,15 @@ def _continual_box(config: CLConfig, *, budget_id: str, task_id: str) -> Schedul
 # Track P0: Breadth Delta Screen
 # ============================================================
 
-P0_EPOCHS = 1
-# 32 samples per step. The loader used to read the batch *count* as the batch
-# size, so the declared 375-batch screen trained at 375 samples/step (a 118,282
-# parameter cell never saw its step size move); the two are separate fields of
-# the box (TODO95 D2).
-P0_BATCH_SIZE = 32
-# 32 batches (1,024 samples) ranked cells by their default step size, not by
-# their mechanism: at 32 batches `adam` scored 0.198 and `euclidean` 0.540; at
-# 375 batches `adam` scored 0.695 and `euclidean` 0.424 (measured 2026-11-18).
-# A screen must run long enough for the slowest declared step size to move.
-P0_BATCH_LIMIT = 375
-P0_SEED = 0
+# The screen's slice: one task family, its declared base box (TODO95 S2).
+# The box is not restated here — ``sec_pilot.BASE_BOXES`` is the one source,
+# and a second literal is how the screen trained at a different box than the
+# map printed.
+P0_TASK = "mnist"
 P0_HIDDEN_DIM = 128
-# A 128-wide hidden layer composes 118,282 parameters; a 10k ceiling with a
-# 128-wide layer was an impossible box (measured 2026-11-18), and the screen
-# never checked it. The ceiling now fits the declared geometry.
-P0_PARAM_BUDGET = 150_000
+# The parameter ceiling is the base box's own field (``Schedule.param_budget``),
+# not a second literal: a 10k ceiling with a 128-wide layer was an impossible
+# box (measured 2026-11-18), and the declared base now fits its geometry.
 # How many compose-legal boxes to try per primitive before declaring it cannot
 # train. Most resolve on the first (base) box; a few need a companion swap.
 P0_MAX_COORDINATES = 24
@@ -499,21 +495,6 @@ def _screen_status() -> Status:
     )
 
 
-def _control_val_acc(schedule: Schedule, device: str) -> float | None:
-    """The base coordinate's own accuracy at this box: the ability ruler.
-
-    The gate bar is the task's chance rate, so a cell above it has cleared a
-    floor, not a capability. A map row is only readable beside this control:
-    the same box, the default six-axis coordinate, one seed.
-    """
-    try:
-        result = evaluate_cell(_coordinate(_AXIS_DEFAULTS), schedule)
-    except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
-        logger.exception("P0 control cell failed at the box")
-        return None
-    return float(dict(result.metrics).get("val_acc", 0.0))
-
-
 def _control_stats(
     schedule: Schedule, device: str
 ) -> tuple[float | None, float | None]:
@@ -521,22 +502,18 @@ def _control_stats(
 
     One seed is a cell, not a control. A control whose mean sits inside the
     bar's 2σ band has no power, and its slice is refused before it is priced
-    (TODO95 S2).
+    (TODO95 S2). The calibration rule is ``sec_pilot.calibrate_control``;
+    this is its measurement at the screen's box.
     """
-    from dataclasses import replace
-
-    from computronium.experiment.sec_pilot import CONTROL_SEEDS
-
-    values: list[float] = []
-    for seed in range(CONTROL_SEEDS):
-        value = _control_val_acc(replace(schedule, seed=seed, n_seeds=1), device)
-        if value is not None:
-            values.append(value)
-    if not values:
+    del device  # the schedule carries the device the control runs on
+    try:
+        calibration = calibrate_control(schedule, evaluate=evaluate_cell)
+    except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
+        logger.exception("P0 control cell failed at the box")
         return None, None
-    mean = sum(values) / len(values)
-    spread = math.sqrt(sum((value - mean) ** 2 for value in values) / len(values))
-    return mean, spread
+    if calibration is None:
+        return None, None
+    return calibration.control_mean, calibration.control_std
 
 
 def _ruler(task_id: str) -> tuple[str, str]:
@@ -623,7 +600,9 @@ def _params_for(axes: dict[str, str], own_knobs: str | None = None) -> dict[str,
         params["geometry.depth"] = 2
         params["geometry.num_experts"] = 8
         params["geometry.top_k"] = 2
-    elif geometry == "graph":
+    if geometry == "graph":
+        # The graph topology also needs its connectivity; it is not a
+        # feedforward width, so the first branch cannot carry it.
         params["geometry.edge_index"] = [[0, 1], [1, 0]]
 
     dynamics = axes["dynamics"]
@@ -826,8 +805,10 @@ def _train_nearest(
             last_error = exc
             if getattr(exc, "cause", None) == "timeout":
                 return None, None, last_error, tried, True
-        except (ValueError, RuntimeError) as exc:
-            # ruff: ignore[blind-except] - one bad cell never ends the screen
+        except Exception as exc:  # ruff: ignore[blind-except] - one bad cell ends its cell, never the screen
+            # A compose rejection is a refused row; any other failure
+            # (a crash, a missing objective) is an execution fact (a defect).
+            # Neither may abandon the other 74 rows.
             last_error = exc
     return None, None, last_error, tried, False
 
@@ -843,6 +824,7 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
     criterion: str,
     axis: str,
     primitive_key: str,
+    box: dict[str, Any],
     own_knobs: bool = False,
 ) -> dict[str, Any]:
     """The cell a primitive emits when no compose-legal box trained."""
@@ -857,6 +839,8 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
                 f"{tried}/{candidates} boxes; last error: {last_error}"
             ),
             "ruler": ruler,
+            "box": box,
+            "rule": "refused at the base box (cost cap)",
         }
 
     # No compose-legal box trained. Distinguish a compose rejection (never
@@ -869,6 +853,9 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
             "primitive": entry.id,
             "status": "UNAVAILABLE",
             "reason": f"validation: {last_error}",
+            "ruler": ruler,
+            "box": box,
+            "rule": "refused at the base box (validation)",
         }
     logger.exception(f"P0 every legal box failed to train: {entry.id}")
     inert = binding_reason(
@@ -881,6 +868,8 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
         "error": str(last_error),
         "cause": getattr(last_error, "cause", None),
         "ruler": ruler,
+        "box": box,
+        "rule": "base box, no legal box trained",
         "binding": "inert" if inert else "bound",
         "binding_reason": inert,
         "tried": tried,
@@ -916,6 +905,8 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             "status": "UNAVAILABLE",
             "reason": "no legal box or not available",
             "ruler": ruler,
+            "box": _box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
+            "rule": "refused at the base box",
             "binding": "inert" if box_binding else "bound",
             "binding_reason": box_binding,
         }
@@ -935,13 +926,17 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             axis=axis,
             primitive_key=primitive_key,
             own_knobs=own_knobs,
+            box=_box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
         )
 
     metrics = dict(eval_result.metrics)
     val_acc = float(metrics.get("val_acc", 0.0))
     loss = float(metrics.get("loss", float("inf")))
     finite = math.isfinite(val_acc) and math.isfinite(loss)
-    within = eval_result.param_count <= P0_PARAM_BUDGET * (1 + PARAM_BUDGET_TOLERANCE)
+    ceiling = schedule.param_budget
+    within = ceiling <= 0 or eval_result.param_count <= ceiling * (
+        1 + PARAM_BUDGET_TOLERANCE
+    )
     defect = (
         None
         if finite and within
@@ -995,17 +990,82 @@ def _task_bar(task_id: str) -> Any:
     return primary_pass_bar(TaskRegistry().get(task_id))
 
 
+def _param_budget(task_id: str) -> int:
+    """The family's declared parameter ceiling; 0 when undeclared."""
+    schedule = base_schedule(task_id)
+    return 0 if schedule is None else schedule.param_budget
+
+
 def _refused_cell(
-    entry: PrimitiveCensusEntry, reason: str, ruler: str
+    entry: PrimitiveCensusEntry,
+    reason: str,
+    ruler: str,
+    box: dict[str, Any],
 ) -> dict[str, Any]:
-    """One cell a slice refuses before it is priced: the trigger is the row."""
+    """One cell a slice refuses before it is priced: the trigger is the row.
+
+    A refusal is a box statement, so the box it was refused at travels with
+    it; otherwise the row cannot be told apart from a box it was never near.
+    """
     return {
         "track": "P0",
         "primitive": entry.id,
         "status": "UNAVAILABLE",
         "reason": reason,
         "ruler": ruler,
+        "box": box,
+        "rule": "refused at the base box",
     }
+
+
+def _refused_cells(
+    entries: list[PrimitiveCensusEntry],
+    reason: str,
+    ruler: str,
+    box: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """A slice refused at one box: one row per primitive, each with the box."""
+    return [_refused_cell(entry, reason, ruler, box) for entry in entries]
+
+
+def _screen_entries(
+    entries: list[PrimitiveCensusEntry],
+    schedule: Schedule,
+    base_box: dict[str, Any],
+    *,
+    control_acc: float | None,
+    ruler: str,
+    criterion: str,
+    own_knobs: bool,
+) -> list[dict[str, Any]]:
+    """Screen every entry at the base box: one cell each, refusals included."""
+    from computronium.experiment.sec_pilot import refusal_for
+
+    cells: list[dict[str, Any]] = []
+    for entry in entries:
+        family_reason = refusal_for(entry, schedule.task_id)
+        if family_reason is not None:
+            logger.info(f"P0 refused by task family: {entry.id}")
+            cells.append(_refused_cell(entry, family_reason, ruler, base_box))
+            continue
+        logger.info(f"P0 screening: {entry.id}")
+        axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+        cells.append(
+            _screen_coordinate(
+                entry,
+                _iter_legal_coordinates(
+                    entry, limit=P0_MAX_COORDINATES, own_knobs=own_knobs
+                ),
+                schedule,
+                control_acc=control_acc,
+                ruler=ruler,
+                criterion=criterion,
+                axis=axis,
+                primitive_key=entry.id.split(".")[-1],
+                own_knobs=own_knobs,
+            )
+        )
+    return cells
 
 
 def run_p0_track(
@@ -1057,67 +1117,46 @@ def run_p0_track(
         f"(from {len(census_entries)} total)"
     )
 
-    schedule = Schedule(
-        fidelity="L0",
-        seed=P0_SEED,
-        n_seeds=1,
-        epochs=P0_EPOCHS,
-        batch_limit=P0_BATCH_LIMIT,
-        batch_size=P0_BATCH_SIZE,
-        budget_id="p0",
-        task_id="mnist",
-        param_budget=P0_PARAM_BUDGET,
-        device=device,
-        deterministic=True,
-        num_workers=0,
-        precision="fp32",
-        checkpoint_every_n=0,
+    schedule = base_schedule(P0_TASK, device)
+    criterion, ruler = _ruler(P0_TASK)
+    base_box = (
+        {} if schedule is None else _box_summary(_coordinate(_AXIS_DEFAULTS), schedule)
     )
-
-    control_acc, control_spread = _control_stats(schedule, device)
-    criterion, ruler = _ruler(schedule.task_id)
-    bar = _task_bar(schedule.task_id)
-    logger.info(
-        f"P0 control at this box: val_acc={control_acc} "
-        f"(spread {control_spread}, bar {None if bar is None else bar.value})"
-    )
-
-    powered = control_acc is not None and (bar is None or control_acc > bar.value)
+    control_acc: float | None = None
+    control_spread: float | None = None
+    powered = False
+    bar = _task_bar(P0_TASK)
     results: list[dict[str, Any]] = []
-    if not powered:
-        # The control is inside the bar's band: the slice measures noise, so
-        # it is refused before it is priced (TODO95 S2).
-        reason = (
-            f"control at chance at this box: val_acc={control_acc} inside bar "
-            f"{None if bar is None else bar.value}; slice refused before it "
-            "is priced (TODO95 S2)"
-        )
-        results = [_refused_cell(entry, reason, ruler) for entry in entries_to_screen]
+    if schedule is None:
+        # A family with no declared base has no box to price and no control
+        # to read: its slice is refused at the census's own gap (TODO95 S2).
+        reason = f"{P0_TASK} declares no base box; the slice is refused"
+        results = _refused_cells(entries_to_screen, reason, ruler, base_box)
     else:
-        from computronium.experiment.sec_pilot import refusal_for
-
-        for entry in entries_to_screen:
-            family_reason = refusal_for(entry, schedule.task_id)
-            if family_reason is not None:
-                logger.info(f"P0 refused by task family: {entry.id}")
-                results.append(_refused_cell(entry, family_reason, ruler))
-                continue
-            logger.info(f"P0 screening: {entry.id}")
-            axis = _AXIS_FIELD.get(entry.axis, entry.axis)
-            results.append(
-                _screen_coordinate(
-                    entry,
-                    _iter_legal_coordinates(
-                        entry, limit=P0_MAX_COORDINATES, own_knobs=own_knobs
-                    ),
-                    schedule,
-                    control_acc=control_acc,
-                    ruler=ruler,
-                    criterion=criterion,
-                    axis=axis,
-                    primitive_key=entry.id.split(".")[-1],
-                    own_knobs=own_knobs,
-                )
+        control_acc, control_spread = _control_stats(schedule, device)
+        logger.info(
+            f"P0 control at this box: val_acc={control_acc} "
+            f"(spread {control_spread}, bar {None if bar is None else bar.value})"
+        )
+        powered = control_acc is not None and (bar is None or control_acc > bar.value)
+        if not powered:
+            # The control is inside the bar's band: the slice measures noise,
+            # so it is refused before it is priced (TODO95 S2).
+            reason = (
+                f"control at chance at this box: val_acc={control_acc} inside "
+                f"bar {None if bar is None else bar.value}; slice refused "
+                "before it is priced (TODO95 S2)"
+            )
+            results = _refused_cells(entries_to_screen, reason, ruler, base_box)
+        else:
+            results = _screen_entries(
+                entries_to_screen,
+                schedule,
+                base_box,
+                control_acc=control_acc,
+                ruler=ruler,
+                criterion=criterion,
+                own_knobs=own_knobs,
             )
 
     total = len(entries_to_screen)
@@ -1140,7 +1179,7 @@ def run_p0_track(
         "bar": None if bar is None else bar.value,
         "own_knobs": own_knobs,
         "ruler": ruler,
-        "base_box": _box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
+        "base_box": base_box,
         "defect_rate": defect_rate,
         "pause_r": pause_r,
         "cells": results,
@@ -1197,7 +1236,7 @@ def run_p1_track(
                 batch_limit=P1_BATCH_LIMIT,
                 budget_id="p1",
                 task_id="mnist",
-                param_budget=P0_PARAM_BUDGET,
+                param_budget=_param_budget(P0_TASK),
                 device=device,
                 deterministic=True,
                 num_workers=0,
@@ -1397,6 +1436,7 @@ def _map_row(
         "swapped": False,
         "defect": None,
         "trigger": None,
+        "replay_hash": None,
         "last_screened": None,
     }
     if not entry.available:
@@ -1422,7 +1462,7 @@ def _map_row(
         row["binding"] = cell.get("binding")
         row["binding_reason"] = cell.get("binding_reason")
         row["swapped"] = cell.get("swapped", False)
-        row["rule"] = (
+        row["rule"] = cell.get("rule") or (
             "nearest-legal swap" if row["swapped"] else "base box, one axis varied"
         )
         row["ruler"] = cell.get("ruler")
@@ -1433,6 +1473,11 @@ def _map_row(
             "within_ceiling": cell.get("within_ceiling"),
             **(cell.get("resource") or {}),
         }
+        record = cell.get("record")
+        if record:
+            # The replay hash is the record's provenance, not a second hash:
+            # a row whose claim cannot be replayed is not reproducible.
+            row["replay_hash"] = record["provenance"]["code_sha"]
     if status == "measured":
         row["measurement"] = {
             "val_acc": cell.get("val_acc"),
@@ -1492,6 +1537,8 @@ def update_map(
             "total": len(census_entries),
             "available": sum(1 for entry in census_entries if entry.available),
             "control_val_acc": control,
+            "control_spread": (p0_result or {}).get("control_spread"),
+            "bar": (p0_result or {}).get("bar"),
         },
         "base": base,
         "by_axis": by_axis,
@@ -1510,6 +1557,22 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
         f"Inventory: {inventory['total']} primitives, "
         f"{inventory['available']} available; "
         f"control val_acc={inventory['control_val_acc']}"
+    )
+    totals: dict[str, int] = {}
+    for counts in map_data["by_axis"].values():
+        for status, count in counts.items():
+            totals[status] = totals.get(status, 0) + count
+    print(
+        "Screen: "
+        + ", ".join(
+            f"{status}={totals.get(status, 0)}"
+            for status in (
+                "measured",
+                "defect",
+                "refused",
+                "unmeasured",
+            )
+        )
     )
     for axis, counts in sorted(map_data["by_axis"].items()):
         detail = ", ".join(

@@ -1,15 +1,18 @@
 # TODO95 — The Map Is the Product
 
-**Status:** 2026-11-18 · drafted from the README and `PURPOSE.md`, after TODO94
+**Status:** 2026-11-19 · drafted from the README and `PURPOSE.md`, after TODO94
 Session 12; session 14 landed the record, the box and two composable rows;
-session 15 calibrated the bar, the 3-seed control and the own-knobs box. The
-laboratory exists to map the 6-axis space of learning systems
+session 15 calibrated the bar, the 3-seed control and the own-knobs box;
+session 16 re-screened the census at that box (S2b). The laboratory exists to
+map the 6-axis space of learning systems
 (10 substrates × 12 geometries × 8 dynamics × 6 plasticities × 19 credits ×
 18 updates = 75 primitives, 2M+ legal cells). Today the map is:
 **73 of 75 primitives available** (2 declared gaps: the documented no-op
-plasticities), at 75 distinct boxes on one ruler, with the P0 screen emitting
-measurements and never verdicts. The instrument works; the next session
-re-screens the census at the calibrated boxes (S2b).
+plasticities), all 75 rows at one base box (mnist, 32 samples/step, 375
+batches, 1 epoch; control 0.8908 ± 0.0024, bar 0.1060), with the box and the
+replay hash on every screened row: **57 measured, 6 defect, 12 refused**
+(8 family refusals, 2 cost caps, 2 declared gaps). The instrument works; the
+next session ranks the bound rows and runs the interaction slice (S3).
 
 ---
 
@@ -111,20 +114,22 @@ by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
 ### Queue (session 15; one table)
 
 The census is the inventory: 75 rows, 73 available, 2 declared gaps (the two
-no-op plasticities), 75 distinct boxes. The box fix and the calibration landed:
+no-op plasticities). The box fix and the calibration landed:
 vision (`mnist`, 32/step, 375 batches, 1 epoch) control 0.8908 ± 0.0024, bar
-0.1060, 8.3 s/cell (434 cells/h); tabular (`iris`, 32/step, 20 epochs) control
-0.7333 ± 0.0943, bar 0.5055, 4.9 s/cell (729 cells/h). The own-knobs box ran
-the 18 update rows: 14 measured, 4 refused (3 family refusals, 1 cost cap).
-The remaining work is the re-screen at these boxes (S2b), then one claim
-session each for the interaction and the deep dive. A row without a gate is prose; a session without a claim is a sweep.
+0.1060; tabular (`iris`, 32/step, 20 epochs) control 0.7333 ± 0.0943, bar
+0.5055. The own-knobs box ran the 18 update rows: 14 measured, 4 refused
+(3 family refusals, 1 cost cap). S2b then re-screened all 75 rows at the
+vision base: 57 measured, 6 defect, 12 refused, 19.7 min (12.0 s/cell mean
+over 62 trained cells, 228 rows/h). The remaining work is the interaction
+slice (S3), then the claim and publication (S4). A row without a gate is prose;
+a session without a claim is a sweep.
 
 | # | Session | Closes | Gate |
 |---|---|---|---|
 | S1a ✅ | **Schema + debt** (no GPU) | `MAP_VERSION`; `schema.gaps.GAPS` (one gap table, reasons + triggers); `noisy`/`closed_form_ridge` compose their own rows; `Schedule` gains `batch_size`/`steps_per_task` (the box); `record_from_evaluation` + a `Record` in the P0 log; `_screen_coordinate` extracted; README regenerated from the registry | `test_box_identity`, `test_loop_has_no_bar`, `test_init_then_update_keeps_a_row`, `test_gap_table_single_source`, `test_readme_counts_match_census`, `test_spec_composes` |
 | S1b | **The two parked rows** (no GPU) | `rule_state`/`substrate_coupled` stay in the inventory (user decision: no deletion); make each a bounded contract that composes — `apply_operator` in the standard step, and a substrate state σ read back — or park them with the `GAPS` row as the snapshot of a capability the kernel still owes | the `GAPS` row fails when the row becomes available; `test_axis_liveness_lock` |
 | S2a ✅ | **Calibrate + bind** (~10 min GPU) | the bar (chance + 2σ at the ruler's resolution); the 3-seed control per family; the `iris` base; the task-family filter (3 update rows `refused`); the own-knobs box (14/18 update rows `bound` and measured); `memory_mb` and `energy_per_batch` in the resource vector | `test_pilot_calibration` (`test_the_bar_is_the_floor_plus_2_sigma`, `test_a_constant_control_refuses_its_slice`, `test_the_family_filter_refuses_a_sequence_credit_on_vision`, `test_the_own_knobs_box_binds_an_update_row`, `test_the_resource_vector_carries_memory_and_energy`) |
-| S2b | **Re-screen at the calibrated boxes** (~2 h GPU) | `map.json` v3 at 32/step, the declared bar and the own-knobs/binding flags; swap labels on defect rows; the replay hash; graph and sequence bases stay `refused` until declared | `test_map_summary_matches_census`, `test_every_map_row_has_its_box` |
+| S2b ✅ | **Re-screen at the calibrated boxes** (~20 min GPU) | `map.json` v3 at 32/step: 57 measured, 6 defect (5 ceiling + graph's static edge index), 12 refused (8 family, 2 cost caps, 2 gaps); every screened row carries its box, rule and replay hash; the base schedule now derives from `BASE_BOXES` (one box), the control from `calibrate_control` (one rule); graph composes (cache round-trip) and `noisy` measures (device-model row); no row needed a swap, and no graph/sequence family has a declared base | `test_map_summary_matches_census`, `test_every_map_row_has_its_box` |
 | S3 | **Interaction** (P3, ~10 min GPU) | rank only `binding=bound` rows; the pair with the most variance; 1 seed per cell, 3 for the top; intervals, not a ranking | `test_interaction_power` |
 | S4 | **Claim + publish** (P4/P5) | ladder the surprising bound row to 3 points, then 5 paired at matched boxes; pre-registered margin; method cards, the committed `docs/sec/map.md`, `comp verify` | `test_paired_ci`, `test_map_summary_matches_census`, `test_extension_path` |
 
@@ -193,7 +198,7 @@ yet, so their slices are `refused` rather than priced at a guessed box.
 ruler's resolution); a slice with a chance control is refused.
 **Done when:** each family has a calibrated base and a measured cost per cell.
 
-### P2 — The census (the first real map; ~2 h) ▶
+### P2 — The census (the first real map; session 16) ✅ base box
 
 **Decision:** of 73 primitives, which train at their slice's base, which need a
 swap, which fail, and at what cost?
@@ -204,14 +209,26 @@ refused counts per axis, and the defect list with mechanisms named.
 **Box:** the P1 base for MNIST; a primitive that is illegal at the base is
 measured at its nearest legal box and marked `swapped`; each primitive is also
 measured at its own declared defaults and marked `own-knobs`. The measured base:
-375 batches, hidden 128, 150k ceiling, control 0.8908 ± 0.0024, 8.3 s/cell.
-**Open:** the re-screen at the calibrated boxes (the previous map ran at the
-uncalibrated bar and the shared 32/step box); own-knobs for the other five
-axes (the update axis is landed); swap labels on defect rows; the replay hash
-(P0b). The family filter, the calibrated bar and `memory_mb`/`energy_per_batch`
-landed in S2a.
+375 batches, hidden 128, 150k ceiling, control 0.8908 ± 0.0024, bar 0.1060.
+**Result (session 16):** 75 rows, 73 available, **57 measured / 6 defect / 12
+refused** at the vision base, 19.7 min walltime (12.0 s/cell mean over the 62
+trained cells, median 7.8 s, 228 rows/h). Defects: 5 parameter-ceiling rows
+(`surrogate` 234,898; `attention` 494,986; `causal_transformer` 397,568;
+`routing` 234,898; `tile` 628,280 against the 150k ceiling) and `graph` (a
+static two-node edge index on 32 feedforward rows). Refusals: 8 task-family
+(3 sequence credits, 3 continual updates, `closed_form_ridge`, `quantum`), 2
+cost caps (`natural_gradient`, `diffusion` at 60 s), and the 2 declared no-op
+plasticity gaps. Every screened row carries its box, rule, control and replay
+hash; no row needed a swap (0 `swapped`). The frontier rows are the 6 measured
+near chance (`pc_alm` 0.1224, `target_inversion` 0.1195, `temporal_trace`
+0.1224 inert, `conv` 0.1217, `quantized_adam` 0.1016 inert, `error_predictive_coding` 0.1242) — defect probes for S4, not verdicts.
+**Open:** own-knobs for the other five axes (the update axis is landed); a
+declared base for the graph and sequence families (their own task slices stay
+refused until measured); the 6 near-chance bound rows are S4's deep-dive
+candidates.
 **Gate:** every row reproducible; every `fail` names a mechanism; the report
-prints the inventory count.
+prints the inventory count. Locked by `test_map_summary_matches_census` and
+`test_every_map_row_has_its_box`.
 **Done when:** one map with no missing rows, no inflated status, and every inert
 row named — the base-box map meets this; own-knobs extends it.
 
@@ -287,9 +304,10 @@ before the first cell is a budget leak.
 
 ## 7. Definition of done
 
-- One inventory (73 available rows: 63 measured, 5 ceiling defects, 5 box
-  refusals; no permanent gaps) projected into census, map, README and method
-  cards.
+- One inventory (73 available rows: 57 measured, 6 defects — 5 parameter
+  ceilings and `graph`'s static edge index — and 10 box refusals; the 2 no-op
+  plasticities stay declared gaps) projected into census, map, README and
+  method cards.
 - Every measured row carries its task, base box, ruler, control and cost.
 - Each family has a calibrated base with a measured cells/hour.
 - No `measured` row called viable; no missing row; no `swapped` row labelled

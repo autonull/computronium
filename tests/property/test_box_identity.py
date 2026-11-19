@@ -126,3 +126,58 @@ def test_the_cell_log_carries_a_record_and_a_screen(tmp_path: Path) -> None:
     line = json.loads((tmp_path / "cells.jsonl").read_text())
     assert line["screen"]["primitive"] == "x"
     assert "record" in line
+
+
+def test_every_map_row_has_its_box(tmp_path: Path) -> None:
+    """A screened row is comparable only with the box it ran at (TODO95 S2b)."""
+    entries = build_census()
+    box = _box_summary(_COORDINATE, _SCHEDULE)
+    measured = {
+        "primitive": entries[0].id,
+        "status": "MEASURED",
+        "val_acc": 0.5,
+        "loss": 1.0,
+        "param_count": 10,
+        "within_ceiling": True,
+        "walltime_s": 1.0,
+        "box": box,
+        "ruler": "val_acc on mnist",
+        "control_val_acc": 0.89,
+        "binding": "bound",
+        "binding_reason": None,
+        "swapped": False,
+        "record": {"provenance": {"code_sha": "replay-mnist-0"}},
+    }
+    refused = {
+        "primitive": entries[1].id,
+        "status": "UNAVAILABLE",
+        "reason": "control at chance at this box",
+        "ruler": "val_acc on mnist",
+        "box": box,
+        "rule": "refused at the base box",
+    }
+    update_map(
+        tmp_path,
+        entries,
+        {
+            "cells": [measured, refused],
+            "control_val_acc": 0.89,
+            "control_spread": 0.0024,
+            "bar": 0.106,
+            "base_box": box,
+        },
+    )
+    map_data = json.loads((tmp_path / "map.json").read_text())
+    rows = map_data["primitives"]
+    assert map_data["inventory"]["bar"] == 0.106
+    assert map_data["inventory"]["control_spread"] == 0.0024
+    for row in rows.values():
+        assert {"box", "task", "rule", "control", "resource"} <= set(row)
+        if row["last_screened"]:
+            assert row["box"]["task"] == _SCHEDULE.task_id, row["primitive"]
+            assert row["box"]["batch_size"] == _SCHEDULE.batch_size
+            assert row["box"]["batch_limit"] == _SCHEDULE.batch_limit
+            assert row["rule"], row["primitive"]
+    assert rows[entries[0].id]["replay_hash"] == "replay-mnist-0"
+    assert rows[entries[1].id]["replay_hash"] is None
+    assert rows[entries[1].id]["trigger"] == "control at chance at this box"

@@ -78,11 +78,15 @@ def test_a_chance_cell_is_still_a_measurement(
 def test_the_box_travels_with_the_measurement(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    from computronium.experiment.sec_pilot import base_schedule
+
+    base = base_schedule("mnist", "cpu")
+    assert base is not None
     cell = _screen(monkeypatch, tmp_path, 0.93)["cells"][0]
     assert cell["box"]["task"] == "mnist"
-    assert cell["box"]["batch_limit"] == sec_loop.P0_BATCH_LIMIT
-    assert cell["box"]["epochs"] == sec_loop.P0_EPOCHS
-    assert cell["box"]["seed"] == sec_loop.P0_SEED
+    assert cell["box"]["batch_limit"] == base.batch_limit
+    assert cell["box"]["epochs"] == base.epochs
+    assert cell["box"]["seed"] == base.seed
     assert cell["param_count"] == 100
     assert cell["within_ceiling"] is True
 

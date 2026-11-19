@@ -595,7 +595,10 @@ def _compose_configs_cached(
         plasticity=plasticity,
         credit=credit,
         update=update,
-        params=dict(coord_params),
+        # The cache key is a serialized form, not an identity: a structural
+        # value (``geometry.edge_index``) must come back as the list the
+        # builder validates, or the graph topology is refused at every box.
+        params={key: _restore_mutable(value) for key, value in coord_params},
     )
     geometry_dict = {k: _restore_mutable(v) for k, v in geometry_explicit}
 

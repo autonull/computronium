@@ -87,6 +87,26 @@ def test_the_map_has_one_row_per_censused_primitive(tmp_path: Path) -> None:
         assert "best_coordinate" not in row
 
 
+def test_map_summary_matches_census(tmp_path: Path) -> None:
+    """The map's counts are the census's rows, never a second tally."""
+    entries = build_census()
+    update_map(tmp_path, entries, p0_result=None)
+    data = json.loads((tmp_path / "map.json").read_text())
+    census_rows = {entry.id: entry for entry in entries}
+
+    assert data["inventory"]["total"] == len(entries)
+    assert data["inventory"]["available"] == sum(entry.available for entry in entries)
+    for axis, counts in data["by_axis"].items():
+        expected = sum(1 for entry in entries if entry.axis == axis)
+        assert sum(counts.values()) == expected, axis
+    for row in data["primitives"].values():
+        assert row["axis"] == census_rows[row["primitive"]].axis
+    assert (
+        sum(sum(counts.values()) for counts in data["by_axis"].values())
+        == data["inventory"]["total"]
+    )
+
+
 def test_a_v3_map_keeps_rows_a_later_run_did_not_screen(tmp_path: Path) -> None:
     entries = build_census()
     measured = entries[0]

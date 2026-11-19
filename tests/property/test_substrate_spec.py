@@ -31,6 +31,7 @@ _PRESETS = [
     "sparse",
     "ternary",
     "complex",
+    "noisy",
 ]
 
 

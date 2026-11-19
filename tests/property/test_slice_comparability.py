@@ -8,6 +8,7 @@ is not a result about its axis.
 
 from __future__ import annotations
 
+from computronium.experiment.schema.coordinate import Coordinate
 from computronium.experiment.sec_census import PrimitiveCensusEntry
 from computronium.experiment.sec_loop import _map_row
 
@@ -68,3 +69,32 @@ def test_an_inert_row_is_not_a_result_about_its_axis() -> None:
     assert row["binding"] == "inert"
     assert row["binding_reason"]
     assert row["measurement"]["val_acc"] == 0.12
+
+
+def test_a_cached_coordinate_keeps_its_structural_values() -> None:
+    """The compose cache is a serialization, not an identity: a graph edge
+    index must come back as a list, or the graph topology is refused."""
+    from computronium.experiment.kernel.compose import compose_configs
+
+    coordinate = Coordinate(
+        substrate="digital",
+        geometry="graph",
+        dynamics="instantaneous",
+        plasticity="null",
+        credit="gradient",
+        update="euclidean",
+        params={
+            "credit.lr": 0.01,
+            "update.lr": 0.01,
+            "geometry.hidden_dim": 128,
+            "geometry.depth": 2,
+            "geometry.edge_index": [[0, 1], [1, 0]],
+        },
+    )
+    config = compose_configs(
+        coordinate=coordinate,
+        geometry={},
+        input_shape=(1, 28, 28),
+        output_dim=10,
+    )
+    assert config.geometry.connectivity["edge_index"] == [[0, 1], [1, 0]]
