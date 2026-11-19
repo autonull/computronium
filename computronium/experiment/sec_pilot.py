@@ -70,6 +70,7 @@ class BaseBox:
     batch_limit: int
     epochs: int
     param_budget: int = 150_000
+    base_coordinate: dict[str, str] | None = None
 
 
 #: The declared base per task family. A family with no row has no base box and
@@ -78,6 +79,17 @@ class BaseBox:
 BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
     "vision": BaseBox("vision", "mnist", 32, 375, 1),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
+    "graph": BaseBox(
+        "graph", "cora", 1, 1, 200, param_budget=200_000,
+        base_coordinate={"geometry": "graph", "credit": "gradient", "update": "euclidean"}
+    ),
+})
+
+
+#: Family-specific base coordinate overrides. Merged with _AXIS_DEFAULTS.
+BASE_COORDINATES: Final[Mapping[str, dict[str, str]]] = MappingProxyType({
+    "graph": {"geometry": "graph"},
+    "sequence": {"geometry": "recurrent", "dynamics": "instantaneous"},
 })
 
 
@@ -215,6 +227,7 @@ def calibrate_control(
     schedule: Schedule,
     *,
     evaluate: Callable[..., CellEvaluation] | None = None,
+    family: str | None = None,
 ) -> Calibration | None:
     """Measure the base control over ``CONTROL_SEEDS`` seeds.
 
@@ -222,6 +235,7 @@ def calibrate_control(
         schedule: The base box; only its seed varies between runs.
         evaluate: The evaluator (``evaluate_cell`` by default), injectable so
             the calibration rule is testable without a training run.
+        family: Optional task family for family-specific base coordinate.
 
     Returns:
         The control's power, or ``None`` when the task declares no bar.
@@ -237,7 +251,11 @@ def calibrate_control(
         runner = evaluate
     from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
 
-    coordinate = _coordinate(dict(_AXIS_DEFAULTS))
+    # Use family-specific base coordinate if available
+    base_axes = dict(_AXIS_DEFAULTS)
+    if family is not None and family in BASE_COORDINATES:
+        base_axes.update(BASE_COORDINATES[family])
+    coordinate = _coordinate(base_axes)
     values = [
         float(
             runner(coordinate, replace(schedule, seed=seed, n_seeds=1)).metrics.get(

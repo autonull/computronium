@@ -517,7 +517,9 @@ def _control_stats(
     """
     del device  # the schedule carries the device the control runs on
     try:
-        calibration = calibrate_control(schedule, evaluate=evaluate_cell)
+        from computronium.experiment.sec_pilot import task_family, calibrate_control
+        family = task_family(schedule.task_id)
+        calibration = calibrate_control(schedule, evaluate=evaluate_cell, family=family)
     except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
         logger.exception("P0 control cell failed at the box")
         return None, None
@@ -576,7 +578,7 @@ def _params_for(axes: dict[str, str], own_knobs: str | None = None) -> dict[str,
     at its own declared config defaults, companions stay at the base box
     (TODO95 S2). The base box shares one step size and one geometry width.
     """
-    params: dict[str, Any] = {"credit.lr": 0.01, "update.lr": 0.01}
+    params: dict[str, Any] = {"credit.lr": 0.01, "update.step_size": 0.01}
     geometry = axes["geometry"]
     if geometry in {
         "feedforward",
@@ -1088,6 +1090,7 @@ def run_p0_track(
     device: str = "auto",
     breadth: str = "delta",
     own_knobs: bool = False,
+    task_id: str = "mnist",
 ) -> dict[str, Any]:
     """Run Track P0: Breadth screen for primitives.
 
@@ -1096,7 +1099,7 @@ def run_p0_track(
     ``own_knobs`` runs the viability box: each varied axis at its own declared
     config defaults instead of the shared comparison box (TODO95 S2).
     """
-    logger.info(f"Starting Track P0: {breadth} breadth screen")
+    logger.info(f"Starting Track P0: {breadth} breadth screen on {task_id}")
 
     # Load map to check which primitives have been screened
     map_path = out_dir / "map.json"
@@ -1130,20 +1133,20 @@ def run_p0_track(
         f"(from {len(census_entries)} total)"
     )
 
-    schedule = base_schedule(P0_TASK, device)
-    criterion, ruler = _ruler(P0_TASK)
+    schedule = base_schedule(task_id, device)
+    criterion, ruler = _ruler(task_id)
     base_box = (
         {} if schedule is None else _box_summary(_coordinate(_AXIS_DEFAULTS), schedule)
     )
     control_acc: float | None = None
     control_spread: float | None = None
     powered = False
-    bar = _task_bar(P0_TASK)
+    bar = _task_bar(task_id)
     results: list[dict[str, Any]] = []
     if schedule is None:
         # A family with no declared base has no box to price and no control
         # to read: its slice is refused at the census's own gap (TODO95 S2).
-        reason = f"{P0_TASK} declares no base box; the slice is refused"
+        reason = f"{task_id} declares no base box; the slice is refused"
         results = _refused_cells(entries_to_screen, reason, ruler, base_box)
     else:
         control_acc, control_spread = _control_stats(schedule, device)
@@ -2356,6 +2359,12 @@ def main() -> None:
         action="store_true",
         help="Run the viability box: each varied axis at its own defaults",
     )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="mnist",
+        help="Task for P0 screen (determines family and base box)",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument(
         "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
@@ -2406,6 +2415,7 @@ def main() -> None:
             device=args.device,
             breadth=args.breadth,
             own_knobs=args.own_knobs,
+            task_id=args.task,
         )
         all_results.extend(p0_result["cells"])
 

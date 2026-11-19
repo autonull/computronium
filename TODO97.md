@@ -5,6 +5,7 @@ The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
+**Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
 
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
@@ -22,7 +23,10 @@ question.
 | S2 | Delete ~380 per-primitive files + generated tests | ✅ DONE |
 | S3 | Verify 6 property locks pass | ✅ DONE |
 | S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ✅ DONE |
-| S5 | First family base (graph) + first ladder (target_inversion) | ⏳ NEXT |
+| S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
+| S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
+| S5b | Screen graph family primitives | ✅ DONE (9 measured) |
+| S5c | First ladder (target_inversion on vision) | ⏳ NEXT |
 | S6 | Audit with `scripts/audit.py` | ⏳ PENDING |
 
 ---
@@ -51,7 +55,8 @@ the wrong product for a laboratory.
 | Fact | Number | Source |
 |---|---:|---|
 | Primitives | 75 | census |
-| Bound measured | 30 | map |
+| Bound measured (vision) | 30 | map (mnist) |
+| Bound measured (graph) | 9 | map (cora) |
 | Inert (measures companions) | 27 | map |
 | Bound at chance (<0.5) | 11 | map |
 | Bound mid (0.5–0.85) | 7 | map |
@@ -59,7 +64,7 @@ the wrong product for a laboratory.
 | Rows with no bound, usable result | 45 | 27 + 12 + 6 |
 | Defects | 6 (5 ceilings + 1 shape) | map |
 | Refused | 12 (8 family, 2 cost, 2 gaps) | map |
-| Task families with a base box | 2 of 9 | `BASE_BOXES` |
+| Task families with a base box | 3 of 9 | `BASE_BOXES` (vision, tabular, graph) |
 | Declared family rows | ~159 | sum of `task_families` |
 | Source scaffolding files | 563 | 383 primitives + 96 generated + 84 algorithms |
 | Source files that survive | ~1,400 | ontology 33, experiment 206, acceleration 34, core/domains/models/scripts etc. |
@@ -69,8 +74,8 @@ the wrong product for a laboratory.
 | Kernel files with their own `@triton.jit` | 0 / 75 | grep |
 | Kernel-parity tests that pass without requiring a real kernel | 235 | pytest |
 
-**The headline is not 57 measured. It is 30 bound, 11 at chance, 45 without a
-usable result.**
+**The headline is not 57 measured. It is 39 bound (30 vision + 9 graph), 11 at chance, 45 without a
+usable result. Graph family now has a calibrated base box.**
 
 ---
 
