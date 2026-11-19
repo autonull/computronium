@@ -1,8 +1,33 @@
-"""Primitives package.
+"""Primitives package — Single-source specification and execution interface.
 
-Reusable axis-level mechanisms for learning systems.
-
-Importing an axis subpackage (``primitives.state_dynamics``) registers its
-primitives; the implementation registry discovers them by walking this package,
-so there is no name table here to drift from the directories.
+This module provides the public API for the primitive layer (TODO97 migration).
+Replaces ~380 per-primitive spec/cases/reference/kernel files with:
+- protocol.py: StepResult, PrimitiveSpec, PrimitiveProtocol, ReferenceAdapter
+- registry.py: 75 PrimitiveSpec rows in REGISTRY
 """
+
+from computronium.primitives.protocol import (
+    PrimitiveProtocol,
+    PrimitiveSpec,
+    ReferenceAdapter,
+    StepResult,
+)
+from computronium.primitives.registry import (
+    REGISTRY,
+    count_primitives,
+    get_primitive_spec,
+    list_primitives,
+)
+
+__all__ = [
+    # Protocol
+    "StepResult",
+    "PrimitiveSpec",
+    "PrimitiveProtocol",
+    "ReferenceAdapter",
+    # Registry
+    "REGISTRY",
+    "get_primitive_spec",
+    "list_primitives",
+    "count_primitives",
+]

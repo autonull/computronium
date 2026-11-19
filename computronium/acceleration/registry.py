@@ -136,6 +136,47 @@ def _discover() -> None:
     if _DISCOVERED:
         return
 
+    # Register primitives from the new single-source registry
+    try:
+        from computronium.primitives.registry import REGISTRY as PRIMITIVE_REGISTRY
+        from computronium.acceleration.spec import (
+            ImplementationSpec,
+            ParityTolerance,
+        )
+        for spec in PRIMITIVE_REGISTRY.values():
+            # Map kernel_status to ImplementationStatus literal
+            status_map = {
+                "missing": "missing",
+                "reference_only": "reference_only",
+                "kernel_unverified": "kernel_unverified",
+                "kernel_verified": "kernel_verified",
+                "microbenched": "microbenched",
+                "campaign_ready": "campaign_ready",
+                "deprecated": "deprecated",
+            }
+            impl_status = status_map.get(spec.kernel_status, "reference_only")
+            impl_spec = ImplementationSpec(
+                id=spec.id,
+                kind="primitive",
+                name=spec.name,
+                axis=spec.axis,
+                reference_entrypoint=spec.reference_entrypoint,
+                kernel_entrypoint=spec.kernel_entrypoint,
+                kernel_technology=spec.kernel_technology,
+                supported_backends=spec.supported_backends,
+                status=impl_status,
+                summary=spec.summary,
+                equations=spec.equations,
+                invariants=spec.invariants,
+                tags=spec.tags,
+                task_families=spec.task_families,
+                available=spec.available,
+                capability_card=spec.capability_card,
+            )
+            register(impl_spec)
+    except ImportError:
+        pass  # Fall back to package discovery
+
     _discover_package("computronium.primitives")
     _discover_package("computronium.algorithms")
 

@@ -4,11 +4,26 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-19] ✅ **S1–S3 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted.
+
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
 3-file protocol, fixes the cheap wiring defects first, calibrates the seven
 missing task families, and only then screens at boxes that can answer the
 question.
+
+---
+
+## Progress Summary
+
+| Session | Task | Status |
+|---|---|---|
+| S1 | Migrate primitives to 3-file protocol + registry | ✅ DONE |
+| S2 | Delete ~380 per-primitive files + generated tests | ✅ DONE |
+| S3 | Verify 6 property locks pass | ✅ DONE |
+| S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ⏳ NEXT |
+| S5 | First family base (graph) + first ladder (target_inversion) | ⏳ PENDING |
+| S6 | Audit with `scripts/audit.py` | ⏳ PENDING |
 
 ---
 
