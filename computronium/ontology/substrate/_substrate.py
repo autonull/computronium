@@ -47,6 +47,7 @@ class SubstrateType(StrEnum):
     TERNARY = "ternary"
     OPTICAL = "optical"
     QUANTUM = "quantum"
+    NOISY = "noisy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,6 +238,29 @@ class SubstrateConfig:
             noise_level=noise_level,
             weight_bounds=weight_bounds,
             sparsity=0.0,  # Sparsity emerges from thresholding
+            device=device,
+        )
+
+    @classmethod
+    def noisy(
+        cls,
+        *,
+        noise_level: float = 0.05,
+        precision: str = "float32",
+        device: str = "cpu",
+    ) -> SubstrateConfig:
+        """The digital substrate configured with additive state noise.
+
+        An axis row of its own because a noisy substrate is a different
+        apparatus from an exact one: zero noise recovers ``digital``, so the
+        knob is the row's default, not a second implementation.
+        """
+        return cls(
+            substrate_type=SubstrateType.NOISY,
+            precision=precision,
+            noise_level=noise_level,
+            weight_bounds=None,
+            sparsity=0.0,
             device=device,
         )
 
@@ -917,32 +941,15 @@ class TernarySubstrate:
         return estimate_ternary_energy(shapes)._asdict()
 
 
-def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[too-many-return-statements]
+def substrate_from_config(config: SubstrateConfig) -> Substrate:
     """Factory function to instantiate substrate from config."""
-    match config.substrate_type:
-        case SubstrateType.DIGITAL:
-            return DigitalSubstrate(config)
-        case SubstrateType.ANALOG:
-            return AnalogSubstrate(config)
-        case SubstrateType.MEMRISTIVE:
-            return MemristiveSubstrate(config)
-        case SubstrateType.NEUROMORPHIC:
-            return NeuromorphicSubstrate(config)
-        case SubstrateType.OPTICAL:
-            return OpticalSubstrate(config)
-        case SubstrateType.QUANTUM:
-            return QuantumSubstrate(config)
-        case SubstrateType.SPARSE:
-            return SparseSubstrate(config)
-        case SubstrateType.TERNARY:
-            return TernarySubstrate(config)
-        case _:
-            # Complex substrate uses DIGITAL type with special config
-            if config.precision == "float32" and getattr(
-                config, "_complex_emulated", False
-            ):
-                return ComplexSubstrate(config)
-            return DigitalSubstrate(config)
+    substrate_cls = _SUBSTRATE_CLASSES.get(config.substrate_type)
+    if substrate_cls is not None:
+        return substrate_cls(config)
+    # Complex substrate uses DIGITAL type with special config
+    if config.precision == "float32" and getattr(config, "_complex_emulated", False):
+        return ComplexSubstrate(config)
+    return DigitalSubstrate(config)
 
 
 # Alias for backwards compatibility with tests
@@ -1049,6 +1056,22 @@ class QuantizedSubstrate(DigitalSubstrate):
         """
         shapes = extract_layer_shapes(input_shape, weight_shape, num_layers)
         return estimate_quantized_energy(shapes)._asdict()
+
+
+#: The substrate type -> class table. One declaration; ``substrate_from_config``
+#: reads it, so adding a substrate type is one row here plus its config
+#: classmethod (TODO95 D1: one source of truth per rule).
+_SUBSTRATE_CLASSES: dict[SubstrateType, type[Substrate]] = {
+    SubstrateType.DIGITAL: DigitalSubstrate,
+    SubstrateType.ANALOG: AnalogSubstrate,
+    SubstrateType.MEMRISTIVE: MemristiveSubstrate,
+    SubstrateType.NEUROMORPHIC: NeuromorphicSubstrate,
+    SubstrateType.OPTICAL: OpticalSubstrate,
+    SubstrateType.QUANTUM: QuantumSubstrate,
+    SubstrateType.SPARSE: SparseSubstrate,
+    SubstrateType.TERNARY: TernarySubstrate,
+    SubstrateType.NOISY: NoisySubstrate,
+}
 
 
 __all__ = [

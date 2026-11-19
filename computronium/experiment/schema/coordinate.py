@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, fields, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
@@ -78,6 +78,8 @@ class Coordinate:
                 "n_seeds": schedule.n_seeds,
                 "epochs": schedule.epochs,
                 "batch_limit": schedule.batch_limit,
+                "batch_size": schedule.batch_size,
+                "steps_per_task": schedule.steps_per_task,
                 "budget_id": schedule.budget_id,
                 "task_id": schedule.task_id,
                 "param_budget": schedule.param_budget,
@@ -141,6 +143,41 @@ class Coordinate:
         return self.cell_key() == other.cell_key()
 
 
+#: The box's legal vocabularies, declared once: a value outside one is refused.
+_SCHEDULE_VALUES: Final[dict[str, frozenset[str]]] = {
+    "fidelity": frozenset({"L0", "L1", "L2"}),
+    "device": frozenset({"cpu", "cuda", "auto"}),
+    "precision": frozenset({"fp32", "fp16", "bf16"}),
+    "distributed_backend": frozenset({"none", "ddp", "fsdp"}),
+}
+_SCHEDULE_NON_NEGATIVE: Final[tuple[str, ...]] = (
+    "seed",
+    "batch_limit",
+    "steps_per_task",
+    "param_budget",
+    "num_workers",
+    "checkpoint_every_n",
+    "early_stopping_patience",
+)
+_SCHEDULE_POSITIVE: Final[tuple[str, ...]] = ("n_seeds", "epochs", "batch_size")
+
+
+def _validate_schedule(schedule: Schedule) -> None:
+    """Refuse a box whose fields cannot describe a run."""
+    for name, allowed in _SCHEDULE_VALUES.items():
+        if getattr(schedule, name) not in allowed:
+            raise ValueError(
+                f"Invalid {name}: {getattr(schedule, name)!r}; expected one of "
+                f"{sorted(allowed)}"
+            )
+    for name in _SCHEDULE_NON_NEGATIVE:
+        if getattr(schedule, name) < 0:
+            raise ValueError(f"{name} must be non-negative")
+    for name in _SCHEDULE_POSITIVE:
+        if getattr(schedule, name) <= 0:
+            raise ValueError(f"{name} must be positive")
+
+
 @dataclass(frozen=True, slots=True)
 class Schedule:
     """Execution schedule for an experiment cell."""
@@ -151,6 +188,12 @@ class Schedule:
     epochs: int
     batch_limit: int
     budget_id: str
+    # The training batch the loader draws, and the optimizer steps granted to
+    # each task in a multi-task run. They are part of the box: a cell trained
+    # at 32 samples per step is not the cell trained at 375, whatever the
+    # batch count says (TODO95 D2).
+    batch_size: int = 32
+    steps_per_task: int = 0  # 0 = derive from the task's own length
     task_id: str = ""  # L17: Task identity for cross-task uniqueness
     # A parameter ceiling changes what is trained, so it is part of the
     # measurement: two cells differing only by ceiling must not share a
@@ -177,36 +220,7 @@ class Schedule:
     fsdp_mixed_precision: bool = True
 
     def __post_init__(self) -> None:
-        if self.fidelity not in {"L0", "L1", "L2"}:
-            raise ValueError(f"Invalid fidelity: {self.fidelity}")
-        if self.seed < 0:
-            raise ValueError("seed must be non-negative")
-        if self.n_seeds <= 0:
-            raise ValueError("n_seeds must be positive")
-        if self.epochs <= 0:
-            raise ValueError("epochs must be positive")
-        if self.batch_limit < 0:
-            raise ValueError("batch_limit must be non-negative")
-        if self.param_budget < 0:
-            raise ValueError("param_budget must be non-negative")
-        if self.device not in {"cpu", "cuda", "auto"}:
-            raise ValueError(
-                f"Invalid device: {self.device}; expected 'cpu', 'cuda', or 'auto'"
-            )
-        if self.num_workers < 0:
-            raise ValueError("num_workers must be non-negative")
-        if self.precision not in {"fp32", "fp16", "bf16"}:
-            raise ValueError(
-                f"Invalid precision: {self.precision}; expected 'fp32', 'fp16', or 'bf16'"
-            )
-        if self.checkpoint_every_n < 0:
-            raise ValueError("checkpoint_every_n must be non-negative")
-        if self.early_stopping_patience < 0:
-            raise ValueError("early_stopping_patience must be non-negative")
-        if self.distributed_backend not in {"none", "ddp", "fsdp"}:
-            raise ValueError(
-                f"Invalid distributed_backend: {self.distributed_backend}; expected 'none', 'ddp', or 'fsdp'"
-            )
+        _validate_schedule(self)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -215,6 +229,8 @@ class Schedule:
             "n_seeds": self.n_seeds,
             "epochs": self.epochs,
             "batch_limit": self.batch_limit,
+            "batch_size": self.batch_size,
+            "steps_per_task": self.steps_per_task,
             "budget_id": self.budget_id,
             "task_id": self.task_id,
             "param_budget": self.param_budget,
@@ -254,6 +270,8 @@ class Schedule:
             n_seeds=data["n_seeds"],
             epochs=data["epochs"],
             batch_limit=data["batch_limit"],
+            batch_size=data.get("batch_size", 32),
+            steps_per_task=data.get("steps_per_task", 0),
             budget_id=data["budget_id"],
             task_id=data.get("task_id", ""),
             param_budget=data.get("param_budget", 0),

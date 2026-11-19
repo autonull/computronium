@@ -117,6 +117,17 @@ class PlasticityConfig:
         )
 
     @classmethod
+    def closed_form_ridge(
+        cls, ridge_lambda: float = 1e-3, **kwargs: object
+    ) -> PlasticityConfig:
+        """Closed-form ridge plasticity: ψ computed from nudged activity."""
+        return cls(
+            plasticity_type="closed_form_ridge",
+            plastic_state_dims=None,
+            consolidation_config={"ridge_lambda": ridge_lambda, **kwargs},
+        )
+
+    @classmethod
     def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the plasticity axis.
 

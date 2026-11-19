@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -29,6 +29,9 @@ from computronium.validation.statistics import (
     cohens_dz,
     permutation_test_p,
 )
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.coordinate import Schedule
 
 __all__ = [
     "DEFAULT_ALPHA",
@@ -68,6 +71,9 @@ class ThresholdRegistration:
         alpha: Family-wise error rate for the confirmation test.
         min_seeds: Minimum per-arm seed count.
         created: ISO date the registration was committed to the repo.
+        box: The declared run box (a subset of ``Schedule.to_dict()``), kept
+            because a threshold written for one box does not decide a claim
+            measured at another (TODO95 D2).
     """
 
     claim: str
@@ -76,14 +82,26 @@ class ThresholdRegistration:
     alpha: float = DEFAULT_ALPHA
     min_seeds: int = MIN_SEEDS
     created: str = ""
+    box: dict[str, Any] | None = None
 
-    def to_dict(self) -> dict[str, str | float | int]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize for JSON registration files."""
         return asdict(self)
+
+    def box_mismatch(self, schedule: Schedule) -> str | None:
+        """The first declared box field the run's schedule disagrees with."""
+        if not self.box:
+            return None
+        actual = schedule.to_dict()
+        for key, declared in self.box.items():
+            if actual.get(key) != declared:
+                return f"{key}: registered {declared!r}, run {actual.get(key)!r}"
+        return None
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> ThresholdRegistration:
         """Deserialize from a registration file."""
+        box = data.get("box") or data.get("schedule")
         return cls(
             claim=str(data["claim"]),
             metric=str(data["metric"]),
@@ -91,6 +109,7 @@ class ThresholdRegistration:
             alpha=float(data.get("alpha", DEFAULT_ALPHA)),  # type: ignore[arg-type]
             min_seeds=int(data.get("min_seeds", MIN_SEEDS)),  # type: ignore[arg-type]
             created=str(data.get("created", "")),
+            box=dict(box) if isinstance(box, dict) else None,  # type: ignore[arg-type]
         )
 
     @classmethod
@@ -168,8 +187,19 @@ class PairedComparison:
     p_value: float
     cohens_dz: float
 
-    def passes(self, registration: ThresholdRegistration) -> bool:
-        """Confirm against a registration: CI excludes the margin at alpha."""
+    def passes(
+        self, registration: ThresholdRegistration, *, schedule: Schedule | None = None
+    ) -> bool:
+        """Confirm against a registration: CI excludes the margin at alpha.
+
+        A registration that declares a box decides only a run at that box: a
+        missing or disagreeing schedule refuses the claim instead of comparing
+        two different instruments (TODO95 D2).
+        """
+        if registration.box and (
+            schedule is None or registration.box_mismatch(schedule) is not None
+        ):
+            return False
         return self.ci_lower > registration.threshold and self.p_value < (
             registration.alpha
         )

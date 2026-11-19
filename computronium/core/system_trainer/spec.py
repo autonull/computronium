@@ -195,6 +195,7 @@ def _plasticity_from_config(plasticity: PlasticityConfig):
     """Instantiate plasticity from config."""
     from computronium.core.plasticity import (
         NullPlasticity,
+        closed_form_ridge_from_config,
         conflict_adaptive_from_config,
         create_fast_weight_plasticity,
         create_routing_plasticity,
@@ -203,11 +204,15 @@ def _plasticity_from_config(plasticity: PlasticityConfig):
         temporal_psi_from_config,
     )
 
+    # The retired rows (``rule_state``, ``substrate_coupled``) stay here: their
+    # benchmarks construct them directly, and ``schema.gaps.GAPS`` records why
+    # they are out of the inventory (TODO95 D1).
     factories = {
         "routing": create_routing_plasticity,
         "fast_weights": create_fast_weight_plasticity,
         "substrate_coupled": create_substrate_coupled_plasticity,
         "rule_state": create_rule_state_plasticity,
+        "closed_form_ridge": closed_form_ridge_from_config,
         "temporal_psi": temporal_psi_from_config,
         "conflict_adaptive": conflict_adaptive_from_config,
     }

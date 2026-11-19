@@ -2,29 +2,28 @@
 
 The census used to read ``schema.primitives.ALL_PRIMITIVES``, a hand list of 62
 rows that dropped 11 credits/updates the axis registry composes. This test fails
-if any axis row is missing from the census, if the two spec-only rows stop being
-named gaps, or if the map stops carrying one row per censused primitive.
+if any axis row is missing from the census, if a gap stops being declared in
+``schema.gaps.GAPS``, or if the map stops carrying one row per censused
+primitive.
+
+``noisy`` and ``closed_form_ridge`` now compose their own axis rows, so the
+inventory is 75 rows with the two documented no-op plasticities as the only
+declared gaps — breadth added, nothing retired.
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from computronium.acceleration.registry import primitives
 from computronium.acceleration.spec import coordinate_of_id
 from computronium.experiment.schema.axis import AXES_REGISTRIES
-from computronium.experiment.sec_census import GAP_REASON, build_census, write_census
+from computronium.experiment.schema.gaps import GAPS
+from computronium.experiment.sec_census import build_census, write_census
 from computronium.experiment.sec_loop import update_map
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
-_SPEC_ONLY = {
-    ("substrate", "noisy"),
-    ("plasticity", "closed_form_ridge"),
-}
-_UNAVAILABLE_AXIS_ROWS = {
+_GAPS = {
     "primitive.plasticity.rule_state",
     "primitive.plasticity.substrate_coupled",
 }
@@ -46,34 +45,25 @@ def test_the_census_is_the_spec_registry() -> None:
 def test_every_axis_row_has_a_census_entry() -> None:
     covered = {coordinate_of_id(entry.id) for entry in build_census()}
     axis_rows = _axis_rows()
-    assert len(axis_rows) == 73
-    assert axis_rows <= covered
-    assert covered - axis_rows == _SPEC_ONLY
-    assert len(covered) == 75
+    assert len(axis_rows) == 75
+    assert axis_rows == covered
 
 
-def test_the_spec_only_rows_are_named_capability_gaps() -> None:
+def test_gap_table_single_source() -> None:
     gaps = {entry.id: entry for entry in build_census() if not entry.available}
-    assert {
-        "primitive.substrate.noisy",
-        "primitive.plasticity.closed_form_ridge",
-    } <= set(gaps)
-    assert gaps["primitive.substrate.noisy"].unavailable_reason == GAP_REASON
-    assert (
-        gaps["primitive.plasticity.closed_form_ridge"].unavailable_reason == GAP_REASON
-    )
-    assert set(gaps) == _UNAVAILABLE_AXIS_ROWS | {
-        f"primitive.{axis}.{name}" for axis, name in _SPEC_ONLY
-    }
-    assert all(entry.screen_status == "refused" for entry in gaps.values())
+    assert set(gaps) == _GAPS == set(GAPS)
+    for primitive_id, entry in gaps.items():
+        assert entry.unavailable_reason == GAPS[primitive_id].reason
+        assert entry.unavailable_trigger == GAPS[primitive_id].trigger
+        assert entry.screen_status == "refused"
 
 
 def test_census_json_prints_the_inventory(tmp_path: Path) -> None:
     write_census(tmp_path, build_census())
     data = json.loads((tmp_path / "census.json").read_text())
     assert data["total_primitives"] == 75
-    assert data["available"] == 71
-    assert len(data["gaps"]) == 4
+    assert data["available"] == 73
+    assert len(data["gaps"]) == 2
     assert sum(row["total"] for row in data["by_axis"].values()) == 75
 
 
@@ -130,3 +120,39 @@ def test_a_v3_map_keeps_rows_a_later_run_did_not_screen(tmp_path: Path) -> None:
     assert rows[measured.id]["status"] == "measured"
     assert rows[measured.id]["measurement"]["val_acc"] == 0.5
     assert rows[entries[1].id]["status"] == "unmeasured"
+
+
+def test_spec_composes() -> None:
+    """No primitive ships without a coordinate and without a declared reason."""
+    axis_rows = _axis_rows()
+    for spec in primitives():
+        coordinate = coordinate_of_id(spec.id)
+        assert coordinate is not None, spec.id
+        assert coordinate in axis_rows or spec.id in GAPS, spec.id
+
+
+def test_one_record_version() -> None:
+    """``MAP_VERSION`` is the only record version literal in the package."""
+    repo = Path(__file__).resolve().parents[2]
+    source = (repo / "computronium").rglob("*.py")
+    offenders = [
+        path.relative_to(repo)
+        for path in source
+        if '"SEC-v' in path.read_text(encoding="utf-8", errors="ignore")
+        and path.name != "sec_census.py"
+    ]
+    assert offenders == []
+
+
+def test_readme_counts_match_census() -> None:
+    """The README's generated counts read the registry, not prose."""
+    from tests.property._readme import load_readme_builder
+
+    builder = load_readme_builder()
+    entries = build_census()
+    assert builder._primitive_total() == str(sum(row.available for row in entries))
+    for axis, registry in AXES_REGISTRIES.items():
+        generator = builder._GENERATORS[f"{axis.value}_count"]
+        assert generator() == str(
+            sum(1 for spec in registry.values() if spec.available)
+        ), axis.value

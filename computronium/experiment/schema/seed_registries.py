@@ -12,8 +12,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Final, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from computronium.core.identity_card import BiasReference, EstimatorKind
 
 from computronium.core.plasticity import READOUT_REPLACING_PLASTICITIES
@@ -43,6 +41,7 @@ from computronium.experiment.schema.axis import (
     StructuralAxis,
     register_axis_spec,
 )
+from computronium.experiment.schema.gaps import gap_for
 from computronium.experiment.schema.metrics import MEASURED_OBJECTIVES
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
@@ -111,6 +110,7 @@ _SUBSTRATE_PRIMS: list[tuple[str, str]] = [
     ("complex", "Complex-valued substrate"),
     ("sparse", "Sparse substrate: sparsity-masked state"),
     ("ternary", "Ternary substrate: weights in {-alpha, 0, +alpha}"),
+    ("noisy", "Digital substrate with additive state noise"),
 ]
 
 # Geometry primitives: topology params are fixed by the primitive choice
@@ -324,6 +324,11 @@ _PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     ("fast_weights", "Fast-weight episode-local memory", ("fast_weight_dim",)),
     ("substrate_coupled", "Physical substrate-coupled plasticity", ()),
     ("rule_state", "Rule-state plasticity (Z3)", ("num_operators",)),
+    (
+        "closed_form_ridge",
+        "Closed-form ridge plasticity: psi solved, never trained",
+        ("ridge_lambda",),
+    ),
     ("temporal_psi", "Trace-decayed supervised psi", ("trace_decay",)),
     (
         "conflict_adaptive",
@@ -463,31 +468,6 @@ def _hyperparameter_spec(
 type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 
 
-# Primitives the kernel registers but cannot honour, with the reason recorded
-# (R78). An unavailable row is excluded from every space, so the run stops
-# proposing cells it would only fail. A row returns here only with a measured
-# reason and a reversal trigger (TODO92 §3.9).
-#
-# Reversal triggers:
-# - ``rule_state``: returns when a trainer applies ``apply_operator`` (the Z3
-#   frozen-θ loop). Its ψ evolves but the standard step never reads it.
-# - ``substrate_coupled``: returns when a substrate carries a separate state σ
-#   through the joint transition and the standard step reads it. Today the
-#   primitive is a documented no-op at the plasticity protocol level.
-_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
-    (StructuralAxis.PLASTICITY, "rule_state"): (
-        "RuleStatePlasticity has no modulate(): the standard train step evolves "
-        "ψ but never applies the selected operator, so the post-step geometry "
-        "is bit-identical to null (TODO92 §3.9, one-step parameter fingerprint)."
-    ),
-    (StructuralAxis.PLASTICITY, "substrate_coupled"): (
-        "SubstrateCoupledPlasticity is a no-op at the plasticity protocol level "
-        "(ψ ≡ σ; the substrate owns state evolution), so the standard step is "
-        "bit-identical to null (TODO92 §3.9, one-step parameter fingerprint)."
-    ),
-}
-
-
 def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:
     """Every axis primitive with its description and structural topology params."""
     substrate: tuple[PrimitiveRow, ...] = tuple((n, d, ()) for n, d in _SUBSTRATE_PRIMS)
@@ -504,6 +484,27 @@ def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]],
         (StructuralAxis.CREDIT, credit),
         (StructuralAxis.UPDATE, update),
     )
+
+
+def _unavailable_axis_rows() -> dict[tuple[StructuralAxis, str], str]:
+    """The unavailable axis rows, projected from the one gap table.
+
+    ``schema.gaps.GAPS`` is the declaration; this is its axis-keyed view, so a
+    row's reason is written once (TODO95 D1).
+    """
+    return {
+        (axis, name): gap.reason
+        for axis, rows in _axis_primitives()
+        for name, _description, _topology in rows
+        if (gap := gap_for(f"primitive.{axis.value}.{name}")) is not None
+    }
+
+
+# Primitives the kernel registers but cannot honour, with the reason recorded
+# (R78). An unavailable row is excluded from every space, so the run stops
+# proposing cells it would only fail. The declaration is ``schema.gaps.GAPS``;
+# this name is its derived view.
+_UNAVAILABLE: Final[dict[tuple[StructuralAxis, str], str]] = _unavailable_axis_rows()
 
 
 def _accepted_params(axis: StructuralAxis, primitive: str) -> frozenset[str]:
@@ -544,13 +545,14 @@ def _seed_axis_primitives() -> None:
     for axis, primitives in _axis_primitives():
         for name, description, topology in primitives:
             estimator_kind, bias_reference = _estimator_coordinate(axis, name)
+            gap = gap_for(f"primitive.{axis.value}.{name}")
             register_axis_spec(
                 AxisSpec(
                     name=name,
                     axis_kind=axis,
                     description=description,
-                    available=(axis, name) not in _UNAVAILABLE,
-                    unavailable_reason=_UNAVAILABLE.get((axis, name)),
+                    available=gap is None,
+                    unavailable_reason=None if gap is None else gap.reason,
                     target_kind=(
                         "class_index" if (axis, name) in CLASS_TARGET_ONLY else "any"
                     ),

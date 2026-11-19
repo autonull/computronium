@@ -17,6 +17,7 @@ from computronium.core.plasticity.adaptive_psi import (
 from computronium.core.plasticity.closed_form import (
     ClosedFormRidgeConfig,
     ClosedFormRidgePlasticity,
+    closed_form_ridge_from_config,
     create_closed_form_ridge_plasticity,
 )
 from computronium.core.plasticity.fast_weights import (
@@ -59,6 +60,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Closed Form (W3 — ψ computed, not trained)
     "ClosedFormRidgePlasticity",
     "ClosedFormRidgeConfig",
+    "closed_form_ridge_from_config",
     "create_closed_form_ridge_plasticity",
     # Routing
     "RoutingPlasticity",

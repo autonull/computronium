@@ -41,6 +41,7 @@ def _create_trainer_config(
 
     return SystemTrainerConfig(
         max_epochs=schedule.epochs,
+        batch_size=schedule.batch_size,
         device=resolved_device,
         seed=schedule.seed,
         limit_train_batches=limit,
@@ -130,7 +131,7 @@ def _create_trainer(
         train_data = task
         val_data = task  # Use same task for validation (different masks/splits)
     else:
-        batch_size = config.limit_train_batches or 32  # fallback
+        batch_size = config.batch_size
         train_data = _create_data_provider(
             task, "train", batch_size, config.limit_train_batches
         )

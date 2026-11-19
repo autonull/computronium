@@ -10,13 +10,17 @@ This test fails if a verdict key or a bar comparison returns to the screen.
 
 from __future__ import annotations
 
-from pathlib import Path
+import json
+from typing import TYPE_CHECKING
 
 import pytest
 
 from computronium.experiment import sec_loop
 from computronium.experiment.kernel.evaluate import CellEvaluation
 from computronium.experiment.sec_census import PrimitiveCensusEntry
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _ENTRY = PrimitiveCensusEntry(
     id="primitive.parameter_update.euclidean",
@@ -81,3 +85,19 @@ def test_the_box_travels_with_the_measurement(
     assert cell["box"]["seed"] == sec_loop.P0_SEED
     assert cell["param_count"] == 100
     assert cell["within_ceiling"] is True
+
+
+def test_loop_has_no_bar(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A screen's status vocabulary has no verdict and no second bar."""
+    from computronium.experiment.sec_loop import update_map
+
+    result = _screen(monkeypatch, tmp_path, 0.93)
+    cell = result["cells"][0]
+    assert cell["record"]["status"]["gate_verdict"] == "PENDING"
+    assert cell["record"]["status"]["maturity"] == "l0"
+    assert cell["record"]["payload"]["pass_bar_cleared"] is None
+    assert "viable" not in str(cell)
+    update_map(tmp_path, [_ENTRY], result)
+    map_row = json.loads((tmp_path / "map.json").read_text())["primitives"][_ENTRY.id]
+    assert map_row["status"] == "measured"
+    assert map_row["status"] not in {"pass", "viable", "unavailable", "coordinate"}

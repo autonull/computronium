@@ -137,3 +137,19 @@ def create_closed_form_ridge_plasticity(
     **kwargs: float,
 ) -> ClosedFormRidgePlasticity:
     return ClosedFormRidgePlasticity(ClosedFormRidgeConfig(**kwargs))
+
+
+def closed_form_ridge_from_config(
+    config: object,
+) -> ClosedFormRidgePlasticity:
+    """Instantiate from a ``PlasticityConfig(plasticity_type="closed_form_ridge")``.
+
+    The axis config carries the knob in ``consolidation_config``; this is the
+    one adapter from the box's declaration to the law's own config.
+    """
+    consolidation = getattr(config, "consolidation_config", None) or {}
+    return ClosedFormRidgePlasticity(
+        ClosedFormRidgeConfig(
+            ridge_lambda=float(consolidation.get("ridge_lambda", 1e-3))
+        )
+    )

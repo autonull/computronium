@@ -79,6 +79,7 @@ __all__ = [
     "compute_stability_metrics",
     "evaluate_cell",
     "history_metrics",
+    "record_from_evaluation",
     "task_shape",
 ]
 
@@ -617,6 +618,7 @@ def _compute_substrate_objectives(
         "sparse": SubstrateConfig.sparse,
         "ternary": SubstrateConfig.ternary,
         "complex": SubstrateConfig.complex,
+        "noisy": SubstrateConfig.noisy,
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
     dynamics_name = coordinate.dynamics
@@ -871,10 +873,34 @@ def cell_record(
             payload={"status": "failed", "cause": exc.cause, "error": str(exc)},
         )
 
+    return record_from_evaluation(
+        coordinate=coordinate,
+        schedule=schedule,
+        provenance=provenance,
+        evaluation=evaluation,
+    )
+
+
+def record_from_evaluation(
+    coordinate: Coordinate,
+    schedule: Schedule,
+    provenance: Provenance,
+    evaluation: CellEvaluation,
+    *,
+    status: Status | None = None,
+    extra_payload: Mapping[str, Any] | None = None,
+) -> Record:
+    """The record a completed evaluation writes: its box, identity and replay hash.
+
+    ``status=None`` derives the gate verdict from what happened. A screen passes
+    its own status instead, because a screen records a measurement and never
+    adjudicates it (TODO95 D5); the box and the replay hash travel either way.
+    """
+    from computronium.experiment.schema.record import Record
+
     complete = evaluation.epochs_completed >= schedule.epochs
     within_ceiling = _within_ceiling(evaluation.param_count, schedule.param_budget)
 
-    # Compute replay hash for reproducibility (D10)
     # Hash over: code_sha, dataset_version, coordinate + full schedule
     replay_hash = _cell_replay_hash(provenance, coordinate, schedule)
 
@@ -903,18 +929,22 @@ def cell_record(
     payload["normalized_metric"] = normalized_metric
     payload["primary_metric"] = primary_key
     # The gate ruler travels with the record: a PASS is a comparison against a
-    # declared chance/majority rate, not an unqualified "defect-free".
+    # declared chance/majority rate, not an unqualified "defect-free". A screen
+    # passes its own status and gets the ruler without the comparison, because
+    # the bar is a gate's floor, not a screen's judgment (TODO95 D5).
     bar = task_pass_bar(task_id)
-    below_bar = (
-        ""
-        if bar is None or clears_task_bar(bar, evaluation.metrics)
-        else (
-            "below bar: "
-            f"{bar.metric_key}="
-            f"{evaluation.metrics.get(bar.metric_key, float('nan')):.4f} "
-            f"misses {bar.direction} {bar.value:.4f} ({task_id} {bar.metric_key})"
+    below_bar = ""
+    if status is None:
+        below_bar = (
+            ""
+            if bar is None or clears_task_bar(bar, evaluation.metrics)
+            else (
+                "below bar: "
+                f"{bar.metric_key}="
+                f"{evaluation.metrics.get(bar.metric_key, float('nan')):.4f} "
+                f"misses {bar.direction} {bar.value:.4f} ({task_id} {bar.metric_key})"
+            )
         )
-    )
     payload["pass_bar"] = (
         None
         if bar is None
@@ -924,7 +954,11 @@ def cell_record(
             "value": bar.value,
         }
     )
-    payload["pass_bar_cleared"] = None if bar is None else not below_bar
+    payload["pass_bar_cleared"] = (
+        None if bar is None or status is not None else not below_bar
+    )
+    if extra_payload:
+        payload.update(extra_payload)
     if evaluation.checkpoint_path:
         payload["checkpoint_path"] = evaluation.checkpoint_path
     if evaluation.convergence_curve:
@@ -932,16 +966,17 @@ def cell_record(
     passed = complete and within_ceiling and not below_bar
 
     # Build legacy status and convert to schema Status with procedure metadata
-    status = _build_status_with_procedures(
-        passed,
-        complete,
-        within_ceiling,
-        evaluation.param_count,
-        schedule.param_budget,
-        replay_hash=replay_hash,
-        deterministic=schedule.deterministic,
-        below_bar=below_bar,
-    )
+    if status is None:
+        status = _build_status_with_procedures(
+            passed,
+            complete,
+            within_ceiling,
+            evaluation.param_count,
+            schedule.param_budget,
+            replay_hash=replay_hash,
+            deterministic=schedule.deterministic,
+            below_bar=below_bar,
+        )
 
     return Record.create(
         run_id=provenance.links.get("run_id", str(uuid.uuid4())),

@@ -1,9 +1,14 @@
-"""SEC Loop: Result-first capability harvest loop.
+"""SEC Loop: result-first capability harvest loop.
 
 Runs:
-- Track R (result-first): R1 (SplitMNIST batch-1 local vs backprop)
+- Track R (result-first): R1 (SplitMNIST local vs backprop with EWC)
 - Track P0 (breadth delta): screen unscreened/changed/failed primitives
-- Track P1 (confirmation): 3 seeds, paired, only on P0 PASS
+- Track P1 (confirmation): 3 seeds, paired, on a measured, bound P0 cell
+
+A screen measures; it never adjudicates. P1 stays for the review meeting, but
+its comparison is not yet a claim: a verdict needs a pre-registered comparison
+at a calibrated box (TODO95 D4/D5), and its hard-coded `chance = 0.1` is the
+open defect that session owns.
 
 Run:
     uv run python -m computronium.experiment.sec_loop --track R1 --breadth delta --out results/sec
@@ -27,11 +32,28 @@ from computronium.experiment.kernel.evaluate import (
     CellEvaluation,
     EvaluationError,
     evaluate_cell,
+    record_from_evaluation,
 )
-from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    Provenance,
+    Schedule,
+)
+from computronium.experiment.schema.record import (
+    FailureCause,
+    GateVerdict,
+    Maturity,
+    ReproducibilityClass,
+    Severity,
+    Status,
+)
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 from computronium.experiment.sec_binding import binding_reason
-from computronium.experiment.sec_census import PrimitiveCensusEntry, build_census
+from computronium.experiment.sec_census import (
+    MAP_VERSION,
+    PrimitiveCensusEntry,
+    build_census,
+)
 
 logger = get_logger(__name__)
 
@@ -110,10 +132,12 @@ def run_r1_track(
                 credit_results.append(final_acc)
                 credit_forgetting.append(avg_forgetting)
 
+                box = _continual_box(config, budget_id="r1", task_id=R1_TASK)
                 result_entry = {
                     "track": "R1",
                     "credit": credit_name,
                     "seed": seed,
+                    "box": box.to_dict(),
                     "val_acc": final_acc,
                     "final_accuracies": metrics.final_accuracies,
                     "avg_forgetting": avg_forgetting,
@@ -282,6 +306,9 @@ def run_r2_track(
                     "track": "R2",
                     "credit": credit_name,
                     "seed": seed,
+                    "box": _continual_box(
+                        config, budget_id="r2", task_id="permuted_mnist"
+                    ).to_dict(),
                     "val_acc": final_acc,
                     "final_accuracies": metrics.final_accuracies,
                     "avg_forgetting": avg_forgetting,
@@ -367,11 +394,40 @@ def run_r2_track(
     return result_summary
 
 
+def _continual_box(config: CLConfig, *, budget_id: str, task_id: str) -> Schedule:
+    """The box a continual-learning cell trains at: its kernel schedule.
+
+    The CL config's own knobs (lr, ewc_lambda, num_tasks) stay the cell's
+    params; the box records what the *kernel* ran at, so a claim can refuse a
+    re-run at another batch size or seed (TODO95 P0b).
+    """
+    return Schedule(
+        fidelity="L0",
+        seed=config.seed,
+        n_seeds=1,
+        epochs=config.epochs_per_task,
+        batch_limit=0,
+        batch_size=config.batch_size,
+        budget_id=budget_id,
+        task_id=task_id,
+        device=config.device,
+        deterministic=True,
+        num_workers=0,
+        precision="fp32",
+        checkpoint_every_n=0,
+    )
+
+
 # ============================================================
 # Track P0: Breadth Delta Screen
 # ============================================================
 
 P0_EPOCHS = 1
+# 32 samples per step. The loader used to read the batch *count* as the batch
+# size, so the declared 375-batch screen trained at 375 samples/step (a 118,282
+# parameter cell never saw its step size move); the two are separate fields of
+# the box (TODO95 D2).
+P0_BATCH_SIZE = 32
 # 32 batches (1,024 samples) ranked cells by their default step size, not by
 # their mechanism: at 32 batches `adam` scored 0.198 and `euclidean` 0.540; at
 # 375 batches `adam` scored 0.695 and `euclidean` 0.424 (measured 2026-11-18).
@@ -397,28 +453,49 @@ P0_OWN_KNOBS = False
 
 
 def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[str, Any]:
-    """The box a cell was screened in: the six axes plus the schedule.
+    """The box a cell was screened in: the six axes plus the whole schedule.
 
     A row without its task, batch and step count cannot be reproduced and cannot
-    be compared with another row (TODO95 D2/D3).
+    be compared with another row (TODO95 D2/D3). The schedule is the box, so its
+    own serialization is the one source; the six axes are added to it.
     """
-    box: dict[str, Any] = {
-        "substrate": coord.substrate,
-        "geometry": coord.geometry,
-        "dynamics": coord.dynamics,
-        "plasticity": coord.plasticity,
-        "credit": coord.credit,
-        "update": coord.update,
-    }
+    box: dict[str, Any] = {"substrate": coord.substrate}
+    for field in _AXIS_FIELD.values():
+        box[field] = getattr(coord, field)
     if schedule is not None:
-        box |= {
-            "task": schedule.task_id,
-            "epochs": schedule.epochs,
-            "batch_limit": schedule.batch_limit,
-            "seed": schedule.seed,
-            "param_budget": schedule.param_budget,
-        }
+        box |= schedule.to_dict()
+        # ``Schedule.to_dict`` names the task ``task_id``; the map's row
+        # (and its readers) name it ``task``. One box, one spelling each.
+        box["task"] = schedule.task_id
     return box
+
+
+def _provenance(task_id: str, box: dict[str, Any], replay_hash: str) -> Provenance:
+    """The run declaration one screened cell belongs to."""
+    return Provenance(
+        env={"task": task_id, "fidelity": str(box.get("fidelity", "L0"))},
+        dataset=task_id,
+        dataset_version=str(box.get("budget_id", "")),
+        code_sha=replay_hash,
+        policy=str(box.get("budget_id", "")),
+        links={"run_id": f"sec-{box.get('budget_id', task_id)}"},
+    )
+
+
+def _screen_status() -> Status:
+    """A screen's status: measured, not adjudicated (TODO95 D5)."""
+    return Status(
+        gate_verdict=GateVerdict.PENDING,
+        defect="",
+        cause=FailureCause.UNKNOWN,
+        severity=Severity.LOW,
+        quarantine=False,
+        maturity=Maturity.L0,
+        uncertainty={},
+        reproducibility=ReproducibilityClass.REPLAYABLE,
+        assessment_procedure_version="sec-screen",
+        ceec_link=None,
+    )
 
 
 def _control_val_acc(schedule: Schedule, device: str) -> float | None:
@@ -642,6 +719,199 @@ def get_legal_coordinate_for_primitive(
     return coords[0] if coords else None
 
 
+def _train_nearest(
+    candidates: list[Coordinate], schedule: Schedule
+) -> tuple[CellEvaluation | None, Coordinate | None, Exception | None, int, bool]:
+    """Try compose-legal boxes nearest-to-default until one actually trains.
+
+    A compose-legal box can still fail at training time (a surrogate credit with
+    no hard top-k gate, a readout-replacing plasticity), so the run is the final
+    oracle. Returns ``(evaluation, coordinate, last error, tried, timed out)``.
+    """
+    last_error: Exception | None = None
+    started = time.monotonic()
+    deadline = started + P0_PRIMITIVE_BUDGET_S
+
+    def within_budget() -> bool:
+        return time.monotonic() < deadline
+
+    params = {
+        "deadline_check": within_budget,
+        "deadline_check_every_n_steps": 1,
+    }
+    tried = 0
+    for coord in candidates:
+        if not within_budget():
+            return None, None, last_error, tried, True
+        tried += 1
+        try:
+            return (
+                evaluate_cell(coord, schedule, params=params),
+                coord,
+                None,
+                tried,
+                False,
+            )
+        except EvaluationError as exc:
+            last_error = exc
+            if getattr(exc, "cause", None) == "timeout":
+                return None, None, last_error, tried, True
+        except (ValueError, RuntimeError) as exc:
+            # ruff: ignore[blind-except] - one bad cell never ends the screen
+            last_error = exc
+    return None, None, last_error, tried, False
+
+
+def _unmeasured_cell(
+    entry: PrimitiveCensusEntry,
+    *,
+    tried: int,
+    candidates: int,
+    last_error: Exception | None,
+    timed_out: bool,
+    ruler: str,
+    criterion: str,
+    axis: str,
+    primitive_key: str,
+) -> dict[str, Any]:
+    """The cell a primitive emits when no compose-legal box trained."""
+    if timed_out:
+        logger.warning(f"P0 candidate budget spent: {entry.id}")
+        return {
+            "track": "P0",
+            "primitive": entry.id,
+            "status": "UNAVAILABLE",
+            "reason": (
+                f"cost cap: {P0_PRIMITIVE_BUDGET_S:.0f}s after "
+                f"{tried}/{candidates} boxes; last error: {last_error}"
+            ),
+            "ruler": ruler,
+        }
+
+    # No compose-legal box trained. Distinguish a compose rejection (never
+    # should happen here — candidates are already compose-legal) from a
+    # training-time contract failure.
+    if isinstance(last_error, ValueError):
+        logger.warning(f"P0 all boxes rejected: {entry.id}, error={last_error}")
+        return {
+            "track": "P0",
+            "primitive": entry.id,
+            "status": "UNAVAILABLE",
+            "reason": f"validation: {last_error}",
+        }
+    logger.exception(f"P0 every legal box failed to train: {entry.id}")
+    inert = binding_reason(
+        axis, primitive_key, criterion=criterion, own_knobs=P0_OWN_KNOBS
+    )
+    return {
+        "track": "P0",
+        "primitive": entry.id,
+        "status": "DEFECT",
+        "error": str(last_error),
+        "cause": getattr(last_error, "cause", None),
+        "ruler": ruler,
+        "binding": "inert" if inert else "bound",
+        "binding_reason": inert,
+        "tried": tried,
+    }
+
+
+def _screen_coordinate(  # ruff: ignore[too-many-arguments]
+    entry: PrimitiveCensusEntry,
+    candidates: list[Coordinate],
+    schedule: Schedule,
+    *,
+    control_acc: float | None,
+    ruler: str,
+    criterion: str,
+    axis: str,
+    primitive_key: str,
+) -> dict[str, Any]:
+    """Screen one primitive over its nearest compose-legal boxes.
+
+    Emits one cell: the number, the box and the cost beside a MEASURED status;
+    a DEFECT only for an execution fact (a crash, a non-finite metric, a
+    ceiling violation). A bar is a gate's floor; a screen never mints a verdict
+    (TODO95 D5), so no cell carries one.
+    """
+    box_binding = binding_reason(
+        axis, primitive_key, criterion=criterion, own_knobs=P0_OWN_KNOBS
+    )
+    if not candidates:
+        return {
+            "track": "P0",
+            "primitive": entry.id,
+            "status": "UNAVAILABLE",
+            "reason": "no legal box or not available",
+            "ruler": ruler,
+            "binding": "inert" if box_binding else "bound",
+            "binding_reason": box_binding,
+        }
+
+    eval_result, coord, last_error, tried, timed_out = _train_nearest(
+        candidates, schedule
+    )
+    if eval_result is None or coord is None:
+        return _unmeasured_cell(
+            entry,
+            tried=tried,
+            candidates=len(candidates),
+            last_error=last_error,
+            timed_out=timed_out,
+            ruler=ruler,
+            criterion=criterion,
+            axis=axis,
+            primitive_key=primitive_key,
+        )
+
+    metrics = dict(eval_result.metrics)
+    val_acc = float(metrics.get("val_acc", 0.0))
+    loss = float(metrics.get("loss", float("inf")))
+    finite = math.isfinite(val_acc) and math.isfinite(loss)
+    within = eval_result.param_count <= P0_PARAM_BUDGET * (1 + PARAM_BUDGET_TOLERANCE)
+    defect = (
+        None
+        if finite and within
+        else (
+            "non-finite metric"
+            if not finite
+            else f"param_count {eval_result.param_count} over ceiling"
+        )
+    )
+    box = _box_summary(coord, schedule)
+    record = record_from_evaluation(
+        coordinate=coord,
+        schedule=schedule,
+        provenance=_provenance(schedule.task_id, box, coord.measurement_key(schedule)),
+        evaluation=eval_result,
+        status=_screen_status(),
+        extra_payload={
+            "defect": defect,
+            "binding": box_binding or "bound",
+            "swapped": getattr(coord, axis) != primitive_key,
+        },
+    )
+    return {
+        "track": "P0",
+        "primitive": entry.id,
+        "status": "DEFECT" if defect else "MEASURED",
+        "val_acc": val_acc,
+        "loss": loss,
+        "param_count": eval_result.param_count,
+        "within_ceiling": within,
+        "metrics": metrics,
+        "box": box,
+        "ruler": ruler,
+        "control_val_acc": control_acc,
+        "binding": "inert" if box_binding else "bound",
+        "binding_reason": box_binding,
+        "swapped": getattr(coord, axis) != primitive_key,
+        "defect": defect,
+        "walltime_s": eval_result.walltime_s,
+        "record": record.to_dict(),
+    }
+
+
 def run_p0_track(
     out_dir: Path,
     census_entries: list[PrimitiveCensusEntry],
@@ -663,10 +933,9 @@ def run_p0_track(
         map_data = json.loads(map_path.read_text())
         for prim_id, entry in map_data.get("primitives", {}).items():
             if entry.get("last_screened") and entry.get("status") in {
-                "pass",
+                "measured",
                 "defect",
-                "unavailable",
-                "coordinate",
+                "refused",
             }:
                 screened_primitives.add(prim_id)
 
@@ -685,10 +954,9 @@ def run_p0_track(
     entries_to_screen = entries_to_screen[:max_primitives]
 
     logger.info(
-        f"P0 {breadth}: {len(entries_to_screen)} primitives to screen (from {len(census_entries)} total)"
+        f"P0 {breadth}: {len(entries_to_screen)} primitives to screen "
+        f"(from {len(census_entries)} total)"
     )
-
-    results: list[dict[str, Any]] = []
 
     schedule = Schedule(
         fidelity="L0",
@@ -696,6 +964,7 @@ def run_p0_track(
         n_seeds=1,
         epochs=P0_EPOCHS,
         batch_limit=P0_BATCH_LIMIT,
+        batch_size=P0_BATCH_SIZE,
         budget_id="p0",
         task_id="mnist",
         param_budget=P0_PARAM_BUDGET,
@@ -710,168 +979,22 @@ def run_p0_track(
     criterion, ruler = _ruler(schedule.task_id)
     logger.info(f"P0 control at this box: val_acc={control_acc}")
 
+    results: list[dict[str, Any]] = []
     for entry in entries_to_screen:
         logger.info(f"P0 screening: {entry.id}")
         axis = _AXIS_FIELD.get(entry.axis, entry.axis)
-        primitive_key = entry.id.split(".")[-1]
-
-        # Try compose-legal boxes nearest-to-default until one actually trains.
-        # A compose-legal box can still fail at training time (a surrogate credit
-        # with no hard top-k gate, a readout-replacing plasticity), so the
-        # training run is the final oracle.
-        candidates = _iter_legal_coordinates(entry, limit=P0_MAX_COORDINATES)
-        if not candidates:
-            inert = binding_reason(
-                axis,
-                primitive_key,
+        results.append(
+            _screen_coordinate(
+                entry,
+                _iter_legal_coordinates(entry, limit=P0_MAX_COORDINATES),
+                schedule,
+                control_acc=control_acc,
+                ruler=ruler,
                 criterion=criterion,
-                own_knobs=P0_OWN_KNOBS,
+                axis=axis,
+                primitive_key=entry.id.split(".")[-1],
             )
-            results.append({
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "UNAVAILABLE",
-                "reason": "no legal box or not available",
-                "ruler": ruler,
-                "binding": "inert" if inert else "bound",
-                "binding_reason": inert,
-            })
-            continue
-
-        last_error: Exception | None = None
-        completed = False
-        started = time.monotonic()
-        deadline = started + P0_PRIMITIVE_BUDGET_S
-
-        def within_budget() -> bool:
-            return time.monotonic() < deadline
-
-        params = {
-            "deadline_check": within_budget,
-            "deadline_check_every_n_steps": 1,
-        }
-        timed_out = False
-        tried = 0
-        for coord in candidates:
-            if not within_budget():
-                timed_out = True
-                break
-            tried += 1
-            try:
-                eval_result: CellEvaluation = evaluate_cell(
-                    coord, schedule, params=params
-                )
-            except EvaluationError as exc:
-                last_error = exc
-                if getattr(exc, "cause", None) == "timeout":
-                    timed_out = True
-                    break
-                continue
-            except ValueError as exc:
-                last_error = exc
-                continue
-            except Exception as exc:  # ruff: ignore[blind-except] - one bad cell never ends the screen
-                last_error = exc
-                continue
-
-            metrics = dict(eval_result.metrics)
-            val_acc = float(metrics.get("val_acc", 0.0))
-            loss = float(metrics.get("loss", float("inf")))
-            finite = math.isfinite(val_acc) and math.isfinite(loss)
-            within = eval_result.param_count <= P0_PARAM_BUDGET * (
-                1 + PARAM_BUDGET_TOLERANCE
-            )
-            defect = (
-                None
-                if finite and within
-                else (
-                    "non-finite metric"
-                    if not finite
-                    else f"param_count {eval_result.param_count} over ceiling"
-                )
-            )
-            inert = binding_reason(
-                axis,
-                primitive_key,
-                criterion=criterion,
-                own_knobs=P0_OWN_KNOBS,
-            )
-            # A screen records; it never adjudicates. It emits the number, the
-            # box, the size and the cost, plus a DEFECT only for an execution
-            # fact (a crash, a non-finite metric, a ceiling violation).
-            # "Above chance" is not a capability, and a 1-seed cell is not a
-            # comparison (TODO95 §2). `binding` says whether the varied axis
-            # could act at this box; an inert row is not a result about it.
-            results.append({
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "DEFECT" if defect else "MEASURED",
-                "val_acc": val_acc,
-                "loss": loss,
-                "param_count": eval_result.param_count,
-                "within_ceiling": within,
-                "metrics": metrics,
-                "box": _box_summary(coord, schedule),
-                "ruler": ruler,
-                "control_val_acc": control_acc,
-                "binding": "inert" if inert else "bound",
-                "binding_reason": inert,
-                "swapped": getattr(coord, axis) != primitive_key,
-                "defect": defect,
-                "walltime_s": eval_result.walltime_s,
-            })
-            completed = True
-            break
-
-        if completed:
-            continue
-
-        elapsed = time.monotonic() - started
-        if timed_out:
-            logger.warning(f"P0 candidate budget spent: {entry.id}, {elapsed:.0f}s")
-            results.append({
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "UNAVAILABLE",
-                "reason": (
-                    f"cost cap: {elapsed:.0f}s over {P0_PRIMITIVE_BUDGET_S:.0f}s "
-                    f"after {tried}/{len(candidates)} boxes; "
-                    f"last error: {last_error}"
-                ),
-                "ruler": ruler,
-            })
-            continue
-
-        # No compose-legal box trained. Distinguish a compose rejection (never
-        # should happen here — candidates are already compose-legal) from a
-        # training-time contract failure.
-        if isinstance(last_error, ValueError):
-            logger.warning(f"P0 all boxes rejected: {entry.id}, error={last_error}")
-            results.append({
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "UNAVAILABLE",
-                "reason": f"validation: {last_error}",
-            })
-        else:
-            logger.exception(f"P0 every legal box failed to train: {entry.id}")
-            inert = binding_reason(
-                axis,
-                primitive_key,
-                criterion=criterion,
-                own_knobs=P0_OWN_KNOBS,
-            )
-            results.append({
-                "track": "P0",
-                "primitive": entry.id,
-                "status": "DEFECT",
-                "error": str(last_error),
-                "cause": getattr(last_error, "cause", None),
-                "ruler": ruler,
-                "binding": "inert" if inert else "bound",
-                "binding_reason": inert,
-                "tried": len(candidates),
-            })
+        )
 
     total = len(entries_to_screen)
     measured_count = sum(1 for cell in results if cell["status"] == "MEASURED")
@@ -1100,11 +1223,24 @@ def update_portfolio(
 
 
 def update_cell_log(out_dir: Path, all_results: list[dict]) -> None:
-    """Append results to cells.jsonl."""
+    """Append every cell to cells.jsonl, record-first (TODO95 P0b).
+
+    One line per cell: ``{"screen": <cell>, "record": <Record|None>}``. The
+    record is the cell's evidence — its box and replay hash; the screen is what
+    the run measured and how the varied axis bound. Both keys are always
+    present, so a reader never has to guess which shape it holds.
+    """
     cell_log_path = out_dir / "cells.jsonl"
     with cell_log_path.open("a") as f:
         for result in all_results:
-            f.write(json.dumps(result, default=str) + "\n")
+            screen = {k: v for k, v in result.items() if k != "record"}
+            f.write(
+                json.dumps(
+                    {"screen": screen, "record": result.get("record")},
+                    default=str,
+                )
+                + "\n"
+            )
     logger.info(f"Cell log updated: {cell_log_path} (+{len(all_results)} entries)")
 
 
@@ -1193,7 +1329,7 @@ def update_map(
     previous: dict[str, dict] = {}
     if map_path.exists():
         prior = json.loads(map_path.read_text())
-        if prior.get("version") == "SEC-v3":
+        if prior.get("version") == MAP_VERSION:
             previous = prior.get("primitives", {})
 
     primitives: dict[str, dict] = {}
@@ -1222,7 +1358,7 @@ def update_map(
     control = (p0_result or {}).get("control_val_acc")
     base = (p0_result or {}).get("base_box", {})
     map_data = {
-        "version": "SEC-v3",
+        "version": MAP_VERSION,
         "updated": datetime.now().isoformat(),
         "inventory": {
             "total": len(census_entries),
@@ -1302,14 +1438,14 @@ def main() -> None:
         choices=["substrate", "geometry", "dynamics", "plasticity", "credit", "update"],
         help="Screen only this axis (repeatable); the map keeps earlier rows",
     )
-    parser.add_argument("--out", type=Path, required=True, help="Output directory")
-    parser.add_argument(
-        "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
-    )
     parser.add_argument(
         "--p1-from-map",
         action="store_true",
-        help="Run P1 on PASS primitives from map.json (not just current P0 run)",
+        help="Run P1 on measured, bound primitives from map.json (not just this P0 run)",
+    )
+    parser.add_argument("--out", type=Path, required=True, help="Output directory")
+    parser.add_argument(
+        "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
     )
     args = parser.parse_args()
 
@@ -1400,6 +1536,7 @@ def main() -> None:
             f"box_defect={p0_result['box_defect']}, "
             f"pause_R={p0_result['pause_r']}"
         )
+
     if p1_result:
         print(
             f"P1: confirmed={p1_result['confirmed']}, surprises={p1_result['surprises']}"

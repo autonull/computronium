@@ -7,25 +7,11 @@ Run:
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-
-@dataclass(frozen=True, slots=True)
-class TrackPortfolioEntry:
-    """One track in the portfolio."""
-
-    track: str
-    rank: int
-    kill_rule: str
-    last_result: str  # claim, coordinate, defect, running, unstarted
-    budget_used: dict[str, float]
-    contention: bool
+from computronium.experiment.sec_census import MAP_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +27,18 @@ class PrimitiveMapEntry:
     defect: str | None
     capability: str
     last_screened: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TrackPortfolioEntry:
+    """One track in the portfolio."""
+
+    track: str
+    rank: int
+    kill_rule: str
+    last_result: str  # measured, defect, refused, running, unstarted
+    budget_used: dict[str, float]
+    contention: bool
 
 
 DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
@@ -63,7 +61,7 @@ DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
     TrackPortfolioEntry(
         track="P0",
         rank=3,
-        kill_rule=">20% DEFECT → pause R, fix",
+        kill_rule=">20% defect → pause R, fix",
         last_result="unstarted",
         budget_used={"cells": 0, "primitives": 0},
         contention=False,
@@ -86,7 +84,7 @@ def write_portfolio(out_dir: Path) -> None:
 
     data = {
         "initialized_at": datetime.now().isoformat(),
-        "version": "SEC-v2",
+        "version": MAP_VERSION,
         "tracks": [asdict(t) for t in DEFAULT_TRACKS],
         "active_track": "R1",
         "session_count": 0,
@@ -109,14 +107,14 @@ def write_cell_log(out_dir: Path) -> None:
 
 
 def write_map(out_dir: Path) -> None:
-    """Initialize empty map.json."""
+    """Initialize empty map.json at the one record version."""
     out_dir.mkdir(parents=True, exist_ok=True)
     map_path = out_dir / "map.json"
 
     if not map_path.exists():
         data = {
             "initialized_at": datetime.now().isoformat(),
-            "version": "SEC-v2",
+            "version": MAP_VERSION,
             "primitives": {},
         }
         map_path.write_text(json.dumps(data, indent=2))
@@ -128,7 +126,9 @@ def write_map(out_dir: Path) -> None:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="SEC Init - initialize portfolio and cell log")
+    parser = argparse.ArgumentParser(
+        description="SEC Init - initialize portfolio and cell log"
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     args = parser.parse_args()
 

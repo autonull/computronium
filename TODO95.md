@@ -1,12 +1,14 @@
 # TODO95 — The Map Is the Product
 
 **Status:** 2026-11-18 · drafted from the README and `PURPOSE.md`, after TODO94
-Session 12. The laboratory exists to map the 6-axis space of learning systems
-(9 substrates × 12 geometries × 8 dynamics × 7 plasticities × 19 credits ×
-18 updates = 73 primitives, 2M+ legal cells). Today the map is:
-**62 of 73 primitives**, at **57 different boxes**, on **one ruler**, with
-**47 labelled `pass`** of which **21 sit at or near chance**. The instrument
-works; the map is not yet a map.
+Session 12; session 14 landed the record, the box and two composable rows. The
+laboratory exists to map the 6-axis space of learning systems
+(10 substrates × 12 geometries × 8 dynamics × 6 plasticities × 19 credits ×
+18 updates = 75 primitives, 2M+ legal cells). Today the map is:
+**73 of 75 primitives available** (2 declared gaps: the documented no-op
+plasticities), at 75 distinct boxes on one ruler, with the P0 screen emitting
+measurements and never verdicts. The instrument works; the map's census is the
+next session.
 
 ---
 
@@ -107,14 +109,17 @@ by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
 
 ### Queue (session 14; one table)
 
-The base-box census is landed: 75 rows, 61 measured (31 bound, 30 inert), 8
-defect, 6 refused, 0 missing; box `mnist`/375/150k/seed 0, control 0.8914.
-The remaining work is one schema session, one calibration session and two claim
-sessions. A row without a gate is prose; a session without a claim is a sweep.
+The census is the inventory: 75 rows, 73 available, 2 declared gaps (the two
+no-op plasticities), 75 distinct boxes. The P0 map of the *previous* box
+(`mnist`/375/150k/seed 0, control 0.8914) is superseded by the box fix:
+`batch_size` was being read from the batch count, so every row must be
+re-screened at 32/step (S2). The remaining work is one row-contract session,
+one calibration session and two claim sessions. A row without a gate is prose; a session without a claim is a sweep.
 
 | # | Session | Closes | Gate |
 |---|---|---|---|
-| S1 | **Schema + debt** (no GPU) | the record and the box (P0b); delete the P1 track and map `confirmation`; one `MAP_VERSION`; one gap table; extract `_screen_coordinate`; README counts from the generator (it reads the registry); the inventory: fix `noisy`/`closed_form_ridge` and retire `rule_state`/`substrate_coupled` → **73 available, 0 gaps** | `test_box_identity`, `test_loop_has_no_bar`, `test_init_then_update_keeps_a_row`, `test_gap_table_single_source`, `test_readme_counts_match_census`, `test_spec_composes`; `ruff` no PLR09/C901 |
+| S1a ✅ | **Schema + debt** (no GPU) | `MAP_VERSION`; `schema.gaps.GAPS` (one gap table, reasons + triggers); `noisy`/`closed_form_ridge` compose their own rows; `Schedule` gains `batch_size`/`steps_per_task` (the box); `record_from_evaluation` + a `Record` in the P0 log; `_screen_coordinate` extracted; README regenerated from the registry | `test_box_identity`, `test_loop_has_no_bar`, `test_init_then_update_keeps_a_row`, `test_gap_table_single_source`, `test_readme_counts_match_census`, `test_spec_composes` |
+| S1b | **The two parked rows** (no GPU) | `rule_state`/`substrate_coupled` stay in the inventory (user decision: no deletion); make each a bounded contract that composes — `apply_operator` in the standard step, and a substrate state σ read back — or park them with the `GAPS` row as the snapshot of a capability the kernel still owes | the `GAPS` row fails when the row becomes available; `test_axis_liveness_lock` |
 | S2 | **Calibrate + bind** (~20 min GPU) | the bar (chance + 2σ at the ruler's resolution) and a 3-seed control per family; the `iris` base; the task-family filter (3 sequence credits become `refused`); the own-knobs pass (30 inert rows); the resource vector gains `memory_mb` and `energy_per_batch` | `test_control_power`, `test_task_family_filter`, `test_own_knobs`, `test_resource_vector` |
 | S3 | **Interaction** (P3, ~10 min GPU) | rank only `binding=bound` rows; the pair with the most variance; 1 seed per cell, 3 for the top; intervals, not a ranking | `test_interaction_power` |
 | S4 | **Claim + publish** (P4/P5) | ladder the surprising bound row to 3 points, then 5 paired at matched boxes; pre-registered margin; method cards, the committed `docs/sec/map.md`, `comp verify` | `test_paired_ci`, `test_map_summary_matches_census`, `test_extension_path` |
@@ -133,17 +138,25 @@ the axis registry is the only list.
 **Open:** the two spec-only rows have two honest ends — fix their classmethods and
 add their axis rows, or retire their specs; the two no-op plasticities
 (`rule_state`, `substrate_coupled`) have the same choice. S1 adopts the 73-row
-target: fix the shipped two, retire the no-ops, and D9's `test_spec_composes`
-passes with no permanent gaps.
+target: fix the shipped two (done) and resolve the two parked rows (S1b, by
+adding a mechanism — they are not deleted), so D9's `test_spec_composes` holds
+and no row is a permanent gap.
 
-### P0b — One box, one record (schema change; 1 session)
+### P0b — One box, one record (schema change) ✅ mostly
 
-**Decision:** can a claim be checked against its run? Today no.
-**Deliverable:** `Schedule` gains `batch_size`, `steps_per_task`; the CL runner
-builds one; the `sec_loop` JSONL becomes a `Record` carrying the box and the
-replay hash; `ThresholdRegistration` stops discarding box fields.
-**Gate:** `test_box_identity`: changing `batch_size` alone refuses the claim.
-**Done when:** one record schema, one box type, and a claim that names its box.
+**Decision:** can a claim be checked against its run? Now yes for a screened
+cell.
+**Landed:** `Schedule` gains `batch_size`, `steps_per_task` (part of the
+measurement key, printed in the box, written to the map); the loader draws
+`batch_size` rather than reading the batch *count* as the batch size;
+`record_from_evaluation` wraps a completed evaluation in a `Record` (box +
+replay hash) and the P0 log writes `{"screen": …, "record": …}`;
+`ThresholdRegistration.box` round-trips and `PairedComparison.passes` refuses a
+run at another box. **Gate:** `test_box_identity`.
+**Open:** the CL runner still builds its `Schedule` beside `CLConfig` rather
+than deriving the config from it (the R-track cells carry the kernel box but no
+`Record`); a claim is refused for a missing box only when the registration
+declares one.
 
 ### P0.5 — The defect queue (before the census) ✅
 

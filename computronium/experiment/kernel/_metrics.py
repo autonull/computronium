@@ -403,6 +403,7 @@ def _compute_substrate_objectives(
         "sparse": SubstrateConfig.sparse,
         "ternary": SubstrateConfig.ternary,
         "complex": SubstrateConfig.complex,
+        "noisy": SubstrateConfig.noisy,
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
     dynamics_name = coordinate.dynamics

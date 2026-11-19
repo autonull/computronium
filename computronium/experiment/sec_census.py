@@ -1,10 +1,10 @@
 """SEC census: every primitive spec joined to its runtime axis row.
 
-The axis registries are the inventory (73 composable rows). The acceleration
-spec registry adds the rows that ship as specs yet have no runtime coordinate;
-their absence is a capability gap, named here, not a silently dropped row
-(TODO95 P0a). ``build_census`` is the only place a primitive is enumerated;
-the map, the screen and the README project it.
+The axis registries are the inventory (one composable row per primitive). The
+acceleration spec registry is the implementation list; the join between them is
+checked here. A spec without an axis row is a gap — and a gap has exactly one
+home, ``schema.gaps.GAPS`` (TODO95 D1/D9). ``build_census`` is the only place a
+primitive is enumerated; the map, the screen and the README project it.
 
 Run:
     uv run python -m computronium.experiment.sec_census --out results/sec
@@ -21,11 +21,11 @@ from typing import Final
 from computronium.acceleration.registry import primitives as primitive_specs
 from computronium.acceleration.spec import coordinate_of_id
 from computronium.experiment.schema.axis import AXES_REGISTRIES, AxisSpec
+from computronium.experiment.schema.gaps import gap_for
 
-#: The reason a spec row with no runtime coordinate cannot be screened. The
-#: config classmethod the axis composes through is what is missing; the code
-#: path may still exist behind a factory (see ``surface.inventory``).
-GAP_REASON: Final[str] = "no config classmethod — a capability gap"
+#: The one version stamp of the SEC record. The census, the map and every
+#: reader compare this value; a second literal is how two artifacts drift.
+MAP_VERSION: Final[str] = "SEC-v3"
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +47,7 @@ class PrimitiveCensusEntry:
     screen_box: dict | None = None
     screen_result: dict | None = None
     unavailable_reason: str | None = None
+    unavailable_trigger: str | None = None
 
 
 def _axis_row(spec_id: str) -> tuple[str, str, AxisSpec | None]:
@@ -60,12 +61,24 @@ def _axis_row(spec_id: str) -> tuple[str, str, AxisSpec | None]:
 
 
 def build_census() -> list[PrimitiveCensusEntry]:
-    """Every primitive spec, with its axis row's availability."""
+    """Every primitive spec, with its axis row's availability and its gap."""
     entries: list[PrimitiveCensusEntry] = []
     for spec in sorted(primitive_specs(), key=lambda item: item.id):
         axis, runtime, row = _axis_row(spec.id)
-        reason = GAP_REASON if row is None else row.unavailable_reason
-        available = row is not None and row.available
+        gap = gap_for(spec.id)
+        row_available = row is not None and row.available
+        if gap is None and not row_available:
+            msg = (
+                f"primitive {spec.id!r} has no axis row or an unavailable one, "
+                "and no schema.gaps.GAPS entry"
+            )
+            raise ValueError(msg)
+        if gap is not None and row_available:
+            msg = (
+                f"schema.gaps.GAPS declares {spec.id!r} a gap, but its row is available"
+            )
+            raise ValueError(msg)
+        available = gap is None
         entries.append(
             PrimitiveCensusEntry(
                 id=spec.id,
@@ -79,7 +92,8 @@ def build_census() -> list[PrimitiveCensusEntry]:
                 kernel_entrypoint=spec.kernel_entrypoint,
                 supported_backends=spec.supported_backends,
                 screen_status="unscreened" if available else "refused",
-                unavailable_reason=None if available else reason,
+                unavailable_reason=None if gap is None else gap.reason,
+                unavailable_trigger=None if gap is None else gap.trigger,
             )
         )
     return entries
@@ -102,12 +116,17 @@ def write_census(out_dir: Path, entries: list[PrimitiveCensusEntry]) -> None:
 
     data = {
         "generated_at": datetime.now().isoformat(),
-        "version": "SEC-v3",
+        "version": MAP_VERSION,
         "total_primitives": len(entries),
         "available": len(entries) - len(gaps),
         "by_axis": by_axis,
         "gaps": [
-            {"id": entry.id, "reason": entry.unavailable_reason} for entry in gaps
+            {
+                "id": entry.id,
+                "reason": entry.unavailable_reason,
+                "trigger": entry.unavailable_trigger,
+            }
+            for entry in gaps
         ],
         "primitives": [asdict(entry) for entry in entries],
     }

@@ -14,6 +14,7 @@ from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
 )
 from computronium.core.plasticity import (
+    closed_form_ridge_from_config,
     conflict_adaptive_from_config,
     create_fast_weight_plasticity,
     create_routing_plasticity,
@@ -535,6 +536,8 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
         plasticity_instance = create_temporal_psi_plasticity(plasticity)
     elif plasticity_type == "conflict_adaptive":
         plasticity_instance = conflict_adaptive_from_config(plasticity)
+    elif plasticity_type == "closed_form_ridge":
+        plasticity_instance = closed_form_ridge_from_config(plasticity)
     elif plasticity_type == "null":
         plasticity_instance = NullPlasticity()
     else:
