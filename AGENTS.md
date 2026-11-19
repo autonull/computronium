@@ -159,6 +159,50 @@
    with their measured-regime numbers and a docstring citing the demo they
    informed.
 
+## Primitive Testing Requirements
+
+**Every primitive must have passing unit tests before SEC optimization runs.**
+
+### 1. Minimum Capability Tests (Rung 0–1)
+- **One-step wiring (Rung 0)**: `compute_pseudo_gradient` produces finite, non-zero gradients for error-aware credits; `settle` converges for non-instantaneous dynamics
+- **1 epoch / 1 seed on minimum viable task (Rung 1)**: above chance (error-aware) or non-zero update (error-blind)
+- **Fast task selection**: `digits` (1797×64) before `mnist` (70000×784), `iris` (150×4) before larger tabular, `cora` for graph, `cartpole` for RL
+- **Run time target**: ≤30 seconds per primitive at minimum config
+
+### 2. Error-Blind vs Error-Aware Criteria
+| Credit Type | Pass Criterion | Examples |
+|---|---|---|
+| Error-aware (reads label) | `val_acc > bar` (task's primary pass bar) | `gradient`, `target_inversion`, `pc_alm`, `random_projections` |
+| Error-blind (no label) | Non-zero parameter update, finite loss | `homeostatic`, `temporal_trace` |
+
+### 3. No "Capability Gaps" Without a Failing Test
+- If a primitive doesn't train, it's a **defect** (fixable) until proven otherwise
+- A "gap" requires a NEW primitive/feature that doesn't exist yet
+- Document defects with a test that **fails today, passes when fixed**
+- NEVER skip a test with "gap" — fix the primitive or file the defect with test
+
+### 4. Per-Axis Contract Tests (Already in `tests/primitives/`)
+- `test_primitive_contract.py`: case determinism, seed variation, device placement, reference follows seed
+- `test_<axis>_contract.py`: axis-specific output contracts (pseudo-gradient count/shape, settle convergence, etc.)
+- `test_primitive_capability.py`: end-to-end 1-epoch capability on declared families
+
+### 5. SEC Only Runs After Rungs 0–2 Pass
+- **No SEC screen on a primitive that hasn't cleared its unit tests**
+- SEC = Rungs 2–4 (ladder, paired CI, competitiveness)
+- Unit tests = Rungs 0–1 (wiring, 1-epoch viability)
+- A primitive with no unit test coverage is "not wired" — SEC refuses it
+
+### 6. Task Family Coverage
+- Test at least **one declared family** per primitive in CI
+- Full family matrix runs in SEC (S5 Screens), not unit tests
+- Refused families (per `task_families` declaration) are skipped with reason
+
+### 7. The Test Is The Ultimate Authority
+- If a test fails, the primitive is broken — period
+- "It works in literature" is not a defense; the test reveals the defect
+- Fix the code until the test passes; never weaken the test
+- Every "gap" claimed without a failing test is an assumption, not evidence
+
 ## Documentation
 - Don't edit README.md directly; in `docs/readme/*`, edit individual sections or the generator script
 

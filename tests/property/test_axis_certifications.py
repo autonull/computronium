@@ -493,6 +493,88 @@ class TestCAxisTargetInversionCredit:
                 f"global surrogate alignment cos={cos_sim:.4f} < {COSINE_TOL_GOOD}"
             )
 
+    def test_target_inversion_instantaneous_dynamics_nonzero_pseudograds(self) -> None:
+        """TargetInversionCredit with InstantaneousDynamics produces non-zero pseudo-gradients.
+
+        This is the declared compatible pairing per COORDINATE_TOLERANCES:
+        ("target_inversion", "instantaneous"): (0.1, 5e-3)
+
+        The transpose feedback mechanism must produce non-vanishing targets
+        in a single forward pass (no settle iterations). This test would have
+        caught the regression where feedback_scale was not applied.
+        """
+        torch.manual_seed(42)
+        device = torch.device("cpu")
+
+        credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion(
+            feedback_scale=0.01,
+            beta=0.5,
+        ))
+
+        substrate = DigitalSubstrate(SubstrateConfig.digital())
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,),
+                init_scheme="innocenti", residual=True,
+            )
+        )
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
+
+        sys = compose_system(substrate, geometry, dynamics, credit, update)
+        _setup_system_device(sys, device)
+
+        x = torch.randn(BATCH, WIDTH, device=device)
+        y = torch.randint(0, 10, (BATCH,), device=device)
+
+        # Run one training step to get nudged state
+        sys.train()
+        result = sys.train_step(x, y)
+
+        # Extract nudged state from the pipeline
+        from computronium.core.pipeline import _PhaseContext, _run_phases, forward_pass
+        from computronium.ontology.credit import Phase
+
+        owned_free = None
+        initial_activations = forward_pass(substrate, geometry, x)
+
+        phase_ctx = _PhaseContext(
+            credit=credit,
+            dynamics=dynamics,
+            geometry=geometry,
+            substrate=substrate,
+            initial_activations=initial_activations,
+            x=x,
+            y=y,
+            plasticity=None,
+            psi=None,
+            context=None,
+            loss_fn=torch.nn.functional.cross_entropy,
+            graph_kwargs=None,
+            owned_free=owned_free,
+        )
+        states = _run_phases(phase_ctx)
+
+        nudged_state = states[Phase.NUDGED]
+        logits = sys.forward(x)
+        loss = torch.nn.functional.cross_entropy(logits, y)
+
+        pseudo_grads = credit.compute_pseudo_gradient(
+            phase_states(nudged=nudged_state),
+            loss,
+            geometry,
+        )
+
+        # Check pseudo-gradients are non-zero and finite
+        assert len(pseudo_grads) > 0, "Should produce pseudo-gradients"
+        total_norm = sum(g.norm().item() for g in pseudo_grads)
+        assert total_norm > 0.0, "Total pseudo-gradient norm must be > 0 (feedback_scale must be applied)"
+        assert all(torch.isfinite(g).all() for g in pseudo_grads), "All pseudo-gradients must be finite"
+
+        # Check each layer has non-zero gradient
+        for i, g in enumerate(pseudo_grads):
+            assert g.norm().item() > 0.0, f"Layer {i} pseudo-gradient must be non-zero"
+
 
 class TestCAxisTemporalTraceCredit:
     """C-Axis: TemporalTraceCredit (STDP) causal/anti-causal asymmetry & decay."""
