@@ -41,6 +41,7 @@ __all__ = [
     "BASE_BOXES",
     "CONTROL_SEEDS",
     "SIGMAS",
+    "TASK_FAMILIES",
     "BaseBox",
     "Calibration",
     "base_schedule",
@@ -51,6 +52,21 @@ __all__ = [
     "resource_vector",
     "task_family",
 ]
+
+#: Every task family the primitive layer declares, in one place. A family in
+#: this tuple must have a ``BASE_BOXES`` row and a calibrated control before a
+#: screen can run on it; ``scripts/audit.py`` reads this tuple as the gate.
+TASK_FAMILIES: Final[tuple[str, ...]] = (
+    "vision",
+    "tabular",
+    "graph",
+    "sequence",
+    "continual",
+    "rl",
+    "scientific",
+    "neuromorphic",
+    "lm",
+)
 
 #: How many seeds the base control runs at. One seed is a cell, not a control.
 CONTROL_SEEDS: Final[int] = 3
@@ -80,8 +96,66 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
     "vision": BaseBox("vision", "mnist", 32, 375, 1),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
     "graph": BaseBox(
-        "graph", "cora", 1, 1, 200, param_budget=200_000,
-        base_coordinate={"geometry": "graph", "credit": "gradient", "update": "euclidean"}
+        "graph",
+        "cora",
+        1,
+        1,
+        200,
+        param_budget=200_000,
+        base_coordinate={
+            "geometry": "graph",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    ),
+    "sequence": BaseBox(
+        "sequence",
+        "char_ngram",
+        32,
+        0,
+        10,
+        base_coordinate={"geometry": "recurrent", "dynamics": "instantaneous"},
+    ),
+    "continual": BaseBox(
+        "continual",
+        "copy_task",
+        16,
+        0,
+        5,
+        base_coordinate={"plasticity": "null"},
+    ),
+    "rl": BaseBox(
+        "rl",
+        "cartpole",
+        8,
+        0,
+        5,
+        base_coordinate={"geometry": "recurrent"},
+    ),
+    "scientific": BaseBox(
+        "scientific",
+        "lorenz_state",
+        32,
+        0,
+        10,
+        base_coordinate={"geometry": "feedforward"},
+    ),
+    "neuromorphic": BaseBox(
+        "neuromorphic",
+        "spiking_mnist",
+        32,
+        0,
+        5,
+        base_coordinate={"substrate": "neuromorphic"},
+    ),
+    "lm": BaseBox(
+        "lm",
+        "tiny_shakespeare",
+        32,
+        0,
+        3,
+        param_budget=600_000,
+        base_coordinate={"geometry": "causal_transformer"},
     ),
 })
 

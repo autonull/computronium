@@ -48,42 +48,6 @@ from computronium.experiment.schema import (
 )
 
 
-class TestBenchmarkClassHierarchy:
-    """Tests for E1-E4 benchmark class hierarchy (feedback #10)."""
-
-    def test_e1_infrastructure_class(self) -> None:
-        """E1: Infrastructure validity benchmarks."""
-        # These are machinery tests - crash recovery, store overhead, etc.
-        # No specific code to test here; verified by integration tests
-        assert True  # Placeholder for class definition
-
-    def test_e2_algorithmic_class(self) -> None:
-        """E2: Algorithmic validity benchmarks."""
-        # Policy reaches target quality with fewer evaluations
-        # Surrogate acquisition efficiency vs random
-        # Cost-model estimate-vs-actual
-        assert True  # Placeholder for class definition
-
-    def test_e3_scientific_class(self) -> None:
-        """E3: Scientific validity benchmarks."""
-        # Axis effect reproduces across independent seeds
-        # Effect survives independent environments
-        # Effect transfers to held-out tasks
-        assert True  # Placeholder for class definition
-
-    def test_e4_generalization_class(self) -> None:
-        """E4: Generalization benchmarks."""
-        # Cross-task transfer
-        # Cross-topology transfer
-        # Unseen substrate (zero-shot/few-shot)
-        assert True  # Placeholder for class definition
-
-    def test_classes_are_disjoint_concepts(self) -> None:
-        """Benchmark classes represent distinct evidence hierarchies."""
-        classes = ["E1", "E2", "E3", "E4"]
-        assert len(classes) == len(set(classes))
-
-
 class TestEffectSizeProtocol:
     """Tests for effect-size protocol (feedback #11)."""
 

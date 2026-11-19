@@ -5,16 +5,12 @@ Delegates to fast_weight primitive kernel where possible.
 
 from typing import Any
 
-from computronium.acceleration.backends import kernel_available
-from computronium.primitives.plasticity.fast_weights.kernel import (
-    is_available as fw_kernel_available,
-)
-
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and fw_kernel_available()
+    """No fused fast-weight kernel exists; the reference path is the only rung."""
+    return False
 
 
 def step(case: Any) -> Any:

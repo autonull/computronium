@@ -62,7 +62,9 @@ class PrimitiveSpec:
     reference_entrypoint: str  # Dotted path to reference function
     kernel_status: Literal["implemented", "wrapper", "stub", "absent"] = "absent"
     kernel_entrypoint: str | None = None
-    kernel_technology: Literal["torch", "triton", "cuda", "torch_compile", "cupy", "numpy"] | None = None
+    kernel_technology: (
+        Literal["torch", "triton", "cuda", "torch_compile", "cupy", "numpy"] | None
+    ) = None
     supported_backends: tuple[Literal["reference", "kernel"], ...] = ("reference",)
     available: bool = True
     capability_card: str = ""
@@ -113,7 +115,6 @@ class ReferenceAdapter:
 
     def make_task_case(self, task_id: str, box: dict, seed: int) -> PrimitiveCase:
         """Create a universal test case."""
-        from importlib import import_module
         from dataclasses import asdict, is_dataclass
 
         config_factory = self._import_callable(self.SPEC.config_factory)
@@ -138,7 +139,6 @@ class ReferenceAdapter:
 
     def reference_step(self, case: Any) -> StepResult:
         """Call the ontology class's reference entrypoint."""
-        from importlib import import_module
         from dataclasses import replace
 
         # Add spec to case.extra for the generic reference entrypoint
@@ -161,7 +161,9 @@ class ReferenceAdapter:
                 metrics={},
                 state={},
             )
-        raise TypeError(f"Reference entrypoint returned {type(result)}, expected StepResult or list[Tensor]")
+        raise TypeError(
+            f"Reference entrypoint returned {type(result)}, expected StepResult or list[Tensor]"
+        )
 
     def kernel_step(self, case: Any) -> StepResult:
         """Call the kernel entrypoint or raise if absent."""
@@ -172,8 +174,6 @@ class ReferenceAdapter:
             return self.reference_step(case)
         if self.SPEC.kernel_entrypoint is None:
             raise RuntimeError(f"Kernel entrypoint not set for {self.SPEC.id}")
-
-        from importlib import import_module
 
         entrypoint = self._import_callable(self.SPEC.kernel_entrypoint)
         result = entrypoint(case)
@@ -187,7 +187,9 @@ class ReferenceAdapter:
                 metrics={},
                 state={},
             )
-        raise TypeError(f"Kernel entrypoint returned {type(result)}, expected StepResult or list[Tensor]")
+        raise TypeError(
+            f"Kernel entrypoint returned {type(result)}, expected StepResult or list[Tensor]"
+        )
 
     def fingerprint(self, case: Any) -> str:
         """Compute a deterministic fingerprint from the case output."""
@@ -208,21 +210,27 @@ class ReferenceAdapter:
         axis = self.SPEC.axis
         if axis == "credit":
             from computronium.experiment.invariants import credit_invariant
+
             return credit_invariant(case, self)
         elif axis == "dynamics":
             from computronium.experiment.invariants import dynamics_invariant
+
             return dynamics_invariant(case, self)
         elif axis == "geometry":
             from computronium.experiment.invariants import geometry_invariant
+
             return geometry_invariant(case, self)
         elif axis == "plasticity":
             from computronium.experiment.invariants import plasticity_invariant
+
             return plasticity_invariant(case, self)
         elif axis == "substrate":
             from computronium.experiment.invariants import substrate_invariant
+
             return substrate_invariant(case, self)
         elif axis == "update":
             from computronium.experiment.invariants import update_invariant
+
             return update_invariant(case, self)
         return False
 
@@ -244,7 +252,7 @@ class ReferenceAdapter:
         try:
             module = import_module(module_path)
             return getattr(module, func_name)
-        except (ImportError, AttributeError):
+        except ImportError, AttributeError:
             pass
 
         # Try as module.Class.method
@@ -261,6 +269,46 @@ class ReferenceAdapter:
 
 # Generic reference entrypoints for each axis
 # These are used as the reference_entrypoint in PrimitiveSpec
+
+#: The typed config class each axis's ontology classes accept. The case carries
+#: a dict (the contract tests read it by key); the reference converts it once.
+_CONFIG_CLASSES: dict[str, tuple[str, str]] = {
+    "credit": ("computronium.ontology.credit", "CreditAssignmentConfig"),
+    "dynamics": ("computronium.ontology.dynamics", "StateDynamicsConfig"),
+    "geometry": ("computronium.ontology.geometry", "GeometryConfig"),
+    "plasticity": ("computronium.state", "PlasticityConfig"),
+    "substrate": ("computronium.ontology.substrate", "SubstrateConfig"),
+    "update": ("computronium.ontology.update", "ParameterUpdateConfig"),
+}
+
+
+def _ontology_config(spec: PrimitiveSpec, config: Any) -> Any:
+    """The typed config a spec's ontology class accepts, from the case dict."""
+    if not isinstance(config, dict):
+        return config
+    import dataclasses
+    from importlib import import_module
+
+    module_path, class_name = _CONFIG_CLASSES[spec.axis]
+    config_class = getattr(import_module(module_path), class_name)
+    fields = {field.name for field in dataclasses.fields(config_class)}
+    return config_class(**{
+        key: value for key, value in config.items() if key in fields
+    })
+
+
+def _case_ontology_config(spec: PrimitiveSpec, case: PrimitiveCase) -> Any:
+    """The typed config ``make_task_case`` composed, else the dict's typed view."""
+    return case.extra.get("ontology_config") or _ontology_config(spec, case.config)
+
+
+def _plasticity_instance(ontology_class: type, config: Any) -> Any:
+    """A plasticity law from its typed config, or its no-argument constructor."""
+    try:
+        return ontology_class(config)
+    except TypeError:
+        # Null/substrate-coupled own no parameters; rule-state wants its dims.
+        return ontology_class()
 
 
 def _credit_reference(case: PrimitiveCase) -> StepResult:
@@ -279,7 +327,7 @@ def _credit_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    credit = ontology_class(case.config)
+    credit = ontology_class(_case_ontology_config(spec, case))
 
     # The case needs states and geometry from the experiment harness
     # For contract tests, we create minimal mock data
@@ -303,7 +351,11 @@ def _credit_reference(case: PrimitiveCase) -> StepResult:
         return StepResult(
             weights=grads,
             activations=getattr(case, "activations", []),
-            metrics={"pseudo_gradient_norm": sum(g.norm().item() for g in grads) if grads else 0.0},
+            metrics={
+                "pseudo_gradient_norm": sum(g.norm().item() for g in grads)
+                if grads
+                else 0.0
+            },
             state={},
         )
     except Exception as e:
@@ -330,7 +382,7 @@ def _dynamics_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    dynamics = ontology_class(case.config)
+    dynamics = ontology_class(_case_ontology_config(spec, case))
 
     # The case needs input x and substrate
     x = case.extra.get("x")
@@ -383,7 +435,9 @@ def _geometry_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    geometry = ontology_class(case.config)
+    from computronium.core.system_trainer.factory import geometry_from_config
+
+    geometry = geometry_from_config(_case_ontology_config(spec, case))
     substrate = case.extra.get("substrate")
 
     # Get input from batch or extra
@@ -433,7 +487,7 @@ def _update_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    update = ontology_class(case.config)
+    update = ontology_class(_case_ontology_config(spec, case))
 
     # The case needs gradients and parameters
     grads = case.extra.get("grads", [])
@@ -451,9 +505,15 @@ def _update_reference(case: PrimitiveCase) -> StepResult:
         # Call step
         new_params = update.step(params, grads)
         return StepResult(
-            weights=list(new_params.values()) if isinstance(new_params, dict) else new_params,
+            weights=list(new_params.values())
+            if isinstance(new_params, dict)
+            else new_params,
             activations=[],
-            metrics={"update_norm": sum(p.norm().item() for p in new_params.values()) if isinstance(new_params, dict) else 0.0},
+            metrics={
+                "update_norm": sum(p.norm().item() for p in new_params.values())
+                if isinstance(new_params, dict)
+                else 0.0
+            },
             state={},
         )
     except Exception as e:
@@ -479,7 +539,7 @@ def _substrate_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    substrate = ontology_class(case.config)
+    substrate = ontology_class(_case_ontology_config(spec, case))
 
     # The case needs input
     x = case.extra.get("x")
@@ -506,7 +566,11 @@ def _substrate_reference(case: PrimitiveCase) -> StepResult:
         return StepResult(
             weights=[],
             activations=[output] if isinstance(output, torch.Tensor) else [],
-            metrics={"output_norm": output.norm().item() if isinstance(output, torch.Tensor) else 0.0},
+            metrics={
+                "output_norm": output.norm().item()
+                if isinstance(output, torch.Tensor)
+                else 0.0
+            },
             state={},
         )
     except Exception as e:
@@ -532,7 +596,8 @@ def _plasticity_reference(case: PrimitiveCase) -> StepResult:
         module = import_module(module_path)
         ontology_class = getattr(module, class_name)
 
-    plasticity = ontology_class(case.config)
+    config = _case_ontology_config(spec, case)
+    plasticity = _plasticity_instance(ontology_class, config)
 
     # The case needs pre/post activations and params
     pre_acts = case.extra.get("pre_acts", [])
@@ -557,9 +622,15 @@ def _plasticity_reference(case: PrimitiveCase) -> StepResult:
             new_params = params
 
         return StepResult(
-            weights=list(new_params.values()) if isinstance(new_params, dict) else new_params,
+            weights=list(new_params.values())
+            if isinstance(new_params, dict)
+            else new_params,
             activations=[],
-            metrics={"plasticity_norm": sum(p.norm().item() for p in new_params.values()) if isinstance(new_params, dict) else 0.0},
+            metrics={
+                "plasticity_norm": sum(p.norm().item() for p in new_params.values())
+                if isinstance(new_params, dict)
+                else 0.0
+            },
             state={},
         )
     except Exception as e:

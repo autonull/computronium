@@ -5,16 +5,12 @@ Delegates to routing primitive kernel where possible.
 
 from typing import Any
 
-from computronium.acceleration.backends import kernel_available
-from computronium.primitives.plasticity.routing.kernel import (
-    is_available as routing_kernel_available,
-)
-
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and routing_kernel_available()
+    """No fused routing kernel exists; the reference path is the only rung."""
+    return False
 
 
 def step(case: Any) -> Any:

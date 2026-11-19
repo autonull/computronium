@@ -8,6 +8,11 @@ instrument at it.
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
 **Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion ladder on vision: capability gap (transpose feedback vanishes; val_acc=0.119 ≈ chance 0.10). Works on graph family (0.68 @ 6 epochs). Needs feedback alignment or learned inverses for vision.
 **Progress:** [2026-11-19] ✅ **S4 COMPLETE (extended)** — All 75 primitives pass Rung 0 wiring tests (284 tests, 16 skipped). Created `tests/primitives/test_primitive_wiring.py` covering: instantiate, forward pass, pseudo-gradients (finite & non-zero for error-aware), settle convergence. 6/6 property locks still pass.
+**Progress:** [2026-11-19] ✅ **S6a AUDIT GATE INSTALLED** — `scripts/audit.py` implements the seven §8.2 predicates: duplicate test bodies, empty assertions, per-primitive subdirectories, primitive-without-spec, family-without-base, near-chance-without-ladder, kernel-stub-pass. Static checks are green. It reports the 5 near-chance bound rows that still need a ladder record (S6b).
+**Progress:** [2026-11-19] ✅ **S3 BASES DECLARED** — `TASK_FAMILIES` (9) is now the one family universe, and `BASE_BOXES` carries a row for every family (sequence, continual, rl, scientific, neuromorphic, lm added). Calibration controls (3 seeds, bar, cost, replay hash) remain S3b.
+**Progress:** [2026-11-19] ✅ **S2b MIGRATION REPAIR** — Removed the stale per-primitive `kernel_entrypoint`/`kernel_technology` tables (they pointed at deleted modules); `kernel_status` now uses the protocol vocabulary (`absent`, 75/75) until S7. Repaired the four algorithm kernels that imported deleted primitive modules, the `rungbench` per-package sites, and the registry config/ontology name bugs (`PepitaCredit`, `ParameterUpdateConfig`, `GeometryConfig.recurrent`, `SubstrateConfig.optical`).
+
+**Progress:** [2026-11-19] ⏳ **S5d ADAPTER DEFECT (open)** — `ReferenceAdapter.make_task_case` still cannot build typed configs for geometry (factories need task facts), and `_update_reference`/`_plasticity_reference` return empty results without a harness. Consequence: `tests/primitives/test_primitive_contract.py` has 116 failures on those axes. Named mechanism: compose the config from `compose_configs` and instantiate via `geometry_from_config`/`*_from_config`. Failing lock: `tests/primitives/test_primitive_contract.py` (keep red until fixed).
 
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
@@ -23,14 +28,36 @@ question.
 |---|---|---|
 | S1 | Migrate primitives to 3-file protocol + registry | ✅ DONE |
 | S2 | Delete ~380 per-primitive files + generated tests | ✅ DONE |
+| S2b | Repair stale kernel tables, algorithm imports, rungbench | ✅ DONE |
 | S3 | Verify 6 property locks pass | ✅ DONE |
+| S3a | 9/9 task families declared in `BASE_BOXES` | ✅ DONE |
+| S3b | 3-seed controls, bar, cost, replay hash per family | ⏳ PENDING |
 | S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ✅ DONE |
 | S4x | Rung 0 wiring tests for all 75 primitives (284 tests) | ✅ DONE |
 | S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
 | S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
 | S5b | Screen graph family primitives | ✅ DONE (9 measured) |
 | S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — capability gap (works on graph, vanishing targets on vision) |
-| S6 | Audit with `scripts/audit.py` | ⏳ PENDING |
+| S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ⏳ OPEN — 116 contract failures |
+| S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
+| S6b | Audit measurement gate (5 near-chance ladders) | ⏳ PENDING |
+| S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
+
+### Next actions (dependency order)
+
+1. **S5d** — make `ReferenceAdapter.make_task_case` compose the typed config
+   (`compose_configs`) and the reference instantiate via
+   `geometry_from_config` / `substrate_from_config` / `*_from_config`. Gate:
+   `uv run python -m pytest tests/primitives/test_primitive_contract.py -q`.
+2. **S6b** — run the 5 ladders the audit reports
+   (`forward_tangent`, `local_contrastive`, `pc_alm`, `random_projections`,
+   `target_inversion`) and write each record into the map's `deep_dive` (or a
+   `ladders` table) so the audit exits 0.
+3. **S3b** — calibrate the 6 new family bases (3-seed control, bar, cost,
+   replay hash); `family_without_base` is green, calibration is not.
+4. **S7** — point the 10 verified primitives at the existing acceleration
+   modules; flip their `kernel_status` to `implemented` and satisfy
+   `test_implemented_kernel_carries_its_evidence`.
 
 ---
 
@@ -584,6 +611,8 @@ uv run python -m computronium.experiment.sec_loop \
 
 # 4. Audit
 uv run python scripts/audit.py
+#    S6a: static predicates green; 5 near-chance ladders remain (S6b)
+#    --check <name> runs one predicate; --json emits machine-readable findings
 ```
 
 ---

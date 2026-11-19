@@ -188,10 +188,10 @@ class TestComponentDeviceConsistency:
             assert v.device.type == device_cuda.type
 
     def test_routing_plasticity_no_internal_state(self, device_cpu, device_cuda):
-        """RoutingPlasticity has no internal persistent tensors."""
-        plasticity = RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01)  # ruff: ignore[unused-variable]
-        # No internal state to move
-        assert True
+        """RoutingPlasticity holds no projection tensor until its first call."""
+        plasticity = RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01)
+        assert not plasticity._gate_proj, "gate projection is not lazy"
+        assert not plasticity._unit_proj, "unit projection is not lazy"
 
     def test_rule_state_plasticity_device(self, device_cpu, device_cuda):
         """RuleStatePlasticity device set at construction."""
@@ -204,9 +204,9 @@ class TestComponentDeviceConsistency:
             assert p.device.type == device_cuda.type
 
     def test_null_plasticity_no_internal_state(self, device_cpu, device_cuda):
-        """NullPlasticity has no internal state."""
-        plasticity = NullPlasticity()  # ruff: ignore[unused-variable]
-        assert True
+        """NullPlasticity creates no plastic state."""
+        plasticity = NullPlasticity()
+        assert plasticity.initial_psi(None) == {}
 
     def test_joint_system_all_plasticity_types(self, device_cpu, device_cuda):
         """Joint system works with all plasticity types on target device."""

@@ -651,28 +651,5 @@ def test_consolidation_respects_registry():
     assert "not_consol" not in new_context.theta
 
 
-def test_plasticity_config_factories():
-    """PlasticityConfig factories should create valid configs."""
-    null_config = PlasticityConfig.null()
-    assert null_config.plasticity_type == "null"
-    assert null_config.plastic_state_dims is None
-
-    routing_config = PlasticityConfig.routing(gate_dim=64)
-    assert routing_config.plasticity_type == "routing"
-    assert routing_config.plastic_state_dims == {"gate_logits": 64, "active_routes": 64}
-
-    fw_config = PlasticityConfig.fast_weights(fast_weight_dim=128)
-    assert fw_config.plasticity_type == "fast_weights"
-    assert fw_config.plastic_state_dims == {"fast_weights": 128}
-
-    sc_config = PlasticityConfig.substrate_coupled()
-    assert sc_config.plasticity_type == "substrate_coupled"
-    assert sc_config.plastic_state_dims is None
-
-    rs_config = PlasticityConfig.rule_state(num_operators=16)
-    assert rs_config.plasticity_type == "rule_state"
-    assert rs_config.plastic_state_dims == {"operator_logits": 16}
-
-
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

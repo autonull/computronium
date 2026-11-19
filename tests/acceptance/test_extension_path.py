@@ -93,7 +93,7 @@ def test_a_row_screened_elsewhere_is_not_this_slice(tmp_path: Path) -> None:
 
 def test_a_slice_without_a_base_box_is_refused(tmp_path: Path) -> None:
     path = _map(tmp_path, _stranger())
-    verdict = verify_row(json.loads(path.read_text()), _stranger().id, "rl")
+    verdict = verify_row(json.loads(path.read_text()), _stranger().id, "unknown_family")
     assert not verdict.held
     assert any("declares no base box" in problem for problem in verdict.problems)
 

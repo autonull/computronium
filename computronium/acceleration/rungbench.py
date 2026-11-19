@@ -34,31 +34,11 @@ OUTPUT_DIR = pathlib.Path("artifacts/benchmarks/rungs")
 type Case = Any
 type Step = Callable[[Case], object]
 
-#: Packages whose ``kernel`` module reaches a triton or compiled rung. Each entry
-#: is (spec id, package) and is the unit §1.2 counted as a "triton call site".
+#: Packages whose ``kernel`` module reaches a triton or compiled rung. The
+#: primitive sites were deleted with the per-primitive scaffolding (TODO97 S2);
+#: the algorithm packages survive, so only they carry a per-package site.
 _RUNG_PACKAGES: tuple[tuple[str, str], ...] = (
     ("algorithm.pcalm", "computronium.algorithms.pcalm"),
-    (
-        "primitive.credit_assignment.local_goodness",
-        "computronium.primitives.credit_assignment.local_goodness",
-    ),
-    (
-        "primitive.credit_assignment.random_projections",
-        "computronium.primitives.credit_assignment.random_projections",
-    ),
-    ("primitive.geometry.tile_mesh", "computronium.primitives.geometry.tile_mesh"),
-    (
-        "primitive.state_dynamics.energy_minimization",
-        "computronium.primitives.state_dynamics.energy_minimization",
-    ),
-    (
-        "primitive.state_dynamics.pc_alm",
-        "computronium.primitives.state_dynamics.pc_alm",
-    ),
-    (
-        "primitive.state_dynamics.predictive_settling",
-        "computronium.primitives.state_dynamics.predictive_settling",
-    ),
 )
 
 
@@ -149,7 +129,7 @@ def _shape(case: Case) -> str:
 
 
 def _spec_site(spec_id: str, package: str) -> RungSite:
-    """Bind both rungs of a spec site: ``reference.step`` and ``kernel.step``."""
+    """Bind both rungs of an algorithm package site: ``reference.step`` and ``kernel.step``."""
     from computronium.acceleration.registry import get
 
     spec = get(spec_id)
@@ -239,9 +219,10 @@ def _eqprop_site() -> RungSite:
 
 def rung_sites() -> tuple[RungSite, ...]:
     """Every site that has a triton rung to measure, in a stable order."""
-    return tuple(
-        [_spec_site(spec_id, package) for spec_id, package in _RUNG_PACKAGES]
-        + [_muon_site(), _eqprop_site()]
+    return (
+        *(_spec_site(spec_id, package) for spec_id, package in _RUNG_PACKAGES),
+        _muon_site(),
+        _eqprop_site(),
     )
 
 

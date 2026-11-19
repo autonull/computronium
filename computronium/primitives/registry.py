@@ -16,7 +16,7 @@ _ONTOLOGY_CLASSES = {
     "primitive.credit_assignment.local_goodness": "computronium.ontology.credit.LocalGoodnessCredit",
     "primitive.credit_assignment.temporal_trace": "computronium.ontology.credit.TemporalTraceCredit",
     "primitive.credit_assignment.homeostatic": "computronium.ontology.credit.HomeostaticCredit",
-    "primitive.credit_assignment.pepita": "computronium.ontology.credit.PEPITACredit",
+    "primitive.credit_assignment.pepita": "computronium.ontology.credit.PepitaCredit",
     "primitive.credit_assignment.gradient": "computronium.ontology.credit.GradientCredit",
     "primitive.credit_assignment.local_contrastive": "computronium.ontology.credit.LocalContrastiveCredit",
     "primitive.credit_assignment.hybrid": "computronium.ontology.credit.HybridCredit",
@@ -28,7 +28,6 @@ _ONTOLOGY_CLASSES = {
     "primitive.credit_assignment.eligibility_prop": "computronium.ontology.credit.EligibilityPropCredit",
     "primitive.credit_assignment.unbiased_rtrl": "computronium.ontology.credit.UnbiasedOnlineRTRLCredit",
     "primitive.credit_assignment.rtrl_reference": "computronium.ontology.credit.RTRLReference",
-
     # Dynamics (8)
     "primitive.state_dynamics.instantaneous": "computronium.ontology.dynamics.InstantaneousDynamics",
     "primitive.state_dynamics.predictive_settling": "computronium.ontology.dynamics.PredictiveSettlingDynamics",
@@ -38,7 +37,6 @@ _ONTOLOGY_CLASSES = {
     "primitive.state_dynamics.diffusion": "computronium.ontology.dynamics.DiffusionDynamics",
     "primitive.state_dynamics.lazy": "computronium.ontology.dynamics.LazyStateDynamics",
     "primitive.state_dynamics.spike_integration": "computronium.ontology.dynamics.SpikeIntegrationDynamics",
-
     # Geometry (12)
     "primitive.geometry.feedforward": "computronium.ontology.geometry.FeedforwardGeometry",
     "primitive.geometry.conv": "computronium.ontology.geometry.ConvGeometry",
@@ -52,7 +50,6 @@ _ONTOLOGY_CLASSES = {
     "primitive.geometry.spatial_lattice": "computronium.ontology.geometry.SpatialLattice3DGeometry",
     "primitive.geometry.routing": "computronium.ontology.geometry.RoutingGeometry",
     "primitive.geometry.causal_transformer": "computronium.ontology.geometry.TransformerGeometry",
-
     # Update (18)
     "primitive.parameter_update.adafactor": "computronium.ontology.update.FactoredSecondMomentUpdate",
     "primitive.parameter_update.adam": "computronium.ontology.update.AdamUpdate",
@@ -72,7 +69,6 @@ _ONTOLOGY_CLASSES = {
     "primitive.parameter_update.schedule_free": "computronium.ontology.update.ScheduleFreeUpdate",
     "primitive.parameter_update.spectral_constrained": "computronium.ontology.update.SpectralConstrainedUpdate",
     "primitive.parameter_update.synaptic_intelligence": "computronium.ontology.update.SynapticIntelligenceUpdate",
-
     # Plasticity (8)
     "primitive.plasticity.null": "computronium.state.NullPlasticity",
     "primitive.plasticity.fast_weights": "computronium.core.plasticity.fast_weights.FastWeightPlasticity",
@@ -82,7 +78,6 @@ _ONTOLOGY_CLASSES = {
     "primitive.plasticity.conflict_adaptive": "computronium.core.plasticity.adaptive_psi.ConflictAdaptivePsiPlasticity",
     "primitive.plasticity.rule_state": "computronium.core.plasticity.rule_state.RuleStatePlasticity",
     "primitive.plasticity.substrate_coupled": "computronium.core.plasticity.substrate_coupled.SubstrateCoupledPlasticity",
-
     # Substrate (10)
     "primitive.substrate.digital": "computronium.ontology.substrate.DigitalSubstrate",
     "primitive.substrate.ternary": "computronium.ontology.substrate.TernarySubstrate",
@@ -119,7 +114,6 @@ _CONFIG_FACTORIES = {
     "primitive.credit_assignment.eligibility_prop": "computronium.ontology.credit.CreditAssignmentConfig.eligibility_prop",
     "primitive.credit_assignment.unbiased_rtrl": "computronium.ontology.credit.CreditAssignmentConfig.unbiased_rtrl",
     "primitive.credit_assignment.rtrl_reference": "computronium.ontology.credit.CreditAssignmentConfig.rtrl_reference",
-
     # Dynamics (8)
     "primitive.state_dynamics.instantaneous": "computronium.ontology.dynamics.StateDynamicsConfig.instantaneous",
     "primitive.state_dynamics.predictive_settling": "computronium.ontology.dynamics.StateDynamicsConfig.predictive_settling",
@@ -129,12 +123,11 @@ _CONFIG_FACTORIES = {
     "primitive.state_dynamics.diffusion": "computronium.ontology.dynamics.StateDynamicsConfig.diffusion",
     "primitive.state_dynamics.lazy": "computronium.ontology.dynamics.StateDynamicsConfig.lazy",
     "primitive.state_dynamics.spike_integration": "computronium.ontology.dynamics.StateDynamicsConfig.spike_integration",
-
     # Geometry (12)
     "primitive.geometry.feedforward": "computronium.ontology.geometry.GeometryConfig.feedforward",
     "primitive.geometry.conv": "computronium.ontology.geometry.GeometryConfig.conv",
     "primitive.geometry.graph": "computronium.ontology.geometry.GeometryConfig.graph",
-    "primitive.geometry.recurrent": "computronium.ontology.geometry.GeometryConfig.rnn",
+    "primitive.geometry.recurrent": "computronium.ontology.geometry.GeometryConfig.recurrent",
     "primitive.geometry.nca": "computronium.ontology.geometry.GeometryConfig.nca",
     "primitive.geometry.tile": "computronium.ontology.geometry.GeometryConfig.tile",
     "primitive.geometry.tile_mesh": "computronium.ontology.geometry.GeometryConfig.tile_mesh",
@@ -143,27 +136,25 @@ _CONFIG_FACTORIES = {
     "primitive.geometry.spatial_lattice": "computronium.ontology.geometry.GeometryConfig.spatial_lattice",
     "primitive.geometry.routing": "computronium.ontology.geometry.GeometryConfig.routing",
     "primitive.geometry.causal_transformer": "computronium.ontology.geometry.GeometryConfig.causal_transformer",
-
     # Update (18)
-    "primitive.parameter_update.adafactor": "computronium.ontology.update.UpdateConfig.adafactor",
-    "primitive.parameter_update.adam": "computronium.ontology.update.UpdateConfig.adam",
-    "primitive.parameter_update.bayesian_online": "computronium.ontology.update.UpdateConfig.bayesian_online",
-    "primitive.parameter_update.cascade_synapse": "computronium.ontology.update.UpdateConfig.cascade_synapse",
-    "primitive.parameter_update.elastic_consolidation": "computronium.ontology.update.UpdateConfig.elastic_consolidation",
-    "primitive.parameter_update.euclidean": "computronium.ontology.update.UpdateConfig.euclidean",
-    "primitive.parameter_update.lion": "computronium.ontology.update.UpdateConfig.lion",
-    "primitive.parameter_update.local_adam": "computronium.ontology.update.UpdateConfig.local_adam",
-    "primitive.parameter_update.mean_norm": "computronium.ontology.update.UpdateConfig.mean_norm",
-    "primitive.parameter_update.muon": "computronium.ontology.update.UpdateConfig.muon",
-    "primitive.parameter_update.natural_gradient": "computronium.ontology.update.UpdateConfig.natural_gradient",
-    "primitive.parameter_update.ortho_adam": "computronium.ontology.update.UpdateConfig.ortho_adam",
-    "primitive.parameter_update.quantized_adam": "computronium.ontology.update.UpdateConfig.quantized_adam",
-    "primitive.parameter_update.riemannian_orthogonal": "computronium.ontology.update.UpdateConfig.riemannian_orthogonal",
-    "primitive.parameter_update.role_split": "computronium.ontology.update.UpdateConfig.role_split",
-    "primitive.parameter_update.schedule_free": "computronium.ontology.update.UpdateConfig.schedule_free",
-    "primitive.parameter_update.spectral_constrained": "computronium.ontology.update.UpdateConfig.spectral_constrained",
-    "primitive.parameter_update.synaptic_intelligence": "computronium.ontology.update.UpdateConfig.synaptic_intelligence",
-
+    "primitive.parameter_update.adafactor": "computronium.ontology.update.ParameterUpdateConfig.adafactor",
+    "primitive.parameter_update.adam": "computronium.ontology.update.ParameterUpdateConfig.adam",
+    "primitive.parameter_update.bayesian_online": "computronium.ontology.update.ParameterUpdateConfig.bayesian_online",
+    "primitive.parameter_update.cascade_synapse": "computronium.ontology.update.ParameterUpdateConfig.cascade_synapse",
+    "primitive.parameter_update.elastic_consolidation": "computronium.ontology.update.ParameterUpdateConfig.elastic_consolidation",
+    "primitive.parameter_update.euclidean": "computronium.ontology.update.ParameterUpdateConfig.euclidean",
+    "primitive.parameter_update.lion": "computronium.ontology.update.ParameterUpdateConfig.lion",
+    "primitive.parameter_update.local_adam": "computronium.ontology.update.ParameterUpdateConfig.local_adam",
+    "primitive.parameter_update.mean_norm": "computronium.ontology.update.ParameterUpdateConfig.mean_norm",
+    "primitive.parameter_update.muon": "computronium.ontology.update.ParameterUpdateConfig.muon",
+    "primitive.parameter_update.natural_gradient": "computronium.ontology.update.ParameterUpdateConfig.natural_gradient",
+    "primitive.parameter_update.ortho_adam": "computronium.ontology.update.ParameterUpdateConfig.ortho_adam",
+    "primitive.parameter_update.quantized_adam": "computronium.ontology.update.ParameterUpdateConfig.quantized_adam",
+    "primitive.parameter_update.riemannian_orthogonal": "computronium.ontology.update.ParameterUpdateConfig.riemannian_orthogonal",
+    "primitive.parameter_update.role_split": "computronium.ontology.update.ParameterUpdateConfig.role_split",
+    "primitive.parameter_update.schedule_free": "computronium.ontology.update.ParameterUpdateConfig.schedule_free",
+    "primitive.parameter_update.spectral_constrained": "computronium.ontology.update.ParameterUpdateConfig.spectral_constrained",
+    "primitive.parameter_update.synaptic_intelligence": "computronium.ontology.update.ParameterUpdateConfig.synaptic_intelligence",
     # Plasticity (8)
     "primitive.plasticity.null": "computronium.state.PlasticityConfig.null",
     "primitive.plasticity.fast_weights": "computronium.state.PlasticityConfig.fast_weights",
@@ -173,13 +164,12 @@ _CONFIG_FACTORIES = {
     "primitive.plasticity.conflict_adaptive": "computronium.state.PlasticityConfig.conflict_adaptive",
     "primitive.plasticity.rule_state": "computronium.state.PlasticityConfig.rule_state",
     "primitive.plasticity.substrate_coupled": "computronium.state.PlasticityConfig.substrate_coupled",
-
     # Substrate (10)
     "primitive.substrate.digital": "computronium.ontology.substrate.SubstrateConfig.digital",
     "primitive.substrate.ternary": "computronium.ontology.substrate.SubstrateConfig.ternary",
     "primitive.substrate.analog": "computronium.ontology.substrate.SubstrateConfig.analog",
     "primitive.substrate.memristive": "computronium.ontology.substrate.SubstrateConfig.memristive",
-    "primitive.substrate.photonic": "computronium.ontology.substrate.SubstrateConfig.photonic",
+    "primitive.substrate.photonic": "computronium.ontology.substrate.SubstrateConfig.optical",
     "primitive.substrate.quantum": "computronium.ontology.substrate.SubstrateConfig.quantum",
     "primitive.substrate.sparse": "computronium.ontology.substrate.SubstrateConfig.sparse",
     "primitive.substrate.neuromorphic": "computronium.ontology.substrate.SubstrateConfig.neuromorphic",
@@ -198,209 +188,6 @@ _AXIS_REFERENCE_ENTRYPOINTS = {
     "plasticity": "computronium.primitives.protocol._plasticity_reference",
 }
 
-# Map from primitive id to kernel entrypoint
-_KERNEL_ENTRYPOINTS = {
-    # Credit (19)
-    "primitive.credit_assignment.random_projections": "computronium.primitives.credit_assignment.random_projections.kernel.step",
-    "primitive.credit_assignment.target_inversion": "computronium.primitives.credit_assignment.target_inversion.kernel.step",
-    "primitive.credit_assignment.pc_alm": "computronium.primitives.credit_assignment.pc_alm.kernel.step",
-    "primitive.credit_assignment.thermodynamic_contrast": "computronium.primitives.credit_assignment.thermodynamic_contrast.kernel.step",
-    "primitive.credit_assignment.local_goodness": "computronium.primitives.credit_assignment.local_goodness.kernel.step",
-    "primitive.credit_assignment.temporal_trace": "computronium.primitives.credit_assignment.temporal_trace.kernel.step",
-    "primitive.credit_assignment.homeostatic": "computronium.primitives.credit_assignment.homeostatic.kernel.step",
-    "primitive.credit_assignment.pepita": "computronium.primitives.credit_assignment.pepita.kernel.step",
-    "primitive.credit_assignment.gradient": "computronium.primitives.credit_assignment.gradient.kernel.step",
-    "primitive.credit_assignment.local_contrastive": "computronium.primitives.credit_assignment.local_contrastive.kernel.step",
-    "primitive.credit_assignment.hybrid": "computronium.primitives.credit_assignment.hybrid.kernel.step",
-    "primitive.credit_assignment.forward_tangent": "computronium.primitives.credit_assignment.forward_tangent.kernel.step",
-    "primitive.credit_assignment.score_function": "computronium.primitives.credit_assignment.score_function.kernel.step",
-    "primitive.credit_assignment.zeroth_order": "computronium.primitives.credit_assignment.zeroth_order.kernel.step",
-    "primitive.credit_assignment.surrogate": "computronium.primitives.credit_assignment.surrogate.kernel.step",
-    "primitive.credit_assignment.local_supervision": "computronium.primitives.credit_assignment.local_supervision.kernel.step",
-    "primitive.credit_assignment.eligibility_prop": "computronium.primitives.credit_assignment.eligibility_prop.kernel.step",
-    "primitive.credit_assignment.unbiased_rtrl": "computronium.primitives.credit_assignment.unbiased_rtrl.kernel.step",
-    "primitive.credit_assignment.rtrl_reference": "computronium.primitives.credit_assignment.rtrl_reference.kernel.step",
-
-    # Dynamics (8)
-    "primitive.state_dynamics.instantaneous": "computronium.primitives.state_dynamics.instantaneous.kernel.step",
-    "primitive.state_dynamics.predictive_settling": "computronium.primitives.state_dynamics.predictive_settling.kernel.step",
-    "primitive.state_dynamics.energy_minimization": "computronium.primitives.state_dynamics.energy_minimization.kernel.step",
-    "primitive.state_dynamics.error_predictive_coding": "computronium.primitives.state_dynamics.error_predictive_coding.kernel.step",
-    "primitive.state_dynamics.pc_alm": "computronium.primitives.state_dynamics.pc_alm.kernel.step",
-    "primitive.state_dynamics.diffusion": "computronium.primitives.state_dynamics.diffusion.kernel.step",
-    "primitive.state_dynamics.lazy": "computronium.primitives.state_dynamics.lazy.kernel.step",
-    "primitive.state_dynamics.spike_integration": "computronium.primitives.state_dynamics.spike_integration.kernel.step",
-
-    # Geometry (12)
-    "primitive.geometry.feedforward": "computronium.primitives.geometry.feedforward.kernel.forward",
-    "primitive.geometry.conv": "computronium.primitives.geometry.conv.kernel.forward",
-    "primitive.geometry.graph": "computronium.primitives.geometry.graph.kernel.forward",
-    "primitive.geometry.recurrent": "computronium.primitives.geometry.recurrent.kernel.forward",
-    "primitive.geometry.nca": "computronium.primitives.geometry.nca.kernel.forward",
-    "primitive.geometry.tile": "computronium.primitives.geometry.tile.kernel.forward",
-    "primitive.geometry.tile_mesh": "computronium.primitives.geometry.tile_mesh.kernel.forward",
-    "primitive.geometry.ntm": "computronium.primitives.geometry.ntm.kernel.forward",
-    "primitive.geometry.attention": "computronium.primitives.geometry.attention.kernel.forward",
-    "primitive.geometry.spatial_lattice": "computronium.primitives.geometry.spatial_lattice.kernel.forward",
-    "primitive.geometry.routing": "computronium.primitives.geometry.routing.kernel.forward",
-    "primitive.geometry.causal_transformer": "computronium.primitives.geometry.causal_transformer.kernel.forward",
-
-    # Update (18)
-    "primitive.parameter_update.adafactor": "computronium.primitives.parameter_update.adafactor.kernel.step",
-    "primitive.parameter_update.adam": "computronium.primitives.parameter_update.adam.kernel.step",
-    "primitive.parameter_update.bayesian_online": "computronium.primitives.parameter_update.bayesian_online.kernel.step",
-    "primitive.parameter_update.cascade_synapse": "computronium.primitives.parameter_update.cascade_synapse.kernel.step",
-    "primitive.parameter_update.elastic_consolidation": "computronium.primitives.parameter_update.elastic_consolidation.kernel.step",
-    "primitive.parameter_update.euclidean": "computronium.primitives.parameter_update.euclidean.kernel.step",
-    "primitive.parameter_update.lion": "computronium.primitives.parameter_update.lion.kernel.step",
-    "primitive.parameter_update.local_adam": "computronium.primitives.parameter_update.local_adam.kernel.step",
-    "primitive.parameter_update.mean_norm": "computronium.primitives.parameter_update.mean_norm.kernel.step",
-    "primitive.parameter_update.muon": "computronium.primitives.parameter_update.muon.kernel.step",
-    "primitive.parameter_update.natural_gradient": "computronium.primitives.parameter_update.natural_gradient.kernel.step",
-    "primitive.parameter_update.ortho_adam": "computronium.primitives.parameter_update.ortho_adam.kernel.step",
-    "primitive.parameter_update.quantized_adam": "computronium.primitives.parameter_update.quantized_adam.kernel.step",
-    "primitive.parameter_update.riemannian_orthogonal": "computronium.primitives.parameter_update.riemannian_orthogonal.kernel.step",
-    "primitive.parameter_update.role_split": "computronium.primitives.parameter_update.role_split.kernel.step",
-    "primitive.parameter_update.schedule_free": "computronium.primitives.parameter_update.schedule_free.kernel.step",
-    "primitive.parameter_update.spectral_constrained": "computronium.primitives.parameter_update.spectral_constrained.kernel.step",
-    "primitive.parameter_update.synaptic_intelligence": "computronium.primitives.parameter_update.synaptic_intelligence.kernel.step",
-
-    # Plasticity (8)
-    "primitive.plasticity.null": "computronium.primitives.plasticity.null.kernel.step",
-    "primitive.plasticity.fast_weights": "computronium.primitives.plasticity.fast_weights.kernel.step",
-    "primitive.plasticity.routing": "computronium.primitives.plasticity.routing.kernel.step",
-    "primitive.plasticity.closed_form_ridge": "computronium.primitives.plasticity.closed_form_ridge.kernel.step",
-    "primitive.plasticity.temporal_psi": "computronium.primitives.plasticity.temporal_psi.kernel.step",
-    "primitive.plasticity.conflict_adaptive": "computronium.primitives.plasticity.conflict_adaptive.kernel.step",
-    "primitive.plasticity.rule_state": "computronium.primitives.plasticity.rule_state.kernel.step",
-    "primitive.plasticity.substrate_coupled": "computronium.primitives.plasticity.substrate_coupled.kernel.step",
-
-    # Substrate (10)
-    "primitive.substrate.digital": "computronium.primitives.substrate.digital.kernel.step",
-    "primitive.substrate.ternary": "computronium.primitives.substrate.ternary.kernel.step",
-    "primitive.substrate.analog": "computronium.primitives.substrate.analog.kernel.step",
-    "primitive.substrate.memristive": "computronium.primitives.substrate.memristive.kernel.step",
-    "primitive.substrate.photonic": "computronium.primitives.substrate.photonic.kernel.step",
-    "primitive.substrate.quantum": "computronium.primitives.substrate.quantum.kernel.step",
-    "primitive.substrate.sparse": "computronium.primitives.substrate.sparse.kernel.step",
-    "primitive.substrate.neuromorphic": "computronium.primitives.substrate.neuromorphic.kernel.step",
-    "primitive.substrate.noisy": "computronium.primitives.substrate.noisy.kernel.step",
-    "primitive.substrate.complex": "computronium.primitives.substrate.complex.kernel.step",
-    "primitive.substrate.optical": "computronium.primitives.substrate.optical.kernel.step",
-}
-
-# Map from primitive id to kernel technology
-_KERNEL_TECHNOLOGY = {
-    # Credit (19)
-    "primitive.credit_assignment.random_projections": "triton",
-    "primitive.credit_assignment.target_inversion": "triton",
-    "primitive.credit_assignment.pc_alm": "triton",
-    "primitive.credit_assignment.thermodynamic_contrast": "triton",
-    "primitive.credit_assignment.local_goodness": "triton",
-    "primitive.credit_assignment.temporal_trace": "triton",
-    "primitive.credit_assignment.homeostatic": "triton",
-    "primitive.credit_assignment.pepita": "triton",
-    "primitive.credit_assignment.gradient": "triton",
-    "primitive.credit_assignment.local_contrastive": "triton",
-    "primitive.credit_assignment.hybrid": "triton",
-    "primitive.credit_assignment.forward_tangent": "triton",
-    "primitive.credit_assignment.score_function": "triton",
-    "primitive.credit_assignment.zeroth_order": "triton",
-    "primitive.credit_assignment.surrogate": "triton",
-    "primitive.credit_assignment.local_supervision": "triton",
-    "primitive.credit_assignment.eligibility_prop": "triton",
-    "primitive.credit_assignment.unbiased_rtrl": "triton",
-    "primitive.credit_assignment.rtrl_reference": "triton",
-
-    # Dynamics (8)
-    "primitive.state_dynamics.instantaneous": "triton",
-    "primitive.state_dynamics.predictive_settling": "triton",
-    "primitive.state_dynamics.energy_minimization": "triton",
-    "primitive.state_dynamics.error_predictive_coding": "triton",
-    "primitive.state_dynamics.pc_alm": "triton",
-    "primitive.state_dynamics.diffusion": "triton",
-    "primitive.state_dynamics.lazy": "triton",
-    "primitive.state_dynamics.spike_integration": "triton",
-
-    # Geometry (12)
-    "primitive.geometry.feedforward": "triton",
-    "primitive.geometry.conv": "triton",
-    "primitive.geometry.graph": "triton",
-    "primitive.geometry.recurrent": "triton",
-    "primitive.geometry.nca": "triton",
-    "primitive.geometry.tile": "triton",
-    "primitive.geometry.tile_mesh": "triton",
-    "primitive.geometry.ntm": "triton",
-    "primitive.geometry.attention": "triton",
-    "primitive.geometry.spatial_lattice": "triton",
-    "primitive.geometry.routing": "triton",
-    "primitive.geometry.causal_transformer": "triton",
-
-    # Update (18)
-    "primitive.parameter_update.adafactor": "triton",
-    "primitive.parameter_update.adam": "triton",
-    "primitive.parameter_update.bayesian_online": "triton",
-    "primitive.parameter_update.cascade_synapse": "triton",
-    "primitive.parameter_update.elastic_consolidation": "triton",
-    "primitive.parameter_update.euclidean": "triton",
-    "primitive.parameter_update.lion": "triton",
-    "primitive.parameter_update.local_adam": "triton",
-    "primitive.parameter_update.mean_norm": "triton",
-    "primitive.parameter_update.muon": "triton",
-    "primitive.parameter_update.natural_gradient": "triton",
-    "primitive.parameter_update.ortho_adam": "triton",
-    "primitive.parameter_update.quantized_adam": "triton",
-    "primitive.parameter_update.riemannian_orthogonal": "triton",
-    "primitive.parameter_update.role_split": "triton",
-    "primitive.parameter_update.schedule_free": "triton",
-    "primitive.parameter_update.spectral_constrained": "triton",
-    "primitive.parameter_update.synaptic_intelligence": "triton",
-
-    # Plasticity (8)
-    "primitive.plasticity.null": "triton",
-    "primitive.plasticity.fast_weights": "triton",
-    "primitive.plasticity.routing": "triton",
-    "primitive.plasticity.closed_form_ridge": "triton",
-    "primitive.plasticity.temporal_psi": "triton",
-    "primitive.plasticity.conflict_adaptive": "triton",
-    "primitive.plasticity.rule_state": "triton",
-    "primitive.plasticity.substrate_coupled": "triton",
-
-    # Substrate (10)
-    "primitive.substrate.digital": "triton",
-    "primitive.substrate.ternary": "triton",
-    "primitive.substrate.analog": "triton",
-    "primitive.substrate.memristive": "triton",
-    "primitive.substrate.photonic": "triton",
-    "primitive.substrate.quantum": "triton",
-    "primitive.substrate.sparse": "triton",
-    "primitive.substrate.neuromorphic": "triton",
-    "primitive.substrate.noisy": "triton",
-    "primitive.substrate.complex": "triton",
-    "primitive.substrate.optical": "triton",
-}
-
-# Map from primitive id to kernel status
-_KERNEL_STATUS = {
-    # kernel_verified
-    "primitive.credit_assignment.random_projections": "kernel_verified",
-    "primitive.credit_assignment.local_goodness": "kernel_verified",
-    "primitive.credit_assignment.temporal_trace": "kernel_verified",
-    "primitive.credit_assignment.pc_alm": "kernel_verified",
-    "primitive.state_dynamics.predictive_settling": "kernel_verified",
-    "primitive.state_dynamics.energy_minimization": "kernel_verified",
-    "primitive.state_dynamics.pc_alm": "kernel_verified",
-    "primitive.geometry.tile_mesh": "kernel_verified",
-    "primitive.plasticity.routing": "kernel_verified",
-    "primitive.plasticity.fast_weights": "kernel_verified",
-    "primitive.parameter_update.muon": "kernel_verified",
-    # kernel_unverified
-    "primitive.credit_assignment.pepita": "kernel_unverified",
-    "primitive.credit_assignment.hybrid": "kernel_unverified",
-    # reference_only (most)
-}
-
-# Map from primitive id to task_families
 _TASK_FAMILIES = {
     # Credit (19)
     "primitive.credit_assignment.random_projections": ("vision", "sequence", "tabular"),
@@ -409,9 +196,21 @@ _TASK_FAMILIES = {
     "primitive.credit_assignment.thermodynamic_contrast": ("vision", "sequence"),
     "primitive.credit_assignment.local_goodness": ("vision", "sequence", "tabular"),
     "primitive.credit_assignment.temporal_trace": ("sequence", "vision"),
-    "primitive.credit_assignment.homeostatic": ("vision", "sequence", "tabular", "continual"),
+    "primitive.credit_assignment.homeostatic": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
     "primitive.credit_assignment.pepita": ("vision",),
-    "primitive.credit_assignment.gradient": ("vision", "sequence", "tabular", "continual", "graph", "rl"),
+    "primitive.credit_assignment.gradient": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+        "graph",
+        "rl",
+    ),
     "primitive.credit_assignment.local_contrastive": ("vision",),
     "primitive.credit_assignment.hybrid": ("vision",),
     "primitive.credit_assignment.forward_tangent": ("vision", "sequence"),
@@ -422,9 +221,15 @@ _TASK_FAMILIES = {
     "primitive.credit_assignment.eligibility_prop": ("sequence", "rl"),
     "primitive.credit_assignment.unbiased_rtrl": ("sequence", "rl"),
     "primitive.credit_assignment.rtrl_reference": ("sequence", "rl"),
-
     # Dynamics (8)
-    "primitive.state_dynamics.instantaneous": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.state_dynamics.instantaneous": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.state_dynamics.predictive_settling": ("vision", "sequence", "tabular"),
     "primitive.state_dynamics.energy_minimization": ("vision", "sequence", "tabular"),
     "primitive.state_dynamics.error_predictive_coding": ("vision",),
@@ -432,9 +237,15 @@ _TASK_FAMILIES = {
     "primitive.state_dynamics.diffusion": ("vision", "sequence"),
     "primitive.state_dynamics.lazy": ("vision", "sequence", "tabular"),
     "primitive.state_dynamics.spike_integration": ("sequence", "rl", "neuromorphic"),
-
     # Geometry (12)
-    "primitive.geometry.feedforward": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.geometry.feedforward": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.geometry.conv": ("vision",),
     "primitive.geometry.graph": ("graph",),
     "primitive.geometry.recurrent": ("sequence", "rl"),
@@ -446,29 +257,88 @@ _TASK_FAMILIES = {
     "primitive.geometry.spatial_lattice": ("vision", "rl"),
     "primitive.geometry.routing": ("vision", "sequence", "tabular"),
     "primitive.geometry.causal_transformer": ("sequence", "rl"),
-
     # Update (18)
-    "primitive.parameter_update.adafactor": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.adam": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.parameter_update.adafactor": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
+    "primitive.parameter_update.adam": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.parameter_update.bayesian_online": ("sequence", "rl"),
     "primitive.parameter_update.cascade_synapse": ("sequence", "rl", "continual"),
     "primitive.parameter_update.elastic_consolidation": ("continual",),
-    "primitive.parameter_update.euclidean": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.parameter_update.euclidean": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.parameter_update.lion": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.local_adam": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.mean_norm": ("vision", "sequence", "tabular", "continual"),
+    "primitive.parameter_update.local_adam": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
+    "primitive.parameter_update.mean_norm": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
     "primitive.parameter_update.muon": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.natural_gradient": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.ortho_adam": ("vision", "sequence", "tabular", "continual"),
+    "primitive.parameter_update.natural_gradient": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
+    "primitive.parameter_update.ortho_adam": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
     "primitive.parameter_update.quantized_adam": ("neuromorphic", "vision", "sequence"),
-    "primitive.parameter_update.riemannian_orthogonal": ("vision", "sequence", "tabular", "continual"),
+    "primitive.parameter_update.riemannian_orthogonal": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
     "primitive.parameter_update.role_split": ("continual", "vision", "sequence"),
-    "primitive.parameter_update.schedule_free": ("vision", "sequence", "tabular", "continual"),
-    "primitive.parameter_update.spectral_constrained": ("vision", "sequence", "tabular", "continual"),
+    "primitive.parameter_update.schedule_free": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
+    "primitive.parameter_update.spectral_constrained": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+    ),
     "primitive.parameter_update.synaptic_intelligence": ("continual",),
-
     # Plasticity (8)
-    "primitive.plasticity.null": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.plasticity.null": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.plasticity.fast_weights": ("sequence", "rl", "continual"),
     "primitive.plasticity.routing": ("vision", "sequence", "tabular"),
     "primitive.plasticity.closed_form_ridge": ("vision", "sequence", "tabular"),
@@ -476,9 +346,15 @@ _TASK_FAMILIES = {
     "primitive.plasticity.conflict_adaptive": ("continual",),
     "primitive.plasticity.rule_state": ("continual", "sequence", "rl"),
     "primitive.plasticity.substrate_coupled": ("neuromorphic", "analog"),
-
     # Substrate (10)
-    "primitive.substrate.digital": ("continual", "vision", "sequence", "tabular", "graph", "rl"),
+    "primitive.substrate.digital": (
+        "continual",
+        "vision",
+        "sequence",
+        "tabular",
+        "graph",
+        "rl",
+    ),
     "primitive.substrate.ternary": ("vision", "sequence", "tabular", "neuromorphic"),
     "primitive.substrate.analog": ("neuromorphic", "analog"),
     "primitive.substrate.memristive": ("neuromorphic", "analog"),
@@ -486,7 +362,14 @@ _TASK_FAMILIES = {
     "primitive.substrate.quantum": ("quantum",),
     "primitive.substrate.sparse": ("vision", "sequence", "tabular"),
     "primitive.substrate.neuromorphic": ("neuromorphic", "sequence", "rl"),
-    "primitive.substrate.noisy": ("vision", "sequence", "tabular", "continual", "graph", "rl"),
+    "primitive.substrate.noisy": (
+        "vision",
+        "sequence",
+        "tabular",
+        "continual",
+        "graph",
+        "rl",
+    ),
     "primitive.substrate.complex": ("quantum", "analog"),
     "primitive.substrate.optical": ("photonic", "analog"),
 }
@@ -578,7 +461,6 @@ _INVARIANTS = {
         "deterministic under fixed seed",
         "state remains finite",
     ),
-
     # Dynamics (8)
     "primitive.state_dynamics.instantaneous": (
         "deterministic under fixed seed",
@@ -617,7 +499,6 @@ _INVARIANTS = {
         "deterministic under fixed seed",
         "state remains finite",
     ),
-
     # Geometry (13)
     "primitive.geometry.feedforward": (
         "output shape matches (batch, output_dim)",
@@ -679,7 +560,6 @@ _INVARIANTS = {
         "deterministic under fixed seed",
         "activations remain finite",
     ),
-
     # Update (18)
     "primitive.parameter_update.adafactor": (
         "factored second moment estimation",
@@ -770,7 +650,6 @@ _INVARIANTS = {
         "deterministic under fixed seed",
         "state remains finite",
     ),
-
     # Plasticity (8)
     "primitive.plasticity.null": (
         "returns zero parameter updates",
@@ -811,7 +690,6 @@ _INVARIANTS = {
         "deterministic under fixed seed",
         "state remains finite",
     ),
-
     # Substrate (10)
     "primitive.substrate.digital": (
         "passes through without modification",
@@ -892,7 +770,6 @@ _SUMMARIES = {
     "primitive.credit_assignment.eligibility_prop": "Eligibility propagation credit assignment.",
     "primitive.credit_assignment.unbiased_rtrl": "Unbiased online RTRL credit assignment.",
     "primitive.credit_assignment.rtrl_reference": "RTRL reference implementation.",
-
     # Dynamics (8)
     "primitive.state_dynamics.instantaneous": "Single-pass feedforward dynamics for Backprop and Forward-Forward algorithms.",
     "primitive.state_dynamics.predictive_settling": "Predictive coding settling with separate error and value units.",
@@ -902,7 +779,6 @@ _SUMMARIES = {
     "primitive.state_dynamics.diffusion": "Diffusion-based state dynamics.",
     "primitive.state_dynamics.lazy": "Lazy state dynamics with minimal computation.",
     "primitive.state_dynamics.spike_integration": "Spike integration dynamics for neuromorphic substrates.",
-
     # Geometry (13)
     "primitive.geometry.feedforward": "Standard feedforward DAG topology (MLP/CNN) with configurable depth and width.",
     "primitive.geometry.conv": "Convolutional geometry with spatial weight sharing.",
@@ -916,7 +792,6 @@ _SUMMARIES = {
     "primitive.geometry.spatial_lattice": "3D spatial lattice geometry.",
     "primitive.geometry.routing": "Routing geometry with dynamic connectivity.",
     "primitive.geometry.causal_transformer": "Causal transformer geometry.",
-
     # Update (18)
     "primitive.parameter_update.adafactor": "Adafactor optimizer with factored second moments.",
     "primitive.parameter_update.adam": "Adaptive moment estimation optimizer.",
@@ -936,7 +811,6 @@ _SUMMARIES = {
     "primitive.parameter_update.schedule_free": "Schedule-free adaptive learning rate.",
     "primitive.parameter_update.spectral_constrained": "Spectral norm constrained update.",
     "primitive.parameter_update.synaptic_intelligence": "Synaptic intelligence update.",
-
     # Plasticity (8)
     "primitive.plasticity.null": "Null plasticity — no parameter updates (ablation baseline).",
     "primitive.plasticity.fast_weights": "Fast weights plasticity with outer-product Hebbian updates.",
@@ -946,7 +820,6 @@ _SUMMARIES = {
     "primitive.plasticity.conflict_adaptive": "Conflict-adaptive ψ plasticity.",
     "primitive.plasticity.rule_state": "Rule-state dependent plasticity.",
     "primitive.plasticity.substrate_coupled": "Substrate-coupled plasticity for neuromorphic/analog.",
-
     # Substrate (10)
     "primitive.substrate.digital": "Standard digital substrate (float32, no constraints).",
     "primitive.substrate.ternary": "Ternary substrate with {-1, 0, 1} weights.",
@@ -983,7 +856,6 @@ _CAPABILITY_CARDS = {
     "primitive.credit_assignment.eligibility_prop": "Eligibility traces; temporal credit assignment",
     "primitive.credit_assignment.unbiased_rtrl": "Unbiased RTRL; exact online gradient",
     "primitive.credit_assignment.rtrl_reference": "RTRL reference; full Jacobian computation",
-
     # Dynamics (8)
     "primitive.state_dynamics.instantaneous": "Single-pass feedforward; compatible with gradient and local credits; baseline for settling dynamics",
     "primitive.state_dynamics.predictive_settling": "Predictive coding dynamics; separate error and value units; free/nudged phases",
@@ -993,7 +865,6 @@ _CAPABILITY_CARDS = {
     "primitive.state_dynamics.diffusion": "Diffusion dynamics; continuous-time state evolution",
     "primitive.state_dynamics.lazy": "Lazy dynamics; minimal computation per step",
     "primitive.state_dynamics.spike_integration": "Spike integration; neuromorphic temporal dynamics",
-
     # Geometry (13)
     "primitive.geometry.feedforward": "Standard feedforward DAG; compatible with all credits/dynamics/updates; depth/width configurable",
     "primitive.geometry.conv": "Convolutional spatial weight sharing; translation equivariant; standard CNN topology",
@@ -1007,7 +878,6 @@ _CAPABILITY_CARDS = {
     "primitive.geometry.spatial_lattice": "3D spatial lattice; volumetric processing",
     "primitive.geometry.routing": "Dynamic routing; mixture of experts style",
     "primitive.geometry.causal_transformer": "Causal transformer; autoregressive generation",
-
     # Update (18)
     "primitive.parameter_update.adafactor": "Memory-efficient factored second moments; transformer training",
     "primitive.parameter_update.adam": "Adaptive per-parameter learning rates; de facto default for deep learning",
@@ -1027,7 +897,6 @@ _CAPABILITY_CARDS = {
     "primitive.parameter_update.schedule_free": "Schedule-free learning rates; no LR schedule needed",
     "primitive.parameter_update.spectral_constrained": "Spectral norm constraint; stability guarantee",
     "primitive.parameter_update.synaptic_intelligence": "Synaptic importance; online importance weighting",
-
     # Plasticity (8)
     "primitive.plasticity.null": "Ablation baseline; zero updates; measures credit contribution in isolation",
     "primitive.plasticity.fast_weights": "Hebbian outer-product updates; short-term memory; compatible with sequence tasks",
@@ -1037,7 +906,6 @@ _CAPABILITY_CARDS = {
     "primitive.plasticity.conflict_adaptive": "Conflict-adaptive ψ; handles interference",
     "primitive.plasticity.rule_state": "Rule-state dependent; meta-plasticity",
     "primitive.plasticity.substrate_coupled": "Substrate-coupled; neuromorphic/analog native plasticity",
-
     # Substrate (10)
     "primitive.substrate.digital": "Standard float32 digital compute; no quantization; reference baseline",
     "primitive.substrate.ternary": "Ternary weights {-1,0,1}; 2-bit quantization; efficient inference",
@@ -1076,15 +944,19 @@ def _make_spec(primitive_id: str) -> PrimitiveSpec:
         axis=runtime_axis,
         name=name,
         equations="",  # TODO: extract from original specs
-        invariants=_INVARIANTS.get(primitive_id, ("deterministic under fixed seed", "state remains finite")),
-        task_families=_TASK_FAMILIES.get(primitive_id, ("vision", "sequence", "tabular")),
-        kernel_status=_KERNEL_STATUS.get(primitive_id, "reference_only"),
+        invariants=_INVARIANTS.get(
+            primitive_id, ("deterministic under fixed seed", "state remains finite")
+        ),
+        task_families=_TASK_FAMILIES.get(
+            primitive_id, ("vision", "sequence", "tabular")
+        ),
         ontology_class=_ONTOLOGY_CLASSES.get(primitive_id, "object"),
         config_factory=_CONFIG_FACTORIES.get(primitive_id, ""),
         reference_entrypoint=_REFERENCE_ENTRYPOINTS.get(primitive_id, ""),
-        kernel_entrypoint=_KERNEL_ENTRYPOINTS.get(primitive_id),
-        kernel_technology=_KERNEL_TECHNOLOGY.get(primitive_id),
-        supported_backends=("reference", "kernel") if _KERNEL_ENTRYPOINTS.get(primitive_id) else ("reference",),
+        kernel_status="absent",
+        kernel_entrypoint=None,
+        kernel_technology=None,
+        supported_backends=("reference",),
         available=True,
         capability_card=_CAPABILITY_CARDS.get(primitive_id, ""),
         summary=_SUMMARIES.get(primitive_id, ""),
@@ -1115,7 +987,6 @@ _PRIMITIVE_IDS = [
     "primitive.credit_assignment.thermodynamic_contrast",
     "primitive.credit_assignment.unbiased_rtrl",
     "primitive.credit_assignment.zeroth_order",
-
     # Dynamics (8)
     "primitive.state_dynamics.diffusion",
     "primitive.state_dynamics.energy_minimization",
@@ -1125,7 +996,6 @@ _PRIMITIVE_IDS = [
     "primitive.state_dynamics.pc_alm",
     "primitive.state_dynamics.predictive_settling",
     "primitive.state_dynamics.spike_integration",
-
     # Geometry (12)
     "primitive.geometry.attention",
     "primitive.geometry.causal_transformer",
@@ -1139,7 +1009,6 @@ _PRIMITIVE_IDS = [
     "primitive.geometry.spatial_lattice",
     "primitive.geometry.tile",
     "primitive.geometry.tile_mesh",
-
     # Update (18)
     "primitive.parameter_update.adafactor",
     "primitive.parameter_update.adam",
@@ -1159,7 +1028,6 @@ _PRIMITIVE_IDS = [
     "primitive.parameter_update.schedule_free",
     "primitive.parameter_update.spectral_constrained",
     "primitive.parameter_update.synaptic_intelligence",
-
     # Plasticity (8)
     "primitive.plasticity.closed_form_ridge",
     "primitive.plasticity.conflict_adaptive",
@@ -1169,7 +1037,6 @@ _PRIMITIVE_IDS = [
     "primitive.plasticity.rule_state",
     "primitive.plasticity.substrate_coupled",
     "primitive.plasticity.temporal_psi",
-
     # Substrate (10)
     "primitive.substrate.analog",
     "primitive.substrate.complex",
@@ -1222,13 +1089,15 @@ def count_primitives() -> dict[str, int]:
     return counts
 
 
-# Verify we have 75 primitives
-assert len(REGISTRY) == 75, f"Expected 75 primitives, got {len(REGISTRY)}"
+# The registry is the single source: a missing or extra row is a wiring defect.
+if len(REGISTRY) != 75:
+    msg = f"Expected 75 primitives, got {len(REGISTRY)}"
+    raise RuntimeError(msg)
 
 # Export
 __all__ = [
     "REGISTRY",
+    "count_primitives",
     "get_primitive_spec",
     "list_primitives",
-    "count_primitives",
 ]

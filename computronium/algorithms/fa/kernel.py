@@ -5,16 +5,12 @@ Delegates to random_projections primitive kernel where possible.
 
 from typing import Any
 
-from computronium.acceleration.backends import kernel_available
-from computronium.primitives.credit_assignment.random_projections.kernel import (
-    is_available as rp_kernel_available,
-)
-
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and rp_kernel_available()
+    """No fused feedback-alignment kernel exists; the reference path is the only rung."""
+    return False
 
 
 def step(case: Any) -> Any:

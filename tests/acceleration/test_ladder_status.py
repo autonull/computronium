@@ -36,14 +36,14 @@ def _cli(capsys: pytest.CaptureFixture[str], *args: str) -> str:
 
 
 def test_a_technology_is_a_selectable_request() -> None:
-    spec = get("primitive.credit_assignment.local_goodness")
+    spec = get("algorithm.pcalm")
     assert select_backend(spec, "triton") == "kernel"
     assert resolve_rung(spec, "triton").technology == "triton"
     assert resolve_rung(spec, "triton").entrypoint == spec.kernel_entrypoint
 
 
 def test_selecting_an_unused_technology_names_what_exists() -> None:
-    spec = get("primitive.state_dynamics.energy_minimization")
+    spec = get("algorithm.backprop")
     with pytest.raises(ValueError) as excinfo:
         select_backend(spec, "triton")
     message = str(excinfo.value)
@@ -162,7 +162,7 @@ def test_a_triton_spec_without_availability_family_falls_back_rather_than_claimi
     exists at all: a rung nobody can verify is the rung TODO37 §4.1 was written
     about, and answering "available" for it would be the lying field again.
     """
-    spec = get("primitive.credit_assignment.homeostatic")
+    spec = get("algorithm.fast_weight")
     assert (
         spec.kernel_technology == "triton"
         and _availability_family_from_spec(spec) is None

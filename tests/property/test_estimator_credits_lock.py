@@ -41,12 +41,10 @@ from computronium.ontology.credit import (
     ScoreFunctionCredit,
     ZerothOrderCredit,
 )
-from computronium.primitives._common import make_activation_primitive_case
-from computronium.primitives.credit_assignment.forward_tangent import (
-    cases as ft_cases,
-)
-from computronium.primitives.credit_assignment.forward_tangent import (
-    reference as ft_reference,
+from computronium.primitives._common import (
+    make_activation_primitive_case,
+    make_estimator_case,
+    make_estimator_reference_step,
 )
 from computronium.state import CompositeState
 
@@ -60,6 +58,24 @@ _ESTIMATORS = {
     "score_function": ("score_function", "unbiased_expected"),
     "zeroth_order": ("zeroth_order", "finite_difference"),
 }
+
+
+def _ft_case(*, seed: int, estimator_samples: int) -> Any:
+    return make_estimator_case(
+        geometry_factory=lambda: FeedforwardGeometry(
+            GeometryConfig.feedforward(input_dim=4, output_dim=4, hidden_dims=())
+        ),
+        config={"estimator_samples": estimator_samples},
+        seed=seed,
+    )
+
+
+_FT_REFERENCE = make_estimator_reference_step(
+    ForwardTangentCredit,
+    lambda config: CreditAssignmentConfig.forward_tangent(
+        estimator_samples=config.get("estimator_samples", 8)
+    ),
+)
 
 
 def _params(geometry: Any) -> tuple[list[str], list[torch.Tensor]]:
@@ -121,8 +137,8 @@ def test_every_estimator_settles_only_the_free_phase() -> None:
 def _variance_mse(estimator_samples: int, seeds: range) -> float:
     errors = []
     for seed in seeds:
-        case = ft_cases.make_case(seed=seed, estimator_samples=estimator_samples)
-        estimate = _concat(ft_reference.step(case))
+        case = _ft_case(seed=seed, estimator_samples=estimator_samples)
+        estimate = _concat(_FT_REFERENCE(case))
         exact = _exact_case_gradient(case)
         errors.append(float((estimate - exact).square().mean()))
     return sum(errors) / len(errors)
@@ -130,8 +146,8 @@ def _variance_mse(estimator_samples: int, seeds: range) -> float:
 
 def test_forward_tangent_parity_and_variance_fall() -> None:
     """cos > 0.3 at 8 tangents; the MSE falls as 1/n."""
-    case = ft_cases.make_case(seed=0, estimator_samples=8)
-    estimate = _concat(ft_reference.step(case))
+    case = _ft_case(seed=0, estimator_samples=8)
+    estimate = _concat(_FT_REFERENCE(case))
     exact = _exact_case_gradient(case)
     assert _cos(estimate, exact) > 0.3
 
