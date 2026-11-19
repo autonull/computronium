@@ -82,6 +82,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "method-card": ("computronium.experiment.documentation.method_cards", "main", ()),
     "faq": ("computronium.experiment.documentation.faq", "main", ()),
     "capabilities": ("computronium.cli.commands.capabilities", "app", ()),
+    "verify": ("computronium.cli.commands.verify", "app", ()),
     "plugin": ("computronium.plugins", "main", ()),
     "benchmark-contrib": ("computronium.benchmarks.contributions.cli", "main", ()),
 }
@@ -135,6 +136,7 @@ _SUMMARIES: dict[str, str] = {
     "method-card": "Method cards: auto-generated docs for ontology primitives (Phase F2)",
     "faq": "FAQ/Troubleshooting: curated from CI/CD failures (Phase F2)",
     "capabilities": "List and verify registered capabilities (Gate 1/2)",
+    "verify": "Verify a primitive's map row in a slice family (TODO95 P5)",
     "plugin": "Plugin management: custom objectives, substrates, dynamics (Phase F3)",
     "benchmark-contrib": "Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)",
 }

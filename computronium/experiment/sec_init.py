@@ -82,6 +82,14 @@ DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
         budget_used={"cells": 0, "seeds": 0},
         contention=False,
     ),
+    TrackPortfolioEntry(
+        track="P4",
+        rank=6,
+        kill_rule="A rung at the bar is a capability gap, not a claim",
+        last_result="unstarted",
+        budget_used={"cells": 0, "seeds": 0},
+        contention=False,
+    ),
 ]
 
 

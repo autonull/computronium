@@ -220,7 +220,7 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | 38 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
+| **🚪 Entry Points** | 39 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
 | **🎯 Tasks & Data** | 7 domains, 30 tasks |
 | **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 45 constraints |
 | **🧬 6-Axis Ontology** | 10 substrates, 12 geometries, 8 dynamics, 6 plasticities, 19 credits, 18 updates = 73 primitives |
@@ -810,6 +810,7 @@ six-axis systems and assert real accuracies.
 | `method-card` | Method cards: auto-generated docs for ontology primitives (Phase F2) |
 | `faq` | FAQ/Troubleshooting: curated from CI/CD failures (Phase F2) |
 | `capabilities` | List and verify registered capabilities (Gate 1/2) |
+| `verify` | Verify a primitive's map row in a slice family (TODO95 P5) |
 | `plugin` | Plugin management: custom objectives, substrates, dynamics (Phase F3) |
 | `benchmark-contrib` | Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3) |
 

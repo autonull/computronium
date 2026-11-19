@@ -701,7 +701,7 @@ def _is_legal(coord: Coordinate) -> tuple[bool, str | None]:
         return True, None
     except ValueError as exc:
         return False, str(exc)
-    except Exception as exc:  # noqa: BLE001 - report, never crash the screen
+    except Exception as exc:  # ruff: ignore[blind-except] - report, never crash the screen
         return False, f"{type(exc).__name__}: {exc}"
 
 
@@ -1310,72 +1310,91 @@ def run_p1_track(
 # ============================================================
 
 
-def _interaction_cell(
-    levels: dict[str, str],
-    schedule: Schedule,
-    *,
-    seed: int,
-) -> InteractionCell:
-    """One run of the factorial: its box, its seed and its replay hash.
+def _measure(coord: Coordinate, run: Schedule) -> dict[str, Any]:
+    """One screened cell: status, number, cost, box and replay hash.
 
     A compose-legal box is checked before it is priced; a training-time
-    contract failure is a defect with its mechanism named, never a crash.
+    contract failure is a defect with its mechanism named, never a crash. The
+    record is written from the evaluation, so the replay hash is the run's
+    provenance — one source read by the interaction slice and the deep dive.
     """
-    from computronium.experiment.sec_interaction import InteractionCell
-
-    axes = {**_AXIS_DEFAULTS, **levels}
-    coord = _coordinate(axes)
-    run = replace(schedule, seed=seed, n_seeds=1)
     box = _box_summary(coord, run)
-
-    def cell(
-        status: str,
-        *,
-        val_acc: float | None = None,
-        loss: float | None = None,
-        walltime_s: float | None = None,
-        replay_hash: str | None = None,
-        reason: str | None = None,
-    ) -> InteractionCell:
-        return InteractionCell(
-            levels=dict(levels),
-            seed=seed,
-            status=status,
-            val_acc=val_acc,
-            loss=loss,
-            walltime_s=walltime_s,
-            replay_hash=replay_hash,
-            box=box,
-            reason=reason,
-        )
-
     legal, reason = _is_legal(coord)
     if not legal:
-        return cell("refused", reason=reason)
+        return {
+            "status": "refused",
+            "val_acc": None,
+            "loss": None,
+            "walltime_s": None,
+            "replay_hash": None,
+            "box": box,
+            "reason": reason,
+        }
     try:
         eval_result = evaluate_cell(coord, run)
     except EvaluationError as exc:
-        return cell("defect", reason=f"{exc.cause}: {exc}")
+        return {
+            "status": "defect",
+            "val_acc": None,
+            "loss": None,
+            "walltime_s": None,
+            "replay_hash": None,
+            "box": box,
+            "reason": f"{exc.cause}: {exc}",
+        }
     except Exception as exc:  # ruff: ignore[blind-except] - one bad cell, never the slice
-        return cell("defect", reason=f"{type(exc).__name__}: {exc}")
+        return {
+            "status": "defect",
+            "val_acc": None,
+            "loss": None,
+            "walltime_s": None,
+            "replay_hash": None,
+            "box": box,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
 
     defect, _within = _defect_for(eval_result, run)
     metrics = dict(eval_result.metrics)
     record = record_from_evaluation(
         coordinate=coord,
         schedule=run,
-        provenance=_provenance(schedule.task_id, box, coord.measurement_key(run)),
+        provenance=_provenance(run.task_id, box, coord.measurement_key(run)),
         evaluation=eval_result,
         status=_screen_status(),
         extra_payload={"defect": defect},
     )
-    return cell(
-        "defect" if defect else "measured",
-        val_acc=None if defect else float(metrics.get("val_acc", 0.0)),
-        loss=float(metrics.get("loss", float("inf"))),
-        walltime_s=eval_result.walltime_s,
-        replay_hash=record.to_dict()["provenance"]["code_sha"],
-        reason=defect,
+    return {
+        "status": "defect" if defect else "measured",
+        "val_acc": None if defect else float(metrics.get("val_acc", 0.0)),
+        "loss": float(metrics.get("loss", float("inf"))),
+        "walltime_s": eval_result.walltime_s,
+        "replay_hash": record.to_dict()["provenance"]["code_sha"],
+        "box": box,
+        "reason": defect,
+    }
+
+
+def _interaction_cell(
+    levels: dict[str, str],
+    schedule: Schedule,
+    *,
+    seed: int,
+) -> InteractionCell:
+    """One run of the factorial: its box, its seed and its replay hash."""
+    from computronium.experiment.sec_interaction import InteractionCell
+
+    axes = {**_AXIS_DEFAULTS, **levels}
+    measured = _measure(_coordinate(axes), replace(schedule, seed=seed, n_seeds=1))
+    return InteractionCell(
+        levels=dict(levels),
+        seed=seed,
+        status=measured["status"],
+        val_acc=measured["val_acc"],
+        loss=measured["loss"],
+        walltime_s=measured["walltime_s"],
+        replay_hash=measured["replay_hash"],
+        box=measured["box"],
+        reason=measured["reason"],
     )
 
 
@@ -1569,6 +1588,288 @@ def _interaction_result(
 
 
 # ============================================================
+# Track P4: The deep dive (one claim, one box)
+# ============================================================
+
+#: The committed registration the claim reads. The margin is declared in the
+#: repo before the run, so a session that cannot name its claim refuses.
+DEEP_DIVE_REGISTRATION = Path("configs/preregistrations/sec_deep_dive.json")
+
+
+def _deep_dive_coordinate(candidate: Any, factor: float) -> Coordinate:
+    """The candidate's base box with its primary knob at one ladder point."""
+    axes = {**_AXIS_DEFAULTS, candidate.axis: candidate.level}
+    coord = _coordinate(axes)
+    return replace(
+        coord,
+        params={**coord.params, candidate.knob: candidate.default * factor},
+    )
+
+
+def _deep_dive_setup(
+    out_dir: Path, device: str, registration_path: Path
+) -> tuple[Any, Any, Schedule] | None:
+    """The map's candidate, the committed claim and the base box, or ``None``."""
+    from computronium.experiment.sec_deep_dive import (
+        load_registration,
+        select_candidate,
+    )
+
+    map_path = out_dir / "map.json"
+    if not map_path.exists():
+        logger.warning("P4: no map.json — the census is not screened; dive refused")
+        return None
+    map_data = json.loads(map_path.read_text())
+    if map_data.get("version") != MAP_VERSION:
+        logger.warning(
+            f"P4: map version {map_data.get('version')} is not {MAP_VERSION}; "
+            "dive refused"
+        )
+        return None
+    candidate = select_candidate(map_data)
+    if candidate is None:
+        logger.warning("P4: no surprising bound row with a declared knob; dive refused")
+        return None
+    task_id = str((map_data.get("base") or {}).get("task") or P0_TASK)
+    schedule = base_schedule(task_id, device)
+    if schedule is None:
+        logger.warning(f"P4: {task_id} declares no base box; dive refused")
+        return None
+    registration = load_registration(registration_path, schedule)
+    if registration is None:
+        logger.warning(
+            f"P4: no pre-registration for {task_id} at {registration_path}; "
+            "the claim is refused before the first cell (TODO95 S4)"
+        )
+        return None
+    return candidate, registration, schedule
+
+
+def run_p4_track(
+    out_dir: Path,
+    device: str = "auto",
+    *,
+    registration_path: Path | None = None,
+) -> dict[str, Any] | None:
+    """Run Track P4: the map's surprising bound row, at one box (TODO95 S4).
+
+    The ladder screens three points on the primitive's primary knob at one seed;
+    the best point then pairs five seeds against the primitive's own default at
+    the matched base box. The margin is read from the committed registration,
+    so the claim is fixed-n and cannot be stopped early.
+
+    Returns ``None`` when the dive is refused: no map, no candidate, no
+    declared base box, or no pre-registered claim at this box.
+    """
+    from computronium.experiment.sec_deep_dive import best_rung
+
+    setup = _deep_dive_setup(
+        out_dir, device, registration_path or DEEP_DIVE_REGISTRATION
+    )
+    if setup is None:
+        return None
+    candidate, registration, schedule = setup
+    started = time.monotonic()
+    rungs = _ladder(candidate, schedule)
+    best = best_rung(tuple(rungs))
+    bar = _task_bar(schedule.task_id)
+    if best is None or (bar is not None and (best.val_acc or 0.0) <= bar.value):
+        reason = (
+            "rung 2: no ladder point clears the bar at this box; the knob is "
+            "priced, not claimed (a capability gap, TODO95 P4)"
+        )
+        return _deep_dive_result(
+            candidate,
+            tuple(rungs),
+            best,
+            (),
+            None,
+            registration,
+            verdict="coordinate",
+            stop_reason=reason,
+            started=started,
+        )
+
+    cells = _paired_cells(candidate, schedule, best.factor)
+    failed = next((cell for cell in cells if cell.status == "defect"), None)
+    if failed is not None:
+        return _deep_dive_result(
+            candidate,
+            tuple(rungs),
+            best,
+            tuple(cells),
+            None,
+            registration,
+            verdict="defect",
+            stop_reason=(
+                f"rung 4: the {failed.arm} arm at seed {failed.seed} is an "
+                f"execution fact: {failed.reason}"
+            ),
+            started=started,
+        )
+    return _pair_verdict(candidate, rungs, best, cells, registration, schedule, started)
+
+
+def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
+    """The three-point ladder at one seed: the knob's declared neighbours."""
+    from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
+
+    rungs: list[LadderRung] = []
+    for factor, value in ladder_points(candidate):
+        measured = _measure(
+            _deep_dive_coordinate(candidate, factor),
+            replace(schedule, seed=0, n_seeds=1),
+        )
+        rungs.append(
+            LadderRung(
+                factor=factor,
+                value=value,
+                status=measured["status"],
+                val_acc=measured["val_acc"],
+                walltime_s=measured["walltime_s"],
+                replay_hash=measured["replay_hash"],
+                box=measured["box"],
+                reason=measured["reason"],
+            )
+        )
+    return rungs
+
+
+def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[Any]:
+    """Five index-matched seeds per arm at the matched base box."""
+    from computronium.experiment.sec_deep_dive import CLAIM_SEEDS, PairedCell
+
+    cells: list[PairedCell] = []
+    for seed in range(CLAIM_SEEDS):
+        for arm, factor in (("control", 1.0), ("treatment", treatment)):
+            measured = _measure(
+                _deep_dive_coordinate(candidate, factor),
+                replace(schedule, seed=seed, n_seeds=1),
+            )
+            cells.append(
+                PairedCell(
+                    arm=arm,
+                    factor=factor,
+                    seed=seed,
+                    status=measured["status"],
+                    val_acc=measured["val_acc"],
+                    loss=measured["loss"],
+                    walltime_s=measured["walltime_s"],
+                    replay_hash=measured["replay_hash"],
+                    box=measured["box"],
+                    reason=measured["reason"],
+                )
+            )
+    return cells
+
+
+def _pair_verdict(  # ruff: ignore[too-many-arguments]
+    candidate: Any,
+    rungs: list[Any],
+    best: Any,
+    cells: list[Any],
+    registration: Any,
+    schedule: Schedule,
+    started: float,
+) -> dict[str, Any]:
+    """The pair's verdict: a claim, a coordinate, or an inert knob.
+
+    The comparison is fixed-n: every seed is run before ``passes`` is asked.
+    Two arms that agree at every seed are bit-identical, so their difference is
+    structurally zero and the pair has no power — it is marked, not priced.
+    """
+    from dataclasses import asdict
+
+    from computronium.experiment.sec_deep_dive import claim_verdict
+    from computronium.validation.preregistration import paired_comparison
+
+    treatments = [cell for cell in cells if cell.arm == "treatment"]
+    controls = [cell for cell in cells if cell.arm == "control"]
+    identical = all(
+        treatment.val_acc == control.val_acc
+        for treatment, control in zip(treatments, controls, strict=True)
+    )
+    if identical:
+        return _deep_dive_result(
+            candidate,
+            tuple(rungs),
+            best,
+            tuple(cells),
+            None,
+            registration,
+            verdict="coordinate",
+            stop_reason=(
+                "rung 4: the arms are identical at every seed — the knob does "
+                "not bind at this box, so the pair has no power and is marked, "
+                "not priced (a capability gap, TODO95 S4)"
+            ),
+            started=started,
+            no_power=True,
+        )
+    paired = paired_comparison(
+        [float(cell.val_acc or 0.0) for cell in treatments],
+        [float(cell.val_acc or 0.0) for cell in controls],
+        seed=schedule.seed,
+    )
+    verdict = claim_verdict(paired, registration, schedule)
+    logger.info(
+        f"P4 complete: {candidate.primitive} best={best.factor} "
+        f"effect={paired.mean_diff:.4f} verdict={verdict}"
+    )
+    return _deep_dive_result(
+        candidate,
+        tuple(rungs),
+        best,
+        tuple(cells),
+        asdict(paired),
+        registration,
+        verdict=verdict,
+        stop_reason=(
+            "rung 4: five paired seeds at the base box; the CI clears the "
+            "registered margin"
+            if verdict == "claim"
+            else "rung 4: five paired seeds at the base box; the effect sits "
+            "inside the registered margin"
+        ),
+        started=started,
+    )
+
+
+def _deep_dive_result(  # ruff: ignore[too-many-arguments]
+    candidate: Any,
+    rungs: tuple[Any, ...],
+    best: Any,
+    cells: tuple[Any, ...],
+    paired: dict[str, Any] | None,
+    registration: Any,
+    *,
+    verdict: str,
+    stop_reason: str,
+    started: float,
+    no_power: bool = False,
+) -> dict[str, Any]:
+    """The deep dive layer: the candidate, the ladder, the pair and the claim."""
+    from computronium.experiment.sec_deep_dive import DeepDive
+
+    measured = [rung.val_acc for rung in rungs if rung.status == "measured"]
+    dive = DeepDive(
+        candidate=candidate,
+        rungs=rungs,
+        best=best,
+        cells=cells,
+        paired=paired,
+        claim=registration.to_dict(),
+        verdict=verdict,
+        stop_reason=stop_reason,
+        walltime_s=time.monotonic() - started,
+        knob_binds=len(set(measured)) > 1,
+        no_power=no_power,
+    )
+    layer = dive.to_dict()
+    return {"track": "P4", "deep_dive": layer, "cells": layer["cells"]}
+
+
+# ============================================================
 # Portfolio & Map Updates
 # ============================================================
 
@@ -1598,6 +1899,7 @@ def update_portfolio(
     p0_result: dict | None,
     p1_result: dict | None,
     p3_result: dict | None = None,
+    p4_result: dict | None = None,
 ) -> None:
     """Update portfolio.json with track results."""
     portfolio_path = out_dir / "portfolio.json"
@@ -1679,6 +1981,22 @@ def update_portfolio(
         track["budget_used"]["seeds"] = sum(
             1 for cell in p3_result["cells"] if cell["status"] == "measured"
         )
+
+    if p4_result:
+        layer = p4_result["deep_dive"]
+        track = _portfolio_track(portfolio, "P4")
+        effect = layer.get("effect")
+        track["last_result"] = {
+            "primitive": layer["candidate"]["primitive"],
+            "knob": layer["candidate"]["knob"],
+            "verdict": layer["verdict"],
+            "effect": None if effect is None else effect["mean_diff"],
+            "ci": None if effect is None else [effect["ci_lower"], effect["ci_upper"]],
+            "n_max": None if effect is None else effect["n"],
+            "stop_reason": layer["stop_reason"],
+        }
+        track["budget_used"]["cells"] = len(layer["ladder"]) + len(layer["cells"])
+        track["budget_used"]["seeds"] = len({cell["seed"] for cell in layer["cells"]})
 
     portfolio_path.write_text(json.dumps(portfolio, indent=2, default=str))
     logger.info(f"Portfolio updated: {portfolio_path}")
@@ -1811,14 +2129,16 @@ def update_map(
     p1_result: dict | None = None,
     p3_result: dict | None = None,
     *,
+    p4_result: dict | None = None,
     report: bool = True,
 ) -> None:
     """Write map.json v3: one row per censused primitive, never a missing row.
 
-    The interaction layer is part of the same document: an axis-by-axis run
-    keeps the layer an earlier run measured, and only P3 replaces it
-    (TODO95 S3). ``report`` suppresses the printed census on an intermediate
-    write, so a P3 run reads the screen it just wrote, not the previous one.
+    The interaction layer and the deep dive are part of the same document: an
+    axis-by-axis run keeps the layers an earlier run measured, and only P3/P4
+    replace them (TODO95 S3/S4). ``report`` suppresses the printed census on
+    an intermediate write, so a P3/P4 run reads the screen it just wrote, not
+    the previous one.
     """
     map_path = out_dir / "map.json"
     cells = {cell["primitive"]: cell for cell in (p0_result or {}).get("cells", [])}
@@ -1829,11 +2149,13 @@ def update_map(
     prior: dict[str, Any] = {}
     previous: dict[str, dict] = {}
     interaction: dict[str, Any] | None = None
+    deep_dive: dict[str, Any] | None = None
     if map_path.exists():
         prior = json.loads(map_path.read_text())
         if prior.get("version") == MAP_VERSION:
             previous = prior.get("primitives", {})
             interaction = prior.get("interaction")
+            deep_dive = prior.get("deep_dive")
 
     primitives: dict[str, dict] = {}
     for entry in census_entries:
@@ -1859,6 +2181,7 @@ def update_map(
         counts[row["status"]] = counts.get(row["status"], 0) + 1
 
     interaction = (p3_result or {}).get("interaction") or interaction
+    deep_dive = (p4_result or {}).get("deep_dive") or deep_dive
 
     map_data = {
         "version": MAP_VERSION,
@@ -1873,12 +2196,37 @@ def update_map(
         "base": _carried_base(prior, p0_result),
         "by_axis": by_axis,
         "interaction": interaction,
+        "deep_dive": deep_dive,
         "primitives": primitives,
     }
     map_path.write_text(json.dumps(map_data, indent=2, default=str))
     logger.info(f"Map updated: {map_path} ({len(primitives)} rows)")
     if report:
         _print_map_report(map_data)
+
+
+def _print_deep_dive(deep: dict[str, Any]) -> None:
+    """The deep dive layer: the candidate, the ladder, the pair and the stop."""
+    candidate = deep["candidate"]
+    print(f"Deep dive: {candidate['primitive']} — verdict={deep['verdict']}")
+    print(
+        f"  knob: {candidate['knob']} default={candidate['default']:g} "
+        f"(margin over bar {candidate['margin']:.4f})"
+    )
+    for rung in deep["ladder"]:
+        print(
+            f"  rung {rung['factor']:g}× -> {rung['value']:g}: "
+            f"{rung['status']} val_acc={rung['val_acc']}"
+        )
+    print(f"  knob binds: {deep['knob_binds']}; no power: {deep['no_power']}")
+    effect = deep.get("effect")
+    if effect:
+        print(
+            f"  effect: {effect['mean_diff']:.4f} "
+            f"[{effect['ci_lower']:.4f}, {effect['ci_upper']:.4f}] at "
+            f"{effect['n']} paired seeds, p={effect['p_value']:.4f}"
+        )
+    print(f"  stop: {deep['stop_reason']}")
 
 
 def _print_map_report(map_data: dict[str, Any]) -> None:
@@ -1941,11 +2289,28 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
                 f"[{effect['lower']:.4f}, {effect['upper']:.4f}] at "
                 f"{effect['seeds']} seeds"
             )
+    if map_data.get("deep_dive"):
+        _print_deep_dive(map_data["deep_dive"])
 
 
 # ============================================================
 # Main Loop
 # ============================================================
+
+
+def _p4_after_screen(
+    out_dir: Path,
+    census_entries: list[PrimitiveCensusEntry],
+    p0_result: dict | None,
+    p1_result: dict | None,
+    p3_result: dict | None,
+    args: Any,
+) -> dict[str, Any] | None:
+    """Land the screen and the slice, then run the dive the map chooses."""
+    update_map(out_dir, census_entries, p0_result, p1_result, p3_result, report=False)
+    return run_p4_track(
+        out_dir, device=args.device, registration_path=args.registration
+    )
 
 
 def main() -> None:
@@ -1961,7 +2326,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--track",
-        choices=["R1", "R2", "P0", "P1", "P3", "all"],
+        choices=["R1", "R2", "P0", "P1", "P3", "P4", "all"],
         default="all",
         help="Track to run",
     )
@@ -1995,6 +2360,12 @@ def main() -> None:
     parser.add_argument(
         "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
     )
+    parser.add_argument(
+        "--registration",
+        type=Path,
+        default=DEEP_DIVE_REGISTRATION,
+        help="Committed pre-registration the P4 claim reads",
+    )
     args = parser.parse_args()
 
     out_dir = args.out
@@ -2009,6 +2380,7 @@ def main() -> None:
     p0_result = None
     p1_result = None
     p3_result = None
+    p4_result = None
 
     # Run R1 if requested
     if args.track in {"R1", "all"}:
@@ -2071,6 +2443,15 @@ def main() -> None:
         if p3_result:
             all_results.extend(p3_result["cells"])
 
+    # The deep dive reads the same map: land the screen and the slice first,
+    # silently, then let the map's candidate (not a second ranking) choose.
+    if args.track in {"P4", "all"}:
+        p4_result = _p4_after_screen(
+            out_dir, census_entries, p0_result, p1_result, p3_result, args
+        )
+        if p4_result:
+            all_results.extend(p4_result["cells"])
+
     # Update artifacts
     update_cell_log(out_dir, all_results)
     update_portfolio(
@@ -2080,8 +2461,16 @@ def main() -> None:
         p0_result,
         p1_result,
         p3_result,
+        p4_result,
     )
-    update_map(out_dir, census_entries, p0_result, p1_result, p3_result)
+    update_map(
+        out_dir,
+        census_entries,
+        p0_result,
+        p1_result,
+        p3_result,
+        p4_result=p4_result,
+    )
 
     # Print summary (raw metrics for human review)
     print("\n=== SEC Loop Summary ===")
@@ -2113,6 +2502,17 @@ def main() -> None:
         print(
             f"P3: pair={' × '.join(layer['pair'])}, status={layer['status']}, "
             f"effect={None if effect is None else round(effect['effect'], 4)}"
+        )
+
+    if p4_result:
+        layer = p4_result["deep_dive"]
+        effect = layer["effect"]
+        print(
+            f"P4: primitive={layer['candidate']['primitive']}, "
+            f"knob={layer['candidate']['knob']}, "
+            f"verdict={layer['verdict']}, "
+            f"effect={None if effect is None else round(effect['mean_diff'], 4)}, "
+            f"n={None if effect is None else effect['n']}"
         )
 
     # Surprise flags (recorded for review meeting)
