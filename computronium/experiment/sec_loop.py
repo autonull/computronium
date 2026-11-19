@@ -54,6 +54,7 @@ from computronium.experiment.sec_census import (
     PrimitiveCensusEntry,
     build_census,
 )
+from computronium.experiment.sec_pilot import resource_vector
 
 logger = get_logger(__name__)
 
@@ -447,9 +448,9 @@ P0_MAX_COORDINATES = 24
 # statement), not a verdict, and it is 8× the measured 375-batch cell.
 P0_PRIMITIVE_BUDGET_S = 60.0
 # The base box shares one step size and one geometry width across primitives.
-# A primitive's own declared defaults are the `own-knobs` pass (TODO95 P2);
-# until that pass runs, an update row is `inert` (an update needs its own step).
-P0_OWN_KNOBS = False
+# A primitive's own declared defaults are the `own-knobs` pass (TODO95 S2);
+# it runs on request (``--own-knobs``) so the two boxes stay distinct
+# instruments. An update row in the base box is `inert` (see sec_binding).
 
 
 def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[str, Any]:
@@ -513,6 +514,31 @@ def _control_val_acc(schedule: Schedule, device: str) -> float | None:
     return float(dict(result.metrics).get("val_acc", 0.0))
 
 
+def _control_stats(
+    schedule: Schedule, device: str
+) -> tuple[float | None, float | None]:
+    """The base control over ``CONTROL_SEEDS`` seeds: mean and spread.
+
+    One seed is a cell, not a control. A control whose mean sits inside the
+    bar's 2σ band has no power, and its slice is refused before it is priced
+    (TODO95 S2).
+    """
+    from dataclasses import replace
+
+    from computronium.experiment.sec_pilot import CONTROL_SEEDS
+
+    values: list[float] = []
+    for seed in range(CONTROL_SEEDS):
+        value = _control_val_acc(replace(schedule, seed=seed, n_seeds=1), device)
+        if value is not None:
+            values.append(value)
+    if not values:
+        return None, None
+    mean = sum(values) / len(values)
+    spread = math.sqrt(sum((value - mean) ** 2 for value in values) / len(values))
+    return mean, spread
+
+
 def _ruler(task_id: str) -> tuple[str, str]:
     """The task's primary metric key and the ruler string a map row carries."""
     from computronium.experiment.registry.task_registry import TaskRegistry
@@ -565,8 +591,13 @@ def _axis_values(field: str) -> list[str]:
     return values
 
 
-def _params_for(axes: dict[str, str]) -> dict[str, Any]:
-    """Structural hyperparameters a coordinate needs for the given axes."""
+def _params_for(axes: dict[str, str], own_knobs: str | None = None) -> dict[str, Any]:
+    """Structural hyperparameters a coordinate needs for the given axes.
+
+    ``own_knobs`` names the varied axis of the viability pass: that axis runs
+    at its own declared config defaults, companions stay at the base box
+    (TODO95 S2). The base box shares one step size and one geometry width.
+    """
     params: dict[str, Any] = {"credit.lr": 0.01, "update.lr": 0.01}
     geometry = axes["geometry"]
     if geometry in {
@@ -626,10 +657,47 @@ def _params_for(axes: dict[str, str]) -> dict[str, Any]:
         "surrogate",
     }:
         params["credit.feedback_scale"] = 0.01
+    if own_knobs is not None:
+        params = _own_knob_overrides(axes, params, own_knobs)
     return params
 
 
-def _coordinate(axes: dict[str, str]) -> Coordinate:
+def _own_knob_overrides(
+    axes: dict[str, str], params: dict[str, Any], own_knobs: str
+) -> dict[str, Any]:
+    """The varied axis at its declared defaults, filtered by the system's verdict."""
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.harvest import harvest_schema
+    from computronium.experiment.sec_pilot import own_knob_params
+
+    # Which of the primitive's declared defaults this selection can use is the
+    # system's own availability verdict, not a second table.
+    base = Coordinate(
+        substrate=axes["substrate"],
+        geometry=axes["geometry"],
+        dynamics=axes["dynamics"],
+        plasticity=axes["plasticity"],
+        credit=axes["credit"],
+        update=axes["update"],
+        params=params,
+    )
+    active = harvest_schema().active(base)
+    kind = StructuralAxis(own_knobs)
+    accepted = set(active.values_for_axis(kind))
+    kept = {
+        key: value
+        for key, value in params.items()
+        if not key.startswith(f"{own_knobs}.")
+    }
+    kept.update({
+        key: value
+        for key, value in own_knob_params(own_knobs, axes[own_knobs]).items()
+        if key.split(".", 1)[-1] in accepted
+    })
+    return kept
+
+
+def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinate:
     return Coordinate(
         substrate=axes["substrate"],
         geometry=axes["geometry"],
@@ -637,7 +705,7 @@ def _coordinate(axes: dict[str, str]) -> Coordinate:
         plasticity=axes["plasticity"],
         credit=axes["credit"],
         update=axes["update"],
-        params=_params_for(axes),
+        params=_params_for(axes, own_knobs=own_knobs),
     )
 
 
@@ -660,6 +728,7 @@ def _is_legal(coord: Coordinate) -> tuple[bool, str | None]:
 def _iter_legal_coordinates(
     entry: PrimitiveCensusEntry,
     limit: int = 64,
+    own_knobs: bool = False,
 ) -> list[Coordinate]:
     """Compose-legal boxes for a primitive, nearest-to-default first.
 
@@ -674,9 +743,10 @@ def _iter_legal_coordinates(
     axis = _AXIS_FIELD.get(entry.axis, entry.axis)
     base = dict(_AXIS_DEFAULTS)
     base[axis] = primitive_key
+    own = axis if own_knobs else None
 
     def emit(axes: dict[str, str]) -> Coordinate | None:
-        coord = _coordinate(axes)
+        coord = _coordinate(axes, own_knobs=own)
         ok, _ = _is_legal(coord)
         return coord if ok else None
 
@@ -762,7 +832,7 @@ def _train_nearest(
     return None, None, last_error, tried, False
 
 
-def _unmeasured_cell(
+def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
     entry: PrimitiveCensusEntry,
     *,
     tried: int,
@@ -773,6 +843,7 @@ def _unmeasured_cell(
     criterion: str,
     axis: str,
     primitive_key: str,
+    own_knobs: bool = False,
 ) -> dict[str, Any]:
     """The cell a primitive emits when no compose-legal box trained."""
     if timed_out:
@@ -801,7 +872,7 @@ def _unmeasured_cell(
         }
     logger.exception(f"P0 every legal box failed to train: {entry.id}")
     inert = binding_reason(
-        axis, primitive_key, criterion=criterion, own_knobs=P0_OWN_KNOBS
+        axis, primitive_key, criterion=criterion, own_knobs=own_knobs
     )
     return {
         "track": "P0",
@@ -826,6 +897,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
     criterion: str,
     axis: str,
     primitive_key: str,
+    own_knobs: bool = False,
 ) -> dict[str, Any]:
     """Screen one primitive over its nearest compose-legal boxes.
 
@@ -835,7 +907,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
     (TODO95 D5), so no cell carries one.
     """
     box_binding = binding_reason(
-        axis, primitive_key, criterion=criterion, own_knobs=P0_OWN_KNOBS
+        axis, primitive_key, criterion=criterion, own_knobs=own_knobs
     )
     if not candidates:
         return {
@@ -862,6 +934,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             criterion=criterion,
             axis=axis,
             primitive_key=primitive_key,
+            own_knobs=own_knobs,
         )
 
     metrics = dict(eval_result.metrics)
@@ -908,7 +981,30 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
         "swapped": getattr(coord, axis) != primitive_key,
         "defect": defect,
         "walltime_s": eval_result.walltime_s,
+        "resource": resource_vector(metrics),
         "record": record.to_dict(),
+    }
+
+
+def _task_bar(task_id: str) -> Any:
+    from computronium.experiment.registry.task_registry import (
+        TaskRegistry,
+        primary_pass_bar,
+    )
+
+    return primary_pass_bar(TaskRegistry().get(task_id))
+
+
+def _refused_cell(
+    entry: PrimitiveCensusEntry, reason: str, ruler: str
+) -> dict[str, Any]:
+    """One cell a slice refuses before it is priced: the trigger is the row."""
+    return {
+        "track": "P0",
+        "primitive": entry.id,
+        "status": "UNAVAILABLE",
+        "reason": reason,
+        "ruler": ruler,
     }
 
 
@@ -918,11 +1014,14 @@ def run_p0_track(
     max_primitives: int = 6,
     device: str = "auto",
     breadth: str = "delta",
+    own_knobs: bool = False,
 ) -> dict[str, Any]:
     """Run Track P0: Breadth screen for primitives.
 
     Delta mode: only unscreened, defect, or failed primitives.
     Full mode: all primitives (re-screen everything).
+    ``own_knobs`` runs the viability box: each varied axis at its own declared
+    config defaults instead of the shared comparison box (TODO95 S2).
     """
     logger.info(f"Starting Track P0: {breadth} breadth screen")
 
@@ -975,26 +1074,51 @@ def run_p0_track(
         checkpoint_every_n=0,
     )
 
-    control_acc = _control_val_acc(schedule, device)
+    control_acc, control_spread = _control_stats(schedule, device)
     criterion, ruler = _ruler(schedule.task_id)
-    logger.info(f"P0 control at this box: val_acc={control_acc}")
+    bar = _task_bar(schedule.task_id)
+    logger.info(
+        f"P0 control at this box: val_acc={control_acc} "
+        f"(spread {control_spread}, bar {None if bar is None else bar.value})"
+    )
 
+    powered = control_acc is not None and (bar is None or control_acc > bar.value)
     results: list[dict[str, Any]] = []
-    for entry in entries_to_screen:
-        logger.info(f"P0 screening: {entry.id}")
-        axis = _AXIS_FIELD.get(entry.axis, entry.axis)
-        results.append(
-            _screen_coordinate(
-                entry,
-                _iter_legal_coordinates(entry, limit=P0_MAX_COORDINATES),
-                schedule,
-                control_acc=control_acc,
-                ruler=ruler,
-                criterion=criterion,
-                axis=axis,
-                primitive_key=entry.id.split(".")[-1],
-            )
+    if not powered:
+        # The control is inside the bar's band: the slice measures noise, so
+        # it is refused before it is priced (TODO95 S2).
+        reason = (
+            f"control at chance at this box: val_acc={control_acc} inside bar "
+            f"{None if bar is None else bar.value}; slice refused before it "
+            "is priced (TODO95 S2)"
         )
+        results = [_refused_cell(entry, reason, ruler) for entry in entries_to_screen]
+    else:
+        from computronium.experiment.sec_pilot import refusal_for
+
+        for entry in entries_to_screen:
+            family_reason = refusal_for(entry, schedule.task_id)
+            if family_reason is not None:
+                logger.info(f"P0 refused by task family: {entry.id}")
+                results.append(_refused_cell(entry, family_reason, ruler))
+                continue
+            logger.info(f"P0 screening: {entry.id}")
+            axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+            results.append(
+                _screen_coordinate(
+                    entry,
+                    _iter_legal_coordinates(
+                        entry, limit=P0_MAX_COORDINATES, own_knobs=own_knobs
+                    ),
+                    schedule,
+                    control_acc=control_acc,
+                    ruler=ruler,
+                    criterion=criterion,
+                    axis=axis,
+                    primitive_key=entry.id.split(".")[-1],
+                    own_knobs=own_knobs,
+                )
+            )
 
     total = len(entries_to_screen)
     measured_count = sum(1 for cell in results if cell["status"] == "MEASURED")
@@ -1002,7 +1126,7 @@ def run_p0_track(
     unavailable_count = sum(1 for cell in results if cell["status"] == "UNAVAILABLE")
     box_defect_count = sum(1 for cell in results if cell.get("within_ceiling") is False)
     defect_rate = defect_count / total if total > 0 else 0.0
-    pause_r = defect_rate > 0.2
+    pause_r = defect_rate > 0.2 or not powered
 
     result_summary = {
         "track": "P0",
@@ -1012,6 +1136,9 @@ def run_p0_track(
         "unavailable": unavailable_count,
         "box_defect": box_defect_count,
         "control_val_acc": control_acc,
+        "control_spread": control_spread,
+        "bar": None if bar is None else bar.value,
+        "own_knobs": own_knobs,
         "ruler": ruler,
         "base_box": _box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
         "defect_rate": defect_rate,
@@ -1304,6 +1431,7 @@ def _map_row(
             "walltime_s": cell.get("walltime_s"),
             "param_count": cell.get("param_count"),
             "within_ceiling": cell.get("within_ceiling"),
+            **(cell.get("resource") or {}),
         }
     if status == "measured":
         row["measurement"] = {
@@ -1443,6 +1571,11 @@ def main() -> None:
         action="store_true",
         help="Run P1 on measured, bound primitives from map.json (not just this P0 run)",
     )
+    parser.add_argument(
+        "--own-knobs",
+        action="store_true",
+        help="Run the viability box: each varied axis at its own defaults",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument(
         "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
@@ -1484,6 +1617,7 @@ def main() -> None:
             max_primitives=args.max_primitives,
             device=args.device,
             breadth=args.breadth,
+            own_knobs=args.own_knobs,
         )
         all_results.extend(p0_result["cells"])
 

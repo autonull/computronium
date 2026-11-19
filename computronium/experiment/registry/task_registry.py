@@ -6,6 +6,7 @@ and measured objectives per task. Wires F0 objective emission + F0b normalizatio
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -56,6 +57,10 @@ class TaskSpecEnriched:
     typical_lr: float = 1e-3
     tags: tuple[str, ...] = field(default_factory=tuple)
     description: str = ""
+    #: Held-out samples the primary ruler resolves a claim at. A bar read at
+    #: chance alone is a coin flip; with the resolution it carries its 2σ band
+    #: (TODO95 S2). ``None`` keeps the chance floor, uncalibrated.
+    resolution: int | None = None
 
     def measured_objectives(self) -> list[TaskObjective]:
         """Return only objectives that are actually measured."""
@@ -79,6 +84,11 @@ class PassBar:
     metric_key: str
     direction: str
     value: float
+    #: The chance/majority rate the bar starts from, and the band it gains
+    #: when the task declares its resolution (TODO95 S2).
+    floor: float = 0.0
+    resolution: int | None = None
+    sigma: float | None = None
 
 
 # Accuracy metrics whose random-guess rate is 1/output_dim.
@@ -108,7 +118,24 @@ def primary_pass_bar(spec: TaskSpecEnriched) -> PassBar | None:
             value = 1.0 / spec.output_dim
         else:
             return None
-    return PassBar(objective.payload_key, objective.direction, float(value))
+    floor = float(value)
+    sigma = (
+        math.sqrt(floor * (1.0 - floor) / spec.resolution)
+        if spec.resolution and 0.0 < floor < 1.0
+        else None
+    )
+    if sigma is not None and objective.direction == "maximize":
+        # The bar is the difficulty rate plus its 2σ noise band at the task's
+        # own resolution: a cell inside the band has cleared no floor.
+        value = floor + 2.0 * sigma
+    return PassBar(
+        objective.payload_key,
+        objective.direction,
+        float(value),
+        floor=floor,
+        resolution=spec.resolution,
+        sigma=sigma,
+    )
 
 
 def _graph_classification_spec(
@@ -361,6 +388,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         geometry_hint="conv",
         typical_batch_size=64,
         typical_lr=1e-3,
+        resolution=10_000,
         tags=("vision", "mnist", "classification"),
         description="MNIST handwritten digits",
     ),
@@ -394,6 +422,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         geometry_hint="feedforward",
         typical_batch_size=1,
         typical_lr=1e-3,
+        resolution=1_000,
         tags=("vision", "mnist", "continual", "classification"),
         description="Split-MNIST (5 binary tasks, batch-1 continual setting)",
     ),
@@ -997,6 +1026,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         geometry_hint="feedforward",
         typical_batch_size=32,
         typical_lr=1e-3,
+        resolution=30,
         tags=("tabular", "sklearn", "iris"),
         description="Iris flower classification",
     ),
