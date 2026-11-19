@@ -281,6 +281,167 @@ def kernel_stub_pass() -> list[Finding]:
     return findings
 
 
+#: Reasons a skip may name: the environment, never the capability.
+ENVIRONMENT_SKIPS = (
+    "CUDA",
+    "dataset",
+    "database",
+    "network",
+    "GPU",
+    "disk",
+    "platform",
+)
+
+
+def _skips(tree: ast.Module) -> Iterable[tuple[int, str]]:
+    """``(lineno, reason)`` for every ``pytest.skip`` call in ``tree``."""
+    for node in ast.walk(tree):
+        reason = node.args[0] if isinstance(node, ast.Call) and node.args else None
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "skip"
+            and isinstance(reason, ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            yield node.lineno, node.args[0].value
+
+
+def capability_skip() -> list[Finding]:
+    """A ``pytest.skip`` that names a capability, not the environment.
+
+    A capability skip is a test defect (TODO97 §0.1): the row is
+    ``unimplemented`` or ``defective`` and must fail instead.
+    """
+    findings = []
+    for path in _test_files():
+        tree = _parse(path)
+        if tree is None:
+            continue
+        for lineno, reason in _skips(tree):
+            if any(marker in reason for marker in ENVIRONMENT_SKIPS):
+                continue
+            if reason.startswith("declared:"):
+                continue
+            findings.append(
+                Finding(
+                    "capability_skip",
+                    f"{path.relative_to(ROOT)}:{lineno} {reason!r}",
+                )
+            )
+    return findings
+
+
+def _map_rows() -> Iterable[tuple[Path, str, dict]]:
+    for map_path in MAPS:
+        if not map_path.exists():
+            continue
+        document = json.loads(map_path.read_text(encoding="utf-8"))
+        for spec_id, row in document.get("primitives", {}).items():
+            yield map_path, spec_id, row
+
+
+def impossible_without_lock() -> list[Finding]:
+    """A quiet ``impossible`` row without a refusal test and a necessity test."""
+    findings = []
+    for map_path, spec_id, row in _map_rows():
+        if row.get("status") != "impossible":
+            continue
+        missing = [
+            key for key in ("refusal_test", "necessity_test") if not row.get(key)
+        ]
+        if missing:
+            findings.append(
+                Finding(
+                    "impossible_without_lock",
+                    f"{map_path.name}:{spec_id} missing {', '.join(missing)}",
+                )
+            )
+    return findings
+
+
+def quiet_row_without_lock() -> list[Finding]:
+    """A ``gap`` label anywhere, or an unimplemented row without a failing test.
+
+    ``unimplemented`` and ``defective`` rows are always failing tests; "gap"
+    is retired vocabulary (TODO97 §0.2). The register's ``refused`` means the
+    declared family excludes the task, so it is scope, not a row state.
+    """
+    findings = []
+    for map_path, spec_id, row in _map_rows():
+        status = row.get("status")
+        labelled = status == "gap" or "gap" in json.dumps(row).lower()
+        if labelled:
+            findings.append(Finding("quiet_row_without_lock", f"{spec_id}: gap label"))
+        if status in {"unimplemented", "defective"} and not row.get("failing_test"):
+            findings.append(
+                Finding(
+                    "quiet_row_without_lock",
+                    f"{map_path.name}:{spec_id} {status} without a failing test",
+                )
+            )
+    return findings
+
+
+def unaccounted_row() -> list[Finding]:
+    """A declared ``(primitive, family)`` row the map does not account for."""
+    from computronium.primitives.registry import REGISTRY
+
+    rows: dict[str, set[str]] = {}
+    for _map_path, spec_id, row in _map_rows():
+        rows.setdefault(spec_id, set()).add(row.get("task_family", row.get("task", "")))
+    statuses = {spec_id: row for _p, spec_id, row in _map_rows()}
+    findings = []
+    for spec in REGISTRY.values():
+        if spec.id not in statuses:
+            findings.append(Finding("unaccounted_row", f"{spec.id}: no map row"))
+    return findings
+
+
+def claim_count_mismatch() -> list[Finding]:
+    """A map's declared counts disagree with its own rows."""
+    findings = []
+    for map_path in MAPS:
+        if not map_path.exists():
+            continue
+        document = json.loads(map_path.read_text(encoding="utf-8"))
+        primitives = document.get("primitives", {})
+        inventory = document.get("inventory") or {}
+        for key, value in inventory.items():
+            claimed = isinstance(value, int) and key in {"rows", "primitives", "total"}
+            if claimed and value != len(primitives):
+                findings.append(
+                    Finding(
+                        "claim_count_mismatch",
+                        f"{map_path.name}: inventory.{key}={value} "
+                        f"but {len(primitives)} rows",
+                    )
+                )
+    return findings
+
+
+#: Names the migration deleted; a surviving alias is a compatibility crutch.
+RETIRED_NAMES = ("_FAMILY_OF_DOMAIN",)
+
+
+def compatibility_alias() -> list[Finding]:
+    """A surviving alias or deprecated re-export of a deleted shape."""
+    findings = []
+    for path in (ROOT / "computronium").rglob("*.py"):
+        if any(part in SKIP_PARTS for part in path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError, UnicodeDecodeError:
+            continue
+        for name in RETIRED_NAMES:
+            if name in text:
+                findings.append(
+                    Finding("compatibility_alias", f"{path.relative_to(ROOT)}: {name}")
+                )
+    return findings
+
+
 CHECKS: dict[str, Callable[[], list[Finding]]] = {
     "duplicate_bodies": duplicate_bodies,
     "empty_assertions": empty_assertions,
@@ -289,6 +450,12 @@ CHECKS: dict[str, Callable[[], list[Finding]]] = {
     "family_without_base": family_without_base,
     "near_chance_without_ladder": near_chance_without_ladder,
     "kernel_stub_pass": kernel_stub_pass,
+    "capability_skip": capability_skip,
+    "impossible_without_lock": impossible_without_lock,
+    "quiet_row_without_lock": quiet_row_without_lock,
+    "unaccounted_row": unaccounted_row,
+    "claim_count_mismatch": claim_count_mismatch,
+    "compatibility_alias": compatibility_alias,
 }
 
 #: The measurement checks need run output; the static gate is the commit gate.

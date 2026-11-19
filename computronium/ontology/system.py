@@ -608,7 +608,16 @@ class SystemConfig:
         )
 
     def _validate_diffusion_dynamics_geometry(self) -> None:
-        """Diffusion dynamics requires energy-based geometry (recurrent)."""
+        """Diffusion dynamics requires an energy-based, single-batch geometry.
+
+        A time-major geometry (``sequence=True``, which a credit's
+        ``requires_sequence`` declaration sets) unrolls its own time axis, so
+        the Langevin interaction energy sees a 3-D activation stack and refuses
+        it (measured: diffusion × eligibility_prop × recurrent raised
+        ``size of tensor a (3) must match tensor b (4)`` in
+        ``_compute_interaction_energy``). Diffusion iterates to a fixed point
+        over one batch; the two time axes cannot coexist.
+        """
         self._require_when(
             condition=self.dynamics.dynamics_type == "diffusion",
             allowed_values={"recurrent"},
@@ -616,6 +625,13 @@ class SystemConfig:
             actual_value=self.geometry.topology_type,
             context="diffusion dynamics requires recurrent geometry",
         )
+        if self.dynamics.dynamics_type == "diffusion" and self.geometry.sequence:
+            msg = (
+                "diffusion dynamics settle one batch; a time-major geometry "
+                "(geometry.sequence=True) unrolls a second time axis, which "
+                "the Langevin interaction energy cannot read"
+            )
+            raise ValueError(msg)
 
     def _validate_spike_integration_credit(self) -> None:
         """Spike integration dynamics requires temporal trace or target inversion credit."""

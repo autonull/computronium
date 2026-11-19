@@ -16,12 +16,17 @@ from importlib import import_module
 import pytest
 
 from computronium.ontology.substrate.spec import SubstrateSpec
+from computronium.primitives.cases import IMPOSSIBLE
 from computronium.primitives.registry import REGISTRY
 from tests.primitives._contract import make_case
 
 SPECS = tuple(
     sorted(
-        (spec for spec in REGISTRY.values() if spec.axis == "substrate"),
+        (
+            spec
+            for spec in REGISTRY.values()
+            if spec.axis == "substrate" and spec.id not in IMPOSSIBLE
+        ),
         key=lambda spec: spec.id,
     )
 )

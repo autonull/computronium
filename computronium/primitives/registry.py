@@ -4,7 +4,10 @@ Single source of truth for all primitives. Replaces ~380 per-primitive files.
 Generated from the existing spec.py files (TODO97 migration).
 """
 
-from computronium.primitives.protocol import PrimitiveSpec
+from computronium.primitives.protocol import (
+    _AXIS_REFERENCE_ENTRYPOINTS,
+    PrimitiveSpec,
+)
 
 # Map from primitive id to ontology class
 _ONTOLOGY_CLASSES = {
@@ -178,15 +181,6 @@ _CONFIG_FACTORIES = {
     "primitive.substrate.optical": "computronium.ontology.substrate.SubstrateConfig.optical",
 }
 
-# Map from axis to generic reference entrypoint
-_AXIS_REFERENCE_ENTRYPOINTS = {
-    "credit": "computronium.primitives.protocol._credit_reference",
-    "dynamics": "computronium.primitives.protocol._dynamics_reference",
-    "geometry": "computronium.primitives.protocol._geometry_reference",
-    "update": "computronium.primitives.protocol._update_reference",
-    "substrate": "computronium.primitives.protocol._substrate_reference",
-    "plasticity": "computronium.primitives.protocol._plasticity_reference",
-}
 
 _TASK_FAMILIES = {
     # Credit (19)

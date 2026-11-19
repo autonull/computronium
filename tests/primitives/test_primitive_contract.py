@@ -7,9 +7,11 @@ requested device. Those properties are axis-independent, so they are asserted
 once here over the registry; each axis adds only its own output contract.
 
 Seed-insensitivity is a *contract* of a law that cannot read a seed, not a gap.
-A substrate factory is a function of its spec (the case seed only names the
-case), and a no-op plasticity returns its input unchanged. Both are declared
-below with the reason; everything else must vary with the seed.
+A no-op plasticity returns its input unchanged, so both are declared below with
+the reason; everything else must vary with the seed.
+
+A row the declared space refuses is ``impossible``, and only such a row may be
+quiet: it carries a refusal test and a necessity test (TODO97 §0.4).
 """
 
 from __future__ import annotations
@@ -20,9 +22,14 @@ import pytest
 import torch
 
 from computronium.acceleration.parity import digest
+from computronium.primitives.cases import (
+    IMPOSSIBLE,
+    PrimitiveImpossibleError,
+    cell_config,
+)
+from computronium.primitives.protocol import PrimitiveCase
 from computronium.primitives.registry import list_primitives
 from tests.primitives._contract import (
-    axis_specs,
     case_class,
     config_reads,
     make_case,
@@ -34,7 +41,7 @@ from tests.primitives._contract import (
 
 SPECS = tuple(
     sorted(
-        (spec for spec in list_primitives()),
+        (spec for spec in list_primitives() if spec.id not in IMPOSSIBLE),
         key=lambda spec: spec.id,
     )
 )
@@ -42,10 +49,6 @@ IDS = [spec.id for spec in SPECS]
 
 #: Specs whose reference output legitimately ignores the seed.
 SEED_BLIND: dict[str, str] = {
-    **{
-        spec.id: "a substrate is a function of its spec, not of the case seed"
-        for spec in axis_specs("substrate")
-    },
     "primitive.plasticity.null": "no-op plasticity returns its input unchanged",
     "primitive.plasticity.substrate_coupled": "psi is the substrate coupling",
 }
@@ -109,7 +112,70 @@ def test_reference_follows_the_seed(spec) -> None:
 
 @pytest.mark.parametrize("spec", SPECS, ids=IDS)
 def test_reference_output_is_finite(spec) -> None:
-    """No reference output tensor contains NaN or infinity."""
+    """No reference output tensor contains NaN or infinity.
+
+    The two no-op plasticity laws return an empty plastic state by their
+    declared contract, so emptiness is theirs; every other row must emit a
+    tensor.
+    """
     output = reference(spec, make_case(spec, seed=0))
-    for tensor in tensors(output):
+    found = tensors(output)
+    if spec.id in SEED_BLIND:
+        return
+    assert found, spec.id
+    for tensor in found:
         assert tensor.isfinite().all(), spec.id
+
+
+@pytest.mark.parametrize("primitive_id", sorted(IMPOSSIBLE))
+def test_impossible_row_is_refused_by_a_declared_constraint(primitive_id: str) -> None:
+    """An impossible row's refusal names the constraint that refuses it."""
+    spec = next(spec for spec in list_primitives() if spec.id == primitive_id)
+    with pytest.raises(PrimitiveImpossibleError) as refused:
+        cell_config(spec)
+    assert refused.value.constraint == IMPOSSIBLE[primitive_id], spec.id
+
+
+@pytest.mark.parametrize("primitive_id", sorted(IMPOSSIBLE))
+def test_impossible_row_refusal_is_necessary(primitive_id: str) -> None:
+    """Compose accepts the cell; only the declared constraint refuses it.
+
+    The system's own builder and validator accept the combination, so the void
+    rule is the sole cause of the refusal — the necessity the taxonomy
+    requires of an ``impossible`` row.
+    """
+    from computronium.experiment.kernel.compose import compose_configs
+    from computronium.experiment.sec_loop import (
+        _AXIS_DEFAULTS,
+        _coordinate,
+    )
+    from computronium.primitives.cases import (
+        MICRO_INPUT_SHAPE,
+        MICRO_OUTPUT_DIM,
+        _declared_legal,
+        _family_task,
+    )
+
+    spec = next(spec for spec in list_primitives() if spec.id == primitive_id)
+    axes = dict(_AXIS_DEFAULTS)
+    axes[spec.axis] = primitive_id.rsplit(".", 1)[-1]
+    task = _family_task(spec, "mnist")
+
+    assert compose_configs(
+        coordinate=_coordinate(axes),
+        geometry={},
+        input_shape=MICRO_INPUT_SHAPE,
+        output_dim=MICRO_OUTPUT_DIM,
+    ), spec.id
+    assert _declared_legal(axes, task) == IMPOSSIBLE[primitive_id], spec.id
+
+
+def test_every_registered_row_is_measured_or_impossible() -> None:
+    """Every spec has a case, or is a counted impossible row."""
+    unaccounted = [
+        spec.id
+        for spec in list_primitives()
+        if spec.id not in IMPOSSIBLE
+        and not isinstance(make_case(spec, seed=0), PrimitiveCase)
+    ]
+    assert not unaccounted, unaccounted

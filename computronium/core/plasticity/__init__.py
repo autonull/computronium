@@ -7,6 +7,7 @@ from computronium.core.joint.transition import (
     PlasticityConfig,
     PlasticityPrimitive,
 )
+from computronium.core.plasticity._dispatch import plasticity_from_config
 from computronium.core.plasticity.adaptive_psi import (
     READOUT_REPLACING_PLASTICITIES,
     ConflictAdaptivePsiConfig,
@@ -52,6 +53,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "READOUT_REPLACING_PLASTICITIES",
     "PlasticityPrimitive",
     "NullPlasticity",
+    "plasticity_from_config",
     # Conflict-adaptive psi (TODO19 R7 — self-switching trace decay)
     "ConflictAdaptivePsiPlasticity",
     "ConflictAdaptivePsiConfig",

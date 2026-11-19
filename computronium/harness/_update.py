@@ -52,16 +52,24 @@ def update_pseudo_grads(
 ) -> list[torch.Tensor]:
     """Deterministic pseudo-gradients matching the geometry's parameter shapes.
 
+    One per learnable weight matrix, in ``_learnable_weight_names`` order: that
+    is the contract a credit emits, so an update rule pairs names and gradients
+    without a surplus check.
+
     Args:
         case: The case the update acts on.
         geometry: The geometry whose parameters the update changes.
 
     Returns:
-        One pseudo-gradient per geometry parameter, in parameter order.
+        One pseudo-gradient per learnable weight, in parameter order.
     """
+    from computronium.ontology._utils import _learnable_weight_names
+
     seed = case.config.get("seed", 0)
     generator = torch.Generator(device=case.multiplier.device).manual_seed(seed + 2000)
-    return [
-        torch.randn_like(param, generator=generator)
-        for param in geometry.params.values()
-    ]
+    weights = {
+        name: param
+        for name, param in geometry.params.items()
+        if name in _learnable_weight_names(geometry.params)
+    }
+    return [torch.randn_like(param, generator=generator) for param in weights.values()]

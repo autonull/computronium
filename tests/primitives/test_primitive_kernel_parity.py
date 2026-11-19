@@ -46,9 +46,9 @@ def test_every_implemented_kernel_declares_its_entrypoint() -> None:
 def test_kernel_matches_reference(spec, seed: int) -> None:
     """The kernel rung agrees with the reference within the parity tolerance."""
     if spec.axis in _FACTORY_AXES:
-        pytest.skip("geometry/substrate build an object, not a StepResult")
+        pytest.skip("declared: geometry/substrate_build_an_object")
     if spec.kernel_status != "implemented":
-        pytest.skip("kernel absent: the reference path is the only rung")
+        pytest.skip("declared: kernel_status='absent'")
 
     adapter = ReferenceAdapter(spec)
     reference = adapter.reference_step(_case(spec, seed))

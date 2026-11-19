@@ -13,15 +13,6 @@ from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
 from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
 )
-from computronium.core.plasticity import (
-    closed_form_ridge_from_config,
-    conflict_adaptive_from_config,
-    create_fast_weight_plasticity,
-    create_routing_plasticity,
-    create_rule_state_plasticity,
-    create_substrate_coupled_plasticity,
-    create_temporal_psi_plasticity,
-)
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -523,25 +514,9 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
 
     # Instantiate plasticity from config — unknown values raise (no silent
     # Null fallback: null plasticity must be declared, not defaulted).
-    plasticity_type = plasticity.plasticity_type.lower()
-    if plasticity_type == "routing":
-        plasticity_instance = create_routing_plasticity(plasticity)
-    elif plasticity_type == "fast_weights":
-        plasticity_instance = create_fast_weight_plasticity(plasticity)
-    elif plasticity_type == "substrate_coupled":
-        plasticity_instance = create_substrate_coupled_plasticity(plasticity)
-    elif plasticity_type == "rule_state":
-        plasticity_instance = create_rule_state_plasticity(plasticity)
-    elif plasticity_type == "temporal_psi":
-        plasticity_instance = create_temporal_psi_plasticity(plasticity)
-    elif plasticity_type == "conflict_adaptive":
-        plasticity_instance = conflict_adaptive_from_config(plasticity)
-    elif plasticity_type == "closed_form_ridge":
-        plasticity_instance = closed_form_ridge_from_config(plasticity)
-    elif plasticity_type == "null":
-        plasticity_instance = NullPlasticity()
-    else:
-        raise ValueError(f"Unknown plasticity_type: {plasticity_type!r}")
+    from computronium.core.plasticity import plasticity_from_config
+
+    plasticity_instance = plasticity_from_config(plasticity)
 
     return compose_joint_system(
         substrate_instance,

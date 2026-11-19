@@ -4,6 +4,10 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-19] ✅ **S5d COMPLETE (the hard gate)** — `ReferenceAdapter` is real: `make_task_case` builds the axis micro-case from a composed `SystemConfig`, and `reference_step` runs the law through `cases.step`, with no exception swallowed anywhere. `computronium/primitives/cases.py` is the one case/step layer (one builder and one step per axis; the per-primitive difference is data). The declared space is now the legality oracle through `_compiled_void_constraints`, so a law that only runs beside a particular companion gets that companion: credit laws on recurrent/module geometry, sequence credits on a time-major batch, diffusion on a settled geometry. Green: `tests/primitives` 666 passed / 152 declared skips; contract suite 519 passed / 2 declared no-op skips; parity 14 passed / 150 declared absent-kernel skips; the six property locks + the extension path 71 passed. Deleted `test_primitive_wiring.py` (~284 duplicate rung-0 tests, 12 capability skips) — the adapter contract plus the six axis contracts carry the same rungs. Fixed along the way: `update_pseudo_grads` emitted one gradient per parameter instead of one per learnable weight (the credit contract's order); `SystemConfig.validate` now refuses a diffusion settling on a time-major geometry (measured crash in `_compute_interaction_energy`); the plasticity dispatch is one `plasticity_from_config`; `_credit_from_config` is the one credit dispatcher.
+
+**Progress:** [2026-11-19] ✅ **S6c COMPLETE (the audit reads all 13 predicates)** — the six completeness predicates landed in `scripts/audit.py`: `capability_skip`, `impossible_without_lock`, `quiet_row_without_lock`, `unaccounted_row`, `claim_count_mismatch`, `compatibility_alias`. A skip names the environment, or the row's own declaration (`declared:`), and nothing else. `--static` reports 30 findings: 22 environment/declared skips, **7 true findings** (6 capability skips in `tests/property/biology/test_biology_axioms.py`, 1 retired `_FAMILY_OF_DOMAIN` in `experiment/sec_pilot.py`). `unaccounted_row`, `claim_count_mismatch`, and `impossible_without_lock` are already 0.
+
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
 **Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion on vision is **unimplemented**: feedback alignment / learned inverses are missing, so the transpose feedback vanishes (val_acc=0.119 ≈ chance 0.10). Works on graph (0.68 @ 6 epochs). The failing lock is the ladder cell; the close condition is a feedback-alignment primitive.
@@ -41,10 +45,10 @@ question.
 | S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
 | S5b | Screen graph family primitives | ✅ DONE (9 measured) |
 | S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — unimplemented (feedback alignment missing); graph works |
-| S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ⏳ OPEN — 116 failing tests (defect lock) |
+| S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ✅ DONE — cases.py; contract 519 passed, axis contracts green |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
-| S6b | Audit measurement gate (5 unimplemented ladders) | ⏳ PENDING |
-| S6c | Six completeness predicates in `scripts/audit.py` | ⏳ PENDING — spec in §8.2 |
+| S6b | Audit measurement gate (5 unimplemented ladders) | ⏳ PENDING — the 5 ladder records |
+| S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 30 findings, 7 true (queue below) |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
 
 ## 0. The three states (binding amendment, 2026-11-19)
@@ -119,14 +123,16 @@ Rules:
 screen, ladder, or kernel precedes it. An item closes on a claim, a named
 verdict, or a capability that works — never on "tests consolidated".
 
-1. **S5d** — make `ReferenceAdapter.make_task_case` compose the typed config
-   (`compose_configs`) and the reference instantiate via
-   `geometry_from_config` / `substrate_from_config` / `*_from_config`. Gate:
-   `uv run python -m pytest tests/primitives/test_primitive_contract.py -q`.
-2. **S6c** — implement the six completeness predicates in `scripts/audit.py`:
-   capability skip, unproved impossible, quiet failure, unaccounted row, count
-   mismatch, compatibility alias. Gate: `uv run python scripts/audit.py
-   --static` exits 0 and the first unaccounted row is reported.
+1. ~~**S5d**~~ ✅ done. The gate is `tests/primitives` (666 passed, 152
+   declared skips) and the six property locks (65 passed).
+2. ~~**S6c**~~ ✅ done. The audit's seven remaining findings are the queue:
+   **a.** `tests/property/biology/test_biology_axioms.py:200,299,311,337,402,414`
+   skips name a mechanism the test cannot find (a Tile-FA shape pair, a
+   trajectory short enough to be undefined). Each is `unimplemented` or
+   `defective`: give it a failing test or the primitive it needs.
+   **b.** `computronium/experiment/sec_pilot.py` still carries
+   `_FAMILY_OF_DOMAIN`; replace it with `TaskSpecEnriched.task_families`
+   (§6.2) and delete the table.
 3. **S6b** — run the 5 ladders the audit reports
    (`forward_tangent`, `local_contrastive`, `pc_alm`, `random_projections`,
    `target_inversion`) and write each record into the map's `deep_dive` (or a
