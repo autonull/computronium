@@ -188,95 +188,14 @@ _CONFIG_FACTORIES = {
     "primitive.substrate.optical": "computronium.ontology.substrate.SubstrateConfig.optical",
 }
 
-# Map from primitive id to reference entrypoint
-_REFERENCE_ENTRYPOINTS = {
-    # Credit (19)
-    "primitive.credit_assignment.random_projections": "computronium.primitives.credit_assignment.random_projections.reference.step",
-    "primitive.credit_assignment.target_inversion": "computronium.primitives.credit_assignment.target_inversion.reference.step",
-    "primitive.credit_assignment.pc_alm": "computronium.primitives.credit_assignment.pc_alm.reference.step",
-    "primitive.credit_assignment.thermodynamic_contrast": "computronium.primitives.credit_assignment.thermodynamic_contrast.reference.step",
-    "primitive.credit_assignment.local_goodness": "computronium.primitives.credit_assignment.local_goodness.reference.step",
-    "primitive.credit_assignment.temporal_trace": "computronium.primitives.credit_assignment.temporal_trace.reference.step",
-    "primitive.credit_assignment.homeostatic": "computronium.primitives.credit_assignment.homeostatic.reference.step",
-    "primitive.credit_assignment.pepita": "computronium.primitives.credit_assignment.pepita.reference.step",
-    "primitive.credit_assignment.gradient": "computronium.primitives.credit_assignment.gradient.reference.step",
-    "primitive.credit_assignment.local_contrastive": "computronium.primitives.credit_assignment.local_contrastive.reference.step",
-    "primitive.credit_assignment.hybrid": "computronium.primitives.credit_assignment.hybrid.reference.step",
-    "primitive.credit_assignment.forward_tangent": "computronium.primitives.credit_assignment.forward_tangent.reference.step",
-    "primitive.credit_assignment.score_function": "computronium.primitives.credit_assignment.score_function.reference.step",
-    "primitive.credit_assignment.zeroth_order": "computronium.primitives.credit_assignment.zeroth_order.reference.step",
-    "primitive.credit_assignment.surrogate": "computronium.primitives.credit_assignment.surrogate.reference.step",
-    "primitive.credit_assignment.local_supervision": "computronium.primitives.credit_assignment.local_supervision.reference.step",
-    "primitive.credit_assignment.eligibility_prop": "computronium.primitives.credit_assignment.eligibility_prop.reference.step",
-    "primitive.credit_assignment.unbiased_rtrl": "computronium.primitives.credit_assignment.unbiased_rtrl.reference.step",
-    "primitive.credit_assignment.rtrl_reference": "computronium.primitives.credit_assignment.rtrl_reference.reference.step",
-
-    # Dynamics (8)
-    "primitive.state_dynamics.instantaneous": "computronium.primitives.state_dynamics.instantaneous.reference.step",
-    "primitive.state_dynamics.predictive_settling": "computronium.primitives.state_dynamics.predictive_settling.reference.step",
-    "primitive.state_dynamics.energy_minimization": "computronium.primitives.state_dynamics.energy_minimization.reference.step",
-    "primitive.state_dynamics.error_predictive_coding": "computronium.primitives.state_dynamics.error_predictive_coding.reference.step",
-    "primitive.state_dynamics.pc_alm": "computronium.primitives.state_dynamics.pc_alm.reference.step",
-    "primitive.state_dynamics.diffusion": "computronium.primitives.state_dynamics.diffusion.reference.step",
-    "primitive.state_dynamics.lazy": "computronium.primitives.state_dynamics.lazy.reference.step",
-    "primitive.state_dynamics.spike_integration": "computronium.primitives.state_dynamics.spike_integration.reference.step",
-
-    # Geometry (12)
-    "primitive.geometry.feedforward": "computronium.primitives.geometry.feedforward.reference.forward",
-    "primitive.geometry.conv": "computronium.primitives.geometry.conv.reference.forward",
-    "primitive.geometry.graph": "computronium.primitives.geometry.graph.reference.forward",
-    "primitive.geometry.recurrent": "computronium.primitives.geometry.recurrent.reference.forward",
-    "primitive.geometry.nca": "computronium.primitives.geometry.nca.reference.forward",
-    "primitive.geometry.tile": "computronium.primitives.geometry.tile.reference.forward",
-    "primitive.geometry.tile_mesh": "computronium.primitives.geometry.tile_mesh.reference.forward",
-    "primitive.geometry.ntm": "computronium.primitives.geometry.ntm.reference.forward",
-    "primitive.geometry.attention": "computronium.primitives.geometry.attention.reference.forward",
-    "primitive.geometry.spatial_lattice": "computronium.primitives.geometry.spatial_lattice.reference.forward",
-    "primitive.geometry.routing": "computronium.primitives.geometry.routing.reference.forward",
-    "primitive.geometry.causal_transformer": "computronium.primitives.geometry.causal_transformer.reference.forward",
-
-    # Update (18)
-    "primitive.parameter_update.adafactor": "computronium.primitives.parameter_update.adafactor.reference.step",
-    "primitive.parameter_update.adam": "computronium.primitives.parameter_update.adam.reference.step",
-    "primitive.parameter_update.bayesian_online": "computronium.primitives.parameter_update.bayesian_online.reference.step",
-    "primitive.parameter_update.cascade_synapse": "computronium.primitives.parameter_update.cascade_synapse.reference.step",
-    "primitive.parameter_update.elastic_consolidation": "computronium.primitives.parameter_update.elastic_consolidation.reference.step",
-    "primitive.parameter_update.euclidean": "computronium.primitives.parameter_update.euclidean.reference.step",
-    "primitive.parameter_update.lion": "computronium.primitives.parameter_update.lion.reference.step",
-    "primitive.parameter_update.local_adam": "computronium.primitives.parameter_update.local_adam.reference.step",
-    "primitive.parameter_update.mean_norm": "computronium.primitives.parameter_update.mean_norm.reference.step",
-    "primitive.parameter_update.muon": "computronium.primitives.parameter_update.muon.reference.step",
-    "primitive.parameter_update.natural_gradient": "computronium.primitives.parameter_update.natural_gradient.reference.step",
-    "primitive.parameter_update.ortho_adam": "computronium.primitives.parameter_update.ortho_adam.reference.step",
-    "primitive.parameter_update.quantized_adam": "computronium.primitives.parameter_update.quantized_adam.reference.step",
-    "primitive.parameter_update.riemannian_orthogonal": "computronium.primitives.parameter_update.riemannian_orthogonal.reference.step",
-    "primitive.parameter_update.role_split": "computronium.primitives.parameter_update.role_split.reference.step",
-    "primitive.parameter_update.schedule_free": "computronium.primitives.parameter_update.schedule_free.reference.step",
-    "primitive.parameter_update.spectral_constrained": "computronium.primitives.parameter_update.spectral_constrained.reference.step",
-    "primitive.parameter_update.synaptic_intelligence": "computronium.primitives.parameter_update.synaptic_intelligence.reference.step",
-
-    # Plasticity (8)
-    "primitive.plasticity.null": "computronium.primitives.plasticity.null.reference.step",
-    "primitive.plasticity.fast_weights": "computronium.primitives.plasticity.fast_weights.reference.step",
-    "primitive.plasticity.routing": "computronium.primitives.plasticity.routing.reference.step",
-    "primitive.plasticity.closed_form_ridge": "computronium.primitives.plasticity.closed_form_ridge.reference.step",
-    "primitive.plasticity.temporal_psi": "computronium.primitives.plasticity.temporal_psi.reference.step",
-    "primitive.plasticity.conflict_adaptive": "computronium.primitives.plasticity.conflict_adaptive.reference.step",
-    "primitive.plasticity.rule_state": "computronium.primitives.plasticity.rule_state.reference.step",
-    "primitive.plasticity.substrate_coupled": "computronium.primitives.plasticity.substrate_coupled.reference.step",
-
-    # Substrate (10)
-    "primitive.substrate.digital": "computronium.primitives.substrate.digital.reference.step",
-    "primitive.substrate.ternary": "computronium.primitives.substrate.ternary.reference.step",
-    "primitive.substrate.analog": "computronium.primitives.substrate.analog.reference.step",
-    "primitive.substrate.memristive": "computronium.primitives.substrate.memristive.reference.step",
-    "primitive.substrate.photonic": "computronium.primitives.substrate.photonic.reference.step",
-    "primitive.substrate.quantum": "computronium.primitives.substrate.quantum.reference.step",
-    "primitive.substrate.sparse": "computronium.primitives.substrate.sparse.reference.step",
-    "primitive.substrate.neuromorphic": "computronium.primitives.substrate.neuromorphic.reference.step",
-    "primitive.substrate.noisy": "computronium.primitives.substrate.noisy.reference.step",
-    "primitive.substrate.complex": "computronium.primitives.substrate.complex.reference.step",
-    "primitive.substrate.optical": "computronium.primitives.substrate.optical.reference.step",
+# Map from axis to generic reference entrypoint
+_AXIS_REFERENCE_ENTRYPOINTS = {
+    "credit": "computronium.primitives.protocol._credit_reference",
+    "dynamics": "computronium.primitives.protocol._dynamics_reference",
+    "geometry": "computronium.primitives.protocol._geometry_reference",
+    "update": "computronium.primitives.protocol._update_reference",
+    "substrate": "computronium.primitives.protocol._substrate_reference",
+    "plasticity": "computronium.primitives.protocol._plasticity_reference",
 }
 
 # Map from primitive id to kernel entrypoint
@@ -1263,6 +1182,21 @@ _PRIMITIVE_IDS = [
     "primitive.substrate.sparse",
     "primitive.substrate.ternary",
 ]
+
+# Build reference entrypoints from axis map
+_REFERENCE_ENTRYPOINTS = {}
+for pid in _PRIMITIVE_IDS:
+    axis = pid.split(".")[1]
+    axis_map = {
+        "credit_assignment": "credit",
+        "state_dynamics": "dynamics",
+        "geometry": "geometry",
+        "plasticity": "plasticity",
+        "substrate": "substrate",
+        "parameter_update": "update",
+    }
+    runtime_axis = axis_map.get(axis, axis)
+    _REFERENCE_ENTRYPOINTS[pid] = _AXIS_REFERENCE_ENTRYPOINTS[runtime_axis]
 
 # Build the registry
 REGISTRY: dict[str, PrimitiveSpec] = {pid: _make_spec(pid) for pid in _PRIMITIVE_IDS}

@@ -34,6 +34,8 @@ class GeometryCase:
     forward_shape: tuple[int, ...]
     route_input: torch.Tensor
     route_shape: tuple[int, ...]
+    edge_index: torch.Tensor | None = None
+    batch: torch.Tensor | None = None
 
 
 def _build_cases() -> dict[str, GeometryCase]:
@@ -106,13 +108,16 @@ def _build_cases() -> dict[str, GeometryCase]:
             config=GeometryConfig.graph(
                 input_dim=16,
                 output_dim=5,
-                edge_index=[[0, 1], [1, 0]],
+                edge_index=[[0, 1, 2, 3], [1, 2, 3, 0]],
                 hidden_dims=(32,),
+                pooling="mean",
             ),
-            forward_input=sample(2, 16),
+            forward_input=sample(4, 16),
             forward_shape=(2, 5),
-            route_input=sample(2, 16),
-            route_shape=(2, 5),
+            route_input=sample(4, 16),
+            route_shape=(4, 5),
+            edge_index=torch.tensor([[0, 1, 2, 3], [1, 2, 3, 0]], dtype=torch.long),
+            batch=torch.tensor([0, 0, 1, 1], dtype=torch.long),
         ),
         "attention": GeometryCase(
             config=GeometryConfig.attention(
@@ -162,6 +167,15 @@ def _build_cases() -> dict[str, GeometryCase]:
             route_input=torch.randint(0, 32, (BATCH, 16), generator=generator),
             route_shape=(BATCH * 16, 32),
         ),
+        "routing": GeometryCase(
+            config=GeometryConfig.routing(
+                input_dim=16, output_dim=5, hidden_dims=(32,), num_experts=4, top_k=2
+            ),
+            forward_input=sample(BATCH, 16),
+            forward_shape=(BATCH, 5),
+            route_input=sample(BATCH, 16),
+            route_shape=(BATCH, 5),
+        ),
     }
 
 
@@ -198,14 +212,29 @@ def test_geometry_forward_route_and_logits(coordinate: str) -> None:
     )
     assert torch.isfinite(routed.float()).all(), f"{coordinate}: non-finite route"
 
-    output = geometry.forward(case.forward_input, substrate)
+    # Graph classification mode needs edge_index and batch
+    if coordinate == "graph":
+        output = geometry.forward(
+            case.forward_input,
+            substrate,
+            edge_index=case.edge_index,
+            batch=case.batch,
+        )
+        acts = geometry.forward_with_intermediates(
+            case.forward_input,
+            substrate,
+            edge_index=case.edge_index,
+            batch=case.batch,
+        )
+    else:
+        output = geometry.forward(case.forward_input, substrate)
+        acts = geometry.forward_with_intermediates(case.forward_input, substrate)
     assert tuple(output.shape) == case.forward_shape, (
         f"{coordinate}: forward emitted {tuple(output.shape)}, "
         f"declared {case.forward_shape}"
     )
     assert torch.isfinite(output.float()).all(), f"{coordinate}: non-finite forward"
 
-    acts = geometry.forward_with_intermediates(case.forward_input, substrate)
     assert acts, f"{coordinate}: forward_with_intermediates returned no acts"
     logits = acts[-1]
     assert logits.shape[-1] == case.config.output_dim, (

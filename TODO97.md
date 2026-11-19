@@ -4,7 +4,7 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
-**Progress:** [2026-11-19] ✅ **S1–S3 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted.
+**Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
@@ -21,8 +21,8 @@ question.
 | S1 | Migrate primitives to 3-file protocol + registry | ✅ DONE |
 | S2 | Delete ~380 per-primitive files + generated tests | ✅ DONE |
 | S3 | Verify 6 property locks pass | ✅ DONE |
-| S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ⏳ NEXT |
-| S5 | First family base (graph) + first ladder (target_inversion) | ⏳ PENDING |
+| S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ✅ DONE |
+| S5 | First family base (graph) + first ladder (target_inversion) | ⏳ NEXT |
 | S6 | Audit with `scripts/audit.py` | ⏳ PENDING |
 
 ---
@@ -540,7 +540,7 @@ wired; no ladder runs before its family has a base.
 ## 11. First commands
 
 ```bash
-# 0. Baseline
+# 0. Baseline (DONE)
 git tag pre-todo97
 uv run python -m pytest \
   tests/property/test_legality_compile_lock.py \
@@ -548,9 +548,9 @@ uv run python -m pytest \
   tests/property/test_binding_condition.py \
   tests/property/test_box_identity.py \
   tests/property/test_screen_has_no_verdict.py \
-  tests/property/test_extension_path.py -q
+  tests/acceptance/test_extension_path.py -q
 
-# 1. Migrate (one commit)
+# 1. Migrate (one commit) (DONE)
 #    add computronium/primitives/{__init__,protocol,registry}.py
 #    delete ~380 per-primitive files; update six locks
 uv run python -m pytest tests/property/test_legality_compile_lock.py \
@@ -558,13 +558,13 @@ uv run python -m pytest tests/property/test_legality_compile_lock.py \
   tests/property/test_binding_condition.py \
   tests/property/test_box_identity.py \
   tests/property/test_screen_has_no_verdict.py \
-  tests/property/test_extension_path.py -q
+  tests/acceptance/test_extension_path.py -q
 
-# 2. Fix the cheap wires
+# 2. Fix the cheap wires (DONE)
 #    graph batching; conv/pc_alm/EPC one-step probes
-uv run python -m pytest tests/ontology/test_geometry.py -q
+uv run python scripts/probes/test_one_step_wiring.py
 
-# 3. First family base (graph) + first ladder (target_inversion)
+# 3. First family base (graph) + first ladder (target_inversion) (NEXT)
 uv run python -m computronium.experiment.sec_loop \
   --track P0 --out results/sec --own-knobs --axis credit
 

@@ -15,44 +15,30 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from computronium.acceleration.registry import all_specs
+from computronium.primitives.registry import REGISTRY, list_primitives
+from computronium.primitives.protocol import PrimitiveCase, PrimitiveSpec, ReferenceAdapter
 
 if TYPE_CHECKING:
-    from computronium.acceleration.spec import ImplementationSpec
-
-#: Reference entrypoints whose callable takes the case's own spec.
-_TAKES_SPEC = frozenset({"make_substrate"})
+    from computronium.primitives.protocol import PrimitiveSpec as PrimitiveSpecType
 
 
-def axis_specs(axis: str) -> tuple[ImplementationSpec, ...]:
+def axis_specs(axis: str) -> tuple[PrimitiveSpec, ...]:
     """Every primitive spec on ``axis``, sorted by ID."""
-    return tuple(
-        sorted(
-            (
-                spec
-                for spec in all_specs()
-                if spec.kind == "primitive" and spec.axis == axis
-            ),
-            key=lambda spec: spec.id,
-        )
-    )
+    return tuple(sorted(list_primitives(axis), key=lambda spec: spec.id))
 
 
-def package(spec: ImplementationSpec) -> str:
-    """The primitive package of ``spec`` (the reference module's parent)."""
-    return spec.reference_entrypoint.rpartition(".")[0].rpartition(".")[0]
+def make_case(spec: PrimitiveSpec, **kwargs: Any) -> PrimitiveCase:
+    """Build a universal case from the spec."""
+    adapter = ReferenceAdapter(spec)
+    task_id = kwargs.get("task_id", "mnist")
+    box = kwargs.get("box", {})
+    seed = kwargs.get("seed", 0)
+    return adapter.make_task_case(task_id, box, seed)
 
 
-def make_case(spec: ImplementationSpec, **kwargs: Any) -> Any:
-    """Build a case from the spec's own cases module."""
-    return import_module(f"{package(spec)}.cases").make_case(**kwargs)
-
-
-def case_class(spec: ImplementationSpec) -> type | None:
-    """The ``Case`` type the spec's cases module declares, if it declares one."""
-    module = import_module(f"{package(spec)}.cases")
-    declared = getattr(module, "Case", None)
-    return declared if isinstance(declared, type) else None
+def case_class(spec: PrimitiveSpec) -> type | None:
+    """The case type is always PrimitiveCase now."""
+    return PrimitiveCase
 
 
 class RecordingConfig(dict):
@@ -73,19 +59,12 @@ class RecordingConfig(dict):
         return super().get(key, default)
 
 
-def case_factories(spec: ImplementationSpec) -> tuple[str, ...]:
-    """Every case factory the spec's cases module declares."""
-    module = import_module(f"{package(spec)}.cases")
-    return tuple(
-        sorted(
-            name
-            for name in dir(module)
-            if name.startswith("make_case") and callable(getattr(module, name))
-        )
-    )
+def case_factories(spec: PrimitiveSpec) -> tuple[str, ...]:
+    """Case factories are not per-primitive anymore."""
+    return ("make_task_case",)
 
 
-def config_reads(spec: ImplementationSpec) -> frozenset[str]:
+def config_reads(spec: PrimitiveSpec) -> frozenset[str]:
     """The ``case.config`` keys the spec's reference reads, statically and at run time.
 
     A case factory that omits a key its own reference knows about silently uses
@@ -129,7 +108,7 @@ def _literal_config_read(node: ast.AST, aliases: set[str]) -> str | None:
     return None
 
 
-def _static_config_reads(spec: ImplementationSpec) -> frozenset[str]:
+def _static_config_reads(spec: PrimitiveSpec) -> frozenset[str]:
     """Literal keys read from ``case.config`` or a local alias, by AST."""
     module = import_module(spec.reference_entrypoint.rpartition(".")[0])
     tree = ast.parse(inspect.getsource(module))
@@ -162,7 +141,7 @@ def _static_config_reads(spec: ImplementationSpec) -> frozenset[str]:
     return frozenset(keys)
 
 
-def _runtime_config_reads(spec: ImplementationSpec) -> frozenset[str]:
+def _runtime_config_reads(spec: PrimitiveSpec) -> frozenset[str]:
     """Keys read from the case config while the reference runs."""
     case = make_case(spec, seed=0)
     config = getattr(case, "config", None)
@@ -174,16 +153,10 @@ def _runtime_config_reads(spec: ImplementationSpec) -> frozenset[str]:
     return frozenset(read)
 
 
-def call(spec: ImplementationSpec, entrypoint: str, case: Any) -> Any:
-    """Call ``entrypoint`` with ``case`` (or its spec for a substrate factory)."""
-    module_path, _, function_name = entrypoint.rpartition(".")
-    function = getattr(import_module(module_path), function_name)
-    return function(case.spec) if function_name in _TAKES_SPEC else function(case)
-
-
-def reference(spec: ImplementationSpec, case: Any) -> Any:
+def reference(spec: PrimitiveSpec, case: Any) -> Any:
     """Run the spec's reference entrypoint on ``case``."""
-    return call(spec, spec.reference_entrypoint, case)
+    adapter = ReferenceAdapter(spec)
+    return adapter.reference_step(case)
 
 
 def payload(case: Any) -> dict[str, Any]:

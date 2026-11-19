@@ -2508,7 +2508,7 @@ class PCALMDynamics(_SettleTelemetry):
             else:
                 metrics = state.metrics or {}
                 set_state_field(state, "metrics", metrics)
-                metrics["dual_vars_free"] = len(dual_vars_for_state)
+                metrics["dual_vars_free"] = dual_vars_for_state
         else:
             set_state_field(state, "nudged_state", acts)
             if hasattr(state, "dual_vars"):
@@ -2519,8 +2519,8 @@ class PCALMDynamics(_SettleTelemetry):
             else:
                 metrics = state.metrics or {}
                 set_state_field(state, "metrics", metrics)
-                metrics["dual_vars"] = len(dual_vars_for_state)
-                metrics["dual_vars_nudged"] = len(dual_vars_for_state)
+                metrics["dual_vars"] = dual_vars_for_state
+                metrics["dual_vars_nudged"] = dual_vars_for_state
         set_state_field(state, "activations", acts)
         return state
 

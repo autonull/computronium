@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from computronium.acceleration.parity import digest
-from computronium.acceleration.registry import all_specs
+from computronium.primitives.registry import list_primitives
 from tests.primitives._contract import (
     axis_specs,
     case_class,
@@ -34,7 +34,7 @@ from tests.primitives._contract import (
 
 SPECS = tuple(
     sorted(
-        (spec for spec in all_specs() if spec.kind == "primitive"),
+        (spec for spec in list_primitives()),
         key=lambda spec: spec.id,
     )
 )
