@@ -11,15 +11,16 @@ import ast
 import dataclasses
 import inspect
 from importlib import import_module
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
-from computronium.primitives.registry import REGISTRY, list_primitives
-from computronium.primitives.protocol import PrimitiveCase, PrimitiveSpec, ReferenceAdapter
-
-if TYPE_CHECKING:
-    from computronium.primitives.protocol import PrimitiveSpec as PrimitiveSpecType
+from computronium.primitives.protocol import (
+    PrimitiveCase,
+    PrimitiveSpec,
+    ReferenceAdapter,
+)
+from computronium.primitives.registry import list_primitives
 
 
 def axis_specs(axis: str) -> tuple[PrimitiveSpec, ...]:
@@ -57,11 +58,6 @@ class RecordingConfig(dict):
     def get(self, key: str, default: Any = None) -> Any:
         self.read.add(key)
         return super().get(key, default)
-
-
-def case_factories(spec: PrimitiveSpec) -> tuple[str, ...]:
-    """Case factories are not per-primitive anymore."""
-    return ("make_task_case",)
 
 
 def config_reads(spec: PrimitiveSpec) -> frozenset[str]:

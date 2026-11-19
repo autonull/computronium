@@ -6,13 +6,15 @@ instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
-**Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion ladder on vision: capability gap (transpose feedback vanishes; val_acc=0.119 ≈ chance 0.10). Works on graph family (0.68 @ 6 epochs). Needs feedback alignment or learned inverses for vision.
+**Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion on vision is **unimplemented**: feedback alignment / learned inverses are missing, so the transpose feedback vanishes (val_acc=0.119 ≈ chance 0.10). Works on graph (0.68 @ 6 epochs). The failing lock is the ladder cell; the close condition is a feedback-alignment primitive.
 **Progress:** [2026-11-19] ✅ **S4 COMPLETE (extended)** — All 75 primitives pass Rung 0 wiring tests (284 tests, 16 skipped). Created `tests/primitives/test_primitive_wiring.py` covering: instantiate, forward pass, pseudo-gradients (finite & non-zero for error-aware), settle convergence. 6/6 property locks still pass.
-**Progress:** [2026-11-19] ✅ **S6a AUDIT GATE INSTALLED** — `scripts/audit.py` implements the seven §8.2 predicates: duplicate test bodies, empty assertions, per-primitive subdirectories, primitive-without-spec, family-without-base, near-chance-without-ladder, kernel-stub-pass. Static checks are green. It reports the 5 near-chance bound rows that still need a ladder record (S6b).
+**Progress:** [2026-11-19] ✅ **S6a AUDIT GATE INSTALLED** — `scripts/audit.py` implements the seven structural §8.2 predicates (duplicate test bodies, empty assertions, per-primitive subdirectories, primitive-without-spec, family-without-base, near-chance-without-ladder, kernel-stub-pass). Static checks are green; it reports the 5 unimplemented ladders (S6b). The five completeness predicates are specified in §8.2 and land in **S6c**.
 **Progress:** [2026-11-19] ✅ **S3 BASES DECLARED** — `TASK_FAMILIES` (9) is now the one family universe, and `BASE_BOXES` carries a row for every family (sequence, continual, rl, scientific, neuromorphic, lm added). Calibration controls (3 seeds, bar, cost, replay hash) remain S3b.
 **Progress:** [2026-11-19] ✅ **S2b MIGRATION REPAIR** — Removed the stale per-primitive `kernel_entrypoint`/`kernel_technology` tables (they pointed at deleted modules); `kernel_status` now uses the protocol vocabulary (`absent`, 75/75) until S7. Repaired the four algorithm kernels that imported deleted primitive modules, the `rungbench` per-package sites, and the registry config/ontology name bugs (`PepitaCredit`, `ParameterUpdateConfig`, `GeometryConfig.recurrent`, `SubstrateConfig.optical`).
 
-**Progress:** [2026-11-19] ⏳ **S5d ADAPTER DEFECT (open)** — `ReferenceAdapter.make_task_case` still cannot build typed configs for geometry (factories need task facts), and `_update_reference`/`_plasticity_reference` return empty results without a harness. Consequence: `tests/primitives/test_primitive_contract.py` has 116 failures on those axes. Named mechanism: compose the config from `compose_configs` and instantiate via `geometry_from_config`/`*_from_config`. Failing lock: `tests/primitives/test_primitive_contract.py` (keep red until fixed).
+**Progress:** [2026-11-19] ⏳ **S5d ADAPTER DEFECT (open)** — `ReferenceAdapter.make_task_case` still cannot build typed configs for geometry (factories need task facts), and `_update_reference`/`_plasticity_reference` return empty results without a harness. Consequence: `tests/primitives/test_primitive_contract.py` has 116 failures on those axes. Named mechanism: compose the config from `compose_configs` and instantiate via `geometry_from_config`/`*_from_config`. The 116 failures are the **defect lock**; they stay failing until fixed.
+
+**Progress:** [2026-11-19] ✅ **S0 TAXONOMY (binding)** — Three states: **impossible / unimplemented / defective**. Only `impossible` may be refused, and only with a refusal test plus a necessity test. `unimplemented` and `defective` are always failing tests. Capability skips and the word "gap" are retired; the audit enforces all three (§8.2).
 
 **One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
 have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
@@ -26,6 +28,7 @@ question.
 
 | Session | Task | Status |
 |---|---|---|
+| S0 | Three-state taxonomy (impossible / unimplemented / defective) | ✅ DONE — binding, §0 |
 | S1 | Migrate primitives to 3-file protocol + registry | ✅ DONE |
 | S2 | Delete ~380 per-primitive files + generated tests | ✅ DONE |
 | S2b | Repair stale kernel tables, algorithm imports, rungbench | ✅ DONE |
@@ -37,25 +40,100 @@ question.
 | S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
 | S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
 | S5b | Screen graph family primitives | ✅ DONE (9 measured) |
-| S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — capability gap (works on graph, vanishing targets on vision) |
-| S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ⏳ OPEN — 116 contract failures |
+| S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — unimplemented (feedback alignment missing); graph works |
+| S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ⏳ OPEN — 116 failing tests (defect lock) |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
-| S6b | Audit measurement gate (5 near-chance ladders) | ⏳ PENDING |
+| S6b | Audit measurement gate (5 unimplemented ladders) | ⏳ PENDING |
+| S6c | Six completeness predicates in `scripts/audit.py` | ⏳ PENDING — spec in §8.2 |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
 
-### Next actions (dependency order)
+## 0. The three states (binding amendment, 2026-11-19)
+
+Every row, refusal, and test is one of three states. **Only the first may be
+quiet.**
+
+| State | Meaning | Evidence | Refused? |
+|---|---|---|---|
+| **Impossible** | Cannot compose by math, shape, or API. | A **refusal test** (`pytest.raises(..., match="<constraint>")`) **and** a **necessity test** (remove the rule → a known-wrong composition compiles). | Yes. This is the only trap. |
+| **Unimplemented** | The primitive, feature, box, or budget does not exist yet. | A **failing test** that names what is missing and the close condition. | No. |
+| **Defective** | It exists and should work, but does not. | A **failing test** that names the mechanism. | No. |
+
+Rules:
+
+1. **No capability `pytest.skip`.** Environment skips only (`no CUDA`, `no dataset`), and the reason says so. A capability skip is a test defect.
+2. **No "gap" label.** A row is `measured`, `unimplemented`, `defective`, or `impossible`. "Capability gap" is retired.
+3. **A small box is unimplemented, never impossible.** The 300k ceiling, the missing family control, the missing budget, and the missing primitive are implementation tasks.
+4. **Impossible is proved, not asserted.** No necessity test → not impossible; it is unimplemented or defective, and it gets a failing test.
+5. **Keep the impossible set small and counted.** Growth is a taxonomy bug.
+6. **A session cannot close a defect it discovers.** It files the failing test, the named mechanism, and the close condition; a later session challenges it.
+7. **The map counts classes**: measured / unimplemented / defective / impossible / unaccounted. `unaccounted == 0` is the completeness gate; `defective == 0` is the quality gate.
+8. **No backwards compatibility.** The migration deletes the old shape; it
+   does not alias, shim, deprecate, or keep a second vocabulary. A legacy name
+   that survives is a defect. A conversion with a current caller is not a
+   compatibility shim; a bridge kept only to make an old test pass is.
+
+### 0.1 What this forbids (the stuck patterns)
+
+- Measuring before S5d is green.
+- Screening a family without a 3-seed control that clears its bar.
+- Calling a low cell an algorithm verdict.
+- Adding a primitive before the existing census is accounted.
+- Claiming a kernel without a kill test and a parity row.
+- Quoting a plan count the artifacts do not carry.
+- Closing a session on "tests consolidated" or "docs regenerated".
+- Keeping a compatibility alias, a deprecated parameter, or a second
+  vocabulary for an old shape the migration replaced.
+
+### 0.2 The path (what each gate buys)
+
+1. **S5d** → every primitive has a case, a reference, and an invariant. The
+   contract suite is green; measurement can start.
+2. **S3b** → every family has a control that clears its bar. A screen can
+   answer a question instead of measuring noise.
+3. **S6b + S4** → the near-chance and mid rows get a ladder; each becomes
+   tuned, defective, or unimplemented with a box.
+4. **S5** → the bound rows are screened at their declared family; the map
+   gains verdicts.
+5. **S7** → ten kernels, each with parity and a kill test; 65 stay absent.
+6. **S8 + S9** → the map and docs regenerate from one source; five claims
+   are pre-registered, paired, and published with a CI.
+
+### 0.3 Cost, stop, and what time-wasting looks like
+
+- Every rung is priced from a measured pilot. The watchdog is 2× that cost.
+  A rung that exceeds its watchdog is a cost-model defect: kill, record,
+  re-price.
+- Screening (rungs 0–2) may stop freely. A claim (rung 3) uses a
+  pre-registered `n_max` with a fixed-n CI and no peeking.
+- No session runs without a stated decision and a stop rule.
+- A session that ends on "tests consolidated" or "docs regenerated" bought
+  structure, not capability: it does not close a capability ticket.
+- The historical sink was measuring before wiring. The S5d gate and the audit
+  exist so that sink cannot recur.
+
+---
+
+### 0.4 Next actions (dependency order)
+
+**No item starts until the previous gate is green.** S5d is the hard gate: no
+screen, ladder, or kernel precedes it. An item closes on a claim, a named
+verdict, or a capability that works — never on "tests consolidated".
 
 1. **S5d** — make `ReferenceAdapter.make_task_case` compose the typed config
    (`compose_configs`) and the reference instantiate via
    `geometry_from_config` / `substrate_from_config` / `*_from_config`. Gate:
    `uv run python -m pytest tests/primitives/test_primitive_contract.py -q`.
-2. **S6b** — run the 5 ladders the audit reports
+2. **S6c** — implement the six completeness predicates in `scripts/audit.py`:
+   capability skip, unproved impossible, quiet failure, unaccounted row, count
+   mismatch, compatibility alias. Gate: `uv run python scripts/audit.py
+   --static` exits 0 and the first unaccounted row is reported.
+3. **S6b** — run the 5 ladders the audit reports
    (`forward_tangent`, `local_contrastive`, `pc_alm`, `random_projections`,
    `target_inversion`) and write each record into the map's `deep_dive` (or a
    `ladders` table) so the audit exits 0.
-3. **S3b** — calibrate the 6 new family bases (3-seed control, bar, cost,
+4. **S3b** — calibrate the 6 new family bases (3-seed control, bar, cost,
    replay hash); `family_without_base` is green, calibration is not.
-4. **S7** — point the 10 verified primitives at the existing acceleration
+5. **S7** — point the 10 verified primitives at the existing acceleration
    modules; flip their `kernel_status` to `implemented` and satisfy
    `test_implemented_kernel_carries_its_evidence`.
 
@@ -69,7 +147,7 @@ question.
 | `1f53b4d1`, `550215b0` | Legality cleanup | Zero capability fixes |
 | `69c5fb09` | PEPITA reference discovery | PEPITA still `kernel_unverified`; no real kernel |
 
-The instrument is real: one inventory, one record, one gap table, a replay
+The instrument is real: one inventory, one record, one exemption table, a replay
 hash per row. That is worth keeping. The cost was measuring before the
 primitives were ready. The map says "57 measured"; 27 of those cells vary the
 companions, 11 sit at chance, and 45 rows have no bound result. The screen
@@ -94,7 +172,7 @@ the wrong product for a laboratory.
 | Rows with no bound, usable result | 45 | 27 + 12 + 6 |
 | Defects | 6 (5 ceilings + 1 shape) | map |
 | Refused | 12 (8 family, 2 cost, 2 gaps) | map |
-| Task families with a base box | 3 of 9 | `BASE_BOXES` (vision, tabular, graph) |
+| Task families with a base box | 9 of 9 declared (3 calibrated) | `BASE_BOXES` |
 | Declared family rows | ~159 | sum of `task_families` |
 | Source scaffolding files | 563 | 383 primitives + 96 generated + 84 algorithms |
 | Source files that survive | ~1,400 | ontology 33, experiment 206, acceleration 34, core/domains/models/scripts etc. |
@@ -106,6 +184,12 @@ the wrong product for a laboratory.
 
 **The headline is not 57 measured. It is 39 bound (30 vision + 9 graph), 11 at chance, 45 without a
 usable result. Graph family now has a calibrated base box.**
+
+**Count check (2026-11-19):** the artifacts in `results/sec/map.json` and
+`results/sec_graph/map.json` show 13 + 3 = **16 bound rows**, not 39. The 39 is
+the plan's claim, not a measured baseline. S6c's `claim_count_mismatch`
+predicate fails until the plan, the maps, and the docs agree. Do not quote 39 as
+progress; quote 16, or regenerate the maps and say why they changed.
 
 ---
 
@@ -253,16 +337,16 @@ three of the eleven near-chance rows. Run them before any 1-epoch ladder.
 
 | Primitive | Primary knob | Ladder | If all fail → triage |
 |---|---|---|---|
-| `credit.target_inversion` | feedback_scale, lr | 3 × 1 seed + 1 confirm | capability gap: transpose feedback vanishes on vision; works on graph (0.68 @ 6 epochs). Needs feedback alignment (random B) or learned inverses for vision. |
-| `credit.random_projections` | feedback scale, lr | 3 × 1 seed | capability gap: width/params |
-| `credit.forward_tangent` | JVP scale, lr | 3 × 1 seed | gap: memory vs accuracy |
-| `credit.zeroth_order` | perturbations, lr | 3 × 1 seed | gap: sample efficiency |
-| `credit.local_contrastive` | phases, lr | 3 × 1 seed | gap: label channel |
-| `credit.local_goodness` | pos/neg passes, lr | 3 × 1 seed | gap: width |
+| `credit.target_inversion` | feedback_scale, lr | 3 × 1 seed + 1 confirm | unimplemented: transpose feedback vanishes on vision; works on graph (0.68 @ 6 epochs). Needs feedback alignment (random B) or learned inverses for vision. |
+| `credit.random_projections` | feedback scale, lr | 3 × 1 seed | unimplemented: width/params |
+| `credit.forward_tangent` | JVP scale, lr | 3 × 1 seed | unimplemented: memory vs accuracy |
+| `credit.zeroth_order` | perturbations, lr | 3 × 1 seed | unimplemented: sample efficiency |
+| `credit.local_contrastive` | phases, lr | 3 × 1 seed | unimplemented: label channel |
+| `credit.local_goodness` | pos/neg passes, lr | 3 × 1 seed | unimplemented: width |
 | `dynamics.spike_integration` | epochs 1/3/10, reset | 3 × 1 seed | defect: reset/decay |
 | `plasticity.conflict_adaptive` | continual task, lr | 3 × 1 seed | defect: protocol |
 
-### 4.3 The 5 ceilings: capability gaps, not defects
+### 4.3 The 5 ceilings: unimplemented boxes, not impossible
 
 | Primitive | Task to measure | Box to test (not yet measured) |
 |---|---|---|
@@ -274,9 +358,10 @@ three of the eleven near-chance rows. Run them before any 1-epoch ladder.
 
 The "measured box" is a **claim to test**, not a result. Measure it, record
 the cost, and publish "requires N parameters on this task". If the box cannot
-fit the task, record a capability gap with the budget that closes it.
+fit the task, record **unimplemented** with the budget and the failing test that
+closes it. It is never impossible: the mechanism exists, the box does not.
 
-### 4.4 The 2 gaps and 2 cost caps
+### 4.4 The 2 unimplemented and 2 cost caps
 
 | Primitive | Action | Done |
 |---|---|---|
@@ -290,10 +375,16 @@ fit the task, record a capability gap with the budget that closes it.
 ## 5. The full action register (75 primitives)
 
 Legend: **R** reference contract, **K** kernel truth, **I** instrument,
-**E** execution repair, **CAP** capability gap (measured larger box), **L**
-one-step probe / ladder, **F** family base, **G** gap implement/retire, **C**
-capability screen. Every row carries R+K. For inert rows the `val_acc` is the
-companion's number, not a verdict on the primitive.
+**E** execution repair, **CAP** unimplemented at the declared box (measured
+larger box), **L** one-step probe / ladder, **F** family base, **G**
+unimplemented implement/retire, **C** capability screen. Every row carries
+R+K. For companion rows the `val_acc` is the companion's number, not a verdict
+on the primitive.
+
+**Status vocabulary:** `refused` in this register means "the declared family
+does not include this task" — it is **unimplemented** (a base or feature is
+missing), not impossible. `defect` is a named mechanism with a failing test.
+`measured` is a boxed result. No register row is "gap".
 
 ### Credit (19)
 
@@ -313,7 +404,7 @@ companion's number, not a verdict on the primitive.
 | `rtrl_reference` | refused | — |  | R+K+F |
 | `score_function` | measured | bound | 0.732 | R+K+L |
 | `surrogate` | defect | bound |  | R+K+CAP |
-| `target_inversion` | measured | bound | 0.119 (vision) / 0.68 (graph) | R+K+L (vision: capability gap) |
+| `target_inversion` | measured | bound | 0.119 (vision) / 0.68 (graph) | R+K+L (vision: unimplemented) |
 | `temporal_trace` | measured | inert | 0.122 | R+K+I |
 | `thermodynamic_contrast` | measured | bound | 0.782 | R+K+L |
 | `unbiased_rtrl` | refused | — |  | R+K+F |
@@ -421,7 +512,7 @@ companion's number, not a verdict on the primitive.
 Each base gets a 3-seed control, measured walltime, parameter budget, and
 replay hash. No screen runs on a family without a base.
 
-### 6.2 Refusal → family (8 family refusals)
+### 6.2 The 8 family refusals are unimplemented, not impossible
 
 | Primitive | Declared families | First screen |
 |---|---|---|
@@ -432,13 +523,15 @@ replay hash. No screen runs on a family without a base.
 | `cascade_synapse` | continual | copy_task |
 | `synaptic_intelligence` | continual | copy_task |
 | `closed_form_ridge` | continual, sequence | copy_task |
-| `quantum` | scientific | lorenz_state (or a named gap) |
+| `quantum` | scientific | lorenz_state (unimplemented: no quantum-chemistry task yet) |
 
-`task_families` becomes an explicit `TaskSpecEnriched` field; `_FAMILY_OF_DOMAIN`
-is deleted. A task may serve vision and continual (`split_mnist`) or sequence
-and continual (`copy_task`); the old table could not express that.
+A family with no base is **unimplemented**, not impossible: the test fails until
+the base exists. `task_families` becomes an explicit `TaskSpecEnriched` field;
+`_FAMILY_OF_DOMAIN` is deleted. A task may serve vision and continual
+(`split_mnist`) or sequence and continual (`copy_task`); the old table could not
+express that.
 
-### 6.3 The 27 inert rows become explicit, not "measured"
+### 6.3 The 27 companion rows become explicit, not "measured"
 
 | Axis | Instrument | Rows |
 |---|---|---|
@@ -471,7 +564,7 @@ speed bottleneck.
 
 **Target: 10 primitives across 9 acceleration modules, not 75.** A primitive
 with no acceleration code stays reference-only; that is a complete answer, not
-a gap.
+a failure.
 
 Kill test: monkeypatch `reference_step` to raise; a kernel test passes only
 when the selected path is `implemented`. A `stub` cannot pass.
@@ -523,7 +616,24 @@ test, or deleted.
 - a per-primitive subdirectory under `computronium/primitives/`;
 - a primitive id without a `PrimitiveSpec` row;
 - a task family without a `BASE_BOXES` row;
-- a near-chance bound row without a ladder record.
+- a near-chance bound row without a ladder record;
+- **a capability `pytest.skip`** (environment skips only; the reason must say
+  `no CUDA` or `no dataset`);
+- **an `impossible` row without a refusal test and a necessity test**;
+- **an `unimplemented` or `defective` row without a failing test** (or a
+  `xfail(strict=True)`), and no `"gap"` label anywhere in the map;
+- **a declared `(primitive, family)` row that is unaccounted**: it is not
+  measured, unimplemented, defective, or impossible;
+- **a plan count that the artifacts do not carry** (the 39-vs-16 mismatch is
+  the first one this catches);
+- **a compatibility alias or deprecated re-export** of a shape the migration
+  deleted (`reference_only`, a per-primitive module path, a
+  `_FAMILY_OF_DOMAIN` fallback).
+
+The first seven are structural and implemented (S6a). The last six are the
+completeness gate: they are what make a quiet "gap", a silent skip, and a
+backwards-compatible crutch impossible. They are specified here and land in
+**S6c**; until then `--static` covers the seven structural predicates only.
 
 ---
 
@@ -534,18 +644,18 @@ test, or deleted.
 | **S0 Baseline** | Tag `pre-todo97`; run six locks; save output | Six locks green | Any lock red |
 | **S1 Migrate** | Add `protocol.py` + `registry.py`; delete ~560 scaffolding files; update six locks | Six locks green; 75 ids registered; `comp verify` works | A lock fails; revert to tag |
 | **S2 Wiring** | Fix graph batching; one-step probes for conv, pc_alm, EPC | 4 rows resolved or named defect | A probe with no named mechanism |
-| **S3 Bases** | Explicit `task_families`; 7 bases; 3-seed controls; 2 gaps; 2 cost caps | 9/9 calibrated; 12/12 refusals mapped | A family without control/bar |
+| **S3 Bases** | Explicit `task_families`; 7 bases; 3-seed controls; 2 unimplemented; 2 cost caps | 9/9 calibrated; 12/12 refusals mapped | A family without control/bar |
 | **S4x Rung-0 Tests** | 284 wiring tests for all 75 primitives (instantiate, forward, pseudograds, settle) | All pass; 6/6 locks green | A test fails |
-| **S4 Ladders** | 3-point ladders for the remaining 8 near-chance + 7 mid | 15 triaged (tuned/defect/gap) | An untriaged row |
+| **S4 Ladders** | 3-point ladders for the remaining 8 near-chance + 7 mid | 15 triaged (tuned/defect/unimplemented) | An untriaged row |
 | **S5 Screens** | Real screens on the 30 bound rows at declared families; 3 seeds | 30 rows with verdict; ~159 family rows planned | A screen on MNIST for a sequence primitive |
-| **S6 Gaps** | Measure 5 ceilings at the proper task | 5 gaps with measured box and cost | A gap without a measured box |
+| **S6 Ceilings** | Measure 5 ceilings at the proper task | 5 unimplemented rows with a failing test, a measured box, and a cost | An unimplemented row with no failing test |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
-| **S8 Map + docs** | Regenerate map with verdict/rung/cost; regenerate README/method cards | 0 inert-labeled capability; docs match map | A doc row the map does not carry |
+| **S8 Map + docs** | Regenerate map with verdict/rung/cost; regenerate README/method cards | 0 unaccounted rows; docs match map | A doc row the map does not carry |
 | **S9 Results** | 5 pre-registered viability claims (control-relative, 5 seeds, CI) | 5 claims with CI | A claim without pre-registration |
 
 **S1–S3 are repair. S4–S6 are measurement. S7 is optional acceleration. S8 is
-the product. S9 is the science.** No screen runs before its primitive is
-wired; no ladder runs before its family has a base.
+the product. S9 is the science.** No screen runs before S5d is green; no
+ladder runs before its family has a control; no row is closed as "gap".
 
 ---
 
@@ -553,23 +663,26 @@ wired; no ladder runs before its family has a base.
 
 1. **75/75 primitives registered** with a `PrimitiveSpec`, a task case, an
    analytic invariant, and a fingerprint.
-2. **0 inert rows labeled as capability.** 27 rows are bound, contract, or
-   named gap.
-3. **0 untriaged near-chance rows.** 11 rows become tuned, defect, or
-   capability gap with a measured box.
-4. **1 graph defect fixed.** Batched node input works; one-step fingerprint
+2. **0 unaccounted rows.** Every declared `(primitive, family, box)` row is
+   `measured`, `unimplemented` (with a failing test), `defective` (with a
+   failing test), or `impossible` (with a refusal test + a necessity test).
+3. **0 capability skips and no "gap" label.** A capability `pytest.skip` is a
+   test defect; the map carries the four states only.
+4. **0 open defects at the audit.** `defective == 0`; the adapter defect
+   (S5d) is the first one that must close.
+5. **1 graph defect fixed.** Batched node input works; one-step fingerprint
    differs from feedforward.
-5. **9/9 task families calibrated.** A base task, a 3-seed control, a bar, a
+6. **9/9 task families calibrated.** A base task, a 3-seed control, a bar, a
    cost, and a replay hash each.
-6. **~159 declared family rows resolved**, one per `(primitive, declared
-   family, box)`; 75/75 primitives carry a bound row, contract row, or named
-   capability gap.
-7. **10 primitives implemented across 9 acceleration modules**, 65
+7. **~159 declared family rows resolved**, one per `(primitive, family, box)`.
+8. **10 primitives implemented across 9 acceleration modules**, 65
    reference-only with `kernel_status="absent"`; 0 stubs pass parity.
-8. **~155 test files / ~1,300 tests**, 0 exact duplicate bodies, 0 stub-pass,
-   0 finiteness-only test.
-9. **5 viability claims**, pre-registered, 5 paired seeds, CI, control-relative.
-10. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0.
+9. **~155 test files / ~1,300 tests**, 0 exact duplicate bodies, 0
+   finiteness-only test, 0 empty assertion.
+10. **5 viability claims**, pre-registered, 5 paired seeds, CI,
+    control-relative; a claim within 1σ of its bar is `marginal`, not met.
+11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
+    and the plan's counts equal the artifacts'.
 
 ---
 
@@ -603,7 +716,7 @@ uv run python scripts/probes/test_one_step_wiring.py
 # 2x. Rung 0 wiring tests for all 75 primitives (DONE)
 uv run python -m pytest tests/primitives/test_primitive_wiring.py -x
 
-# 3. First ladder (target_inversion) — TRIAGED as capability gap on vision
+# 3. First ladder (target_inversion) — TRIAGED as unimplemented on vision
 #    (transpose feedback vanishes; works on graph 0.68 @ 6 epochs)
 #    Next: ladder on graph family or implement feedback alignment for vision
 uv run python -m computronium.experiment.sec_loop \
@@ -611,7 +724,7 @@ uv run python -m computronium.experiment.sec_loop \
 
 # 4. Audit
 uv run python scripts/audit.py
-#    S6a: static predicates green; 5 near-chance ladders remain (S6b)
+#    S6a: static predicates green; 5 unimplemented ladders remain (S6b)
 #    --check <name> runs one predicate; --json emits machine-readable findings
 ```
 
@@ -620,7 +733,8 @@ uv run python scripts/audit.py
 ## 12. What we stop doing
 
 - Measuring before the primitive is wired.
-- Publishing "57 measured" when 27 are inert and 11 are at chance.
+- **Measuring before S5d (the adapter) is green.**
+- Publishing "57 measured" when 27 measure companions and 11 are at chance.
 - Calling a kernel parity test a gate when a stub can pass it.
 - Running a 1-epoch screen and calling it a result.
 - Adding a task family without a base box and a control.
@@ -629,6 +743,11 @@ uv run python scripts/audit.py
 - Screening a sequence primitive on MNIST.
 - Claiming "requires 600k params" before measuring the 600k box.
 - Treating "more tests" as "more capability".
+- **Treating a defect as a "gap".**
+- **Skipping a capability test because it is hard, invalid, or slow.**
+- **Accepting "defeat" without a failing test and a named mechanism.**
+- **Quoting a plan count the artifacts do not carry.**
+- **Closing a session on "tests consolidated" or "docs regenerated".**
 
 ---
 
@@ -638,5 +757,11 @@ uv run python scripts/audit.py
 **No map row is published without verdict, rung, cost, and replay hash.**
 **No kernel is claimed without a kill test and measured parity.**
 **No family is screened without a calibrated base.**
+**Every row is impossible, unimplemented, or defective — and only impossible may be quiet.**
+**Impossible is proved: a refusal test and a necessity test, or it is not impossible.**
+**Unimplemented and defective are failing tests; a skip is a test defect.**
+**0 unaccounted rows is the completeness gate; 0 open defects is the quality gate.**
+**No backwards compatibility: the old shape is deleted, not aliased.**
 
-The instrument is built. This plan points it at working primitives.
+The instrument is built. This plan points it at working primitives, and it
+refuses to let a defect hide as a gap.
