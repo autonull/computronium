@@ -74,6 +74,14 @@ DEFAULT_TRACKS: list[TrackPortfolioEntry] = [
         budget_used={"cells": 0, "seeds": 0},
         contention=False,
     ),
+    TrackPortfolioEntry(
+        track="P3",
+        rank=5,
+        kill_rule="A pair with no power is marked, not reported",
+        last_result="unstarted",
+        budget_used={"cells": 0, "seeds": 0},
+        contention=False,
+    ),
 ]
 
 

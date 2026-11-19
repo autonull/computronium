@@ -20,10 +20,12 @@ import json
 import logging
 import math
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from computronium.acceleration.spec import axis_segment
 from computronium.core.continual.metrics import CLConfig, CLMetrics
 from computronium.core.continual.runner import run_continual_learning
 from computronium.core.logging import get_logger
@@ -34,6 +36,7 @@ from computronium.experiment.kernel.evaluate import (
     evaluate_cell,
     record_from_evaluation,
 )
+from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import (
     Coordinate,
     Provenance,
@@ -59,6 +62,13 @@ from computronium.experiment.sec_pilot import (
     calibrate_control,
     resource_vector,
 )
+
+if TYPE_CHECKING:
+    from computronium.experiment.sec_interaction import (
+        InteractionCell,
+        InteractionEffect,
+        SlicePlan,
+    )
 
 logger = get_logger(__name__)
 
@@ -456,9 +466,9 @@ def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[st
     be compared with another row (TODO95 D2/D3). The schedule is the box, so its
     own serialization is the one source; the six axes are added to it.
     """
-    box: dict[str, Any] = {"substrate": coord.substrate}
-    for field in _AXIS_FIELD.values():
-        box[field] = getattr(coord, field)
+    box: dict[str, Any] = {}
+    for field in StructuralAxis:
+        box[field.value] = getattr(coord, field.value)
     if schedule is not None:
         box |= schedule.to_dict()
         # ``Schedule.to_dict`` names the task ``task_id``; the map's row
@@ -532,15 +542,6 @@ def _ruler(task_id: str) -> tuple[str, str]:
     )
     return key, f"{key} on {task_id} (primary {spec.primary_objective}{chance})"
 
-
-_AXIS_FIELD = {
-    "substrate": "substrate",
-    "geometry": "geometry",
-    "state_dynamics": "dynamics",
-    "plasticity": "plasticity",
-    "credit_assignment": "credit",
-    "parameter_update": "update",
-}
 
 _AXIS_DEFAULTS = {
     "substrate": "digital",
@@ -719,7 +720,7 @@ def _iter_legal_coordinates(
     if not entry.available:
         return []
     primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
-    axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+    axis = axis_segment(entry.axis)
     base = dict(_AXIS_DEFAULTS)
     base[axis] = primitive_key
     own = axis if own_knobs else None
@@ -876,6 +877,31 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
     }
 
 
+def _defect_for(
+    eval_result: CellEvaluation, schedule: Schedule
+) -> tuple[str | None, bool]:
+    """An execution fact (non-finite metric, ceiling) or ``None`` when measured.
+
+    A screen names a DEFECT only for an execution fact (TODO95 D5); the rule is
+    one source, read by the breadth screen and the interaction slice.
+    """
+    metrics = dict(eval_result.metrics)
+    val_acc = float(metrics.get("val_acc", 0.0))
+    loss = float(metrics.get("loss", float("inf")))
+    finite = math.isfinite(val_acc) and math.isfinite(loss)
+    ceiling = schedule.param_budget
+    within = ceiling <= 0 or eval_result.param_count <= ceiling * (
+        1 + PARAM_BUDGET_TOLERANCE
+    )
+    if finite and within:
+        return None, within
+    return (
+        "non-finite metric"
+        if not finite
+        else f"param_count {eval_result.param_count} over ceiling"
+    ), within
+
+
 def _screen_coordinate(  # ruff: ignore[too-many-arguments]
     entry: PrimitiveCensusEntry,
     candidates: list[Coordinate],
@@ -929,23 +955,10 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             box=_box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
         )
 
+    defect, within = _defect_for(eval_result, schedule)
     metrics = dict(eval_result.metrics)
     val_acc = float(metrics.get("val_acc", 0.0))
     loss = float(metrics.get("loss", float("inf")))
-    finite = math.isfinite(val_acc) and math.isfinite(loss)
-    ceiling = schedule.param_budget
-    within = ceiling <= 0 or eval_result.param_count <= ceiling * (
-        1 + PARAM_BUDGET_TOLERANCE
-    )
-    defect = (
-        None
-        if finite and within
-        else (
-            "non-finite metric"
-            if not finite
-            else f"param_count {eval_result.param_count} over ceiling"
-        )
-    )
     box = _box_summary(coord, schedule)
     record = record_from_evaluation(
         coordinate=coord,
@@ -1049,7 +1062,7 @@ def _screen_entries(
             cells.append(_refused_cell(entry, family_reason, ruler, base_box))
             continue
         logger.info(f"P0 screening: {entry.id}")
-        axis = _AXIS_FIELD.get(entry.axis, entry.axis)
+        axis = axis_segment(entry.axis)
         cells.append(
             _screen_coordinate(
                 entry,
@@ -1293,8 +1306,289 @@ def run_p1_track(
 
 
 # ============================================================
+# Track P3: The interaction slice
+# ============================================================
+
+
+def _interaction_cell(
+    levels: dict[str, str],
+    schedule: Schedule,
+    *,
+    seed: int,
+) -> InteractionCell:
+    """One run of the factorial: its box, its seed and its replay hash.
+
+    A compose-legal box is checked before it is priced; a training-time
+    contract failure is a defect with its mechanism named, never a crash.
+    """
+    from computronium.experiment.sec_interaction import InteractionCell
+
+    axes = {**_AXIS_DEFAULTS, **levels}
+    coord = _coordinate(axes)
+    run = replace(schedule, seed=seed, n_seeds=1)
+    box = _box_summary(coord, run)
+
+    def cell(
+        status: str,
+        *,
+        val_acc: float | None = None,
+        loss: float | None = None,
+        walltime_s: float | None = None,
+        replay_hash: str | None = None,
+        reason: str | None = None,
+    ) -> InteractionCell:
+        return InteractionCell(
+            levels=dict(levels),
+            seed=seed,
+            status=status,
+            val_acc=val_acc,
+            loss=loss,
+            walltime_s=walltime_s,
+            replay_hash=replay_hash,
+            box=box,
+            reason=reason,
+        )
+
+    legal, reason = _is_legal(coord)
+    if not legal:
+        return cell("refused", reason=reason)
+    try:
+        eval_result = evaluate_cell(coord, run)
+    except EvaluationError as exc:
+        return cell("defect", reason=f"{exc.cause}: {exc}")
+    except Exception as exc:  # ruff: ignore[blind-except] - one bad cell, never the slice
+        return cell("defect", reason=f"{type(exc).__name__}: {exc}")
+
+    defect, _within = _defect_for(eval_result, run)
+    metrics = dict(eval_result.metrics)
+    record = record_from_evaluation(
+        coordinate=coord,
+        schedule=run,
+        provenance=_provenance(schedule.task_id, box, coord.measurement_key(run)),
+        evaluation=eval_result,
+        status=_screen_status(),
+        extra_payload={"defect": defect},
+    )
+    return cell(
+        "defect" if defect else "measured",
+        val_acc=None if defect else float(metrics.get("val_acc", 0.0)),
+        loss=float(metrics.get("loss", float("inf"))),
+        walltime_s=eval_result.walltime_s,
+        replay_hash=record.to_dict()["provenance"]["code_sha"],
+        reason=defect,
+    )
+
+
+def legal_levels(levels: dict[str, str]) -> bool:
+    """The system's validator on a pair's levels: it seats or refuses the cell."""
+    legal, _reason = _is_legal(_coordinate({**_AXIS_DEFAULTS, **levels}))
+    return legal
+
+
+def _p3_setup(out_dir: Path, device: str) -> tuple[SlicePlan, Schedule] | None:
+    """The map's slice and its base schedule, or ``None`` when P3 is refused."""
+    from computronium.experiment.sec_interaction import axis_spreads, plan_slice
+
+    map_path = out_dir / "map.json"
+    if not map_path.exists():
+        logger.warning("P3: no map.json — the census is not screened; slice refused")
+        return None
+    map_data = json.loads(map_path.read_text())
+    if map_data.get("version") != MAP_VERSION:
+        logger.warning(
+            f"P3: map version {map_data.get('version')} is not {MAP_VERSION}; "
+            "slice refused"
+        )
+        return None
+    if len(axis_spreads(map_data)) < 2:
+        logger.warning("P3: fewer than two axes rank at this box; slice refused")
+        return None
+    plan = plan_slice(map_data, legal=legal_levels)
+    if plan is None:
+        logger.warning("P3: the top pair seats no legal 2×2 at this box; slice refused")
+        return None
+    task_id = str((map_data.get("base") or {}).get("task") or P0_TASK)
+    schedule = base_schedule(task_id, device)
+    if schedule is None:
+        logger.warning(f"P3: {task_id} declares no base box; slice refused")
+        return None
+    return plan, schedule
+
+
+def run_p3_track(out_dir: Path, device: str = "auto") -> dict[str, Any] | None:
+    """Run Track P3: the pair the map allocates, at the base box (TODO95 S3).
+
+    The base cell is the control: its three seeds carry the bar check and the
+    2×2's baseline in one instrument. A control inside the bar marks the slice
+    ``no_power`` before it is priced; the other three cells screen at one seed,
+    then the pair confirms at three seeds, so the effect carries an interval.
+
+    Returns ``None`` when the slice is refused: no map, no ranked pair, or no
+    declared base box.
+    """
+    from computronium.experiment.sec_interaction import INTERACTION_SEEDS
+
+    setup = _p3_setup(out_dir, device)
+    if setup is None:
+        return None
+    plan, schedule = setup
+    levels = plan.combinations()
+    base_runs = [
+        _interaction_cell(dict(levels[0]), schedule, seed=seed)
+        for seed in range(INTERACTION_SEEDS)
+    ]
+    base_values = [cell.val_acc for cell in base_runs if cell.val_acc is not None]
+    control = sum(base_values) / len(base_values) if base_values else None
+    bar = _task_bar(schedule.task_id)
+    if control is None or (bar is not None and control <= bar.value):
+        return _no_power_slice(plan, schedule, base_runs, control, bar)
+    return _confirmed_slice(plan, schedule, base_runs, levels, control)
+
+
+def _no_power_slice(
+    plan: SlicePlan,
+    schedule: Schedule,
+    base_runs: list[InteractionCell],
+    control: float | None,
+    bar: Any,
+) -> dict[str, Any]:
+    """A control inside the bar marks the slice; it never prices the cells."""
+    from computronium.experiment.sec_interaction import InteractionCell
+
+    reason = (
+        f"control at chance at this box: val_acc={control} inside bar "
+        f"{None if bar is None else bar.value}; the slice is refused before "
+        "it is priced (TODO95 S2)"
+    )
+    box = _box_summary(_coordinate(_AXIS_DEFAULTS), schedule)
+    cells: list[InteractionCell] = list(base_runs)
+    for level in plan.combinations()[1:]:
+        cells.append(
+            InteractionCell(
+                levels=level,
+                seed=0,
+                status="refused",
+                val_acc=None,
+                loss=None,
+                walltime_s=None,
+                replay_hash=None,
+                box=box,
+                reason=reason,
+            )
+        )
+    logger.warning(f"P3 marked no power: {reason}")
+    return _interaction_result(
+        plan, cells, status="no_power", stop_reason=reason, control=control
+    )
+
+
+def _confirmed_slice(
+    plan: SlicePlan,
+    schedule: Schedule,
+    base_runs: list[InteractionCell],
+    levels: list[dict[str, str]],
+    control: float,
+) -> dict[str, Any]:
+    """One seed screens each cell; three seeds confirm the pair (TODO95 S3)."""
+    from computronium.experiment.sec_interaction import (
+        INTERACTION_SEEDS,
+        interaction_effect,
+    )
+
+    started = time.monotonic()
+    screened = [
+        _interaction_cell(dict(level), schedule, seed=0) for level in levels[1:]
+    ]
+    cells = [*base_runs, *screened]
+    failed = next((cell for cell in screened if cell.status != "measured"), None)
+    if failed is not None:
+        reason = f"{failed.levels} did not measure: {failed.reason or failed.status}"
+        logger.warning(f"P3 incomplete: {reason}")
+        return _interaction_result(
+            plan,
+            cells,
+            status="incomplete",
+            stop_reason=reason,
+            control=control,
+            screened=interaction_effect(plan, cells),
+        )
+
+    # The extra seeds are declared here, before the pair's number exists, so
+    # the confirm is fixed-n and cannot be stopped early (TODO95 S3).
+    for seed in range(1, INTERACTION_SEEDS):
+        cells.extend(
+            _interaction_cell(dict(level), schedule, seed=seed) for level in levels[1:]
+        )
+    effect = interaction_effect(plan, cells)
+    walltime = time.monotonic() - started
+    logger.info(
+        f"P3 complete: pair={plan.axes}, "
+        f"effect={None if effect is None else effect.effect}"
+    )
+    return _interaction_result(
+        plan,
+        cells,
+        status="measured" if effect is not None else "incomplete",
+        stop_reason=(
+            "rung 3: the pair's 2×2 at three seeds"
+            if effect is not None
+            else "the confirmed 2×2 did not measure"
+        ),
+        control=control,
+        screened=interaction_effect(plan, cells[: 2 * INTERACTION_SEEDS]),
+        effect=effect,
+        walltime_s=walltime,
+    )
+
+
+def _interaction_result(
+    plan: SlicePlan,
+    cells: list[InteractionCell],
+    *,
+    status: str,
+    stop_reason: str,
+    control: float | None,
+    screened: InteractionEffect | None = None,
+    effect: InteractionEffect | None = None,
+    walltime_s: float | None = None,
+) -> dict[str, Any]:
+    """The interaction layer: the design, the cells and the effect."""
+    from computronium.experiment.sec_interaction import analysis
+
+    layer = analysis(plan)
+    layer |= {
+        "cells": [cell.to_dict() for cell in cells],
+        "status": status,
+        "stop_reason": stop_reason,
+        "control_val_acc": control,
+        "screened": None if screened is None else screened.to_dict(),
+        "effect": None if effect is None else effect.to_dict(),
+        "walltime_s": walltime_s,
+    }
+    return {"track": "P3", "interaction": layer, "cells": layer["cells"]}
+
+
+# ============================================================
 # Portfolio & Map Updates
 # ============================================================
+
+
+def _portfolio_track(portfolio: dict[str, Any], track_id: str) -> dict[str, Any]:
+    """The portfolio's row for a track, created from the declared default.
+
+    An older portfolio may predate a track; the default row is the one source
+    of a track's rank and kill rule, so the update never invents a second one.
+    """
+    from dataclasses import asdict
+
+    from computronium.experiment.sec_init import DEFAULT_TRACKS
+
+    for track in portfolio.setdefault("tracks", []):
+        if track["track"] == track_id:
+            return track
+    default = asdict(next(t for t in DEFAULT_TRACKS if t.track == track_id))
+    portfolio["tracks"].append(default)
+    return default
 
 
 def update_portfolio(
@@ -1303,6 +1597,7 @@ def update_portfolio(
     r2_result: dict | None,
     p0_result: dict | None,
     p1_result: dict | None,
+    p3_result: dict | None = None,
 ) -> None:
     """Update portfolio.json with track results."""
     portfolio_path = out_dir / "portfolio.json"
@@ -1315,74 +1610,75 @@ def update_portfolio(
     portfolio["session_count"] += 1
     portfolio["last_session"] = datetime.now().isoformat()
 
-    # Update R1 track
     if r1_result:
-        for track in portfolio["tracks"]:
-            if track["track"] == "R1":
-                track["last_result"] = {
-                    "gap_worst": r1_result["gap_worst"],
-                    "gap_mean": r1_result["gap_mean"],
-                    "local_worst": r1_result["local_worst"],
-                    "backprop_worst": r1_result["backprop_worst"],
-                    "local_forgetting_mean": r1_result["local_forgetting_mean"],
-                    "backprop_forgetting_mean": r1_result["backprop_forgetting_mean"],
-                    "kill_rule_triggered": r1_result["kill_rule_triggered"],
-                    "surprise": r1_result["surprise"],
-                }
-                track["budget_used"]["cells"] = len(r1_result["cells"])
-                track["budget_used"]["seeds"] = len({
-                    c["seed"] for c in r1_result["cells"]
-                })
-                track["contention"] = False
-                break
+        track = _portfolio_track(portfolio, "R1")
+        track["last_result"] = {
+            "gap_worst": r1_result["gap_worst"],
+            "gap_mean": r1_result["gap_mean"],
+            "local_worst": r1_result["local_worst"],
+            "backprop_worst": r1_result["backprop_worst"],
+            "local_forgetting_mean": r1_result["local_forgetting_mean"],
+            "backprop_forgetting_mean": r1_result["backprop_forgetting_mean"],
+            "kill_rule_triggered": r1_result["kill_rule_triggered"],
+            "surprise": r1_result["surprise"],
+        }
+        track["budget_used"]["cells"] = len(r1_result["cells"])
+        track["budget_used"]["seeds"] = len({c["seed"] for c in r1_result["cells"]})
+        track["contention"] = False
 
-    # Update R2 track
     if r2_result:
-        for track in portfolio["tracks"]:
-            if track["track"] == "R2":
-                track["last_result"] = {
-                    "gap_worst": r2_result["gap_worst"],
-                    "gap_mean": r2_result["gap_mean"],
-                    "local_worst": r2_result["local_worst"],
-                    "backprop_worst": r2_result["backprop_worst"],
-                    "local_forgetting_mean": r2_result["local_forgetting_mean"],
-                    "backprop_forgetting_mean": r2_result["backprop_forgetting_mean"],
-                    "kill_rule_triggered": r2_result["kill_rule_triggered"],
-                    "surprise": r2_result["surprise"],
-                }
-                track["budget_used"]["cells"] = len(r2_result["cells"])
-                track["budget_used"]["seeds"] = len({
-                    c["seed"] for c in r2_result["cells"]
-                })
-                track["contention"] = False
-                break
+        track = _portfolio_track(portfolio, "R2")
+        track["last_result"] = {
+            "gap_worst": r2_result["gap_worst"],
+            "gap_mean": r2_result["gap_mean"],
+            "local_worst": r2_result["local_worst"],
+            "backprop_worst": r2_result["backprop_worst"],
+            "local_forgetting_mean": r2_result["local_forgetting_mean"],
+            "backprop_forgetting_mean": r2_result["backprop_forgetting_mean"],
+            "kill_rule_triggered": r2_result["kill_rule_triggered"],
+            "surprise": r2_result["surprise"],
+        }
+        track["budget_used"]["cells"] = len(r2_result["cells"])
+        track["budget_used"]["seeds"] = len({c["seed"] for c in r2_result["cells"]})
+        track["contention"] = False
 
     if p0_result:
-        for track in portfolio["tracks"]:
-            if track["track"] == "P0":
-                track["last_result"] = {
-                    "measured": p0_result["measured"],
-                    "defect": p0_result["defect"],
-                    "unavailable": p0_result["unavailable"],
-                    "box_defect": p0_result["box_defect"],
-                    "control_val_acc": p0_result["control_val_acc"],
-                    "defect_rate": p0_result["defect_rate"],
-                    "pause_r": p0_result["pause_r"],
-                }
-                track["budget_used"]["cells"] = p0_result["screened"]
-                track["budget_used"]["primitives"] = p0_result["screened"]
-                break
+        track = _portfolio_track(portfolio, "P0")
+        track["last_result"] = {
+            "measured": p0_result["measured"],
+            "defect": p0_result["defect"],
+            "unavailable": p0_result["unavailable"],
+            "box_defect": p0_result["box_defect"],
+            "control_val_acc": p0_result["control_val_acc"],
+            "defect_rate": p0_result["defect_rate"],
+            "pause_r": p0_result["pause_r"],
+        }
+        track["budget_used"]["cells"] = p0_result["screened"]
+        track["budget_used"]["primitives"] = p0_result["screened"]
 
     if p1_result:
-        for track in portfolio["tracks"]:
-            if track["track"] == "P1":
-                track["last_result"] = {
-                    "confirmed": p1_result["confirmed"],
-                    "surprises": p1_result["surprises"],
-                }
-                track["budget_used"]["cells"] = p1_result["confirmed"] * P1_SEEDS
-                track["budget_used"]["seeds"] = P1_SEEDS
-                break
+        track = _portfolio_track(portfolio, "P1")
+        track["last_result"] = {
+            "confirmed": p1_result["confirmed"],
+            "surprises": p1_result["surprises"],
+        }
+        track["budget_used"]["cells"] = p1_result["confirmed"] * P1_SEEDS
+        track["budget_used"]["seeds"] = P1_SEEDS
+
+    if p3_result:
+        layer = p3_result["interaction"]
+        track = _portfolio_track(portfolio, "P3")
+        track["last_result"] = {
+            "pair": layer["pair"],
+            "status": layer["status"],
+            "effect": None if layer["effect"] is None else layer["effect"]["effect"],
+            "seeds": None if layer["effect"] is None else layer["effect"]["seeds"],
+            "stop_reason": layer["stop_reason"],
+        }
+        track["budget_used"]["cells"] = len(p3_result["cells"])
+        track["budget_used"]["seeds"] = sum(
+            1 for cell in p3_result["cells"] if cell["status"] == "measured"
+        )
 
     portfolio_path.write_text(json.dumps(portfolio, indent=2, default=str))
     logger.info(f"Portfolio updated: {portfolio_path}")
@@ -1486,24 +1782,58 @@ def _map_row(
     return row
 
 
+def _carried_reading(
+    prior: dict[str, Any], p0_result: dict[str, Any] | None, key: str
+) -> Any:
+    """A reading the new run did not measure, as the earlier map published it.
+
+    P1 and P3 keep the box an earlier screen calibrated; rewriting it empty is
+    how two artifacts drift (TODO95 D2).
+    """
+    measured = (p0_result or {}).get(key)
+    if measured is not None:
+        return measured
+    return (prior.get("inventory") or {}).get(key)
+
+
+def _carried_base(
+    prior: dict[str, Any], p0_result: dict[str, Any] | None
+) -> dict[str, Any]:
+    """The base box a slice that did not re-screen keeps from the earlier map."""
+    measured = (p0_result or {}).get("base_box")
+    return (prior.get("base") or {}) if measured is None else measured
+
+
 def update_map(
     out_dir: Path,
     census_entries: list[PrimitiveCensusEntry],
     p0_result: dict | None,
     p1_result: dict | None = None,
+    p3_result: dict | None = None,
+    *,
+    report: bool = True,
 ) -> None:
-    """Write map.json v3: one row per censused primitive, never a missing row."""
+    """Write map.json v3: one row per censused primitive, never a missing row.
+
+    The interaction layer is part of the same document: an axis-by-axis run
+    keeps the layer an earlier run measured, and only P3 replaces it
+    (TODO95 S3). ``report`` suppresses the printed census on an intermediate
+    write, so a P3 run reads the screen it just wrote, not the previous one.
+    """
     map_path = out_dir / "map.json"
     cells = {cell["primitive"]: cell for cell in (p0_result or {}).get("cells", [])}
 
     # The map accumulates: an axis-by-axis run replaces its own rows and keeps
     # the rows an earlier v3 run measured. A v2 map is not merged — its rows
     # carry a different box and a different status taxonomy.
+    prior: dict[str, Any] = {}
     previous: dict[str, dict] = {}
+    interaction: dict[str, Any] | None = None
     if map_path.exists():
         prior = json.loads(map_path.read_text())
         if prior.get("version") == MAP_VERSION:
             previous = prior.get("primitives", {})
+            interaction = prior.get("interaction")
 
     primitives: dict[str, dict] = {}
     for entry in census_entries:
@@ -1528,25 +1858,27 @@ def update_map(
         counts = by_axis.setdefault(row["axis"], {})
         counts[row["status"]] = counts.get(row["status"], 0) + 1
 
-    control = (p0_result or {}).get("control_val_acc")
-    base = (p0_result or {}).get("base_box", {})
+    interaction = (p3_result or {}).get("interaction") or interaction
+
     map_data = {
         "version": MAP_VERSION,
         "updated": datetime.now().isoformat(),
         "inventory": {
             "total": len(census_entries),
             "available": sum(1 for entry in census_entries if entry.available),
-            "control_val_acc": control,
-            "control_spread": (p0_result or {}).get("control_spread"),
-            "bar": (p0_result or {}).get("bar"),
+            "control_val_acc": _carried_reading(prior, p0_result, "control_val_acc"),
+            "control_spread": _carried_reading(prior, p0_result, "control_spread"),
+            "bar": _carried_reading(prior, p0_result, "bar"),
         },
-        "base": base,
+        "base": _carried_base(prior, p0_result),
         "by_axis": by_axis,
+        "interaction": interaction,
         "primitives": primitives,
     }
     map_path.write_text(json.dumps(map_data, indent=2, default=str))
     logger.info(f"Map updated: {map_path} ({len(primitives)} rows)")
-    _print_map_report(map_data)
+    if report:
+        _print_map_report(map_data)
 
 
 def _print_map_report(map_data: dict[str, Any]) -> None:
@@ -1589,6 +1921,26 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
     ]
     for row in refused:
         print(f"  refused: {row['primitive']} — {row['trigger']}")
+    interaction = map_data.get("interaction")
+    if interaction:
+        pair = " × ".join(interaction["pair"])
+        print(f"Interaction: {pair} — status={interaction['status']}")
+        print(f"  levels: {interaction['levels']}")
+        print(f"  control val_acc={interaction['control_val_acc']}")
+        effect = interaction.get("effect")
+        if effect is None:
+            print(f"  effect: none ({interaction['stop_reason']})")
+        elif effect["lower"] is None:
+            print(
+                f"  effect: {effect['effect']:.4f} (no interval, "
+                f"{effect['seeds']} seed per cell)"
+            )
+        else:
+            print(
+                f"  effect: {effect['effect']:.4f} "
+                f"[{effect['lower']:.4f}, {effect['upper']:.4f}] at "
+                f"{effect['seeds']} seeds"
+            )
 
 
 # ============================================================
@@ -1609,7 +1961,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--track",
-        choices=["R1", "R2", "P0", "P1", "all"],
+        choices=["R1", "R2", "P0", "P1", "P3", "all"],
         default="all",
         help="Track to run",
     )
@@ -1656,6 +2008,7 @@ def main() -> None:
     r2_result = None
     p0_result = None
     p1_result = None
+    p3_result = None
 
     # Run R1 if requested
     if args.track in {"R1", "all"}:
@@ -1710,10 +2063,25 @@ def main() -> None:
         )
         all_results.extend(p1_result["cells"])
 
+    # The interaction slice reads the map the screen writes: land the screen
+    # first, silently, then let P3 rank it.
+    if args.track in {"P3", "all"}:
+        update_map(out_dir, census_entries, p0_result, p1_result, report=False)
+        p3_result = run_p3_track(out_dir, device=args.device)
+        if p3_result:
+            all_results.extend(p3_result["cells"])
+
     # Update artifacts
     update_cell_log(out_dir, all_results)
-    update_portfolio(out_dir, r1_result or {}, r2_result or {}, p0_result, p1_result)
-    update_map(out_dir, census_entries, p0_result, p1_result)
+    update_portfolio(
+        out_dir,
+        r1_result or {},
+        r2_result or {},
+        p0_result,
+        p1_result,
+        p3_result,
+    )
+    update_map(out_dir, census_entries, p0_result, p1_result, p3_result)
 
     # Print summary (raw metrics for human review)
     print("\n=== SEC Loop Summary ===")
@@ -1737,6 +2105,14 @@ def main() -> None:
     if p1_result:
         print(
             f"P1: confirmed={p1_result['confirmed']}, surprises={p1_result['surprises']}"
+        )
+
+    if p3_result:
+        layer = p3_result["interaction"]
+        effect = layer["effect"]
+        print(
+            f"P3: pair={' × '.join(layer['pair'])}, status={layer['status']}, "
+            f"effect={None if effect is None else round(effect['effect'], 4)}"
         )
 
     # Surprise flags (recorded for review meeting)

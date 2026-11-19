@@ -3,16 +3,20 @@
 **Status:** 2026-11-19 · drafted from the README and `PURPOSE.md`, after TODO94
 Session 12; session 14 landed the record, the box and two composable rows;
 session 15 calibrated the bar, the 3-seed control and the own-knobs box;
-session 16 re-screened the census at that box (S2b). The laboratory exists to
-map the 6-axis space of learning systems
+session 16 re-screened the census at that box (S2b); session 17 seated and
+measured the interaction slice (S3). The laboratory exists to map the 6-axis
+space of learning systems
 (10 substrates × 12 geometries × 8 dynamics × 6 plasticities × 19 credits ×
 18 updates = 75 primitives, 2M+ legal cells). Today the map is:
 **73 of 75 primitives available** (2 declared gaps: the documented no-op
 plasticities), all 75 rows at one base box (mnist, 32 samples/step, 375
 batches, 1 epoch; control 0.8908 ± 0.0024, bar 0.1060), with the box and the
 replay hash on every screened row: **57 measured, 6 defect, 12 refused**
-(8 family refusals, 2 cost caps, 2 declared gaps). The instrument works; the
-next session ranks the bound rows and runs the interaction slice (S3).
+(8 family refusals, 2 cost caps, 2 declared gaps). The interaction layer is
+measured: credit × dynamics, 12 cells, 393 s, effect +0.0153 (95% CI
+−0.0092…+0.0397) — the two axes are additive at this box. The instrument
+works; the next session ladders the census's most surprising bound row and
+carries one pre-registered claim (S4).
 
 ---
 
@@ -37,19 +41,10 @@ cost.
 
 ## 1. What the record said before P0a (measured 2026-11-18)
 
-| Fact | Evidence | Consequence |
-|---|---|---|
-| Three inventories disagree | `ALL_PRIMITIVES` 62 vs the axis registry 73 vs README 71 | 11 available primitives absent; 2 implemented specs outside the registry |
-| 62 rows at 57 boxes, one ruler | `map.json` box variants; all rows `val_acc on mnist`; 21 of 61 ≤ 0.20 | rows are neither comparable nor reproducible; a third of the `pass` labels are inflated |
-| The box was 32 batches and a 10k ceiling | `P0_BATCH_LIMIT=32`; 118,282 parameters composed | ranked by step size; at 375 batches `adam` 0.198 → 0.927; every row was outside its own box |
-| `mean_norm`'s default step was 10× too large | 0.01 → 0.101 at the same box; 1e-3 → 0.887 | an absolute-displacement rule needs an absolute step, not an lr |
-| The screen was uncalibrated | 5 controls at `0.09375`, `cause=divergence` on digits | PASS/DEFECT at that box is a coin flip |
-| The screen minted its own verdict | `chance = 0.1; PASS if val_acc > chance + 0.02` | a second bar, and a judgment from a 1-seed cell |
-| Every substrate lands in a 0.49–0.63 band | 9 substrate rows, one algorithm, one task | a 14 pp band answers "does the substrate perturb MNIST", not the substrate→algorithm question |
-
-The pattern: **the map is a legality report with numbers attached.**
-
----
+Three inventories disagreed (62/73/71), 62 rows sat at 57 boxes under one
+ruler (21 of 61 ≤ 0.20), the screen ran 32 batches with a 10k ceiling, and it
+minted its own `chance + 0.02` verdict. The pattern: the map was a legality
+report with numbers attached; sections 2–3 are the fixes.
 
 ## 2. The unit of knowledge: a comparable cell
 
@@ -109,9 +104,10 @@ A debt row closes on its gate; an item without a gate is prose.
 Order by dependency: a row without its run is not reproducible (P0b); a slice
 whose control is at chance cannot label anything (P1); only then is a census
 meaningful (P2); interactions require a fixed base (P3); the deep dive is chosen
-by the map (P4); the external path follows (P5). P0a, P0.5, P0.75 are done.
+by the map (P4); the external path follows (P5). P0a through P3 are done; S4
+remains.
 
-### Queue (session 15; one table)
+### Queue (session 17; one table)
 
 The census is the inventory: 75 rows, 73 available, 2 declared gaps (the two
 no-op plasticities). The box fix and the calibration landed:
@@ -120,138 +116,120 @@ vision (`mnist`, 32/step, 375 batches, 1 epoch) control 0.8908 ± 0.0024, bar
 0.5055. The own-knobs box ran the 18 update rows: 14 measured, 4 refused
 (3 family refusals, 1 cost cap). S2b then re-screened all 75 rows at the
 vision base: 57 measured, 6 defect, 12 refused, 19.7 min (12.0 s/cell mean
-over 62 trained cells, 228 rows/h). The remaining work is the interaction
-slice (S3), then the claim and publication (S4). A row without a gate is prose;
-a session without a claim is a sweep.
+over 62 trained cells, 228 rows/h). S3 seated the map's top pair (credit ×
+dynamics) and measured its 2×2: 12 cells, 393 s, effect +0.0153 (95% CI
+−0.0092…+0.0397) — additive at this box. The remaining work is the claim and
+publication (S4): ladder the census's most surprising bound row, then 5 paired
+seeds at matched boxes. A row without a gate is prose; a session without a
+claim is a sweep.
 
 | # | Session | Closes | Gate |
 |---|---|---|---|
 | S1a ✅ | **Schema + debt** (no GPU) | `MAP_VERSION`; `schema.gaps.GAPS` (one gap table, reasons + triggers); `noisy`/`closed_form_ridge` compose their own rows; `Schedule` gains `batch_size`/`steps_per_task` (the box); `record_from_evaluation` + a `Record` in the P0 log; `_screen_coordinate` extracted; README regenerated from the registry | `test_box_identity`, `test_loop_has_no_bar`, `test_init_then_update_keeps_a_row`, `test_gap_table_single_source`, `test_readme_counts_match_census`, `test_spec_composes` |
-| S1b | **The two parked rows** (no GPU) | `rule_state`/`substrate_coupled` stay in the inventory (user decision: no deletion); make each a bounded contract that composes — `apply_operator` in the standard step, and a substrate state σ read back — or park them with the `GAPS` row as the snapshot of a capability the kernel still owes | the `GAPS` row fails when the row becomes available; `test_axis_liveness_lock` |
+| S1b ✅ | **The two parked rows** (no GPU; parked) | `rule_state`/`substrate_coupled` stay in the inventory (user decision: no deletion); make each a bounded contract that composes — `apply_operator` in the standard step, and a substrate state σ read back — or park them with the `GAPS` row as the snapshot of a capability the kernel still owes | the `GAPS` row fails when the row becomes available; `test_axis_liveness_lock` |
 | S2a ✅ | **Calibrate + bind** (~10 min GPU) | the bar (chance + 2σ at the ruler's resolution); the 3-seed control per family; the `iris` base; the task-family filter (3 update rows `refused`); the own-knobs box (14/18 update rows `bound` and measured); `memory_mb` and `energy_per_batch` in the resource vector | `test_pilot_calibration` (`test_the_bar_is_the_floor_plus_2_sigma`, `test_a_constant_control_refuses_its_slice`, `test_the_family_filter_refuses_a_sequence_credit_on_vision`, `test_the_own_knobs_box_binds_an_update_row`, `test_the_resource_vector_carries_memory_and_energy`) |
 | S2b ✅ | **Re-screen at the calibrated boxes** (~20 min GPU) | `map.json` v3 at 32/step: 57 measured, 6 defect (5 ceiling + graph's static edge index), 12 refused (8 family, 2 cost caps, 2 gaps); every screened row carries its box, rule and replay hash; the base schedule now derives from `BASE_BOXES` (one box), the control from `calibrate_control` (one rule); graph composes (cache round-trip) and `noisy` measures (device-model row); no row needed a swap, and no graph/sequence family has a declared base | `test_map_summary_matches_census`, `test_every_map_row_has_its_box` |
-| S3 | **Interaction** (P3, ~10 min GPU) | rank only `binding=bound` rows; the pair with the most variance; 1 seed per cell, 3 for the top; intervals, not a ranking | `test_interaction_power` |
+| S3 ✅ | **Interaction** (P3, 393 s GPU) | rank only `binding=bound` rows; the pair with the most variance (credit × dynamics); the largest legal 2×2 (`target_inversion` × `lazy`); 1 seed per cell, 3 for the pair; intervals, not a ranking | `test_interaction_power` (14 cases) |
 | S4 | **Claim + publish** (P4/P5) | ladder the surprising bound row to 3 points, then 5 paired at matched boxes; pre-registered margin; method cards, the committed `docs/sec/map.md`, `comp verify` | `test_paired_ci`, `test_map_summary_matches_census`, `test_extension_path` |
 
 Stop rules: a slice whose control is at chance is refused before it is priced; a
 pair with no power is marked, not reported; a claim is fixed-n, no peeking. The
 detailed decisions and done conditions follow.
 
-### P0a — One inventory (no training; done) ✅
+### Done before S3 (sessions 12–16)
 
-**Landed:** `build_census` reads `AXES_REGISTRIES` (73) plus 2 spec-only rows;
-the census prints 75. `noisy` and `closed_form_ridge` are `available=False`
-with "no config classmethod — a capability gap". `ALL_PRIMITIVES` is deleted;
-the axis registry is the only list.
-**Gate:** `test_inventory_single_source` (75 total; every axis row an entry).
-**Open (closed by S1a/S1b):** the two shipped rows (`noisy`,
-`closed_form_ridge`) now compose their own axis rows, so the census is 75 / 73.
-The two no-op plasticities (`rule_state`, `substrate_coupled`) stay parked with
-their `GAPS` rows and triggers (S1b); they are not deleted, so D9's
-`test_spec_composes` holds and no row is a permanent gap.
+- **P0a — one inventory ✅** `build_census` reads `AXES_REGISTRIES` (73) plus 2
+  spec-only rows; the census prints 75. `ALL_PRIMITIVES` is deleted; `noisy` and
+  `closed_form_ridge` compose their own rows; the two no-op plasticities stay
+  declared gaps in `schema.gaps.GAPS`. Gate: `test_inventory_single_source`.
+- **P0b — one box, one record ✅ mostly** `Schedule` gains `batch_size` and
+  `steps_per_task` (in the measurement key and the printed box);
+  `record_from_evaluation` wraps a run (box + replay hash) and the log writes
+  `{"screen", "record"}`; `ThresholdRegistration.box` refuses another box.
+  Gate: `test_box_identity`. Open: the CL runner still builds its `Schedule`
+  beside `CLConfig`, so the R-track cells carry no `Record`.
+- **P0.5 — the defect queue ✅** The 32-batch box and the 10k ceiling were
+  defects, not results (at 375 batches `adam` 0.927); `mean_norm`'s default step
+  was 10× too large (1e-3 → 0.887); `spectral_constrained` and
+  `elastic_consolidation` measure 0.626 — a step ladder, not a verdict.
+- **P0.75 — binding conditions ✅** `sec_binding.py` declares one condition per
+  axis and every cell carries `binding: bound|inert` with its reason. Gate:
+  `test_binding_condition`.
+- **P1 — calibrate the box ✅** Vision (`mnist`, 32/step, 375 batches, 1 epoch,
+  hidden 128, 150k): control 0.8908 ± 0.0024, bar 0.1060, 8.3 s/cell. Tabular
+  (`iris`, 32/step, 20 epochs): control 0.7333 ± 0.0943, bar 0.5055, 4.9 s/cell.
+  Graph and sequence declare no base, so their slices are refused, not priced.
+  Gate: `test_pilot_calibration` (2σ bar, 3-seed control, family filter,
+  own-knobs box, resource vector).
+- **P2 — the census ✅ base box** `map.json` v3: 75 rows, 73 available, 57
+  measured / 6 defect / 12 refused at the vision base, 19.7 min (12.0 s/cell
+  over 62 trained cells, 228 rows/h). Defects: 5 parameter ceilings
+  (`surrogate` 234,898; `attention` 494,986; `causal_transformer` 397,568;
+  `routing` 234,898; `tile` 628,280 vs 150k) and `graph` (a static two-node
+  edge index on 32 feedforward rows). Refusals: 8 task-family, 2 cost caps
+  (`natural_gradient`, `diffusion` at 60 s), 2 declared gaps; 0 swapped; every
+  row carries its box, rule, control and replay hash. The own-knobs box ran
+  the 18 update rows (14 measured, 4 refused). The 6 near-chance bound rows
+  (`pc_alm` 0.1224, `target_inversion` 0.1195, `temporal_trace` 0.1224 inert,
+  `conv` 0.1217, `quantized_adam` 0.1016 inert, `error_predictive_coding`
+  0.1242) are S4's defect probes. Gates: `test_map_summary_matches_census`,
+  `test_every_map_row_has_its_box`.
+- **Open (queued, not S3):** own-knobs for the other five axes (credit,
+  substrate, geometry, dynamics, plasticity); a declared base for the graph and
+  sequence families; the CL runner's `Schedule` still beside `CLConfig`
+  (R-track cells carry no `Record`).
+- **Remaining session:** S4 (P4/P5) — the deep dive, the claim, the published
+  map.
 
-### P0b — One box, one record (schema change) ✅ mostly
-
-**Decision:** can a claim be checked against its run? Now yes for a screened
-cell.
-**Landed:** `Schedule` gains `batch_size`, `steps_per_task` (part of the
-measurement key, printed in the box, written to the map); the loader draws
-`batch_size` rather than reading the batch *count* as the batch size;
-`record_from_evaluation` wraps a completed evaluation in a `Record` (box +
-replay hash) and the P0 log writes `{"screen": …, "record": …}`;
-`ThresholdRegistration.box` round-trips and `PairedComparison.passes` refuses a
-run at another box. **Gate:** `test_box_identity`.
-**Open:** the CL runner still builds its `Schedule` beside `CLConfig` rather
-than deriving the config from it (the R-track cells carry the kernel box but no
-`Record`); a claim is refused for a missing box only when the registration
-declares one.
-
-### P0.5 — The defect queue (before the census) ✅
-
-**Landed:** the 32-batch box (`adam` 0.198) and the 10k ceiling (118,282
-params) were defects, not results; at 375 batches / 150k they measure
-(`adam` 0.927, `lion` 0.914); `mean_norm`'s default step was 10× too large
-(0.01 → 0.887 at 1e-3); `spectral_constrained` and `elastic_consolidation`
-measure 0.626 — a step ladder, not a verdict. `split_mnist` has its domain.
-
-### P0.75 — Declare the binding conditions (no compute; 1 hour) ✅
-
-**Landed:** `sec_binding.py` declares one condition per axis — substrate: a
-substrate-sensitive ruler; credit: a label channel; update: its own step size;
-dynamics: a settle; plasticity: a ψ lifecycle; geometry: a layer/cell/graph form.
-Every cell carries `binding: bound|inert` and the reason.
-**Done when:** an inert slice is never a result about its axis.
-
-### P1 — Calibrate the box (pilot, ~30 min) ✅
-
-**Decision:** at which box does a published control clear the bar on each task
-family, and what does a cell cost?
-**Deliverable:** one base box per family (vision, tabular, graph, sequence):
-`batch_size`, `steps/task`, `epochs`, chosen so the control is above chance
-and the cell is ≤ ~2 min. Publish `cells/hour`, measured, not estimated.
-**Box:** vision: `mnist`, 32/step, 1 epoch, 375 batches, hidden 128, 150k;
-measured control 0.8908 ± 0.0024, bar 0.1060, 8.3 s/cell (434 cells/h).
-Tabular: `iris`, 32/step, 20 epochs; measured control 0.7333 ± 0.0943, bar
-0.5055, 4.9 s/cell (729 cells/h). Graph and sequence have no declared base
-yet, so their slices are `refused` rather than priced at a guessed box.
-**Gate:** the pilot prints control ± σ and the bar (chance/majority + 2σ at the
-ruler's resolution); a slice with a chance control is refused.
-**Done when:** each family has a calibrated base and a measured cost per cell.
-
-### P2 — The census (the first real map; session 16) ✅ base box
-
-**Decision:** of 73 primitives, which train at their slice's base, which need a
-swap, which fail, and at what cost?
-**Deliverable:** `map.json` v3: 75 rows with `status` ∈ {measured, defect,
-refused, unmeasured}, base box, task, rule, control, resource vector.
-Unmeasured rows are `unmeasured`, not absent. A short report: measured/defect/
-refused counts per axis, and the defect list with mechanisms named.
-**Box:** the P1 base for MNIST; a primitive that is illegal at the base is
-measured at its nearest legal box and marked `swapped`; each primitive is also
-measured at its own declared defaults and marked `own-knobs`. The measured base:
-375 batches, hidden 128, 150k ceiling, control 0.8908 ± 0.0024, bar 0.1060.
-**Result (session 16):** 75 rows, 73 available, **57 measured / 6 defect / 12
-refused** at the vision base, 19.7 min walltime (12.0 s/cell mean over the 62
-trained cells, median 7.8 s, 228 rows/h). Defects: 5 parameter-ceiling rows
-(`surrogate` 234,898; `attention` 494,986; `causal_transformer` 397,568;
-`routing` 234,898; `tile` 628,280 against the 150k ceiling) and `graph` (a
-static two-node edge index on 32 feedforward rows). Refusals: 8 task-family
-(3 sequence credits, 3 continual updates, `closed_form_ridge`, `quantum`), 2
-cost caps (`natural_gradient`, `diffusion` at 60 s), and the 2 declared no-op
-plasticity gaps. Every screened row carries its box, rule, control and replay
-hash; no row needed a swap (0 `swapped`). The frontier rows are the 6 measured
-near chance (`pc_alm` 0.1224, `target_inversion` 0.1195, `temporal_trace`
-0.1224 inert, `conv` 0.1217, `quantized_adam` 0.1016 inert, `error_predictive_coding` 0.1242) — defect probes for S4, not verdicts.
-**Open:** own-knobs for the other five axes (the update axis is landed); a
-declared base for the graph and sequence families (their own task slices stay
-refused until measured); the 6 near-chance bound rows are S4's deep-dive
-candidates.
-**Gate:** every row reproducible; every `fail` names a mechanism; the report
-prints the inventory count. Locked by `test_map_summary_matches_census` and
-`test_every_map_row_has_its_box`.
-**Done when:** one map with no missing rows, no inflated status, and every inert
-row named — the base-box map meets this; own-knobs extends it.
-
-### P3 — The interaction slice (the map's structure; ~2 h)
+### P3 — The interaction slice (the map's structure) ✅
 
 **Decision:** which axis pairs change each other at the fixed base?
 **Deliverable:** a factorial slice on the two axes with the most variance over
-`binding=bound` rows (the substrate × credit pair is `PURPOSE.md` §3's
-substrate→algorithm question; credit × geometry is the fallback). 1 seed each at
-the base, the top interactions at 3 seeds; intervals, not a ranking.
+`binding=bound` rows (the substrate × credit pair is `PURPOSE.md` §3's question,
+but at the accuracy ruler substrate has no bound row; the ranking decided credit
+× dynamics — credit × geometry was the predicted fallback). 1 seed each at the
+base, the top pair at 3 seeds; intervals, not a ranking.
 **Box:** the P1 base, only the two varied axes changing.
 **Gate:** the control clears the bar in every cell; a pair with no power is
 marked, not reported.
 **Done when:** the map has a measured interaction layer — the first evidence
 about *which* axes matter together.
 
+**Landed (session 17):** `sec_interaction.py` ranks the axes over measured,
+non-swapped `binding=bound` rows; the top two are credit (variance 0.1017 over
+13 rows) and dynamics (0.1014 over 6); geometry (0.0721) and plasticity
+(0.0661) rank below, and substrate has no bound row at this ruler. The slice is
+the largest 2×2 the system's validator seats (`sec_loop.legal_levels`): an arm
+that cannot compose with the other axis's base level is not a factor level
+here, so the census's most displaced dynamics arm (`error_predictive_coding`,
+which refuses the base credit `gradient`) is skipped and the seated levels are
+credit `gradient → target_inversion`, dynamics `instantaneous → lazy`. The base
+cell is the control (3 seeds, 0.8908); the other three screen at one seed and
+confirm at three, declared before the number exists.
+**Result:** 12 cells, 393 s (`lazy` is the cost: 45 s/cell); the interaction is
++0.0153, 95% CI [−0.0092, +0.0397] at 3 seeds — the pair is additive at this
+box. Each cell carries its own replay hash (the run's seed is in the key; a
+re-run to repair a shared hash reproduced the number, 422 s). The credit arm itself sits at the bar's edge (0.1195), so the null also
+says a settle does not rescue a credit that reads no usable label: a coordinate
+about the pair, and `target_inversion` joins S4's defect probes.
+**Gate:** `test_interaction_power`: the pair is the top two by variance; a
+swapped, refused or defect row never ranks; an inert base level is the
+baseline, not a ranked row; the largest legal 2×2 seats the slice and a pair
+with no legal 2×2 is refused; one seed carries no interval and three carry one;
+a control inside the bar marks `no_power` without pricing a cell; the map keeps
+the layer through a later axis-by-axis run.
+**Open:** one pair at one box — a second pair waits for the map's next variance
+ranking (the graph/sequence bases will change it); the four cells are
+measurements, not a verdict (a claim needs the S4 ladder and paired seeds).
+
 ### P4 — The deep dive (the thesis, chosen by the map)
 
 **Decision:** which region deserves a matched, tuned comparison?
 **Deliverable:** the census's most surprising measurement (today's candidates
-are defect probes: `diffusion` 0.116 at 136 s, `conv` 0.122 at 41 s): a 3-point
-ladder on its primary knob, then 5 paired seeds at matched boxes; pre-registered
-margin, fixed n, no peeking.
+are defect probes: `diffusion` 0.116 at 136 s, `conv` 0.122 at 41 s,
+`target_inversion` 0.1195 whose interaction arm also sits at the bar): a
+3-point ladder on its primary knob, then 5 paired seeds at matched boxes;
+pre-registered margin, fixed n, no peeking.
 **Box:** the candidate's own base; its knob ladder only if the map has a
 measurement there.
 **Gate:** the paired CI at `n_max`; the claim names its box.
