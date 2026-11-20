@@ -256,21 +256,13 @@ class TestDeepNetworkCreditAssignment:
         model.train()  # type: ignore[attr-defined]
         metrics = model.train_step(x, y)  # ruff: ignore[unused-variable]
 
-        # Find first layer weight via geometry params
-        params = model.geometry.params
-        first_layer_weight = None
-        for name, param in params.items():
-            if (
-                "weight" in name.lower()
-                and "bias" not in name.lower()
-                and ("layer_0" in name or "W_in" in name)
-            ):
-                first_layer_weight = param
-                break
-
-        if first_layer_weight is None:
-            pytest.skip("Could not find first layer weight")
-
+        weights = [
+            param
+            for name, param in model.geometry.params.items()
+            if name.endswith(".weight") and param.ndim == 2
+        ]
+        assert weights, "the geometry carries no 2-D weight"
+        first_layer_weight = weights[0]
         assert first_layer_weight.grad is not None, "First layer should have gradients"
         grad_mag = first_layer_weight.grad.abs().mean().item()
         assert grad_mag > 1e-6, (

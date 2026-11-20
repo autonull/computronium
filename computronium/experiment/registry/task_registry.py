@@ -57,6 +57,11 @@ class TaskSpecEnriched:
     typical_lr: float = 1e-3
     tags: tuple[str, ...] = field(default_factory=tuple)
     description: str = ""
+    #: The declared task families this task is screened on, in base-preference
+    #: order (TODO97 §6.2). A task may serve more than one family
+    #: (``split_mnist``: vision + continual); an empty tuple is undeclared, so
+    #: no family filter applies. The task's own row, not a domain lookup.
+    task_families: tuple[str, ...] = ()
     #: Held-out samples the primary ruler resolves a claim at. A bar read at
     #: chance alone is a coin flip; with the resolution it carries its 2σ band
     #: (TODO95 S2). ``None`` keeps the chance floor, uncalibrated.
@@ -152,6 +157,7 @@ def _graph_classification_spec(
     return TaskSpecEnriched(
         name=name,
         domain=DomainType.GRAPH,
+        task_families=("graph",),
         input_shape=None,  # Variable: one row per node
         output_dim=2,
         cost_class=CostClass.MEDIUM,
@@ -185,6 +191,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "xor": TaskSpecEnriched(
         name="xor",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(2,),
         output_dim=2,
         cost_class=CostClass.CHEAP,
@@ -240,6 +247,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "spiral": TaskSpecEnriched(
         name="spiral",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(2,),
         output_dim=3,
         cost_class=CostClass.CHEAP,
@@ -295,6 +303,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "circles": TaskSpecEnriched(
         name="circles",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(2,),
         output_dim=2,
         cost_class=CostClass.CHEAP,
@@ -328,6 +337,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "digits": TaskSpecEnriched(
         name="digits",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(64,),
         output_dim=10,
         cost_class=CostClass.CHEAP,
@@ -361,6 +371,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "mnist": TaskSpecEnriched(
         name="mnist",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(1, 28, 28),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -398,6 +409,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "split_mnist": TaskSpecEnriched(
         name="split_mnist",
         domain=DomainType.VISION,
+        task_families=("vision", "continual"),
         input_shape=(1, 28, 28),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -429,6 +441,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "fashion_mnist": TaskSpecEnriched(
         name="fashion_mnist",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(1, 28, 28),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -462,6 +475,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "kmnist": TaskSpecEnriched(
         name="kmnist",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(1, 28, 28),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -495,6 +509,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "usps": TaskSpecEnriched(
         name="usps",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(1, 16, 16),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -528,6 +543,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "cifar10": TaskSpecEnriched(
         name="cifar10",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(3, 32, 32),
         output_dim=10,
         cost_class=CostClass.EXPENSIVE,
@@ -570,6 +586,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "sequential_mnist": TaskSpecEnriched(
         name="sequential_mnist",
         domain=DomainType.VISION,
+        task_families=("vision",),
         input_shape=(1, 28, 28),
         output_dim=10,
         cost_class=CostClass.MEDIUM,
@@ -627,6 +644,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "copy_task": TaskSpecEnriched(
         name="copy_task",
         domain=DomainType.MEMORY,
+        task_families=("sequence", "continual"),
         input_shape=(21,),  # 10 source tokens + delimiter + up to 10 copied prefix
         output_dim=8,  # vocabulary; the delimiter (8) and pad (9) are never targets
         cost_class=CostClass.CHEAP,
@@ -657,6 +675,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "delayed_cue": TaskSpecEnriched(
         name="delayed_cue",
         domain=DomainType.MEMORY,
+        task_families=("sequence", "continual"),
         input_shape=(10,),
         output_dim=10,
         cost_class=CostClass.CHEAP,
@@ -687,6 +706,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "tiny_shakespeare": TaskSpecEnriched(
         name="tiny_shakespeare",
         domain=DomainType.LANGUAGE,
+        task_families=("sequence", "lm"),
         input_shape=(100,),  # seq_len
         output_dim=65,  # character vocab
         cost_class=CostClass.EXPENSIVE,
@@ -733,6 +753,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "char_ngram": TaskSpecEnriched(
         name="char_ngram",
         domain=DomainType.LANGUAGE,
+        task_families=("sequence", "lm"),
         # The task predicts one character from a flat context window of
         # ``context_len`` previous characters; it is not a token sequence, so
         # the shape is the window and the geometry is the MLP that reads it.
@@ -762,6 +783,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "pendulum": TaskSpecEnriched(
         name="pendulum",
         domain=DomainType.RL,
+        task_families=("rl",),
         input_shape=(3,),  # cos(theta), sin(theta), theta_dot
         output_dim=1,  # torque
         cost_class=CostClass.MEDIUM,
@@ -815,6 +837,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "acrobot": TaskSpecEnriched(
         name="acrobot",
         domain=DomainType.RL,
+        task_families=("rl",),
         input_shape=(6,),
         output_dim=3,
         cost_class=CostClass.MEDIUM,
@@ -841,6 +864,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "cartpole": TaskSpecEnriched(
         name="cartpole",
         domain=DomainType.RL,
+        task_families=("rl",),
         input_shape=(4,),
         output_dim=2,
         cost_class=CostClass.CHEAP,
@@ -867,6 +891,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "cora": TaskSpecEnriched(
         name="cora",
         domain=DomainType.GRAPH,
+        task_families=("graph",),
         input_shape=(1433,),  # Node features
         output_dim=7,  # Classes
         cost_class=CostClass.MEDIUM,
@@ -899,6 +924,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "citeseer": TaskSpecEnriched(
         name="citeseer",
         domain=DomainType.GRAPH,
+        task_families=("graph",),
         input_shape=(3703,),
         output_dim=6,
         cost_class=CostClass.MEDIUM,
@@ -930,6 +956,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "pubmed": TaskSpecEnriched(
         name="pubmed",
         domain=DomainType.GRAPH,
+        task_families=("graph",),
         input_shape=(500,),
         output_dim=3,
         cost_class=CostClass.MEDIUM,
@@ -976,6 +1003,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "breast_cancer": TaskSpecEnriched(
         name="breast_cancer",
         domain=DomainType.TABULAR,
+        task_families=("tabular",),
         input_shape=(30,),
         output_dim=2,
         cost_class=CostClass.CHEAP,
@@ -1005,6 +1033,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "iris": TaskSpecEnriched(
         name="iris",
         domain=DomainType.TABULAR,
+        task_families=("tabular",),
         input_shape=(4,),
         output_dim=3,
         cost_class=CostClass.CHEAP,
@@ -1033,6 +1062,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "wine": TaskSpecEnriched(
         name="wine",
         domain=DomainType.TABULAR,
+        task_families=("tabular",),
         input_shape=(13,),
         output_dim=3,
         cost_class=CostClass.CHEAP,
@@ -1062,6 +1092,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "diabetes": TaskSpecEnriched(
         name="diabetes",
         domain=DomainType.TABULAR,
+        task_families=("tabular",),
         input_shape=(10,),
         output_dim=1,
         cost_class=CostClass.CHEAP,
@@ -1098,6 +1129,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "synthetic_forecast": TaskSpecEnriched(
         name="synthetic_forecast",
         domain=DomainType.TIMESERIES,
+        task_families=("sequence",),
         input_shape=(32,),
         output_dim=1,
         cost_class=CostClass.CHEAP,
@@ -1141,6 +1173,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "pendulum_state": TaskSpecEnriched(
         name="pendulum_state",
         domain=DomainType.SCIENTIFIC,
+        task_families=("scientific",),
         input_shape=(3,),  # sin(theta), cos(theta), theta_dot
         output_dim=3,  # next sin(theta), cos(theta), theta_dot
         cost_class=CostClass.CHEAP,
@@ -1184,6 +1217,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     "lorenz_state": TaskSpecEnriched(
         name="lorenz_state",
         domain=DomainType.SCIENTIFIC,
+        task_families=("scientific",),
         input_shape=(3,),  # x, y, z
         output_dim=3,  # next x, y, z
         cost_class=CostClass.CHEAP,

@@ -44,13 +44,14 @@ __all__ = [
     "TASK_FAMILIES",
     "BaseBox",
     "Calibration",
+    "base_family",
     "base_schedule",
     "calibrate_control",
     "family_of",
     "own_knob_params",
     "refusal_for",
     "resource_vector",
-    "task_family",
+    "task_families",
 ]
 
 #: Every task family the primitive layer declares, in one place. A family in
@@ -188,28 +189,26 @@ class Calibration:
         return self.control_std / math.sqrt(self.seeds)
 
 
-# Axis -> task family, declared once. A task family the axis vocabulary does
-# not name maps to ``None`` and is not filtered (the axis binds elsewhere).
-_FAMILY_OF_DOMAIN: Final[Mapping[str, str]] = MappingProxyType({
-    "vision": "vision",
-    "tabular": "tabular",
-    "graph": "graph",
-    "timeseries": "sequence",
-    "lm": "sequence",
-    "language": "sequence",
-    "rl": "rl",
-    "continual": "continual",
-    "memory": "continual",
-})
+def task_families(task_id: str) -> tuple[str, ...]:
+    """The families a task declares, in base-preference order.
 
-
-def task_family(task_id: str) -> str | None:
-    """The task family a task belongs to, or ``None`` when undeclared."""
+    An undeclared or unknown task has no families, so no family filter applies:
+    a missing declaration is not a refusal.
+    """
     try:
-        domain = TaskRegistry().get(task_id).domain.value
+        return TaskRegistry().get(task_id).task_families
     except Exception:
-        return None
-    return _FAMILY_OF_DOMAIN.get(str(domain))
+        return ()
+
+
+def base_family(task_id: str) -> str | None:
+    """The declared family whose base box is this task, else the first declared."""
+    families = task_families(task_id)
+    for family in families:
+        box = BASE_BOXES.get(family)
+        if box is not None and box.task_id == task_id:
+            return family
+    return families[0] if families else None
 
 
 def family_of(entry: PrimitiveCensusEntry) -> frozenset[str]:
@@ -221,19 +220,20 @@ def refusal_for(entry: PrimitiveCensusEntry, task_id: str) -> str | None:
     """Why a primitive cannot run on the task, or ``None`` when it composes.
 
     The rule is the primitive's own ``task_families`` declaration against the
-    task's family. An empty declaration composes everywhere; an unknown task
-    family is not filtered, because the primitive's declaration is the only
-    source and a missing domain is not a refusal.
+    task's declared families: one shared family composes the pair (split_mnist
+    is both a vision and a continual task). An empty declaration composes
+    everywhere; an undeclared task family is not filtered, because the
+    primitive's declaration is the only source.
     """
-    families = family_of(entry)
-    if not families:
+    declared = family_of(entry)
+    if not declared:
         return None
-    family = task_family(task_id)
-    if family is None or family in families:
+    families = frozenset(task_families(task_id))
+    if not families or declared & families:
         return None
     return (
-        f"`{entry.id}` composes no {family} task family "
-        f"(declares {', '.join(sorted(families))}); the slice refuses it before "
+        f"`{entry.id}` composes no {' or '.join(sorted(families))} task family "
+        f"(declares {', '.join(sorted(declared))}); the slice refuses it before "
         "it is priced (TODO95 S2)"
     )
 
@@ -273,7 +273,7 @@ def own_knob_params(axis: str, primitive: str) -> dict[str, object]:
 
 def base_schedule(task_id: str, device: str = "auto") -> Schedule | None:
     """The family's declared base box as a schedule, or ``None`` when unpriced."""
-    family = task_family(task_id)
+    family = base_family(task_id)
     box = BASE_BOXES.get(family) if family is not None else None
     if box is None or box.task_id != task_id:
         return None

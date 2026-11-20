@@ -81,7 +81,7 @@ def test_absent_kernel_refuses_parity(spec) -> None:
     """The parity test passes only when the kernel path is implemented."""
     primitive = _primitive(spec)
     if primitive.kernel_status == "implemented":
-        pytest.skip("implemented kernels are covered by the parity contract")
+        pytest.skip("declared: implemented kernels are covered by the parity contract")
 
     from computronium.primitives.protocol import ReferenceAdapter
 
@@ -95,7 +95,7 @@ def test_implemented_kernel_carries_its_evidence(spec) -> None:
     """An implemented kernel names its entrypoint, a route, and microbench evidence."""
     primitive = _primitive(spec)
     if primitive.kernel_status != "implemented":
-        pytest.skip("only applies to implemented kernels")
+        pytest.skip("declared: only applies to implemented kernels")
 
     assert primitive.kernel_entrypoint, f"{spec.id}: no kernel entrypoint"
     assert _has_microbench_evidence(spec), (

@@ -151,7 +151,7 @@ class TestLegalityBoundary:
         declared = _get_declared_constraints()
 
         if not declared:
-            pytest.skip("No DECLARED constraints registered yet")
+            pytest.skip("declared: no DECLARED constraints registered yet")
 
         missing_proofs = []
         for constraint in declared:
@@ -173,7 +173,7 @@ class TestLegalityBoundary:
         declared = _get_declared_constraints()
 
         if not declared:
-            pytest.skip("No DECLARED constraints registered yet")
+            pytest.skip("declared: no DECLARED constraints registered yet")
 
         heuristic_violations = []
         for constraint in declared:
@@ -204,7 +204,7 @@ class TestLegalityBoundary:
         declared = _get_declared_constraints()
 
         if not declared:
-            pytest.skip("No DECLARED constraints registered yet")
+            pytest.skip("declared: no DECLARED constraints registered yet")
 
         performance_keywords = [
             "accuracy",
@@ -241,7 +241,7 @@ class TestLegalityBoundary:
         declared = _get_declared_constraints()
 
         if not declared:
-            pytest.skip("No DECLARED constraints registered yet")
+            pytest.skip("declared: no DECLARED constraints registered yet")
 
         soft_violations = []
         for constraint in declared:

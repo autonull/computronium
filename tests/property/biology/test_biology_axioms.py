@@ -196,8 +196,10 @@ class TestLyapunovEnergyDescent:
 
         # Energy should be monotonic (deltas should decrease)
         deltas = telemetry.deltas
-        if len(deltas) < 2:
-            pytest.skip("Trajectory too short")
+        assert len(deltas) >= 2, (
+            f"settle recorded {len(deltas)} energy delta(s); the descent law "
+            "needs at least one step pair"
+        )
 
         # Assert monotone non-increase of deltas (energy proxy)
         slack = 1e-3
@@ -259,102 +261,51 @@ class TestFixedPointReliability:
 
 
 class TestWeightTransportFreeness:
-    """Verify Feedback Alignment models use random fixed B ≠ W.T."""
+    """Verify native FA uses random fixed B ≠ W.T."""
 
-    def test_tile_fa_backward_weights_not_transpose(self, synthetic_mlp_task):
-        """Assert B ≠ W.T at initialization for Tile FA."""
-        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+    def test_native_fa_backward_weights_not_transpose(self, synthetic_mlp_task):
+        """Assert B ≠ W.T at initialization for the native FA credit."""
+        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
-        config = TileAlgorithmConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            neurons_per_tile=hidden_dim,
-            tiles_per_layer=1,
-            num_hidden_layers=1,
-            algorithm="fa",
-            mode="fa",
-            free_steps=10,
-            nudged_steps=10,
-            learning_rate=0.001,
+        model = create_native_fa_mlp(
+            input_dim, hidden_dim, output_dim, lr=0.001, feedback_scale=0.1
         )
-        model = TileAlgorithm(config)
+        model.train()
+        model.train_step(x[:16], y[:16])
 
-        forward_weights = []
-        backward_weights = []
-
-        for name, param in model.named_parameters():
-            if "weight" in name.lower() and "bias" not in name.lower():
-                if (
-                    "backward" in name.lower()
-                    or "feedback" in name.lower()
-                    or "B" in name
-                ):
-                    backward_weights.append((name, param.data.clone()))
-                elif (
-                    "forward" in name.lower() or "W" in name or "layer" in name.lower()
-                ):
-                    forward_weights.append((name, param.data.clone()))
-
-        if not backward_weights:
-            pytest.skip("Tile FA: no backward/feedback weights found")
-
-        for b_name, B in backward_weights:
-            for w_name, W in forward_weights:
-                if B.shape == W.T.shape:
-                    diff = torch.norm(B - W.T).item()
-                    assert diff > 1e-3, (
-                        f"Tile FA: backward weight {b_name} matches forward {w_name} transpose! "
-                        f"||B - W.T|| = {diff:.6f}"
-                    )
-                    return
-
-        pytest.skip("Tile FA: no comparable forward/backward weight shapes")
-
-    def test_tile_fa_backward_path_separate(self, synthetic_mlp_task):
-        """Assert backward pass doesn't read forward weights (separate tensors)."""
-        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
-
-        config = TileAlgorithmConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            neurons_per_tile=hidden_dim,
-            tiles_per_layer=1,
-            num_hidden_layers=1,
-            algorithm="fa",
-            mode="fa",
-            free_steps=10,
-            nudged_steps=10,
-            learning_rate=0.001,
-        )
-        model = TileAlgorithm(config)
-
-        feedback_weights = []
-        for name, param in model.named_parameters():
-            if "backward" in name.lower() or "feedback" in name.lower() or "B" in name:
-                feedback_weights.append((name, param))
-
-        if not feedback_weights:
-            pytest.skip("No feedback weights found")
-
-        forward_weights = [
-            p
-            for n, p in model.named_parameters()
-            if "weight" in n.lower()
-            and "bias" not in n.lower()
-            and "backward" not in n.lower()
-            and "feedback" not in n.lower()
-            and "B" not in n
+        pairs = [
+            (name, feedback, model.geometry.params[name])
+            for name, feedback in model.credit._feedback_weights.items()
+            if feedback.ndim == 2
+            and feedback.shape == model.geometry.params[name].T.shape
         ]
+        assert pairs, "native FA built no feedback matrix over a weight transpose"
 
-        for b_name, B in feedback_weights:
-            for W in forward_weights:
-                assert B.data_ptr() != W.data_ptr(), (
-                    f"Feedback weight {b_name} shares memory with forward weight!"
-                )
-                if B.shape == W.T.shape:
-                    assert B.data_ptr() != W.T.contiguous().data_ptr(), (
-                        f"Feedback weight {b_name} is view of forward transpose!"
-                    )
+        for name, B, W in pairs:
+            diff = torch.norm(B - W.T).item()
+            assert diff > 1e-3, (
+                f"Native FA: feedback {name} matches its forward transpose; "
+                f"||B - W.T|| = {diff:.6f}"
+            )
+
+    def test_native_fa_backward_path_separate(self, synthetic_mlp_task):
+        """Assert the feedback path reads its own tensors, not the forward weights."""
+        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+
+        model = create_native_fa_mlp(
+            input_dim, hidden_dim, output_dim, lr=0.001, feedback_scale=0.1
+        )
+        model.train()
+        model.train_step(x[:16], y[:16])
+
+        feedback_weights = model.credit._feedback_weights
+        assert feedback_weights, "native FA built no feedback matrices"
+
+        for name, B in feedback_weights.items():
+            W = model.geometry.params[name]
+            assert B.data_ptr() != W.data_ptr(), (
+                f"Feedback weight {name} shares memory with its forward weight"
+            )
 
 
 # =============================================================================
@@ -363,77 +314,39 @@ class TestWeightTransportFreeness:
 
 
 class TestAdaptiveFAAlignment:
-    """Verify feedback alignment matrices align with forward weights over training."""
+    """Verify an adaptive FA rule moves B toward W.T over training."""
 
     @pytest.mark.xfail(
-        reason="AdaptiveFA feedback LR too small to show alignment in 50 steps"
+        strict=True,
+        reason="adaptive feedback alignment (B <- B + eta*delta*a^T) is not "
+        "implemented: RandomProjectionsCredit fixates B at init, so B never "
+        "moves toward W.T",
     )
-    def test_feedback_alignment_improves(self, synthetic_mlp_task):  # ruff: ignore[complex-structure, too-many-locals]
-        """After K=50 steps, cos(B, W.T) should increase from initial random value."""
+    def test_feedback_alignment_improves(self, synthetic_mlp_task):
+        """After 50 steps the adaptive rule has moved B toward W.T."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
-        config = TileAlgorithmConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            neurons_per_tile=hidden_dim,
-            tiles_per_layer=1,
-            num_hidden_layers=1,
-            algorithm="fa",
-            mode="fa",
-            free_steps=10,
-            nudged_steps=10,
-            learning_rate=0.001,
+        model = create_native_fa_mlp(
+            input_dim, hidden_dim, output_dim, lr=0.001, feedback_scale=0.01
         )
-        model = TileAlgorithm(config)
-
-        B_weights = []
-        W_weights = []
-        for name, param in model.named_parameters():
-            if "backward" in name.lower() or "feedback" in name.lower() or "B" in name:
-                B_weights.append(param)
-            elif (
-                "forward" in name.lower()
-                and "weight" in name.lower()
-                and "bias" not in name.lower()
-            ):
-                W_weights.append(param)
-
-        if not B_weights or not W_weights:
-            pytest.skip("Could not find both feedback and forward weights")
-
-        initial_alignments = []
-        for B in B_weights:
-            for W in W_weights:
-                if B.shape == W.T.shape:
-                    cos = torch.dot(B.flatten(), W.T.flatten()) / (
-                        torch.norm(B) * torch.norm(W.T) + 1e-8
-                    )
-                    initial_alignments.append(cos.item())
-
-        if not initial_alignments:
-            pytest.skip("No matching shape pairs for alignment")
-
-        xb = x[:32]
-        yb = y[:32]
         model.train()
-        for step in range(50):
-            model.train_step(xb, yb)
+        model.train_step(x[:32], y[:32])
 
-        final_alignments = []
-        for B in B_weights:
-            for W in W_weights:
-                if B.shape == W.T.shape:
-                    cos = torch.dot(B.flatten(), W.T.flatten()) / (
-                        torch.norm(B) * torch.norm(W.T) + 1e-8
-                    )
-                    final_alignments.append(cos.item())
+        before = {
+            name: feedback.detach().clone()
+            for name, feedback in model.credit._feedback_weights.items()
+        }
+        assert before, "native FA built no feedback matrices"
 
-        max_initial = max(initial_alignments)
-        max_final = max(final_alignments)
-        assert max_final > max_initial + 0.05, (
-            f"Feedback alignment did not improve: "
-            f"initial max={max_initial:.4f}, final max={max_final:.4f}"
-        )
+        for _ in range(50):
+            model.train_step(x[:32], y[:32])
+
+        moved = [
+            name
+            for name, feedback in model.credit._feedback_weights.items()
+            if not torch.equal(before[name], feedback.detach())
+        ]
+        assert moved, "adaptive FA never moved B: feedback stays fixed at init"
 
 
 # =============================================================================

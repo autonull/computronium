@@ -281,15 +281,20 @@ def kernel_stub_pass() -> list[Finding]:
     return findings
 
 
-#: Reasons a skip may name: the environment, never the capability.
+#: Reasons a skip may name: the environment, never the capability. Matched
+#: case-insensitively, so a tool's name is the tool whether it is capitalized.
 ENVIRONMENT_SKIPS = (
-    "CUDA",
+    "cuda",
+    "cupy",
+    "cpu fallback",
+    "triton",
     "dataset",
     "database",
     "network",
-    "GPU",
+    "gpu",
     "disk",
     "platform",
+    "no --experiment-db",
 )
 
 
@@ -319,7 +324,8 @@ def capability_skip() -> list[Finding]:
         if tree is None:
             continue
         for lineno, reason in _skips(tree):
-            if any(marker in reason for marker in ENVIRONMENT_SKIPS):
+            lowered = reason.lower()
+            if any(marker in lowered for marker in ENVIRONMENT_SKIPS):
                 continue
             if reason.startswith("declared:"):
                 continue

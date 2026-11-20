@@ -57,11 +57,7 @@ from computronium.experiment.sec_census import (
     PrimitiveCensusEntry,
     build_census,
 )
-from computronium.experiment.sec_pilot import (
-    base_schedule,
-    calibrate_control,
-    resource_vector,
-)
+from computronium.experiment.sec_pilot import base_schedule, resource_vector
 
 if TYPE_CHECKING:
     from computronium.experiment.sec_interaction import (
@@ -517,8 +513,12 @@ def _control_stats(
     """
     del device  # the schedule carries the device the control runs on
     try:
-        from computronium.experiment.sec_pilot import task_family, calibrate_control
-        family = task_family(schedule.task_id)
+        from computronium.experiment.sec_pilot import (
+            base_family,
+            calibrate_control,
+        )
+
+        family = base_family(schedule.task_id)
         calibration = calibrate_control(schedule, evaluate=evaluate_cell, family=family)
     except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
         logger.exception("P0 control cell failed at the box")

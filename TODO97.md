@@ -6,7 +6,9 @@ instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S5d COMPLETE (the hard gate)** — `ReferenceAdapter` is real: `make_task_case` builds the axis micro-case from a composed `SystemConfig`, and `reference_step` runs the law through `cases.step`, with no exception swallowed anywhere. `computronium/primitives/cases.py` is the one case/step layer (one builder and one step per axis; the per-primitive difference is data). The declared space is now the legality oracle through `_compiled_void_constraints`, so a law that only runs beside a particular companion gets that companion: credit laws on recurrent/module geometry, sequence credits on a time-major batch, diffusion on a settled geometry. Green: `tests/primitives` 666 passed / 152 declared skips; contract suite 519 passed / 2 declared no-op skips; parity 14 passed / 150 declared absent-kernel skips; the six property locks + the extension path 71 passed. Deleted `test_primitive_wiring.py` (~284 duplicate rung-0 tests, 12 capability skips) — the adapter contract plus the six axis contracts carry the same rungs. Fixed along the way: `update_pseudo_grads` emitted one gradient per parameter instead of one per learnable weight (the credit contract's order); `SystemConfig.validate` now refuses a diffusion settling on a time-major geometry (measured crash in `_compute_interaction_energy`); the plasticity dispatch is one `plasticity_from_config`; `_credit_from_config` is the one credit dispatcher.
 
-**Progress:** [2026-11-19] ✅ **S6c COMPLETE (the audit reads all 13 predicates)** — the six completeness predicates landed in `scripts/audit.py`: `capability_skip`, `impossible_without_lock`, `quiet_row_without_lock`, `unaccounted_row`, `claim_count_mismatch`, `compatibility_alias`. A skip names the environment, or the row's own declaration (`declared:`), and nothing else. `--static` reports 30 findings: 22 environment/declared skips, **7 true findings** (6 capability skips in `tests/property/biology/test_biology_axioms.py`, 1 retired `_FAMILY_OF_DOMAIN` in `experiment/sec_pilot.py`). `unaccounted_row`, `claim_count_mismatch`, and `impossible_without_lock` are already 0.
+**Progress:** [2026-11-19] ✅ **S6c COMPLETE (the audit reads all 13 predicates)** — the six completeness predicates landed in `scripts/audit.py`: `capability_skip`, `impossible_without_lock`, `quiet_row_without_lock`, `unaccounted_row`, `claim_count_mismatch`, `compatibility_alias`. A skip names the environment, or the row's own declaration (`declared:`), and nothing else. `--static` now reports **0 findings**: the seven-finding queue (below) closed, and the environment markers are matched case-insensitively (`triton`, `CuPy`, `CPU fallback`, `no --experiment-db`), so a tool-less skip names the tool and only a capability skip names a missing mechanism. `unaccounted_row`, `claim_count_mismatch`, and `impossible_without_lock` stay 0.
+
+**Progress:** [2026-11-19] ✅ **S6c QUEUE CLOSED (audit --static exits 0)** — the six biology capability skips are gone. The two weight-transport tests now build the native FA System (`create_native_fa_mlp`; `RandomProjectionsCredit` B ≠ Wᵀ with separate storage) instead of the legacy `TileAlgorithm(algorithm="fa")`, which carries no feedback matrices; the energy-descent test asserts its step count; adaptive FA is `xfail(strict=True)` naming the missing `B ← B + η·δ·aᵀ` rule. `_FAMILY_OF_DOMAIN` is deleted: `TaskSpecEnriched.task_families` is the one declaration, populated for all 30 tasks (`split_mnist`: vision+continual, `copy_task`: sequence+continual, `tiny_shakespeare`/`char_ngram`: sequence+lm), `refusal_for` compares family **sets** (one shared family composes), and `base_family` picks the family whose base box is the task. Green: biology 6 passed / 3 xfailed; the six locks + pilot + boundary + all-implementations 226 passed / 79 skipped / 3 xfailed / 3 xpassed.
 
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
@@ -48,7 +50,7 @@ question.
 | S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ✅ DONE — cases.py; contract 519 passed, axis contracts green |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
 | S6b | Audit measurement gate (5 unimplemented ladders) | ⏳ PENDING — the 5 ladder records |
-| S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 30 findings, 7 true (queue below) |
+| S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
 
 ## 0. The three states (binding amendment, 2026-11-19)
@@ -125,23 +127,27 @@ verdict, or a capability that works — never on "tests consolidated".
 
 1. ~~**S5d**~~ ✅ done. The gate is `tests/primitives` (666 passed, 152
    declared skips) and the six property locks (65 passed).
-2. ~~**S6c**~~ ✅ done. The audit's seven remaining findings are the queue:
-   **a.** `tests/property/biology/test_biology_axioms.py:200,299,311,337,402,414`
-   skips name a mechanism the test cannot find (a Tile-FA shape pair, a
-   trajectory short enough to be undefined). Each is `unimplemented` or
-   `defective`: give it a failing test or the primitive it needs.
-   **b.** `computronium/experiment/sec_pilot.py` still carries
-   `_FAMILY_OF_DOMAIN`; replace it with `TaskSpecEnriched.task_families`
-   (§6.2) and delete the table.
-3. **S6b** — run the 5 ladders the audit reports
+2. ~~**S6c**~~ ✅ done, **queue closed**:
+   **a.** ~~six biology capability skips~~ ✅ the tests read the native FA
+   credit; adaptive FA is a strict xfail naming its missing rule.
+   **b.** ~~`_FAMILY_OF_DOMAIN`~~ ✅ deleted; `TaskSpecEnriched.task_families`
+   is the one declaration, and `family_without_base` reads `TASK_FAMILIES`.
+3. **S6b — NEXT** — run the 5 ladders the full audit reports
    (`forward_tangent`, `local_contrastive`, `pc_alm`, `random_projections`,
    `target_inversion`) and write each record into the map's `deep_dive` (or a
-   `ladders` table) so the audit exits 0.
+   `ladders` table) so the full `scripts/audit.py` exits 0, not only `--static`.
+   Stop rule per §4.2: a 3-point ladder at 1 seed each, then one confirmation
+   seed at the best point; if every point sits inside the bar's 2σ band the row
+   is `unimplemented` with a failing test that names the missing primitive
+   (not "the algorithm fails").
 4. **S3b** — calibrate the 6 new family bases (3-seed control, bar, cost,
    replay hash); `family_without_base` is green, calibration is not.
 5. **S7** — point the 10 verified primitives at the existing acceleration
    modules; flip their `kernel_status` to `implemented` and satisfy
    `test_implemented_kernel_carries_its_evidence`.
+6. **S6d** — close the audit's blind spot on non-literal skip reasons (§8.2);
+   the gate must see the 28 f-string/variable skips before it can claim
+   "0 capability skips".
 
 ---
 
@@ -638,8 +644,17 @@ test, or deleted.
 
 The first seven are structural and implemented (S6a). The last six are the
 completeness gate: they are what make a quiet "gap", a silent skip, and a
-backwards-compatible crutch impossible. They are specified here and land in
-**S6c**; until then `--static` covers the seven structural predicates only.
+backwards-compatible crutch impossible. They are specified here and landed in
+**S6c**.
+
+**Known blind spot (S6d, open defect).** `capability_skip` reads literal
+reasons only: a skip whose reason is an f-string or a variable (`pytest.skip(f"…")`,
+`pytest.skip(SEED_BLIND[id])`) evades the gate — 28 non-literal sites, several
+in `tests/primitives`. The gate is green on the literal subset, not on every
+skip. Close: make the scanner report a non-literal skip, and require the 152
+declared skips to say `declared:` literally (or parse a constant prefix). The
+failing test is an audit fixture whose f-string skip is classified as a
+capability skip; do not call the current 0 findings complete.
 
 ---
 
@@ -730,7 +745,7 @@ uv run python -m computronium.experiment.sec_loop \
 
 # 4. Audit
 uv run python scripts/audit.py
-#    S6a: static predicates green; 5 unimplemented ladders remain (S6b)
+#    --static: 0 findings. Measurement gate: 5 ladders remain (S6b)
 #    --check <name> runs one predicate; --json emits machine-readable findings
 ```
 

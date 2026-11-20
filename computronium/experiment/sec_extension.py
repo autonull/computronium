@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.sec_census import MAP_VERSION
-from computronium.experiment.sec_pilot import BASE_BOXES, task_family
+from computronium.experiment.sec_pilot import BASE_BOXES, task_families
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -73,8 +73,8 @@ def _slice_problems(
             "before it is priced"
         )
     task = row.get("task")
-    if task is not None and task_family(str(task)) != family:
-        screened = task_family(str(task)) or "an undeclared family"
+    if task is not None and family not in task_families(str(task)):
+        screened = ", ".join(task_families(str(task))) or "an undeclared family"
         problems.append(f"row screened on {screened}, not {family}")
     return problems
 
