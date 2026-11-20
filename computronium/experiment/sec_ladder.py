@@ -237,10 +237,22 @@ def failing_test(primitive: str) -> str:
 def ladder_rows(
     document: Mapping[str, Any],
 ) -> list[tuple[str, Mapping[str, Any], float]]:
-    """Every bound row inside the near-chance band, with its chance rate."""
+    """Every bound row inside the near-chance band, with its chance rate.
+
+    The family's own base coordinate is the control, not a candidate: the
+    calibration measured it over ``CONTROL_SEEDS`` and the map carries that
+    mean in ``inventory``. A screen that swaps an axis back to the box's own
+    value (``credit=gradient`` on vision) re-measures the control, so asking it
+    for a ladder would adjudicate a number the control already decides.
+    """
+    base = document.get("base") or {}
     rows: list[tuple[str, Mapping[str, Any], float]] = []
     for spec_id, row in (document.get("primitives") or {}).items():
         if row.get("binding") != "bound":
+            continue
+        axis = row.get("axis")
+        box = row.get("box") or {}
+        if axis and box.get(axis) == base.get(axis):
             continue
         value = (row.get("measurement") or {}).get("val_acc")
         chance = chance_of(str(row.get("ruler", "")))

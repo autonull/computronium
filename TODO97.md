@@ -53,37 +53,67 @@ defects named); six families and the size boxes remain.
 | S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — unimplemented (feedback alignment missing); graph works |
 | S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ✅ DONE — cases.py; contract 519 passed, axis contracts green |
 | S5e | Screen every declared vision row; ladder every near-chance bound row | ✅ DONE — 52/52 vision accounted (45 measured, 4 defective, 26 refused); 8 ladder records |
+| S5f | Screen the remaining families at their base boxes | ✅ DONE — tabular 34/34, continual 48 measured + 6 defect, rl 16 + 6, scientific 6, neuromorphic 11, sequence 46 + 6, lm 28 + 25 |
+| S5g | Fix the family-declaration gap the screens exposed | ✅ DONE — every base axis declares its family (lock: `test_every_base_axis_declares_its_family`); lm/scientific/neuromorphic now have declared rows |
+| S5h | File the defects the new screens found | ⏳ PENDING — time-major credits on rl (D18, 1 xfail filed), nca grid (D16), causal_transformer vocabulary, ntm double backward, lm token layout (25 rows) |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
 | S6b | Audit measurement gate (5 ladders) | ✅ DONE — 2 tuned, 3 unimplemented; audit 0 |
 | S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
 | S6d | Skip scanner reads f-strings and non-literal reasons | ✅ DONE — 14 findings closed; 0 static findings |
-| S6 | Measure the four params-box overruns at their declared box | ⏳ PENDING — surrogate 300k, attention 600k, routing 300k, tile 1M |
+| S6 | Measure the four params-box overruns at their declared box | ✅ DONE — each fits its declared box: surrogate 234,898/300k, routing 234,898/300k, attention 593,819/600k, tile 629,096/1M, causal_transformer 410,880/600k. They are box-limited, not defective; strict-xfail `test_a_box_overrun_fits_its_family_ceiling` names budget-aware sizing |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — 9 factories `xfail` on a missing rung; all 75 are `kernel_status="absent"` |
-| S8 | Regenerate map + docs from one source | ⏳ PENDING |
+| S8 | Regenerate map + docs from one source | ⏳ PENDING — `MAPS` now carries the 7 new family maps; README/method cards still read a second table |
 | S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING |
+
+**Session 2026-11-20 (S5f–S6).** The seven remaining family bases were
+screened at their declared boxes: tabular 34/34 measured; continual 48 measured
+/ 6 defect; rl 16 / 6; scientific 6; neuromorphic 11; sequence 46 / 6; lm
+28 / 25 (token-layout class). Five instrument defects the screens exposed were
+fixed: a base axis now must declare its own family (lock); `_is_legal` validates against the
+task's shape, not MNIST's; a sticky CUDA fault aborts the screen instead of
+painting the remaining rows as defects; the ladder predicate treats the base
+coordinate as the control; the map records the ruler's primary metric. The four
+param-box overruns fit their declared boxes (S6), so they are box-limited, not
+defective; budget-aware sizing stays the close condition.
 
 ### Remaining work (dependency order, 2026-11-20)
 
-1. **S5b–S5g — the six other families' declared rows.** Vision (52) and graph
-   (9) are accounted; sequence (55 rows), tabular (34), continual (27), rl (23)
-   and neuromorphic (7) are not. `lm` and `scientific` have a calibrated base
-   but **zero declared primitives** — a `task_families` declaration omission,
-   not a measurement omission. Per family: screen at `BASE_BOXES[family].task_id`, ladder
-   every near-chance bound row, then add its map to `MAPS` in `scripts/audit.py`.
-2. **S6 — the four params-box overruns.** `credit.surrogate`, `geometry.attention`,
-   `geometry.routing` and `geometry.tile` are `defective` at the 150k vision box
-   because their composed count exceeds the ceiling. Measure each at its declared
-   300k/600k/1M box and write the `unimplemented` row with its failing test.
-   `causal_transformer` needs a sequence screen before its 600k box can be tested.
-3. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
+1. **S5h — file the six defect classes the family screens found.** Each is
+   `defect` with a named mechanism in its map row; the failing test is the
+   deliverable:
+   - **D18, time-major credit on a batch-major task**: `eligibility_prop`,
+     `rtrl_reference`, `unbiased_rtrl` compose on `cartpole`/`copy_task` and
+     die at train time (`got x (1, 4)` / `(32, 21)`). Close: declare
+     `DomainTask.batch_layout` and refuse a credit that disagrees in the
+     declared space. Locked by
+     `test_a_time_major_credit_is_refused_on_a_batch_major_task` (strict xfail).
+   - **D16, NCA guesses its grid**: `nca` on `copy_task` requires 784
+     features for a 28×28 grid and ignores the task's 21. Close: size the grid
+     from `input_shape`.
+   - **causal_transformer assumes a class vocabulary**: `copy_task` raises
+     "Class values must be smaller than num_classes"; `cartpole` raises
+     "Tensor can't be converted to Scalar". Close: a shape/domain contract or
+     a refusal for non-class tasks.
+   - **ntm reuses the graph**: `cartpole` raises "backward through the graph a
+     second time". Close: detach the recurrent state between steps.
+   - **attention over the family ceiling**: 397,064 (`copy_task`) / 394,114
+     (`cartpole`) > 150k; measured 593,819 at its 600k box. Covered by the
+     S6 ceiling lock.
+   - **language token layout (lm)**: 25 rows crash on `tiny_shakespeare`
+     because a token-id input (`Long`) and a `(batch, seq)` target are not
+     carried into the geometry/credit contract (`normal_kernel_cuda` not
+     implemented for `Long`, `4096 vs 32`, `0D or 1D target`). Close: declare
+     the language task's input dtype/layout and refuse or adapt the contract.
+2. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
    carries 9 `xfail` factories (ff, fa, tp, tile, pcalm, dfa, spiking_snn,
    fast_weight, pepita) whose rung does not attach; each is a wrapper over an
    existing acceleration module (§7). A kernel is claimed only with a kill test
    and measured parity.
-4. **S8 — map + docs from one source.** `scripts/audit.py` reads
-   `results/sec` and `results/sec_graph`; every new family map must be added to
-   `MAPS`, and README/method cards regenerate from the map, not a second table.
-5. **S9 — five pre-registered claims.** The two tuned coordinates
+3. **S8 — map + docs from one source.** `scripts/audit.py` now reads the nine
+   family maps; README/method cards still regenerate from a second table. Maps
+   written before 2026-11-20 07:37 carry no `measurement.primary` (the row still
+   carries `val_acc`/`loss` and its ruler); a re-screen adds it.
+4. **S9 — five pre-registered claims.** The two tuned coordinates
    (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
    candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI
    against the control. A claim within 1σ of its bar is `marginal`.

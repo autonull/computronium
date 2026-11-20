@@ -153,6 +153,33 @@ def test_a_tuned_record_needs_a_best_point() -> None:
 
 
 @_RUNS
+def test_the_base_coordinate_is_the_control_not_a_ladder_candidate() -> None:
+    """A row that swaps an axis back to the base value re-measures the control."""
+    document = {
+        "base": {"credit": "gradient"},
+        "primitives": {
+            "primitive.credit_assignment.gradient": {
+                "binding": "bound",
+                "axis": "credit",
+                "box": {"credit": "gradient"},
+                "measurement": {"val_acc": 0.11},
+                "ruler": "val_acc on mnist (chance 0.100)",
+            },
+            "primitive.credit_assignment.local_contrastive": {
+                "binding": "bound",
+                "axis": "credit",
+                "box": {"credit": "local_contrastive"},
+                "measurement": {"val_acc": 0.11},
+                "ruler": "val_acc on mnist (chance 0.100)",
+            },
+        },
+    }
+
+    rows = [spec_id for spec_id, _row, _chance in ladder_rows(document)]
+
+    assert rows == ["primitive.credit_assignment.local_contrastive"]
+
+
 def test_every_near_chance_row_in_the_map_carries_a_record() -> None:
     document = json.loads(MAP.read_text(encoding="utf-8"))
 

@@ -439,6 +439,12 @@ def _continual_box(config: CLConfig, *, budget_id: str, task_id: str) -> Schedul
 # and a second literal is how the screen trained at a different box than the
 # map printed.
 P0_TASK = "mnist"
+#: The lock that closes a ceiling overrun: a row names its close lock, so the
+#: defect class does not need a second per-row table.
+CEILING_LOCK = (
+    "tests/property/test_pilot_calibration.py"
+    "::test_a_box_overrun_fits_its_family_ceiling"
+)
 P0_HIDDEN_DIM = 128
 # The parameter ceiling is the base box's own field (``Schedule.param_budget``),
 # not a second literal: a 10k ceiling with a 128-wide layer was an impossible
@@ -712,20 +718,31 @@ def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinat
     )
 
 
-def _is_legal(coord: Coordinate) -> tuple[bool, str | None]:
-    """Ask the system's own validator whether this cell can exist."""
+def _is_legal(coord: Coordinate, task_id: str = "mnist") -> tuple[bool, str | None]:
+    """Ask the system's own validator whether this cell can exist on the task.
+
+    The task's declared ``input_shape``/``output_dim`` are the geometry facts;
+    validating every candidate against MNIST's shape admits cells (a causal
+    transformer on a 4-feature table) that then fail at training time, and a
+    CUDA fault inside one such cell poisons the context for every later row.
+    """
+    from computronium.experiment.registry.task_registry import TaskRegistry
+
+    spec = TaskRegistry().get(task_id)
+    if spec.input_shape is None or spec.output_dim is None:
+        return False, f"{task_id}: task declares no input shape or output dimension"
     try:
         compose_configs(
             coordinate=coord,
             geometry={},
-            input_shape=(1, 28, 28),
-            output_dim=10,
+            input_shape=spec.input_shape,
+            output_dim=spec.output_dim,
         )
-        return True, None
     except ValueError as exc:
         return False, str(exc)
     except Exception as exc:  # ruff: ignore[blind-except] - report, never crash the screen
         return False, f"{type(exc).__name__}: {exc}"
+    return True, None
 
 
 def _iter_legal_coordinates(
@@ -751,7 +768,7 @@ def _iter_legal_coordinates(
 
     def emit(axes: dict[str, str]) -> Coordinate | None:
         coord = _coordinate(axes, own_knobs=own)
-        ok, _ = _is_legal(coord)
+        ok, _ = _is_legal(coord, task_id)
         return coord if ok else None
 
     seen_keys: set[tuple[tuple[str, str], ...]] = set()
@@ -793,6 +810,29 @@ def get_legal_coordinate_for_primitive(
     return coords[0] if coords else None
 
 
+def _is_cuda_fault(exc: Exception) -> bool:
+    """Whether the CUDA context is poisoned by this failure.
+
+    A device-side assert does not stop at the cell that caused it: every later
+    CUDA op fails with the same sticky error, so a screen that swallows it
+    writes a false ``defect`` for every remaining row. The process must stop.
+    """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        marker in text
+        for marker in (
+            "cuda error",
+            "device-side assert",
+            "sticky error",
+            "cuda_error_assert",
+        )
+    )
+
+
+class CudaContextError(RuntimeError):
+    """A poisoned CUDA context: the screen cannot measure another row."""
+
+
 def _train_nearest(
     candidates: list[Coordinate], schedule: Schedule
 ) -> tuple[CellEvaluation | None, Coordinate | None, Exception | None, int, bool]:
@@ -828,6 +868,10 @@ def _train_nearest(
             )
         except EvaluationError as exc:
             last_error = exc
+            if _is_cuda_fault(exc):
+                raise CudaContextError(
+                    f"{coord.measurement_key(schedule)}: {exc}"
+                ) from exc
             if getattr(exc, "cause", None) == "timeout":
                 return None, None, last_error, tried, True
         except Exception as exc:  # ruff: ignore[blind-except] - one bad cell ends its cell, never the screen
@@ -835,6 +879,10 @@ def _train_nearest(
             # (a crash, a missing objective) is an execution fact (a defect).
             # Neither may abandon the other 74 rows.
             last_error = exc
+            if _is_cuda_fault(exc):
+                raise CudaContextError(
+                    f"{coord.measurement_key(schedule)}: {exc}"
+                ) from exc
     return None, None, last_error, tried, False
 
 
@@ -1002,6 +1050,8 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
         "status": "DEFECT" if defect else "MEASURED",
         "val_acc": val_acc,
         "loss": loss,
+        "metric_key": criterion,
+        "metric_value": metrics.get(criterion),
         "param_count": eval_result.param_count,
         "within_ceiling": within,
         "metrics": metrics,
@@ -1353,7 +1403,7 @@ def _measure(coord: Coordinate, run: Schedule) -> dict[str, Any]:
     provenance — one source read by the interaction slice and the deep dive.
     """
     box = _box_summary(coord, run)
-    legal, reason = _is_legal(coord)
+    legal, reason = _is_legal(coord, run.task_id)
     if not legal:
         return {
             "status": "refused",
@@ -1435,7 +1485,7 @@ def _interaction_cell(
 def legal_levels(levels: dict[str, str], task_id: str | None = None) -> bool:
     """The system's validator on a pair's levels: it seats or refuses the cell."""
     axes = _base_axes(task_id) if task_id is not None else dict(_AXIS_DEFAULTS)
-    legal, _reason = _is_legal(_coordinate({**axes, **levels}))
+    legal, _reason = _is_legal(_coordinate({**axes, **levels}), task_id or "mnist")
     return legal
 
 
@@ -2108,6 +2158,10 @@ def _map_row(
     row["last_screened"] = datetime.now().isoformat()
     row["trigger"] = cell.get("reason")
     row["defect"] = cell.get("defect") or cell.get("error")
+    if row["defect"] and str(row["defect"]).startswith("param_count"):
+        # A ceiling overrun is closed by budget-aware sizing; the lock is one
+        # test for the class, so the row names it instead of a second table.
+        row["failing_test"] = CEILING_LOCK
     if "box" in cell:
         box = cell["box"]
         row["box"] = box
@@ -2135,6 +2189,10 @@ def _map_row(
         row["measurement"] = {
             "val_acc": cell.get("val_acc"),
             "loss": cell.get("loss"),
+            "primary": {
+                "key": cell.get("metric_key"),
+                "value": cell.get("metric_value"),
+            },
         }
     return row
 

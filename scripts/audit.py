@@ -35,6 +35,13 @@ BENCH = ROOT / "artifacts" / "benchmarks"
 MAPS = (
     ROOT / "results" / "sec" / "map.json",
     ROOT / "results" / "sec_graph" / "map.json",
+    ROOT / "results" / "sec_tabular" / "map.json",
+    ROOT / "results" / "sec_sequence" / "map.json",
+    ROOT / "results" / "sec_continual" / "map.json",
+    ROOT / "results" / "sec_rl" / "map.json",
+    ROOT / "results" / "sec_scientific" / "map.json",
+    ROOT / "results" / "sec_neuromorphic" / "map.json",
+    ROOT / "results" / "sec_lm" / "map.json",
 )
 
 #: Directories that never hold source under audit.

@@ -36,9 +36,9 @@ _ENTRY = PrimitiveCensusEntry(
 )
 
 
-def _fake(val_acc: float, param_count: int = 100) -> CellEvaluation:
+def _fake(val_acc: float, param_count: int = 100, **metrics: float) -> CellEvaluation:
     return CellEvaluation(
-        metrics={"val_acc": val_acc, "loss": 0.5},
+        metrics={"val_acc": val_acc, "loss": 0.5, **metrics},
         params={},
         param_count=param_count,
         walltime_s=0.1,
@@ -89,6 +89,78 @@ def test_the_box_travels_with_the_measurement(
     assert cell["box"]["seed"] == base.seed
     assert cell["param_count"] == 100
     assert cell["within_ceiling"] is True
+
+
+def test_a_non_accuracy_task_records_its_primary_metric(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The map's number carries the task's ruler, not a val_acc placeholder."""
+    from dataclasses import replace
+
+    entry = replace(_ENTRY, task_families=("rl",))
+    monkeypatch.setattr(
+        sec_loop,
+        "evaluate_cell",
+        lambda *_a, **_k: _fake(0.1, mean_reward=42.0),
+    )
+
+    result = sec_loop.run_p0_track(
+        tmp_path,
+        [entry],
+        max_primitives=1,
+        breadth="full",
+        device="cpu",
+        task_id="cartpole",
+    )
+    sec_loop.update_map(tmp_path, [entry], result, report=False)
+    cell = result["cells"][0]
+
+    assert (cell["metric_key"], cell["metric_value"]) == ("mean_reward", 42.0)
+    row = json.loads((tmp_path / "map.json").read_text())["primitives"][entry.id]
+    assert row["measurement"]["primary"] == {"key": "mean_reward", "value": 42.0}
+
+
+def test_a_cuda_fault_stops_the_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sticky CUDA error must abort, not paint every later row as a defect."""
+    from computronium.experiment.sec_loop import _base_axes, _coordinate, base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+    coordinate = _coordinate(_base_axes("mnist"))
+
+    def fault(*_args, **_kwargs):
+        raise RuntimeError("CUDA error: device-side assert triggered")
+
+    monkeypatch.setattr(sec_loop, "evaluate_cell", fault)
+
+    with pytest.raises(sec_loop.CudaContextError):
+        sec_loop._train_nearest([coordinate], schedule)
+
+
+def test_an_ordinary_failure_is_one_box_not_the_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from computronium.experiment.sec_loop import _base_axes, _coordinate, base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+    coordinate = _coordinate(_base_axes("mnist"))
+    error = ValueError("bad shape")
+
+    def fail(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(sec_loop, "evaluate_cell", fail)
+
+    evaluation, coord, last_error, tried, timed_out = sec_loop._train_nearest(
+        [coordinate], schedule
+    )
+
+    assert (evaluation, coord, timed_out) == (None, None, False)
+    assert last_error is error
+    assert tried == 1
 
 
 def test_loop_has_no_bar(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

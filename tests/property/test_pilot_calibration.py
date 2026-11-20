@@ -188,12 +188,75 @@ def test_a_calibration_inside_the_bar_has_no_power() -> None:
     assert Calibration(_TASK, minimize, 0.6, 0.0, 3).has_power is False
 
 
+@pytest.mark.parametrize(
+    "primitive_id",
+    [
+        "primitive.credit_assignment.eligibility_prop",
+        "primitive.credit_assignment.rtrl_reference",
+        "primitive.credit_assignment.unbiased_rtrl",
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "D18: the credit declares no time-major batch layout, so a batch-major "
+        "task composes and dies at train time; close: declare the task's "
+        "batch_layout and refuse a credit that disagrees in the declared space"
+    ),
+)
+def test_a_time_major_credit_is_refused_on_a_batch_major_task(
+    primitive_id: str,
+) -> None:
+    assert refusal_for(_entry(primitive_id), "cartpole") is not None
+
+
 def test_the_base_coordinate_is_the_boxes_declaration() -> None:
     """One source: a screen, a calibration and P3 read the box's own axes."""
     assert sec_loop._base_axes("mnist")["geometry"] == "feedforward"
     assert sec_loop._base_axes("cora")["geometry"] == "graph"
     assert sec_loop._base_axes("tiny_shakespeare")["geometry"] == ("causal_transformer")
     assert sec_loop._base_axes("spiking_mnist")["substrate"] == "neuromorphic"
+
+
+def test_every_base_axis_declares_its_family() -> None:
+    """A family's base coordinate is composed of primitives that declare it.
+
+    Otherwise the screen refuses the family's own base axis as "no shared
+    task family" while the control composes it: two declarations, one truth.
+    """
+    from computronium.experiment.sec_loop import _base_axes
+    from computronium.experiment.sec_pilot import BASE_BOXES
+
+    prefix = {
+        "substrate": "substrate",
+        "geometry": "geometry",
+        "dynamics": "state_dynamics",
+        "plasticity": "plasticity",
+        "credit": "credit_assignment",
+        "update": "parameter_update",
+    }
+    census = {entry.id: entry for entry in build_census()}
+    missing = [
+        f"{family}: {primitive_id} declares {census[primitive_id].task_families}"
+        for family, box in BASE_BOXES.items()
+        for axis, value in _base_axes(box.task_id).items()
+        if (
+            (primitive_id := f"primitive.{prefix[axis]}.{value}") in census
+            and census[primitive_id].task_families
+            and family not in census[primitive_id].task_families
+        )
+    ]
+
+    assert not missing
+
+
+def test_every_task_family_has_a_declared_primitive() -> None:
+    """A calibrated family with no declared primitive has no rows to screen."""
+    from computronium.experiment.sec_pilot import TASK_FAMILIES
+
+    declared = {family for entry in build_census() for family in entry.task_families}
+
+    assert set(TASK_FAMILIES) <= declared
 
 
 def test_calibrate_control_runs_at_the_box_coordinate() -> None:
@@ -232,6 +295,51 @@ def test_the_payload_carries_the_calibrated_bar() -> None:
     bar = PassBar("val_acc", "maximize", 0.106, floor=0.1, resolution=10_000)
     assert clears_task_bar(bar, {"val_acc": 0.103}) is False
     assert clears_task_bar(bar, {"val_acc": 0.11}) is True
+
+
+@pytest.mark.parametrize(
+    ("task", "axis", "primitive"),
+    [
+        ("mnist", "geometry", "routing"),
+        ("mnist", "geometry", "tile"),
+        ("char_ngram", "geometry", "attention"),
+        ("copy_task", "geometry", "attention"),
+        ("cartpole", "geometry", "attention"),
+    ],
+    ids=["routing", "tile", "attention", "attention-copy", "attention-rl"],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the family ceiling is below the primitive's requirement: explicit "
+        "geometry sizing bypasses _fit_geometry, so the sizing path never "
+        "enforces the budget (TODO97 S6; measured at the declared box: "
+        "routing 234,898/300k, tile 629,096/1M, attention 593,819/600k)"
+    ),
+)
+def test_a_box_overrun_fits_its_family_ceiling(
+    task: str, axis: str, primitive: str
+) -> None:
+    """The overrun rows become ``unimplemented`` at the family box, not defects."""
+    from computronium.experiment.kernel.evaluate import (
+        _compose_cell,
+        _task,
+        _task_shape,
+    )
+
+    schedule = base_schedule(task)
+    assert schedule is not None
+    coordinate = sec_loop._coordinate({**sec_loop._base_axes(task), axis: primitive})
+    task_object = _task(task, "cpu")
+    cell = _compose_cell(
+        coordinate,
+        None,
+        _task_shape(task_object),
+        schedule.param_budget,
+        task_object,
+    )
+
+    assert cell.param_count <= schedule.param_budget
 
 
 @pytest.mark.xfail(
