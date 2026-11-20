@@ -196,48 +196,24 @@ def family_without_base() -> list[Finding]:
     ]
 
 
-def _chance_of(ruler: str) -> float | None:
-    marker = "chance "
-    if marker not in ruler:
-        return None
-    try:
-        return float(ruler.split(marker, 1)[1].split()[0].strip(",)"))
-    except IndexError, ValueError:
-        return None
-
-
-def _ladder_primitive(layer: object) -> str | None:
-    if isinstance(layer, dict):
-        return layer.get("primitive")
-    return None
-
-
 def near_chance_without_ladder() -> list[Finding]:
-    """A bound row at its resolution's chance rate must have a ladder record."""
+    """A bound row at its resolution's chance rate must have a ladder record.
+
+    The record is the only adjudication of a near-chance cell: a measurement
+    says the primitive ran, not that it cannot train. ``sec_ladder`` owns the
+    record's schema, so the gate and the runner read one declaration.
+    """
+    from computronium.experiment.sec_ladder import map_findings
+
     findings = []
     for map_path in MAPS:
         if not map_path.exists():
             continue
         document = json.loads(map_path.read_text(encoding="utf-8"))
-        ladder = _ladder_primitive(document.get("deep_dive"))
-        for spec_id, row in document.get("primitives", {}).items():
-            if row.get("binding") != "bound":
-                continue
-            measurement = row.get("measurement") or {}
-            value = measurement.get("val_acc")
-            chance = _chance_of(row.get("ruler", ""))
-            if value is None or chance is None:
-                continue
-            if value > 2.0 * chance:
-                continue
-            if ladder != spec_id:
-                findings.append(
-                    Finding(
-                        "near_chance_without_ladder",
-                        f"{map_path.name}:{spec_id} val_acc={value:.3f} "
-                        f"chance={chance:.3f}",
-                    )
-                )
+        findings += [
+            Finding("near_chance_without_ladder", f"{map_path.name}: {problem}")
+            for problem in map_findings(document)
+        ]
     return findings
 
 

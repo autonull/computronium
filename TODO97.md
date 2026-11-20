@@ -10,6 +10,8 @@ instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S6c QUEUE CLOSED (audit --static exits 0)** — the six biology capability skips are gone. The two weight-transport tests now build the native FA System (`create_native_fa_mlp`; `RandomProjectionsCredit` B ≠ Wᵀ with separate storage) instead of the legacy `TileAlgorithm(algorithm="fa")`, which carries no feedback matrices; the energy-descent test asserts its step count; adaptive FA is `xfail(strict=True)` naming the missing `B ← B + η·δ·aᵀ` rule. `_FAMILY_OF_DOMAIN` is deleted: `TaskSpecEnriched.task_families` is the one declaration, populated for all 30 tasks (`split_mnist`: vision+continual, `copy_task`: sequence+continual, `tiny_shakespeare`/`char_ngram`: sequence+lm), `refusal_for` compares family **sets** (one shared family composes), and `base_family` picks the family whose base box is the task. Green: biology 6 passed / 3 xfailed; the six locks + pilot + boundary + all-implementations 226 passed / 79 skipped / 3 xfailed / 3 xpassed.
 
+**Progress:** [2026-11-19] ✅ **S6b COMPLETE (the full audit exits 0)** — `computronium/experiment/sec_ladder.py` runs each near-chance row's 3-point ladder at its own primary knob, 1 seed per rung plus one confirmation seed at the best point, and writes one record into the map's `ladders` table (verdict, rungs, best, cost, replay hash). The knob comes from the active space (`harvest_schema().active`), not a factory signature (D13); the plan's per-primitive knobs are declared in `PRIMARY_KNOBS`. Measured: **`local_contrastive` tuned** (readout_scale 10, 0.402) and **`random_projections` tuned** (feedback_scale 0.1, 0.376) — each is a coordinate, one knob clear of the near-chance band 0.200. **`forward_tangent` (0.185), `pc_alm` (0.122), `target_inversion` (0.114)** stay inside the band: `unimplemented`, with the missing mechanism and a strict-xfail lock (`tests/property/test_ladder_record_lock.py`, 10 passed / 3 xfailed). `scripts/audit.py` (full, not only `--static`): **0 findings**. Note for S8: `results/` is an artifact (gitignored), so the map gate runs locally; CI carries the schema lock only.
+
 **Progress:** [2026-11-19] ✅ **S1–S4 COMPLETE** — Migration done, 6/6 locks pass, scaffolding deleted, cheap wiring fixed (graph batching, conv, pc_alm, EPC).
 **Progress:** [2026-11-19] ✅ **S5 PARTIAL** — Graph family base box added (cora, 200 epochs), graph geometry measured on cora (val_acc=0.362 > bar 0.316), gradient credit measured on graph (val_acc=0.433). Other graph family primitives screened: feedforward geometry (0.402), euclidean/adam updates, instantaneous dynamics, digital/noisy substrates, null plasticity.
 **Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion on vision is **unimplemented**: feedback alignment / learned inverses are missing, so the transpose feedback vanishes (val_acc=0.119 ≈ chance 0.10). Works on graph (0.68 @ 6 epochs). The failing lock is the ladder cell; the close condition is a feedback-alignment primitive.
@@ -49,7 +51,7 @@ question.
 | S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — unimplemented (feedback alignment missing); graph works |
 | S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ✅ DONE — cases.py; contract 519 passed, axis contracts green |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
-| S6b | Audit measurement gate (5 unimplemented ladders) | ⏳ PENDING — the 5 ladder records |
+| S6b | Audit measurement gate (5 ladders) | ✅ DONE — 2 tuned, 3 unimplemented; audit 0 |
 | S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
 
@@ -132,16 +134,13 @@ verdict, or a capability that works — never on "tests consolidated".
    credit; adaptive FA is a strict xfail naming its missing rule.
    **b.** ~~`_FAMILY_OF_DOMAIN`~~ ✅ deleted; `TaskSpecEnriched.task_families`
    is the one declaration, and `family_without_base` reads `TASK_FAMILIES`.
-3. **S6b — NEXT** — run the 5 ladders the full audit reports
-   (`forward_tangent`, `local_contrastive`, `pc_alm`, `random_projections`,
-   `target_inversion`) and write each record into the map's `deep_dive` (or a
-   `ladders` table) so the full `scripts/audit.py` exits 0, not only `--static`.
-   Stop rule per §4.2: a 3-point ladder at 1 seed each, then one confirmation
-   seed at the best point; if every point sits inside the bar's 2σ band the row
-   is `unimplemented` with a failing test that names the missing primitive
-   (not "the algorithm fails").
-4. **S3b** — calibrate the 6 new family bases (3-seed control, bar, cost,
-   replay hash); `family_without_base` is green, calibration is not.
+3. ~~**S6b**~~ ✅ done. The 5 ladders ran: `local_contrastive` (readout_scale
+   10) and `random_projections` (feedback_scale 0.1) are tuned coordinates;
+   `forward_tangent`, `pc_alm`, and `target_inversion` are `unimplemented`
+   with named mechanisms and strict-xfail locks. The records live in the
+   map's `ladders` table; the full `scripts/audit.py` exits 0.
+4. **S3b — NEXT** — calibrate the 6 new family bases (3-seed control, bar,
+   cost, replay hash); `family_without_base` is green, calibration is not.
 5. **S7** — point the 10 verified primitives at the existing acceleration
    modules; flip their `kernel_status` to `implemented` and satisfy
    `test_implemented_kernel_carries_its_evidence`.
@@ -745,7 +744,8 @@ uv run python -m computronium.experiment.sec_loop \
 
 # 4. Audit
 uv run python scripts/audit.py
-#    --static: 0 findings. Measurement gate: 5 ladders remain (S6b)
+#    --static: 0 findings. Full gate: 0 findings (S6b records are local:
+#    results/ is an artifact; S8 makes the map reproducible)
 #    --check <name> runs one predicate; --json emits machine-readable findings
 ```
 
