@@ -71,8 +71,8 @@ def _parse(path: Path) -> ast.Module | None:
         return None
 
 
-def _test_files() -> Iterable[Path]:
-    for path in TESTS.rglob("test_*.py"):
+def _test_files(tests: Path = TESTS) -> Iterable[Path]:
+    for path in tests.rglob("test_*.py"):
         if any(part in SKIP_PARTS for part in path.parts):
             continue
         yield path
@@ -274,43 +274,86 @@ ENVIRONMENT_SKIPS = (
 )
 
 
-def _skips(tree: ast.Module) -> Iterable[tuple[int, str]]:
-    """``(lineno, reason)`` for every ``pytest.skip`` call in ``tree``."""
+def _static_reason(node: ast.expr | None) -> str | None:
+    """The static text of a skip reason, or ``None`` when it is not constant.
+
+    An f-string is a literal whose interpolations are opaque: its constant
+    parts are the text the gate can read. A name, attribute or call carries no
+    readable text, so it cannot prove the environment and is a finding
+    (TODO97 S6d: 28 non-literal sites evaded the literal-only scan).
+    """
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(
+            value.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str)
+            else "{}"
+            for value in node.values
+        )
+    return None
+
+
+def _skip_reason(node: ast.Call) -> ast.expr | None:
+    """The reason argument of a ``pytest.skip`` call, positional or keyword."""
+    if node.args:
+        return node.args[0]
+    return next(
+        (kw.value for kw in node.keywords if kw.arg == "reason"),
+        None,
+    )
+
+
+def _skips(tree: ast.Module) -> Iterable[tuple[int, str | None]]:
+    """``(lineno, reason)`` for every ``pytest.skip`` call in ``tree``.
+
+    The attribute's value must be the ``pytest`` name: ``pytest.mark.skip`` is
+    a marker, not a call, and its reason is a keyword the marker declares.
+    """
     for node in ast.walk(tree):
-        reason = node.args[0] if isinstance(node, ast.Call) and node.args else None
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "skip"
-            and isinstance(reason, ast.Constant)
-            and isinstance(node.args[0].value, str)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "pytest"
         ):
-            yield node.lineno, node.args[0].value
+            yield node.lineno, _static_reason(_skip_reason(node))
 
 
-def capability_skip() -> list[Finding]:
+def capability_skip(tests: Path = TESTS) -> list[Finding]:
     """A ``pytest.skip`` that names a capability, not the environment.
 
     A capability skip is a test defect (TODO97 §0.1): the row is
-    ``unimplemented`` or ``defective`` and must fail instead.
+    ``unimplemented`` or ``defective`` and must fail instead. A reason the
+    scanner cannot read (a variable, a call) is a finding: it cannot name the
+    environment, so it cannot be an environment skip.
     """
     findings = []
-    for path in _test_files():
+    for path in _test_files(tests):
         tree = _parse(path)
         if tree is None:
             continue
         for lineno, reason in _skips(tree):
+            try:
+                where = path.relative_to(ROOT)
+            except ValueError:
+                where = path
+            if reason is None:
+                findings.append(
+                    Finding(
+                        "capability_skip",
+                        f"{where}:{lineno} non-literal skip reason: "
+                        "cannot prove the environment",
+                    )
+                )
+                continue
             lowered = reason.lower()
             if any(marker in lowered for marker in ENVIRONMENT_SKIPS):
                 continue
-            if reason.startswith("declared:"):
+            if reason.strip().startswith("declared:"):
                 continue
-            findings.append(
-                Finding(
-                    "capability_skip",
-                    f"{path.relative_to(ROOT)}:{lineno} {reason!r}",
-                )
-            )
+            findings.append(Finding("capability_skip", f"{where}:{lineno} {reason!r}"))
     return findings
 
 

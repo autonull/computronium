@@ -105,7 +105,7 @@ def test_case_places_its_tensors_on_the_requested_device(spec) -> None:
 def test_reference_follows_the_seed(spec) -> None:
     """The reference entrypoint reads the case it is given."""
     if spec.id in SEED_BLIND:
-        pytest.skip(SEED_BLIND[spec.id])
+        pytest.skip(f"declared: {SEED_BLIND[spec.id]}")
     outputs = [reference(spec, make_case(spec, seed=seed)) for seed in (0, 1)]
     assert digest(outputs[0]) != digest(outputs[1]), spec.id
 

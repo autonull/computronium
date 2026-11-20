@@ -88,6 +88,21 @@ _TRIAGE: Final[Mapping[str, str]] = {
         "transpose feedback vanishes on vision: needs feedback alignment "
         "(a random B) or a learned inverse"
     ),
+    "primitive.geometry.conv": (
+        "no ladder point clears the near-chance band: the conv path does not "
+        "train at the vision box (close: a conv-specific credit path or a "
+        "wider box)"
+    ),
+    "primitive.state_dynamics.error_predictive_coding": (
+        "no ladder point clears the near-chance band: the target/error channel "
+        "the settle reads is not carried through the vision step (close: the "
+        "error-prediction primitive on this geometry)"
+    ),
+    "primitive.parameter_update.quantized_adam": (
+        "the quantized update state carries no step at the base box: the best "
+        "rung is at chance (close: a quantization scale that preserves the "
+        "step, or a declared block size)"
+    ),
 }
 
 
@@ -100,6 +115,8 @@ PRIMARY_KNOBS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType({
     "primitive.credit_assignment.pc_alm": ("beta",),
     "primitive.credit_assignment.random_projections": ("feedback_scale",),
     "primitive.credit_assignment.target_inversion": ("feedback_scale",),
+    "primitive.geometry.conv": ("hidden_dim", "depth"),
+    "primitive.state_dynamics.error_predictive_coding": ("beta", "step_size"),
 })
 
 
@@ -268,8 +285,10 @@ def _header_problems(spec_id: str, record: Mapping[str, Any]) -> list[str]:
     problems: list[str] = []
     if record.get("primitive") != spec_id:
         problems.append("record names another primitive")
-    if record.get("axis") != _AXIS:
-        problems.append(f"record axis {record.get('axis')!r} is not credit")
+    if record.get("axis") != spec_axis(spec_id):
+        problems.append(
+            f"record axis {record.get('axis')!r} is not {spec_axis(spec_id)}"
+        )
     if record.get("verdict") not in VERDICTS:
         problems.append(f"verdict {record.get('verdict')!r} is not declared")
     if record.get("replay") != replay_hash(record):
@@ -361,22 +380,32 @@ def _run_point(
     return LadderRung(factor, value, "measured", float(acc), evaluation.walltime_s)
 
 
-def ladder_knob(spec_id: str, base: Any) -> tuple[str, float] | None:
+def ladder_knob(spec_id: str, base: Any, axis: str = _AXIS) -> tuple[str, float] | None:
     """The primitive's primary active numeric knob and its default.
 
     The active space is the one declaration of which knobs a coordinate can
-    carry: a factory signature names nothing a swept value reaches (D13).
+    carry: a factory signature names nothing a swept value reaches (D13). The
+    axis is the primitive's own: a dynamics row ladders a dynamics knob, not a
+    credit one (measured 2026-11-20: the credit-only ladder recorded conv and
+    error_predictive_coding as "no point trained").
     """
     from computronium.experiment.kernel.compose import harvest_schema
     from computronium.experiment.schema.axis import StructuralAxis
 
-    names = PRIMARY_KNOBS.get(spec_id, LADDER_KNOBS["credit"])
-    values = harvest_schema().active(base).values_for_axis(StructuralAxis.CREDIT)
+    names = PRIMARY_KNOBS.get(spec_id, LADDER_KNOBS[axis])
+    values = harvest_schema().active(base).values_for_axis(StructuralAxis(axis))
     for name in names:
         value = values.get(name)
         if isinstance(value, float) and not isinstance(value, bool) and value > 0:
-            return f"credit.{name}", value
+            return f"{axis}.{name}", value
     return None
+
+
+def spec_axis(spec_id: str) -> str:
+    """The runtime axis a primitive id selects (``primitive.<axis>.<name>``)."""
+    from computronium.acceleration.spec import axis_segment
+
+    return axis_segment(spec_id.split(".")[1])
 
 
 def _best(rungs: Iterable[LadderRung]) -> LadderRung | None:
@@ -420,17 +449,18 @@ def run_ladder(
     ``LADDER_FACTORS``. A primitive with no numeric knob runs no rung: it is
     ``unimplemented`` with the knob it would need, not a quiet cell.
     """
-    runner, sched, base = _ladder_setup(spec_id, evaluate, schedule)
+    runner, sched, base = _ladder_setup(spec_id, row, evaluate, schedule)
     task = str(row.get("task") or _TASK)
+    axis = spec_axis(spec_id)
     band = near_chance_band(chance)
-    knob = ladder_knob(spec_id, base)
+    knob = ladder_knob(spec_id, base, axis)
     if knob is None:
-        return _no_knob_record(spec_id, task, band)
+        return _no_knob_record(spec_id, task, band, axis)
     key, default = knob
     measured = _measure(runner, base, sched, key, default, spec_id, band)
     return LadderRecord(
         primitive=spec_id,
-        axis=_AXIS,
+        axis=axis,
         task=task,
         knob=key,
         default=default,
@@ -478,18 +508,43 @@ def _measure(
 
 def _ladder_setup(
     spec_id: str,
+    row: Mapping[str, Any],
     evaluate: Callable[[Any, Schedule], CellEvaluation] | None,
     schedule: Schedule | None,
 ) -> tuple[Callable[[Any, Schedule], CellEvaluation], Schedule, Any]:
+    """The row's own box as the ladder's base, with its companions.
+
+    The screen found a compose-legal box for the primitive (it swapped a
+    companion when the base box refused). The ladder starts from that box: a
+    default-companion base refuses ``error_predictive_coding`` + gradient
+    credit, which the screen had already resolved (measured 2026-11-20).
+    """
     from computronium.experiment.kernel.evaluate import evaluate_cell
-    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
     from computronium.experiment.sec_pilot import base_schedule
 
-    sched = schedule or base_schedule(_TASK)
+    task = str(row.get("task") or _TASK)
+    sched = schedule or base_schedule(task)
     if sched is None:
-        raise ValueError(f"{_TASK}: no base schedule for the ladder")
-    level = spec_id.rsplit(".", 1)[-1]
-    base = _coordinate({**_AXIS_DEFAULTS, _AXIS: level}, own_knobs=_AXIS)
+        raise ValueError(f"{task}: no base schedule for the ladder")
+    axis = spec_axis(spec_id)
+    box = row.get("box") or {}
+    axes = {name: box.get(name) or _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
+    axes[axis] = spec_id.rsplit(".", 1)[-1]
+    base = Coordinate(
+        substrate=axes["substrate"],
+        geometry=axes["geometry"],
+        dynamics=axes["dynamics"],
+        plasticity=axes["plasticity"],
+        credit=axes["credit"],
+        update=axes["update"],
+        params={
+            key: value
+            for key, value in box.items()
+            if isinstance(key, str) and "." in key
+        },
+    )
     return evaluate or evaluate_cell, sched, base
 
 
@@ -513,7 +568,9 @@ def _run_rungs(
     )
 
 
-def _no_knob_record(spec_id: str, task: str, band: float) -> LadderRecord:
+def _no_knob_record(
+    spec_id: str, task: str, band: float, axis: str = _AXIS
+) -> LadderRecord:
     reason, close = _unimplemented(
         spec_id,
         best=None,
@@ -522,7 +579,7 @@ def _no_knob_record(spec_id: str, task: str, band: float) -> LadderRecord:
     )
     return LadderRecord(
         primitive=spec_id,
-        axis=_AXIS,
+        axis=axis,
         task=task,
         knob=None,
         default=None,
@@ -589,10 +646,17 @@ def main(argv: list[str] | None = None) -> int:
 
     document = json.loads(args.map.read_text(encoding="utf-8"))
     out = args.out or args.map
+    rows = [
+        (spec_id, row, chance)
+        for spec_id, row, chance in ladder_rows(document)
+        if not args.only or spec_id in args.only
+    ]
+    if args.dry_run:
+        for spec_id, *_ in rows:
+            print(f"ladder {spec_id}")
+        return 0
     records: dict[str, dict[str, Any]] = {}
-    for spec_id, row, chance in ladder_rows(document):
-        if args.only and spec_id not in args.only:
-            continue
+    for spec_id, row, chance in rows:
         print(f"ladder {spec_id}")
         record = run_ladder(spec_id, row, chance)
         records[spec_id] = record.to_dict()
@@ -602,8 +666,6 @@ def main(argv: list[str] | None = None) -> int:
             f"{record.walltime_s:.1f}s"
         )
         print(f"  {record.close_condition or 'a coordinate'}")
-    if args.dry_run:
-        return 0
     document.setdefault("ladders", {}).update(records)
     document["updated"] = datetime.now(UTC).isoformat()
     out.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")

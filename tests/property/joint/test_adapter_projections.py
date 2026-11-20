@@ -45,15 +45,20 @@ from computronium.core.substrates.adapters import (
 )
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
+    BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
+    LocalGoodnessCredit,
     ParameterUpdateConfig,
+    RandomProjectionsCredit,
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
+    TargetInversionCredit,
+    TemporalTraceCredit,
     ThermodynamicContrast,
 )
 
@@ -230,7 +235,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
 
         source_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     else:
-        pytest.skip(f"Source dynamics {source_type} not available")
+        pytest.fail(f"source dynamics {source_type} has no constructor")
 
     adapter = create_dynamics_adapter(source_type, target_type, source_dynamics)
 
@@ -291,6 +296,27 @@ CREDIT_ADAPTERS = [
     ("backprop", "thermodynamic_contrast", BackpropToThermodynamicAdapter),
 ]
 
+#: One source credit per declared source type. A row whose source has no
+#: constructor is a declared unimplemented row, not a skipped test.
+CREDIT_SOURCES = {
+    "thermodynamic_contrast": lambda: ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+    ),
+    "random_projections": lambda: RandomProjectionsCredit(
+        CreditAssignmentConfig.random_projections()
+    ),
+    "local_goodness": lambda: LocalGoodnessCredit(
+        CreditAssignmentConfig.local_goodness()
+    ),
+    "temporal_trace": lambda: TemporalTraceCredit(
+        CreditAssignmentConfig.temporal_trace()
+    ),
+    "target_inversion": lambda: TargetInversionCredit(
+        CreditAssignmentConfig.target_inversion()
+    ),
+    "backprop": lambda: BackpropCredit(CreditAssignmentConfig.gradient()),
+}
+
 
 @pytest.mark.parametrize("source_type,target_type,adapter_class", CREDIT_ADAPTERS)
 def test_credit_adapter_consumes_joint_trajectory(
@@ -300,19 +326,10 @@ def test_credit_adapter_consumes_joint_trajectory(
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())  # ruff: ignore[unused-variable]
 
-    # Create source credit
-    if source_type == "thermodynamic_contrast":
-        source_credit = ThermodynamicContrast(
-            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
-        )
-    else:
-        pytest.skip(f"Source credit {source_type} not tested")
-
-    # Create adapter
-    if (source_type, target_type) == ("thermodynamic_contrast", "backprop"):
-        adapter = ThermodynamicToBackpropAdapter(source_credit)
-    else:
-        pytest.skip(f"Adapter {source_type} -> {target_type} not fully tested")
+    # Create source credit and its adapter: the table declares the pair, so a
+    # source without a constructor is a missing row, not a skipped test.
+    source_credit = CREDIT_SOURCES[source_type]()
+    adapter = adapter_class(source_credit)
 
     # Create joint trajectory
     recorder = JointTrajectoryRecorder(

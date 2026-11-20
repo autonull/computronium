@@ -4,6 +4,8 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-20] ✅ **S5 SCREENS COMPLETE (vision + graph) and S6d CLOSED** — the vision map now accounts all **52 declared rows**: **45 measured** (37 bound, 8 inert), **4 defective** (the param-box overruns `credit.surrogate` 234,898 / `geometry.attention` 494,986 / `geometry.routing` 234,898 / `geometry.tile` 628,280 over the 150,000 vision ceiling), **26 refused** (family mismatch or unavailable). The graph map accounts **9/9 declared rows measured** (gradient 0.402, feedforward 0.402, graph 0.362 on cora); the other 66 rows are refused at the graph box, so no graph screen remains. **Eight ladder records** (up from the five S6b wrote): `local_contrastive` **tuned** (readout_scale 10 → 0.4018) and `random_projections` **tuned** (feedback_scale 0.1 → 0.3764); `forward_tangent` 0.1653, `pc_alm` 0.1224, `target_inversion` 0.1137, `geometry.conv` 0.1217 and `error_predictive_coding` 0.0980 and `quantized_adam` 0.0999 stay inside the near-chance band and are `unimplemented` with strict-xfail locks. Three instrument defects surfaced and are fixed with locks: `update_map` **dropped the `ladders` table** on every P0 write (`test_a_screen_keeps_the_ladder_table`); the ladder was **credit-only** (axis from the spec id, base from the row's measured box, axis-aware record validation; `test_the_ladder_sweeps_the_primitive_own_axis`); and `LADDER_KNOBS` named fields the update/plasticity/substrate configs do not declare (`step_size`/`momentum`, `trace_decay`, `noise_level`/`sparsity`; `test_the_knob_table_names_the_axis_own_fields`). `sec_ladder --dry-run` no longer runs the cells it printed. **S6d**: `capability_skip` reads an f-string's constant text and reports a reason it cannot read; the 14 findings are closed — 9 rungless factories are `xfail` with the S7 close, the credit-adapter sources are constructed instead of skipped, declared rows say `declared:` literally, and the dead finite-difference test (0 collected params over deleted modules) is deleted. `scripts/audit.py --static` reports **0 findings**.
+
 **Progress:** [2026-11-19] ✅ **S3b COMPLETE (the calibration gate)** — all nine family bases measured at their declared boxes over `CONTROL_SEEDS=3`, each with bar, cost and replay hash (`results/sec/pilot.json`; 9/9 calibrated, and 9/9 controls clear their bar). The calibration exposed four defects, all fixed: `BASE_COORDINATES` was a second source of the base axes (deleted; `BASE_BOXES[*].base_coordinate` is the one source, read by the calibration, screens, P3 and P4); `tiny_shakespeare` declared `(100,)` while its loader emits 128 tokens; the LM base ran on the default MLP instead of its declared causal transformer; the RL base declared recurrent geometry with gradient/instantaneous dynamics, which cannot compute recurrent grads (now feedforward). Added `spiking_mnist` (MNIST frames as binary spike rasters) because the neuromorphic base named a task that did not exist. `Calibration` now carries the `PassBar`, so perplexity and loss bars clear from below (`has_power` reads `clears_task_bar`); the P0/P3 power checks use the same rule. `scripts/probes/todo97_s3b_calibration.py` reproduces the sweep. Open defect: the graph base composes at 200,967 parameters over its 200,000 ceiling because an explicit `geometry.hidden_dim` bypasses `_fit_geometry`; the failing test is `test_the_graph_base_fits_its_declared_ceiling` (strict xfail).
 
 **Progress:** [2026-11-19] ✅ **S5d COMPLETE (the hard gate)** — `ReferenceAdapter` is real: `make_task_case` builds the axis micro-case from a composed `SystemConfig`, and `reference_step` runs the law through `cases.step`, with no exception swallowed anywhere. `computronium/primitives/cases.py` is the one case/step layer (one builder and one step per axis; the per-primitive difference is data). The declared space is now the legality oracle through `_compiled_void_constraints`, so a law that only runs beside a particular companion gets that companion: credit laws on recurrent/module geometry, sequence credits on a time-major batch, diffusion on a settled geometry. Green: `tests/primitives` 666 passed / 152 declared skips; contract suite 519 passed / 2 declared no-op skips; parity 14 passed / 150 declared absent-kernel skips; the six property locks + the extension path 71 passed. Deleted `test_primitive_wiring.py` (~284 duplicate rung-0 tests, 12 capability skips) — the adapter contract plus the six axis contracts carry the same rungs. Fixed along the way: `update_pseudo_grads` emitted one gradient per parameter instead of one per learnable weight (the credit contract's order); `SystemConfig.validate` now refuses a diffusion settling on a time-major geometry (measured crash in `_compute_interaction_energy`); the plasticity dispatch is one `plasticity_from_config`; `_credit_from_config` is the one credit dispatcher.
@@ -24,11 +26,11 @@ instrument at it.
 
 **Progress:** [2026-11-19] ✅ **S0 TAXONOMY (binding)** — Three states: **impossible / unimplemented / defective**. Only `impossible` may be refused, and only with a refusal test plus a necessity test. `unimplemented` and `defective` are always failing tests. Capability skips and the word "gap" are retired; the audit enforces all three (§8.2).
 
-**One sentence:** Eighteen sessions built a microscope; 45 of 75 rows still
-have no bound, usable result. TODO97 migrates the 563-file scaffolding into a
-3-file protocol, fixes the cheap wiring defects first, calibrates the seven
-missing task families, and only then screens at boxes that can answer the
-question.
+**One sentence:** Eighteen sessions built a microscope; TODO97 migrates the
+563-file scaffolding into a 3-file protocol, fixes the cheap wiring defects
+first, calibrates the nine task families, and screens at boxes that can answer
+the question — vision and graph are accounted (54 rows measured, 4 param-box
+defects named); six families and the size boxes remain.
 
 ---
 
@@ -45,15 +47,46 @@ question.
 | S3b | 3-seed controls, bar, cost, replay hash per family | ✅ DONE — 9/9 calibrated; graph ceiling defect filed |
 | S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ✅ DONE |
 | S4x | Rung 0 wiring tests for all 75 primitives (284 tests) | ✅ DONE |
-| S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
+| S5 | First family base (graph) + first ladder (target_inversion) | ✅ DONE — graph 9/9 measured; see S5e |
 | S5a | Add graph family base box (cora, 200 epochs) | ✅ DONE |
 | S5b | Screen graph family primitives | ✅ DONE (9 measured) |
 | S5c | First ladder (target_inversion on vision) | ✅ TRIAGED — unimplemented (feedback alignment missing); graph works |
 | S5d | Generic `ReferenceAdapter` typed config (geometry/update/plasticity) | ✅ DONE — cases.py; contract 519 passed, axis contracts green |
+| S5e | Screen every declared vision row; ladder every near-chance bound row | ✅ DONE — 52/52 vision accounted (45 measured, 4 defective, 26 refused); 8 ladder records |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
 | S6b | Audit measurement gate (5 ladders) | ✅ DONE — 2 tuned, 3 unimplemented; audit 0 |
 | S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
-| S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — all 75 are `kernel_status="absent"` |
+| S6d | Skip scanner reads f-strings and non-literal reasons | ✅ DONE — 14 findings closed; 0 static findings |
+| S6 | Measure the four params-box overruns at their declared box | ⏳ PENDING — surrogate 300k, attention 600k, routing 300k, tile 1M |
+| S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — 9 factories `xfail` on a missing rung; all 75 are `kernel_status="absent"` |
+| S8 | Regenerate map + docs from one source | ⏳ PENDING |
+| S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING |
+
+### Remaining work (dependency order, 2026-11-20)
+
+1. **S5b–S5g — the six other families' declared rows.** Vision (52) and graph
+   (9) are accounted; sequence (55 rows), tabular (34), continual (27), rl (23)
+   and neuromorphic (7) are not. `lm` and `scientific` have a calibrated base
+   but **zero declared primitives** — a `task_families` declaration omission,
+   not a measurement omission. Per family: screen at `BASE_BOXES[family].task_id`, ladder
+   every near-chance bound row, then add its map to `MAPS` in `scripts/audit.py`.
+2. **S6 — the four params-box overruns.** `credit.surrogate`, `geometry.attention`,
+   `geometry.routing` and `geometry.tile` are `defective` at the 150k vision box
+   because their composed count exceeds the ceiling. Measure each at its declared
+   300k/600k/1M box and write the `unimplemented` row with its failing test.
+   `causal_transformer` needs a sequence screen before its 600k box can be tested.
+3. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
+   carries 9 `xfail` factories (ff, fa, tp, tile, pcalm, dfa, spiking_snn,
+   fast_weight, pepita) whose rung does not attach; each is a wrapper over an
+   existing acceleration module (§7). A kernel is claimed only with a kill test
+   and measured parity.
+4. **S8 — map + docs from one source.** `scripts/audit.py` reads
+   `results/sec` and `results/sec_graph`; every new family map must be added to
+   `MAPS`, and README/method cards regenerate from the map, not a second table.
+5. **S9 — five pre-registered claims.** The two tuned coordinates
+   (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
+   candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI
+   against the control. A claim within 1σ of its bar is `marginal`.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -175,17 +208,15 @@ the wrong product for a laboratory.
 | Fact | Number | Source |
 |---|---:|---|
 | Primitives | 75 | census |
-| Bound measured (vision) | 30 | map (mnist) |
-| Bound measured (graph) | 9 | map (cora) |
-| Inert (measures companions) | 27 | map |
-| Bound at chance (<0.5) | 11 | map |
-| Bound mid (0.5–0.85) | 7 | map |
-| Bound clear (≥0.85) | 12 | map |
-| Rows with no bound, usable result | 45 | 27 + 12 + 6 |
-| Defects | 6 (5 ceilings + 1 shape) | map |
-| Refused | 12 (8 family, 2 cost, 2 gaps) | map |
+| Measured (vision) | 45 (37 bound + 8 inert) | map (mnist), 2026-11-20 |
+| Measured (graph) | 9 (3 bound + 6 inert) | map (cora), 2026-11-20 |
+| Bound at chance (<0.5) | 9 | map (mnist) |
+| Bound mid (0.5–0.85) | 9 | map (mnist) |
+| Bound clear (≥0.85) | 19 | map (mnist) |
+| Defects | 4 (all param-box overruns) | map (mnist) |
+| Refused (vision) | 26 (family mismatch / unavailable) | map (mnist) |
 | Task families with a base box | 9 of 9 calibrated (3-seed controls) | `BASE_BOXES` |
-| Declared family rows | ~159 | sum of `task_families` |
+| Declared family rows | 207 | census sum |
 | Source scaffolding files | 563 | 383 primitives + 96 generated + 84 algorithms |
 | Source files that survive | ~1,400 | ontology 33, experiment 206, acceleration 34, core/domains/models/scripts etc. |
 | Test files / functions | 579 / 3,479 | tests tree |
@@ -194,14 +225,14 @@ the wrong product for a laboratory.
 | Kernel files with their own `@triton.jit` | 0 / 75 | grep |
 | Kernel-parity tests that pass without requiring a real kernel | 235 | pytest |
 
-**The headline is not 57 measured. It is 39 bound (30 vision + 9 graph), 11 at chance, 45 without a
-usable result. Graph family now has a calibrated base box.**
+**The headline is the accounted map: 45 vision rows measured (37 bound, 9 at chance), 4 rows defective at the declared box, and 9/9 graph rows measured.**
 
-**Count check (2026-11-19):** the artifacts in `results/sec/map.json` and
-`results/sec_graph/map.json` show 13 + 3 = **16 bound rows**, not 39. The 39 is
-the plan's claim, not a measured baseline. S6c's `claim_count_mismatch`
-predicate fails until the plan, the maps, and the docs agree. Do not quote 39 as
-progress; quote 16, or regenerate the maps and say why they changed.
+**Count check (2026-11-20):** the artifacts in `results/sec/map.json` and
+`results/sec_graph/map.json` now carry **37 bound vision rows and 3 bound graph
+rows** (the graph family's 9 declared rows are measured; 6 are inert
+companions). The earlier 39 (30 vision + 9 graph) was the plan's claim, and the
+13 + 3 = 16 was the stale artifact. Quote the maps, not this line, and
+regenerate both before publishing a count.
 
 ---
 
@@ -347,26 +378,36 @@ three of the eleven near-chance rows. Run them before any 1-epoch ladder.
 
 ### 4.2 The remaining eight: 3-point ladders
 
-| Primitive | Primary knob | Ladder | If all fail → triage |
+Measured 2026-11-20 at the row's own measured box (seven records in
+`results/sec/map.json` `ladders`). The two tuned rows are coordinates, one knob
+clear of the 0.200 band; the five unimplemented rows are strict-xfail locks in
+`tests/property/test_ladder_record_lock.py`.
+
+| Primitive | Primary knob | Ladder result | Triage |
 |---|---|---|---|
-| `credit.target_inversion` | feedback_scale, lr | 3 × 1 seed + 1 confirm | unimplemented: transpose feedback vanishes on vision; works on graph (0.68 @ 6 epochs). Needs feedback alignment (random B) or learned inverses for vision. |
-| `credit.random_projections` | feedback scale, lr | 3 × 1 seed | unimplemented: width/params |
-| `credit.forward_tangent` | JVP scale, lr | 3 × 1 seed | unimplemented: memory vs accuracy |
-| `credit.zeroth_order` | perturbations, lr | 3 × 1 seed | unimplemented: sample efficiency |
-| `credit.local_contrastive` | phases, lr | 3 × 1 seed | unimplemented: label channel |
-| `credit.local_goodness` | pos/neg passes, lr | 3 × 1 seed | unimplemented: width |
-| `dynamics.spike_integration` | epochs 1/3/10, reset | 3 × 1 seed | defect: reset/decay |
-| `plasticity.conflict_adaptive` | continual task, lr | 3 × 1 seed | defect: protocol |
+| `credit.target_inversion` | feedback_scale | 0.1137 at every point | unimplemented: transpose feedback vanishes on vision; works on graph (0.68 @ 6 epochs). Needs feedback alignment (random B) or learned inverses for vision. |
+| `credit.random_projections` | feedback_scale | **0.3764 tuned** (0.1) | coordinate at the feedback scale |
+| `credit.forward_tangent` | feedback_scale | 0.1653 at every point | unimplemented: memory vs accuracy |
+| `credit.local_contrastive` | readout_scale | **0.4018 tuned** (10) | coordinate at the readout scale |
+| `credit.pc_alm` | beta | 0.1224 at every point | unimplemented: the dual-variable settle is not composed with instantaneous dynamics |
+| `geometry.conv` | geometry.hidden_dim | 0.1217 at every point | unimplemented: the conv path does not train at the vision box |
+| `dynamics.error_predictive_coding` | beta | 0.0980 at every point | unimplemented: the target/error channel is not carried through the vision step |
+| `update.quantized_adam` | step_size | 0.0999 at every point | unimplemented: the quantized update state carries no step at the base box |
+| `credit.zeroth_order`, `dynamics.spike_integration`, `plasticity.conflict_adaptive` | their own knob | refused on vision | screen on their declared family: sequence / neuromorphic / continual |
 
 ### 4.3 The 5 ceilings: unimplemented boxes, not impossible
 
-| Primitive | Task to measure | Box to test (not yet measured) |
+Measured at the vision box 2026-11-20 (each row is `defective`: the composed
+parameter count exceeds the family's 150,000 ceiling). The larger box is still
+to be measured; the numbers below are the observed counts.
+
+| Primitive | Task to measure | Observed / box to test |
 |---|---|---|
-| `credit.surrogate` | mnist (vision/neuromorphic) | 300k params |
-| `geometry.attention` | char_ngram (sequence) | 600k params |
-| `geometry.causal_transformer` | tiny_shakespeare (lm) | 600k params |
-| `geometry.routing` | mnist (vision) | 300k params |
-| `geometry.tile` | mnist (vision) | 1M params |
+| `credit.surrogate` | mnist (vision/neuromorphic) | 234,898 params / 300k box |
+| `geometry.attention` | char_ngram (sequence) | 494,986 params / 600k box |
+| `geometry.causal_transformer` | tiny_shakespeare (lm) | not yet screened (sequence/rl family) / 600k box |
+| `geometry.routing` | mnist (vision) | 234,898 params / 300k box |
+| `geometry.tile` | mnist (vision) | 628,280 params / 1M box |
 
 The "measured box" is a **claim to test**, not a result. Measure it, record
 the cost, and publish "requires N parameters on this task". If the box cannot
@@ -420,17 +461,17 @@ missing), not impossible. `defect` is a named mechanism with a failing test.
 | `temporal_trace` | measured | inert | 0.122 | R+K+I |
 | `thermodynamic_contrast` | measured | bound | 0.782 | R+K+L |
 | `unbiased_rtrl` | refused | — |  | R+K+F |
-| `zeroth_order` | measured | bound | 0.167 | R+K+L |
+| `zeroth_order` | refused (vision) | — |  | R+K+L (screen on sequence) |
 
 ### Geometry (12)
 
 | primitive | status | binding | val_acc | action |
 |---|---|---|---:|---|
 | `attention` | defect | bound |  | R+K+CAP |
-| `causal_transformer` | defect | bound |  | R+K+CAP |
+| `causal_transformer` | refused (vision) | — |  | R+K+CAP (screen on sequence) |
 | `conv` | measured | bound | 0.122 | R+K+L |
 | `feedforward` | measured | bound | 0.894 | R+K+C |
-| `graph` | defect | bound |  | R+K+E |
+| `graph` | measured | bound | 0.362 (cora) | R+K+C |
 | `nca` | measured | bound | 0.896 | R+K+C |
 | `ntm` | measured | bound | 0.876 | R+K+C |
 | `recurrent` | measured | bound | 0.897 | R+K+C |
@@ -450,14 +491,14 @@ missing), not impossible. `defect` is a named mechanism with a failing test.
 | `lazy` | measured | bound | 0.877 | R+K+C |
 | `pc_alm` | measured | bound | 0.640 | R+K+L |
 | `predictive_settling` | measured | bound | 0.724 | R+K+L |
-| `spike_integration` | measured | bound | 0.132 | R+K+L |
+| `spike_integration` | refused (vision) | — |  | R+K+L (screen on neuromorphic) |
 
 ### Plasticity (8)
 
 | primitive | status | binding | val_acc | action |
 |---|---|---|---:|---|
-| `closed_form_ridge` | refused | — |  | R+K+F |
-| `conflict_adaptive` | measured | bound | 0.288 | R+K+L |
+| `closed_form_ridge` | measured | bound | 0.882 | R+K+C |
+| `conflict_adaptive` | refused (vision) | — |  | R+K+L (screen on continual) |
 | `fast_weights` | measured | bound | 0.892 | R+K+C |
 | `null` | measured | inert | 0.894 | R+K+I |
 | `routing` | measured | bound | 0.868 | R+K+C |
@@ -496,7 +537,7 @@ missing), not impossible. `defect` is a named mechanism with a failing test.
 | `muon` | measured | inert | 0.949 | R+K+I |
 | `natural_gradient` | refused | — |  | R+K+F |
 | `ortho_adam` | measured | inert | 0.947 | R+K+I |
-| `quantized_adam` | measured | inert | 0.102 | R+K+I |
+| `quantized_adam` | measured | bound | 0.102 | R+K+L (unimplemented at the base box) |
 | `riemannian_orthogonal` | measured | inert | 0.949 | R+K+I |
 | `role_split` | measured | inert | 0.901 | R+K+I |
 | `schedule_free` | measured | inert | 0.919 | R+K+I |
@@ -657,14 +698,15 @@ completeness gate: they are what make a quiet "gap", a silent skip, and a
 backwards-compatible crutch impossible. They are specified here and landed in
 **S6c**.
 
-**Known blind spot (S6d, open defect).** `capability_skip` reads literal
-reasons only: a skip whose reason is an f-string or a variable (`pytest.skip(f"…")`,
-`pytest.skip(SEED_BLIND[id])`) evades the gate — 28 non-literal sites, several
-in `tests/primitives`. The gate is green on the literal subset, not on every
-skip. Close: make the scanner report a non-literal skip, and require the 152
-declared skips to say `declared:` literally (or parse a constant prefix). The
-failing test is an audit fixture whose f-string skip is classified as a
-capability skip; do not call the current 0 findings complete.
+**Skip scanner (S6d, closed 2026-11-20).** `capability_skip` now reads an
+f-string's constant text and reports a reason it cannot read at all (a name, a
+call): an unreadable reason cannot prove the environment. The 14 findings the
+literal-only scanner could not see are closed — 9 rungless factories are
+`pytest.xfail` with the S7 close, the credit-adapter sources are constructed
+instead of skipped, declared rows say `declared:` literally, and the dead
+finite-difference test (0 collected params over deleted modules) is deleted.
+The lock is `tests/property/test_audit_skip_scan_lock.py`: a fixture f-string
+capability skip must be a finding, an environment f-string must not be.
 
 ---
 
@@ -677,9 +719,11 @@ capability skip; do not call the current 0 findings complete.
 | **S2 Wiring** | Fix graph batching; one-step probes for conv, pc_alm, EPC | 4 rows resolved or named defect | A probe with no named mechanism |
 | **S3 Bases** | Explicit `task_families`; 9 bases; 3-seed controls; bar, cost, replay | 9/9 calibrated; 12/12 refusals mapped | A family without control/bar |
 | **S4x Rung-0 Tests** | 284 wiring tests for all 75 primitives (instantiate, forward, pseudograds, settle) | All pass; 6/6 locks green | A test fails |
-| **S4 Ladders** | 3-point ladders for the remaining 8 near-chance + 7 mid | 15 triaged (tuned/defect/unimplemented) | An untriaged row |
-| **S5 Screens** | Real screens on the 30 bound rows at declared families; 3 seeds | 30 rows with verdict; ~159 family rows planned | A screen on MNIST for a sequence primitive |
-| **S6 Ceilings** | Measure 5 ceilings at the proper task | 5 unimplemented rows with a failing test, a measured box, and a cost | An unimplemented row with no failing test |
+| **S4 Ladders** | 3-point ladders for the near-chance rows | 9 triaged: 2 tuned, 7 unimplemented with a lock | An untriaged row |
+| **S5 Screens** | Vision + graph: every declared row screened at its family box | ✅ 52/52 vision accounted, 9/9 graph measured; 45+9 measured | A screen on MNIST for a sequence primitive |
+| **S5b–S5g Families** | Screen sequence, tabular, continual, rl, neuromorphic, lm, scientific declared rows | 155 rows with verdict | A screen on a family with no control |
+| **S6 Ceilings** | Measure the 4 param-box overruns at the proper task (surrogate, attention, routing, tile) and causal_transformer on sequence | 4 unimplemented rows with a failing test, a measured box, and a cost | An unimplemented row with no failing test |
+| **S6d Skip scan** | ✅ Scanner reads f-strings and reports non-literal reasons; 14 findings closed | 0 capability skips | A non-literal skip the gate cannot read |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
 | **S8 Map + docs** | Regenerate map with verdict/rung/cost; regenerate README/method cards | 0 unaccounted rows; docs match map | A doc row the map does not carry |
 | **S9 Results** | 5 pre-registered viability claims (control-relative, 5 seeds, CI) | 5 claims with CI | A claim without pre-registration |
@@ -753,11 +797,36 @@ uv run python -m pytest tests/primitives/test_primitive_wiring.py -x
 uv run python -m computronium.experiment.sec_loop \
   --track P0 --out results/sec --own-knobs --axis credit --task cora
 
-# 4. Audit
+# 4. Audit (DONE — 0 findings, 2026-11-20)
 uv run python scripts/audit.py
-#    --static: 0 findings. Full gate: 0 findings (S6b records are local:
+#    --static: 0 findings. Full gate: 0 findings (records are local:
 #    results/ is an artifact; S8 makes the map reproducible)
 #    --check <name> runs one predicate; --json emits machine-readable findings
+
+# 5. Vision + graph screens (DONE, 2026-11-20)
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis geometry --axis dynamics --axis plasticity \
+  --max-primitives 40 --task mnist --out results/sec --device cuda
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis substrate --axis update --max-primitives 40 \
+  --task mnist --out results/sec --device cuda --own-knobs
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis credit --axis geometry --axis dynamics --axis plasticity \
+  --max-primitives 40 --task cora --out results/sec_graph --device cuda
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis substrate --axis update --max-primitives 40 \
+  --task cora --out results/sec_graph --device cuda
+
+# 6. Ladders for every near-chance bound row (DONE — 8 records)
+uv run python -m computronium.experiment.sec_ladder          # every row
+uv run python -m computronium.experiment.sec_ladder --only <id>
+uv run python -m computronium.experiment.sec_ladder --dry-run  # prints, runs nothing
+
+# 7. Remaining families (NEXT): one out dir per family base task
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis <axis> --max-primitives 60 --task <char_ngram|iris|copy_task|cartpole|spiking_mnist> \
+  --out results/sec_<family> --device cuda
+#    then sec_ladder on that map, then the audit with the new map in MAPS
 ```
 
 ---

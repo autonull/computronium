@@ -406,8 +406,9 @@ class TestHyperparameterEffectLock:
             cells = _cells_for_spec(spec, limit=10)
 
             if len(cells) < 2:
-                # Availability may filter all — that's a registry gap, flag it
-                pytest.skip(f"No cells for {qname} under {axes}")
+                # Availability filtered every cell: the declared domain is
+                # unaccounted for this hyperparameter, a registry defect.
+                pytest.fail(f"No cells for {qname} under {axes}")
 
             coord1, sched1 = cells[0]
             coord2, sched2 = None, None
@@ -417,7 +418,7 @@ class TestHyperparameterEffectLock:
                     break
 
             if coord2 is None:
-                pytest.skip(f"No variation for {qname}")
+                pytest.fail(f"No variation for {qname}")
 
             shape = task_shape("digits")
             cell1 = compose_configs(

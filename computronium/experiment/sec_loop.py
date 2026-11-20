@@ -2189,12 +2189,16 @@ def update_map(
     previous: dict[str, dict] = {}
     interaction: dict[str, Any] | None = None
     deep_dive: dict[str, Any] | None = None
+    ladders: dict[str, Any] = {}
     if map_path.exists():
         prior = json.loads(map_path.read_text())
         if prior.get("version") == MAP_VERSION:
             previous = prior.get("primitives", {})
             interaction = prior.get("interaction")
             deep_dive = prior.get("deep_dive")
+            # A screen updates rows, not the ladder table: a P0 run that
+            # dropped it would erase every S6b record (measured 2026-11-20).
+            ladders = prior.get("ladders") or {}
 
     primitives: dict[str, dict] = {}
     for entry in census_entries:
@@ -2236,6 +2240,7 @@ def update_map(
         "by_axis": by_axis,
         "interaction": interaction,
         "deep_dive": deep_dive,
+        "ladders": ladders,
         "primitives": primitives,
     }
     map_path.write_text(json.dumps(map_data, indent=2, default=str))

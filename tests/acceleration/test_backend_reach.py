@@ -110,7 +110,10 @@ def test_an_arm_trains_the_system_it_is_bound_to(name: str) -> None:
     system = build(name, backend="auto")
     backend = getattr(system, "_kernel_backend", None)
     if backend is None:
-        pytest.skip(f"{name} has no attachable rung for its coordinate")
+        pytest.xfail(
+            f"unimplemented: {name} attaches no rung (close: S7 wrapper for its "
+            "acceleration module)"
+        )
 
     torch.manual_seed(0)
     before = {key: value.clone() for key, value in system.geometry.params.items()}

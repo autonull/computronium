@@ -105,3 +105,29 @@ def test_loop_has_no_bar(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     map_row = json.loads((tmp_path / "map.json").read_text())["primitives"][_ENTRY.id]
     assert map_row["status"] == "measured"
     assert map_row["status"] not in {"pass", "viable", "unavailable", "coordinate"}
+
+
+def test_a_screen_keeps_the_ladder_table(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A P0 write carries the S6b ladder records; it never rewrites the map.
+
+    Measured 2026-11-20: a P0 run dropped ``ladders`` and every near-chance
+    record with it. The map is a document with sections; a screen owns rows.
+    """
+    from computronium.experiment.sec_loop import update_map
+
+    _screen(monkeypatch, tmp_path, 0.93)  # a cell at the box
+    map_path = tmp_path / "map.json"
+    update_map(tmp_path, [_ENTRY], _screen(monkeypatch, tmp_path, 0.93))
+    document = json.loads(map_path.read_text())
+    document["ladders"] = {"primitive.credit_assignment.forward_tangent": {"v": 1}}
+    map_path.write_text(json.dumps(document))
+
+    result = _screen(monkeypatch, tmp_path, 0.5)
+    update_map(tmp_path, [_ENTRY], result)
+    written = json.loads(map_path.read_text())
+    assert written["ladders"] == {
+        "primitive.credit_assignment.forward_tangent": {"v": 1}
+    }
+    assert written["primitives"][_ENTRY.id]["status"] == "measured"

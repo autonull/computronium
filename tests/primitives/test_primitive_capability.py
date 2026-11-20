@@ -76,99 +76,103 @@ def _task_for_family(family: str) -> str:
     return mapping.get(family, "mnist")
 
 
-def _skip_reason(primitive_id: str, family: str) -> str | None:
-    """Check if this primitive-family combo should be skipped."""
-    # Known capability gaps (documented in TODO97) - require NEW primitives
-    gaps = {
+def _declared_reason(primitive_id: str, family: str) -> str | None:
+    """The row's own declaration: why this combo fails today, and its close.
+
+    A reason names the state (unimplemented / defective / cost) and the
+    mechanism that closes it. The skip message carries ``declared:`` so the
+    audit can tell a declared row from a silent capability skip (TODO97 S6d).
+    """
+    declared = {
         "credit.random_projections": {
-            "vision": "width/params gap (needs wider net)",
-            "sequence": "width/params gap (needs wider net)",
-            "tabular": "width/params gap (needs wider net)",
+            "vision": "unimplemented: width/params (close: wider net)",
+            "sequence": "unimplemented: width/params (close: wider net)",
+            "tabular": "unimplemented: width/params (close: wider net)",
         },
         "credit.forward_tangent": {
-            "vision": "memory vs accuracy gap (needs JVP primitive)",
-            "sequence": "memory vs accuracy gap (needs JVP primitive)",
+            "vision": "unimplemented: memory vs accuracy (close: JVP primitive)",
+            "sequence": "unimplemented: memory vs accuracy (close: JVP primitive)",
         },
         "credit.zeroth_order": {
-            "vision": "sample efficiency gap (needs more perturbations primitive)",
-            "sequence": "sample efficiency gap (needs more perturbations primitive)",
-            "tabular": "sample efficiency gap (needs more perturbations primitive)",
+            "vision": "unimplemented: sample efficiency (close: perturbation budget)",
+            "sequence": "unimplemented: sample efficiency (close: perturbation budget)",
+            "tabular": "unimplemented: sample efficiency (close: perturbation budget)",
         },
         "credit.local_contrastive": {
-            "vision": "label channel gap (needs contrastive head primitive)",
+            "vision": "unimplemented: label channel (close: contrastive head)",
         },
         "credit.local_goodness": {
-            "vision": "width gap (needs wider net)",
-            "sequence": "width gap (needs wider net)",
-            "tabular": "width gap (needs wider net)",
+            "vision": "unimplemented: width (close: wider net)",
+            "sequence": "unimplemented: width (close: wider net)",
+            "tabular": "unimplemented: width (close: wider net)",
         },
         "credit.pc_alm": {
-            "vision": "gamma ladder needed (tuning, not gap)",
+            "vision": "unimplemented: gamma ladder (close: tuning record)",
         },
         "credit.surrogate": {
-            "vision": "300k params ceiling (capability gap: needs larger model)",
-            "sequence": "300k params ceiling (capability gap: needs larger model)",
-            "tabular": "300k params ceiling (capability gap: needs larger model)",
+            "vision": "unimplemented box: 300k params (declared ceiling 150k)",
+            "sequence": "unimplemented box: 300k params (declared ceiling 150k)",
+            "tabular": "unimplemented box: 300k params (declared ceiling 150k)",
         },
         "geometry.attention": {
-            "sequence": "600k params ceiling (capability gap: needs larger model)",
-            "vision": "600k params ceiling (capability gap: needs larger model)",
-            "rl": "600k params ceiling (capability gap: needs larger model)",
+            "sequence": "unimplemented box: 600k params (declared ceiling 150k)",
+            "vision": "unimplemented box: 600k params (declared ceiling 150k)",
+            "rl": "unimplemented box: 600k params (declared ceiling 150k)",
         },
         "geometry.causal_transformer": {
-            "sequence": "600k params ceiling (capability gap: needs larger model)",
-            "rl": "600k params ceiling (capability gap: needs larger model)",
+            "sequence": "unimplemented box: 600k params (declared ceiling 150k)",
+            "rl": "unimplemented box: 600k params (declared ceiling 150k)",
         },
         "geometry.routing": {
-            "vision": "300k params ceiling (capability gap: needs larger model)",
-            "sequence": "300k params ceiling (capability gap: needs larger model)",
-            "tabular": "300k params ceiling (capability gap: needs larger model)",
+            "vision": "unimplemented box: 300k params (declared ceiling 150k)",
+            "sequence": "unimplemented box: 300k params (declared ceiling 150k)",
+            "tabular": "unimplemented box: 300k params (declared ceiling 150k)",
         },
         "geometry.tile": {
-            "vision": "1M params ceiling (capability gap: needs larger model)",
-            "sequence": "1M params ceiling (capability gap: needs larger model)",
-            "tabular": "1M params ceiling (capability gap: needs larger model)",
+            "vision": "unimplemented box: 1M params (declared ceiling 150k)",
+            "sequence": "unimplemented box: 1M params (declared ceiling 150k)",
+            "tabular": "unimplemented box: 1M params (declared ceiling 150k)",
         },
         "dynamics.diffusion": {
-            "vision": "cost model (steps 30->10 tuning)",
-            "sequence": "cost model (steps 30->10 tuning)",
+            "vision": "cost model: settle steps 30 -> 10 (S6 cost row)",
+            "sequence": "cost model: settle steps 30 -> 10 (S6 cost row)",
         },
         "plasticity.closed_form_ridge": {
-            "vision": "refused (no impl)",
-            "sequence": "refused (no impl)",
-            "tabular": "refused (no impl)",
+            "vision": "unimplemented: no closed-form ridge primitive",
+            "sequence": "unimplemented: no closed-form ridge primitive",
+            "tabular": "unimplemented: no closed-form ridge primitive",
         },
         "plasticity.rule_state": {
-            "continual": "no modulate() impl (defect: implement modulate)",
-            "sequence": "no modulate() impl (defect: implement modulate)",
-            "rl": "no modulate() impl (defect: implement modulate)",
+            "continual": "defective: no modulate() (close: implement modulate)",
+            "sequence": "defective: no modulate() (close: implement modulate)",
+            "rl": "defective: no modulate() (close: implement modulate)",
         },
         "plasticity.substrate_coupled": {
-            "neuromorphic": "no-op at protocol (defect: implement joint transition)",
-            "analog": "no-op at protocol (defect: implement joint transition)",
+            "neuromorphic": "defective: no joint substrate transition",
+            "analog": "defective: no joint substrate transition",
         },
         "update.natural_gradient": {
-            "vision": "cost model (diagonal Fisher tuning)",
-            "sequence": "cost model (diagonal Fisher tuning)",
-            "tabular": "cost model (diagonal Fisher tuning)",
-            "continual": "cost model (diagonal Fisher tuning)",
+            "vision": "cost model: diagonal Fisher (S6 cost row)",
+            "sequence": "cost model: diagonal Fisher (S6 cost row)",
+            "tabular": "cost model: diagonal Fisher (S6 cost row)",
+            "continual": "cost model: diagonal Fisher (S6 cost row)",
         },
         "update.cascade_synapse": {
-            "sequence": "refused (no impl)",
-            "rl": "refused (no impl)",
-            "continual": "refused (no impl)",
+            "sequence": "unimplemented: no cascade-synapse primitive",
+            "rl": "unimplemented: no cascade-synapse primitive",
+            "continual": "unimplemented: no cascade-synapse primitive",
         },
         "update.bayesian_online": {
-            "sequence": "refused (no impl)",
-            "rl": "refused (no impl)",
+            "sequence": "unimplemented: no online-Bayes primitive",
+            "rl": "unimplemented: no online-Bayes primitive",
         },
         "update.synaptic_intelligence": {
-            "continual": "refused (no impl)",
+            "continual": "unimplemented: no synaptic-intelligence primitive",
         },
     }
 
-    if primitive_id in gaps and family in gaps[primitive_id]:
-        return gaps[primitive_id][family]
+    if primitive_id in declared and family in declared[primitive_id]:
+        return declared[primitive_id][family]
     return None
 
 
@@ -187,22 +191,22 @@ def test_all_primitives_have_capability_test(primitive_specs):
 def test_primitive_on_declared_families(spec):
     """Test each primitive on its declared task families.
 
-    Runs 1 epoch, 1 seed. Primitives with known gaps are skipped with reason.
-    A primitive that fails without a documented gap is a defect.
+    Runs 1 epoch, 1 seed. A declared unimplemented or defective row is skipped
+    with its named mechanism and close condition; any other failure is a defect.
     """
     # Test at most 1 family per primitive to keep CI fast
     # (full family matrix runs in SEC)
     for family in spec.task_families:
-        reason = _skip_reason(spec.id, family)
+        reason = _declared_reason(spec.id, family)
         if reason:
-            pytest.skip(f"{spec.id} on {family}: {reason}")
+            pytest.skip(f"declared: {spec.id} on {family}: {reason}")
 
         task_id = _task_for_family(family)
         try:
             task = create_task(task_id)
             task.setup()
         except Exception as e:
-            pytest.skip(f"Task {task_id} not available: {e}")
+            pytest.skip(f"no dataset: task {task_id} not available: {e}")
 
         try:
             coord = _base_coordinate(spec.id, task)
@@ -220,7 +224,7 @@ def test_primitive_on_declared_families(spec):
                 task=task,
             )
         except ValueError as e:
-            pytest.skip(f"{spec.id} on {family}: compose failed - {e}")
+            pytest.xfail(f"defective: {spec.id} on {family}: compose failed - {e}")
 
         # Run 1 epoch capability check
         try:

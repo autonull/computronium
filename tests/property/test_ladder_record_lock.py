@@ -207,3 +207,67 @@ def test_an_unimplemented_ladder_clears_its_band(spec_id: str) -> None:
         f"best {max(values):.3f} is inside the band {band:.3f}: "
         f"{record['close_condition']}"
     )
+
+
+@pytest.mark.parametrize(
+    ("spec_id", "axis"),
+    [
+        ("primitive.parameter_update.quantized_adam", "update"),
+        ("primitive.plasticity.temporal_psi", "plasticity"),
+        ("primitive.substrate.noisy", "substrate"),
+    ],
+)
+def test_the_knob_table_names_the_axis_own_fields(spec_id: str, axis: str) -> None:
+    """Every axis's declared ladder knob is a field the config actually has.
+
+    Measured 2026-11-20: the update/plasticity/substrate rows named ``lr``,
+    ``decay``, ``bit_width`` and ``energy_per_op``, none of which those configs
+    declare, so their ladders recorded "no numeric knob" for a trainable row.
+    """
+    from computronium.experiment.sec_ladder import ladder_knob
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+
+    base = _coordinate(
+        {**_AXIS_DEFAULTS, axis: spec_id.rsplit(".", 1)[-1]}, own_knobs=axis
+    )
+    knob = ladder_knob(spec_id, base, axis)
+    assert knob is not None, f"{axis} declares no knob the config carries"
+    assert knob[0].startswith(f"{axis}.")
+
+
+@pytest.mark.parametrize(
+    "spec_id",
+    ["primitive.state_dynamics.error_predictive_coding", "primitive.geometry.conv"],
+)
+def test_the_ladder_sweeps_the_primitive_own_axis(spec_id: str) -> None:
+    """A dynamics or geometry row ladders its own knob, not a credit one.
+
+    Measured 2026-11-20: the credit-only ladder placed ``conv`` on the credit
+    axis, composed nothing, and recorded "no ladder point trained" for a row
+    the screen had just measured.
+    """
+    from computronium.experiment.kernel.evaluate import CellEvaluation
+    from computronium.experiment.sec_ladder import run_ladder
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist")
+    assert schedule is not None
+
+    def fake(_coord: Any, run: Any) -> CellEvaluation:
+        return CellEvaluation(
+            metrics={"val_acc": 0.9, "loss": 0.1},
+            params={},
+            param_count=100,
+            walltime_s=0.01,
+            epochs_completed=1,
+            task_id=run.task_id,
+        )
+
+    row = {"task": "mnist", "ruler": "val_acc on mnist (chance 0.100)"}
+    record = run_ladder(spec_id, row, 0.1, evaluate=fake, schedule=schedule)
+    axis = spec_id.split(".")[1]
+    expected = {"state_dynamics": "dynamics", "geometry": "geometry"}[axis]
+    assert record.axis == expected
+    assert record.knob is not None and record.knob.startswith(f"{expected}.")
+    assert record.runs == 4
+    assert record.verdict == "tuned"

@@ -75,9 +75,9 @@ LADDER_KNOBS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType({
     "credit": ("feedback_scale", "beta", "readout_scale", "lr"),
     "dynamics": ("step_size", "max_steps"),
     "geometry": ("hidden_dim", "depth", "width"),
-    "update": ("lr", "weight_decay"),
-    "plasticity": ("lr", "decay"),
-    "substrate": ("bit_width", "energy_per_op"),
+    "update": ("step_size", "momentum"),
+    "plasticity": ("trace_decay",),
+    "substrate": ("noise_level", "sparsity"),
 })
 
 

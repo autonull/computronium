@@ -122,9 +122,7 @@ def test_every_geometry_registry_key_composes(name: str):
     """Each geometry primitive the registry declares has a valid config classmethod."""
     # Geometries requiring task-specific args are tested in integration tests
     if name in _GEOMETRY_REQUIRES_ARGS:
-        pytest.skip(
-            f"Geometry {name} requires task-specific args (tested in integration)"
-        )
+        pytest.skip(f"declared: geometry {name} config requires task args")
     config = getattr(GeometryConfig, name)()
     assert config is not None
     assert config.topology_type == name
@@ -137,7 +135,7 @@ def test_every_plasticity_registry_key_composes(name: str):
     """Each plasticity primitive the registry declares has a valid config classmethod."""
     # Plasticity primitives requiring args are tested in integration tests
     if name in _PLASTICITY_REQUIRES_ARGS:
-        pytest.skip(f"Plasticity {name} requires args (tested in integration)")
+        pytest.skip(f"declared: plasticity {name} config requires args")
     config = getattr(PlasticityConfig, name)()
     assert config is not None
     assert config.plasticity_type == name
@@ -151,7 +149,7 @@ def test_every_update_registry_key_composes(name: str):
     """Each update primitive the registry declares has a valid config classmethod."""
     # Update primitives requiring args are tested in integration tests
     if name in _UPDATE_REQUIRES_ARGS:
-        pytest.skip(f"Update {name} requires args (tested in integration)")
+        pytest.skip(f"declared: update {name} config requires args")
     config = getattr(ParameterUpdateConfig, name)()
     assert config is not None
     assert config.update_type == name
