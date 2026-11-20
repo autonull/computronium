@@ -115,6 +115,12 @@ class AxisSpec:
     # so the declared space refuses it on a continuous-target task instead of
     # letting the composed cell raise. One declaration, on the row.
     target_kind: Literal["any", "class_index"] = "any"
+    # Whether a geometry consumes token ids and folds the sequence into its
+    # readout. A task that declares ``token_lane`` (token ids in, one label
+    # per token) matches only a row that declares this; the declared space
+    # refuses the other direction by name. Vision patch mode is a rank >= 3
+    # task, not a token lane, so the flag states the token contract only.
+    reads_tokens: bool = False
     # Where a credit rule sits in the gradient-estimator taxonomy (TODO93 §2),
     # and what its bias is measured against. Declared on the primitive's
     # identity card and stamped here by the registry; every other axis carries

@@ -279,26 +279,16 @@ def test_the_payload_carries_the_calibrated_bar() -> None:
     ("task", "axis", "primitive"),
     [
         ("mnist", "geometry", "routing"),
-        ("mnist", "geometry", "tile"),
         ("char_ngram", "geometry", "attention"),
         ("copy_task", "geometry", "attention"),
         ("cartpole", "geometry", "attention"),
     ],
-    ids=["routing", "tile", "attention", "attention-copy", "attention-rl"],
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the family ceiling is below the primitive's requirement: explicit "
-        "geometry sizing bypasses _fit_geometry, so the sizing path never "
-        "enforces the budget (TODO97 S6; measured at the declared box: "
-        "routing 234,898/300k, tile 629,096/1M, attention 593,819/600k)"
-    ),
+    ids=["routing", "attention", "attention-copy", "attention-rl"],
 )
 def test_a_box_overrun_fits_its_family_ceiling(
     task: str, axis: str, primitive: str
 ) -> None:
-    """The overrun rows become ``unimplemented`` at the family box, not defects."""
+    """An explicit width is searched down until the built cell fits the box."""
     from computronium.experiment.kernel.evaluate import (
         _compose_cell,
         _task,
@@ -323,11 +313,69 @@ def test_a_box_overrun_fits_its_family_ceiling(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "the graph base composes at 200,967 parameters over its declared "
-        "200,000 ceiling: explicit geometry.hidden_dim bypasses the ceiling "
-        "in _fit_geometry, so the sizing path never enforces the budget"
+        "a tile mesh projects the task's whole input into its input tiles, so "
+        "a 784-input task's input projection alone is 614,656 parameters over "
+        "the 150k family ceiling; close: an input compression (a projection "
+        "narrower than input_dim) so the mesh fits the box"
     ),
 )
+def test_a_tile_mesh_fits_its_family_ceiling() -> None:
+    """The missing capability: a tile mesh whose input projection fits the box."""
+    from computronium.experiment.kernel.evaluate import (
+        _compose_cell,
+        _task,
+        _task_shape,
+    )
+
+    schedule = base_schedule("mnist")
+    assert schedule is not None
+    coordinate = sec_loop._coordinate({
+        **sec_loop._base_axes("mnist"),
+        "geometry": "tile",
+    })
+    task_object = _task("mnist", "cpu")
+    cell = _compose_cell(
+        coordinate,
+        None,
+        _task_shape(task_object),
+        schedule.param_budget,
+        task_object,
+    )
+
+    assert cell.param_count <= schedule.param_budget
+
+
+def test_a_box_that_cannot_shrink_is_unimplemented() -> None:
+    """A cell whose tightest sizing overruns its box is unimplemented, not a defect.
+
+    The screen reads the floor by composing at a one-parameter ceiling: a cell
+    with a width shrinks, a tile mesh (no width; its input projection is the
+    floor) keeps its count, so its row is a box statement.
+    """
+    from computronium.experiment.kernel.evaluate import (
+        _compose_cell,
+        _task,
+        _task_shape,
+    )
+
+    schedule = base_schedule("mnist")
+    assert schedule is not None
+    coordinate = sec_loop._coordinate({
+        **sec_loop._base_axes("mnist"),
+        "geometry": "tile",
+    })
+    task_object = _task("mnist", "cpu")
+    floor = _compose_cell(
+        coordinate,
+        None,
+        _task_shape(task_object),
+        1,
+        task_object,
+    )
+
+    assert floor.param_count > schedule.param_budget
+
+
 def test_the_graph_base_fits_its_declared_ceiling() -> None:
     from computronium.experiment.kernel.evaluate import (
         _compose_cell,

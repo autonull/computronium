@@ -86,6 +86,44 @@ def test_every_declared_defect_class_stamps_its_lock(
     assert row["failing_test"] == lock.lock
 
 
+def test_an_unimplemented_ceiling_row_carries_its_capability_lock() -> None:
+    """A box statement names the feature that would fit it, not a failing defect."""
+    entry = build_census()[0]
+    cell = {
+        "status": "UNIMPLEMENTED",
+        "defect": "param_count 628280 over ceiling; its tightest sizing is 628280",
+        "defect_class": "ceiling_floor",
+        "failing_test": (
+            "tests/property/test_pilot_calibration.py"
+            "::test_a_tile_mesh_fits_its_family_ceiling"
+        ),
+        "box": {"task": "mnist"},
+    }
+
+    row = _map_row(entry, cell)
+
+    assert row["status"] is RowStatus.UNIMPLEMENTED
+    assert row["failing_test"] == cell["failing_test"]
+    assert missing_locks(row) == []
+
+
+def test_a_delta_screen_reruns_a_defective_row() -> None:
+    """The delta stops being 'delta' if a fixed defect stays screened forever."""
+    from computronium.experiment.sec_loop import _delta_entries
+
+    entry = build_census()[0]
+    map_data = {
+        "primitives": {
+            entry.id: {"last_screened": "2026-11-20T00:00:00", "status": "defective"}
+        }
+    }
+
+    assert [e.id for e in _delta_entries([entry], map_data)] == [entry.id]
+
+    map_data["primitives"][entry.id]["status"] = RowStatus.MEASURED
+    assert _delta_entries([entry], map_data) == []
+
+
 def _write_map(path: Path, row: dict[str, object]) -> None:
     path.write_text(
         json.dumps({"primitives": {"primitive.geometry.nca": row}}),

@@ -220,6 +220,12 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         def __call__(self, x: Tensor, *args, **kwargs) -> Tensor:
             return self.forward(x, *args, **kwargs)
 
+        def detach_state(self) -> None:
+            """Truncate the graph the geometry's buffers carry between steps."""
+            from computronium.ontology.system import detach_geometry_state
+
+            detach_geometry_state(self.geometry)
+
         @property
         def training(self) -> bool:
             """PyTorch compatibility: training mode flag."""

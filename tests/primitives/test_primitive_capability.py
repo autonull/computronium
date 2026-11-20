@@ -244,20 +244,38 @@ def test_primitive_on_declared_families(spec):
             metrics = task.evaluate(cell.system)
 
             # Error-blind credits: check non-zero update, not accuracy
-            from computronium.primitives.registry import get_spec
+            from computronium.core.system_trainer.spec import error_blind_credit
 
-            prim_spec = get_spec(spec.id)
-            if prim_spec and getattr(prim_spec, "error_blind", False):
+            if spec.axis == "credit" and error_blind_credit(spec.name):
                 # Just verify training ran without error
                 assert metrics.loss is not None
                 return
 
             # Error-aware credits: must clear the bar
-            bar = task.spec.primary_pass_bar
-            if bar and bar.value:
-                assert metrics.accuracy > bar.value, (
+            from computronium.experiment.kernel.evaluate import (
+                _primary_domain_metric_key,
+                clears_task_bar,
+                task_pass_bar,
+            )
+
+            bar = task_pass_bar(task_id)
+            if bar is not None:
+                # The bar names the task's primary metric key ("val_ppl" for an
+                # LM task), so the value is read through the same mapping the
+                # evaluator uses — comparing val_acc to a perplexity bar is how
+                # this test misread every non-vision task.
+                values = metrics.to_dict()
+                values.setdefault(
+                    bar.metric_key,
+                    values.get(
+                        _primary_domain_metric_key(task.domain_type),
+                        metrics.accuracy,
+                    ),
+                )
+                assert clears_task_bar(bar, values), (
                     f"{spec.id} on {family} ({task_id}): "
-                    f"accuracy {metrics.accuracy:.4f} <= bar {bar.value:.4f}"
+                    f"{bar.metric_key} {values[bar.metric_key]:.4f} misses "
+                    f"{bar.value:.4f}"
                 )
             else:
                 # No bar defined - just check above chance

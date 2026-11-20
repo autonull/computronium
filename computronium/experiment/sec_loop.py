@@ -449,6 +449,13 @@ CEILING_LOCK = (
     "tests/property/test_pilot_calibration.py"
     "::test_a_box_overrun_fits_its_family_ceiling"
 )
+#: The lock an unimplemented ceiling row names: the feature that would fit the
+#: cell at its family box. A cell whose tightest sizing still overruns declares
+#: no width to shrink, so the missing thing is a capability, not a defect.
+CEILING_FLOOR_LOCK = (
+    "tests/property/test_pilot_calibration.py::test_a_tile_mesh_fits_its_family_ceiling"
+)
+CEILING_FLOOR_CLASS = "ceiling_floor"
 #: The locks for the defect classes the family screens found (TODO97 S5h).
 #: A row stamps its class and the lock the audit reads, so a defect cannot be
 #: published without a failing test.
@@ -500,7 +507,9 @@ DEFECT_LOCKS: tuple[DefectLock, ...] = (
     DefectLock(
         "token_lane",
         LM_LANE_LOCK,
-        lambda task, _defect: _is_language_task(task),
+        lambda task, defect: (
+            _is_language_task(task) and not defect.startswith("param_count")
+        ),
     ),
     DefectLock(
         "ceiling_overrun",
@@ -831,8 +840,12 @@ def _declared_refusal(coord: Coordinate, shape: TaskShape, task_id: str) -> str 
         _batch_layout_rule,
         _is_geometry_task_compatible,
         _target_lane_rule,
+        _token_lane_rule,
     )
 
+    token = _token_lane_rule(coord, shape)
+    if token is not None:
+        return token
     if not _is_geometry_task_compatible(coord.geometry, shape, task_id):
         return (
             f"geometry={coord.geometry} cannot read {task_id}'s "
@@ -1095,6 +1108,28 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
     }
 
 
+def _param_floor(coord: Coordinate, schedule: Schedule) -> int | None:
+    """The tightest parameter count the coordinate composes to at its task.
+
+    Composing at a one-parameter ceiling asks the sizing path for its minimum
+    (the width search shrinks an explicit width; a cell with no width keeps
+    its floor). A floor above the family ceiling means no sizing knob fits the
+    box: the row is unimplemented at this box, not defective.
+    """
+    from computronium.experiment.kernel.evaluate import (
+        _compose_cell,
+        _task,
+        _task_shape,
+    )
+
+    try:
+        task = _task(schedule.task_id, schedule.device)
+        cell = _compose_cell(coord, None, _task_shape(task), 1, task)
+    except Exception:  # ruff: ignore[blind-except] - a probe, never a verdict
+        return None
+    return cell.param_count
+
+
 def _defect_for(
     eval_result: CellEvaluation, schedule: Schedule
 ) -> tuple[str | None, bool]:
@@ -1135,6 +1170,40 @@ def _refusal_reason(
     axes[axis] = primitive_key
     _, why = _is_legal(_coordinate(axes), task_id)
     return why or fallback
+
+
+@dataclass(frozen=True, slots=True)
+class CeilingTriage:
+    """A cell's state after an execution fact: measured, defective, or unimplemented."""
+
+    status: str
+    defect: str | None
+    defect_class: str | None
+    failing_test: str | None
+
+
+def _ceiling_triage(
+    defect: str | None, coord: Coordinate, schedule: Schedule
+) -> CeilingTriage:
+    """Triage a ceiling fact: a cell whose tightest sizing overruns is unimplemented.
+
+    The floor test is what separates a defect from a box statement. A cell with
+    a width shrinks under ``_fit_geometry`` and never reaches here; a cell
+    whose floor is the task's own input projection (a tile mesh over 784
+    inputs) cannot fit any declared box, so it names the feature that would
+    fit it instead of claiming the mechanism is broken.
+    """
+    if not (defect and defect.startswith("param_count")):
+        return CeilingTriage("DEFECT" if defect else "MEASURED", defect, None, None)
+    floor = _param_floor(coord, schedule)
+    if floor is None or floor <= schedule.param_budget:
+        return CeilingTriage("DEFECT", defect, None, None)
+    return CeilingTriage(
+        "UNIMPLEMENTED",
+        f"{defect}; its tightest sizing is {floor}, so no width fits the family box",
+        CEILING_FLOOR_CLASS,
+        CEILING_FLOOR_LOCK,
+    )
 
 
 def _screen_coordinate(  # ruff: ignore[too-many-arguments]
@@ -1191,6 +1260,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
         )
 
     defect, within = _defect_for(eval_result, schedule)
+    triage = _ceiling_triage(defect, coord, schedule)
     metrics = dict(eval_result.metrics)
     val_acc = float(metrics.get("val_acc", 0.0))
     loss = float(metrics.get("loss", float("inf")))
@@ -1202,7 +1272,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
         evaluation=eval_result,
         status=_screen_status(),
         extra_payload={
-            "defect": defect,
+            "defect": triage.defect,
             "binding": box_binding or "bound",
             "swapped": getattr(coord, axis) != primitive_key,
         },
@@ -1210,7 +1280,9 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
     return {
         "track": "P0",
         "primitive": entry.id,
-        "status": "DEFECT" if defect else "MEASURED",
+        "status": triage.status,
+        "defect_class": triage.defect_class,
+        "failing_test": triage.failing_test,
         "val_acc": val_acc,
         "loss": loss,
         "metric_key": criterion,
@@ -1324,6 +1396,35 @@ def _screen_entries(
     return cells
 
 
+def _delta_entries(
+    census_entries: list[PrimitiveCensusEntry], map_data: dict[str, Any]
+) -> list[PrimitiveCensusEntry]:
+    """The rows a delta screen re-runs: unscreened, or a defect a fix may have closed.
+
+    A defect that stays screened forever is how a map claims a failing test
+    after the test passes, so a `defective` row is always in the delta.
+    """
+    screened: set[str] = set()
+    defective: set[str] = set()
+    for prim_id, entry in map_data.get("primitives", {}).items():
+        if entry.get("last_screened") and entry.get("status") in {
+            RowStatus.MEASURED,
+            RowStatus.DEFECTIVE,
+            RowStatus.REFUSED,
+            RowStatus.UNIMPLEMENTED,
+        }:
+            screened.add(prim_id)
+            if entry.get("status") == RowStatus.DEFECTIVE:
+                defective.add(prim_id)
+    return [
+        e
+        for e in census_entries
+        if e.id not in screened
+        or e.id in defective
+        or e.screen_status in {"defect", "failed"}
+    ]
+
+
 def run_p0_track(
     out_dir: Path,
     census_entries: list[PrimitiveCensusEntry],
@@ -1344,25 +1445,10 @@ def run_p0_track(
 
     # Load map to check which primitives have been screened
     map_path = out_dir / "map.json"
-    screened_primitives = set()
-    if map_path.exists():
-        map_data = json.loads(map_path.read_text())
-        for prim_id, entry in map_data.get("primitives", {}).items():
-            if entry.get("last_screened") and entry.get("status") in {
-                RowStatus.MEASURED,
-                RowStatus.DEFECTIVE,
-                RowStatus.REFUSED,
-            }:
-                screened_primitives.add(prim_id)
+    map_data = json.loads(map_path.read_text()) if map_path.exists() else {}
 
     if breadth == "delta":
-        # Filter to delta: unscreened, defect, or failed (from map status)
-        entries_to_screen = [
-            e
-            for e in census_entries
-            if e.id not in screened_primitives
-            or e.screen_status in {"defect", "failed"}
-        ]
+        entries_to_screen = _delta_entries(census_entries, map_data)
     else:  # full
         entries_to_screen = list(census_entries)
 
@@ -2348,6 +2434,10 @@ def _map_row(
         if lock is not None:
             row["defect_class"] = lock.name
             row["failing_test"] = lock.lock
+    # The screen may already have triaged the state (an unimplemented ceiling
+    # names the feature that would fit it); its declaration wins.
+    row["defect_class"] = cell.get("defect_class") or row.get("defect_class")
+    row["failing_test"] = cell.get("failing_test") or row.get("failing_test")
     if status is RowStatus.MEASURED:
         row["measurement"] = {
             "val_acc": cell.get("val_acc"),
@@ -2514,6 +2604,7 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
             for status in (
                 RowStatus.MEASURED,
                 RowStatus.DEFECTIVE,
+                RowStatus.UNIMPLEMENTED,
                 RowStatus.REFUSED,
                 RowStatus.UNMEASURED,
             )

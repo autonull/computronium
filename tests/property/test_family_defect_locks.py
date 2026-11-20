@@ -1,10 +1,10 @@
 """The defect classes the family screens found, each with its lock (TODO97 S5h).
 
 A row states a defect only when a test names the mechanism. The three classes
-the declared space now refuses read the space's own rules (a reversal here
-re-admits a cell that dies at train time). The two runtime classes are strict
-xfail: they fail today with the traceback the screen recorded and flip green
-only when the mechanism is fixed, which is when the marker is deleted.
+the declared space refuses read the space's own rules (a reversal here
+re-admits a cell that dies at train time). The two runtime classes are now
+fixed: the token lane is declared on the task and enforced by the space, and
+the NTM detaches the state it carries between steps.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import pytest
 
 from computronium.experiment import sec_loop
 from computronium.experiment.kernel.evaluate import (
-    EvaluationError,
     TaskShape,
     evaluate_cell,
 )
@@ -78,45 +77,36 @@ def test_a_causal_transformer_refuses_a_flat_classifier_task() -> None:
             _coordinate(task_id, "geometry", "causal_transformer"), task_id
         )
         assert legal is False, task_id
-        assert "cannot read" in (reason or ""), task_id
+        assert "token-lane disagreement" in (reason or ""), task_id
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ntm threads its recurrent state across time steps and calls backward "
-        "on the same graph twice; close: detach the state between steps"
-    ),
-)
 def test_ntm_detaches_its_recurrent_state() -> None:
+    """The zero-history local recipe: state crosses steps, its graph does not."""
     schedule = _cpu_schedule("cartpole")
 
     evaluate_cell(_coordinate("cartpole", "geometry", "ntm"), schedule)
 
 
-@pytest.mark.timeout(300)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "a language task's token-id input (int64) and per-token target are not "
-        "carried into the geometry/credit contract, so 22 rows on "
-        "tiny_shakespeare raise a dtype or shape error; close: declare the "
-        "token lane and refuse or adapt a cell that cannot read it"
-    ),
-)
 def test_a_language_task_declares_its_token_lane() -> None:
-    """The declared space refuses a cell that cannot read tokens, or it trains."""
+    """The declared space refuses a cell that cannot read tokens, or it trains.
+
+    An LM task declares token ids in and one label per token; a token geometry
+    reads that lane and every other geometry is refused by name. A per-row
+    language task (char_ngram) meets the same rule from the other direction:
+    its targets do not fold per token, so the token geometry is refused.
+    """
     for task_id, geometry in (
+        ("tiny_shakespeare", "causal_transformer"),
         ("tiny_shakespeare", "feedforward"),
         ("char_ngram", "causal_transformer"),
+        ("char_ngram", "attention"),
     ):
         coordinate = _coordinate(task_id, "geometry", geometry)
-        legal, _reason = sec_loop._is_legal(coordinate, task_id)
+        legal, reason = sec_loop._is_legal(coordinate, task_id)
+        lane_matches = (geometry == "causal_transformer") == (
+            task_id == "tiny_shakespeare"
+        )
+        assert legal is lane_matches, (task_id, geometry, reason)
         if not legal:
-            continue
-        schedule = _cpu_schedule(task_id)
-        try:
-            evaluate_cell(coordinate, schedule)
-        except EvaluationError as exc:
-            pytest.fail(f"the token lane is undeclared on {task_id}: {exc}")
+            assert "token-lane disagreement" in (reason or "")

@@ -339,7 +339,11 @@ def _fit_geometry(
 
     Derived sizing is a search over the ceiling itself, and the acceptance test
     is the built module's parameter count. With no ceiling in force this is a
-    plain build, so an unconstrained run keeps the measured regime.
+    plain build, so an unconstrained run keeps the measured regime. An explicit
+    width is a request, not an exemption: when the built cell still overruns,
+    the width is searched down to the largest value that fits. A cell with no
+    width to search (its floor is the task's input projection) is returned at
+    its tightest and the screen states it as unimplemented at this box.
     """
 
     def build(budget: int) -> GeometryConfig:
@@ -363,9 +367,58 @@ def _fit_geometry(
             lo = mid + 1
         else:
             hi = mid - 1
-    # A cell that cannot fit even at minimum sizing is not silently enlarged:
-    # the tightest cell is returned and the evaluator's gate reports it.
-    return best or smallest
+    fitted = best or smallest
+    if geometry_param_count(fitted) <= param_budget:
+        return fitted
+    return _fit_explicit_width(
+        mapping,
+        topology=topology,
+        input_shape=input_shape,
+        output_dim=output_dim,
+        param_budget=param_budget,
+        fallback=fitted,
+    )
+
+
+def _fit_explicit_width(
+    mapping: Mapping[str, object],
+    *,
+    topology: str,
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+    fallback: GeometryConfig,
+) -> GeometryConfig:
+    """The largest explicit ``hidden_dim`` whose built geometry fits the budget.
+
+    A cell that fixes its width bypasses the derived search, so the ceiling
+    must shrink the width it was handed. Returns ``fallback`` (its tightest
+    build) when the mapping fixes no width or no width fits.
+    """
+    width = mapping.get("hidden_dim")
+    if not isinstance(width, int | float):
+        return fallback
+    lo, hi, best = 1, int(width) - 1, None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        try:
+            candidate = build_geometry_config(
+                {**mapping, "hidden_dim": mid},
+                topology=topology,
+                input_shape=input_shape,
+                output_dim=output_dim,
+                param_budget=param_budget,
+            )
+            count = geometry_param_count(candidate)
+        except ValueError, RuntimeError:
+            hi = mid - 1
+            continue
+        if count <= param_budget:
+            best = candidate
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return best or fallback
 
 
 def _allowed_keys(topology: str) -> frozenset[str]:

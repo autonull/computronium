@@ -65,6 +65,11 @@ class LMTask(DomainTask):
         return DomainType.LM
 
     @property
+    def token_lane(self) -> bool:
+        """``_NextTokenDataset`` yields int64 token ids and a per-token target."""
+        return True
+
+    @property
     def spec(self) -> DomainSpec:
         return DomainSpec(
             name=self.name,

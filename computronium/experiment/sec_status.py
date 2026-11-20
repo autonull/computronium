@@ -49,6 +49,7 @@ CELL_STATUS: Mapping[str, RowStatus] = MappingProxyType({
     "MEASURED": RowStatus.MEASURED,
     "DEFECT": RowStatus.DEFECTIVE,
     "UNAVAILABLE": RowStatus.REFUSED,
+    "UNIMPLEMENTED": RowStatus.UNIMPLEMENTED,
 })
 
 

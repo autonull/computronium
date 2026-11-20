@@ -271,6 +271,18 @@ class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
         return LossKind.CROSS_ENTROPY
 
     @property
+    def token_lane(self) -> bool:
+        """Whether the loader emits token ids and one target per token.
+
+        A token task's batch is ``(batch, seq_len)`` of class indices with a
+        ``(batch, seq_len)`` next-token target, so only a geometry that reads
+        token ids and folds the sequence into its readout can consume it. The
+        declared space refuses any other geometry by name instead of letting
+        the cell raise on a dtype or a broadcast.
+        """
+        return False
+
+    @property
     def batch_layout(self) -> BatchLayout:
         """The batch layout this task's loader emits.
 

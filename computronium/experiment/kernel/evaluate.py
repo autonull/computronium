@@ -221,6 +221,11 @@ class TaskShape:
     # The layout the task's loader emits: a time-major batch carries a leading
     # time axis, so the declared space refuses a cell that has none.
     batch_layout: BatchLayout = "flat"
+    # The task reads token ids and labels every token. Only a geometry that
+    # declares the token lane consumes this shape; every other geometry is
+    # refused by name instead of raising inside its first Linear (measured:
+    # tiny_shakespeare/feedforward read 128 token positions as one row).
+    token_lane: bool = False
 
     @property
     def input_dim(self) -> int:
@@ -243,6 +248,7 @@ def _task_shape(task: Any) -> TaskShape:
         output_dim=int(task.output_dim),
         target_kind=LOSS_INVENTORY[task.loss_kind].target,
         batch_layout=task.batch_layout,
+        token_lane=task.token_lane,
     )
 
 

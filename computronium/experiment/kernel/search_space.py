@@ -295,13 +295,12 @@ def _is_geometry_task_compatible(
     if geometry == "nca":
         return rank >= 3
 
-    # The causal transformer's token mode shifts targets per token. A flat
-    # classifier input is read as a token sequence whose labels are per
-    # sample, which the settle nudge cannot broadcast (measured: iris refused
-    # with negative class values). Vision patch embedding is the rank >= 3
-    # branch; a language task declares per-token targets.
-    if geometry == "causal_transformer":
-        return rank >= 3 or domain == "language"
+    # The token lane is a property of both sides: the task declares token ids
+    # and a per-token target, and the geometry declares that it reads them.
+    # Any other pairing dies on a dtype cast or a target broadcast (measured:
+    # tiny_shakespeare/feedforward and char_ngram/causal_transformer).
+    if not _is_token_lane_compatible(geometry, task_shape):
+        return False
 
     # A time-major loader emits ``(time, batch, features)``; only a geometry
     # that owns the time axis unrolls it. Every other geometry reshapes the
@@ -325,6 +324,38 @@ def _task_domain(task_id: str | None) -> str | None:
 
 TARGET_LANE_RULE: Final = "class-index primitive on a continuous-target task"
 BATCH_LAYOUT_RULE: Final = "credit × task batch-layout disagreement"
+TOKEN_LANE_RULE: Final = (  # noqa: S105 - a rule name, not a credential
+    "geometry × task token-lane disagreement"
+)
+
+
+def _reads_tokens(geometry: str) -> bool:
+    """Whether the geometry row declares the token contract (``reads_tokens``)."""
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+
+    return AXES_REGISTRIES[StructuralAxis.GEOMETRY][geometry].reads_tokens
+
+
+def _is_token_lane_compatible(geometry: str, task_shape: TaskShape) -> bool:
+    """Whether the geometry can read this task's token lane.
+
+    ``TaskShape.token_lane`` means the loader emits token ids and one label
+    per token, so only a geometry that declares ``reads_tokens`` can consume
+    it. The reverse also fails: a token geometry folds the sequence into its
+    readout, so a per-row task's target cannot broadcast — except vision
+    patch mode (a rank >= 3 input), which the token geometry reads as pixels.
+    """
+    reads = _reads_tokens(geometry)
+    if task_shape.token_lane:
+        return reads
+    return not reads or len(task_shape.input_shape) >= 3
+
+
+def _token_lane_rule(coordinate: Coordinate, task_shape: TaskShape) -> str | None:
+    """The token-lane rule a six-axis coordinate violates, else ``None``."""
+    if _is_token_lane_compatible(coordinate.geometry, task_shape):
+        return None
+    return f"{TOKEN_LANE_RULE}: geometry={coordinate.geometry}"
 
 
 def _is_batch_layout_compatible(axis: str, name: str, batch_layout: str) -> bool:
@@ -1219,6 +1250,13 @@ def iter_candidates(  # ruff: ignore[complex-structure]
         # Explicit geometry-task compatibility filter
         if shape is not None:
             task_shape = shape(task)
+            token = _token_lane_rule(coordinate, task_shape)
+            if token is not None:
+                if use_void_cache and void_cache:
+                    void_cache.record_void(coordinate, schedule.task_id)
+                if rejections is not None:
+                    rejections[token] += 1
+                continue
             if not _is_geometry_task_compatible(
                 coordinate.geometry, task_shape, schedule.task_id
             ):

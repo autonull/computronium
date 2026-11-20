@@ -287,6 +287,11 @@ class RLSystemTrainer:
         steps = 0
 
         for _ in range(self.max_steps):
+            # Truncated BPTT: every step backs up on its own loss, so the
+            # graph a stateful geometry carries from the previous step is
+            # dropped here (measured: ntm's second a2c backward died on the
+            # first step's saved tensors).
+            self.system.detach_state()
             state = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
             with self._autocast:
                 logits = self.system.forward(state)
@@ -404,6 +409,7 @@ class RLSystemTrainer:
         steps = 0
 
         for _ in range(self.max_steps):
+            self.system.detach_state()
             state = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
             if len(self._replay) < DDPG_WARMUP:
                 env_action = np.random.uniform(low=low, high=high).astype(np.float32)

@@ -159,6 +159,27 @@ Phase = StrEnum(
 # ============================================================
 
 
+def detach_geometry_state(geometry: object) -> None:
+    """Truncate the autograd graph a geometry's buffers carry between steps.
+
+    A geometry with persistent buffers (the NTM's memory and controller state)
+    stores the previous step's graph in them. A training loop that backs up
+    once per environment step frees that graph, so the next backward fails;
+    the loop calls this at its step boundary, as truncated BPTT does.
+    Parameters are never touched.
+    """
+    from torch import nn
+
+    if isinstance(geometry, nn.Module):
+        for module in geometry.modules():
+            for name, buffer in tuple(module.named_buffers(recurse=False)):
+                if buffer.grad_fn is not None:
+                    # Replace the buffer: a view's autograd metadata survives
+                    # ``detach_`` and a ``.data`` assignment, so only a new
+                    # tensor detaches it (the LSTM state is a squeeze).
+                    setattr(module, name, buffer.detach())
+
+
 TS = TypeVar("TS", bound=Substrate)
 TG = TypeVar("TG", bound=Geometry)
 TD = TypeVar("TD", bound=StateDynamics)
@@ -228,6 +249,16 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 
     def __call__(self, x: Tensor) -> Tensor:
         """Call the system like a model: ``system(x)``."""
+        ...
+
+    def detach_state(self) -> None:
+        """Truncate the graph the geometry carries between per-step updates.
+
+        A training loop that backs up once per environment step (RL's
+        one-step actor-critic) frees the previous step's graph; a geometry
+        with persistent buffers would then fail its next backward. The loop
+        calls this at its step boundary, as truncated BPTT does.
+        """
         ...
 
     @property
@@ -415,6 +446,7 @@ __all__ = [
     "System",
     "SystemConfig",
     "SystemState",
+    "detach_geometry_state",
 ]
 
 

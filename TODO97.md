@@ -65,6 +65,7 @@ and S9 claims.
 | S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
 | S6d | Skip scanner reads f-strings and non-literal reasons | ✅ DONE — 14 findings closed; 0 static findings |
 | S6 | Measure the four params-box overruns at their declared box | ✅ DONE — each fits its declared box: surrogate 234,898/300k, routing 234,898/300k, attention 593,819/600k, tile 629,096/1M, causal_transformer 410,880/600k. They are box-limited, not defective; strict-xfail `test_a_box_overrun_fits_its_family_ceiling` names budget-aware sizing |
+| S6e | Close the 21 defective rows (token lane, NTM, ceiling) | ✅ DONE — 14 token-lane rows refused by name; NTM trains on cartpole (trainer truncates the graph); width search fits routing/attention/graph; tile re-triaged `unimplemented` (628,280 floor at a 150k box) |
 | S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — 9 factories `xfail` on a missing rung; all 75 are `kernel_status="absent"` |
 | S8 | Regenerate map + docs from one source | ⏳ PENDING — `MAPS` now carries the 7 new family maps; README/method cards still read a second table |
 | S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING |
@@ -79,6 +80,28 @@ painting the remaining rows as defects; the ladder predicate treats the base
 coordinate as the control; the map records the ruler's primary metric. The four
 param-box overruns fit their declared boxes (S6), so they are box-limited, not
 defective; budget-aware sizing stays the close condition.
+
+**Session 2026-11-20 (S6e).** The 21 defective rows are closed. The token lane
+is a declared contract now (`DomainTask.token_lane` → `TaskShape.token_lane` →
+`AxisSpec.reads_tokens`), so `feedforward` on `tiny_shakespeare` and
+`causal_transformer` on `char_ngram` are refused by name before training; the
+base pair (`causal_transformer` on `tiny_shakespeare`, `attention` on
+`char_ngram`) stays legal. The NTM double-backward is fixed in the training
+loop, not in the mechanism: `System.detach_state()` truncates the graph the
+geometry's buffers carry, and the RL trainer calls it at every environment step
+(truncated BPTT). `_fit_geometry` now searches an explicit `hidden_dim` down to
+fit the built geometry, which closes the graph base (200,967 → 199,519),
+routing and all three attention rows. Tile has no width to shrink (its input
+projection is 614,656 of its 628,280 parameters), so the screen writes it
+`unimplemented` at the 150k box and stamps the compression lock. The delta
+screen also now re-runs map-defective rows; before, a fixed defect stayed
+screened forever. The capability test's dead `get_spec` import (migration
+residue) now reads `error_blind_credit` on the credit row, so its error-blind
+case can report instead of raising an `ImportError`. Locks: `test_a_language_task_declares_its_token_lane`,
+`test_ntm_detaches_its_recurrent_state`, `test_a_box_overrun_fits_its_family_ceiling`,
+`test_a_box_that_cannot_shrink_is_unimplemented` (all pass) and
+`test_a_tile_mesh_fits_its_family_ceiling` (strict xfail, the capability that
+would fit it).
 
 ### Remaining work (dependency order, 2026-11-20)
 
@@ -95,20 +118,41 @@ defective; budget-aware sizing stays the close condition.
    (6 rows; `test_a_box_overrun_fits_its_family_ceiling`). The row-state
    vocabulary is one source (`computronium/experiment/sec_status.py`); the
    gate now reports a defective row without its lock.
-2. **Close the 21 defective rows** — each has a failing test, so each is a
-   named mechanism, not a gap:
-   - **token lane (14)**: declare the language task's input dtype and
-     per-token target on `TaskShape` and refuse (or adapt) a geometry/credit
-     that cannot read them. Close condition: the lock's two cases pass —
-     `feedforward` on `tiny_shakespeare` and `causal_transformer` on
-     `char_ngram` train, or the declared space refuses them.
-   - **recurrent state detach (1)**: detach `ntm`'s recurrent state between
-     steps so the second `backward` has a live graph. Close condition:
-     `test_ntm_detaches_its_recurrent_state` passes on `cartpole`.
-   - **budget-aware sizing (6)**: `_fit_geometry` must enforce the family
-     ceiling when an explicit `hidden_dim` is set (the same defect the graph
-     base's 200,967/200,000 lock names). Close condition: the ceiling lock
-     passes at the declared box.
+2. ~~**Close the 21 defective rows**~~ ✅ done (S6e, 2026-11-20). Each became
+   a measured row or a named refusal; none is a gap:
+   - **token lane (14)** — closed as refusals. `DomainTask.token_lane` (true on
+     `LMTask`), `TaskShape.token_lane`, and `AxisSpec.reads_tokens` (true on
+     `causal_transformer`) are the one declaration; `search_space._token_lane_rule`
+     refuses the mismatch by name (`TOKEN_LANE_RULE`). `feedforward` on
+     `tiny_shakespeare` and `causal_transformer` on `char_ngram` are refused
+     before the cell runs; the base pair stays legal. Lock:
+     `test_a_language_task_declares_its_token_lane` (passes).
+   - **recurrent state detach (1)** — fixed. `System.detach_state()`
+     (`detach_geometry_state`) truncates the graph a geometry's buffers carry,
+     and the RL trainer calls it at every environment step (truncated BPTT).
+     `ntm` on `cartpole` trains; `test_ntm_detaches_its_recurrent_state`
+     passes, and the budget-8 combination cover stays green.
+   - **budget-aware sizing (6)** — five rows fixed, one re-triaged. `_fit_geometry`
+     now searches an explicit `hidden_dim` down until the *built* geometry fits
+     the family ceiling (ground truth, not an estimator): routing, attention ×3
+     (mnist/copy_task/cartpole) and the graph base (200,967 → 199,519/200,000)
+     fit. `tile` on mnist has no width to shrink: its input projection is
+     784 × 784 = 614,656 alone, so its floor is 628,280 at a 150k box. The
+     screen now writes such a row as `unimplemented` (status `UNIMPLEMENTED`,
+     `defect_class=ceiling_floor`) and stamps
+     `test_a_tile_mesh_fits_its_family_ceiling` (strict xfail: close = an input
+     compression narrower than `input_dim`). Passing lock:
+     `test_a_box_that_cannot_shrink_is_unimplemented`.
+2b. **S5i — the capability suite's hang** (filed, not closed). The full
+   `uv run python -m pytest tests/primitives/test_primitive_capability.py` run
+   hits the 300 s marker inside `train_on_task`'s DataLoader and produces no
+   verdict: a killed run yields no verdict, collect (`pytest <file> --co -q >
+   ids.txt`) before any re-run. Mechanism: a capability row trains through an
+   unbounded loader, so a row that cannot train hangs instead of failing.
+   Close condition: the loader is bounded (`num_workers=0`, bounded steps), and
+   the suite reports pass / skip / fail in one run. The two dead imports this
+   session fixed (`get_spec`, `task.spec.primary_pass_bar`) were separate test
+   defects; the row now reads `error_blind_credit` and the task's own bar key.
 3. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
    carries 9 `xfail` factories (ff, fa, tp, tile, pcalm, dfa, spiking_snn,
    fast_weight, pepita) whose rung does not attach; each is a wrapper over an
@@ -116,10 +160,15 @@ defective; budget-aware sizing stays the close condition.
    and measured parity.
 4. **S8 — map + docs from one source.** `scripts/audit.py` reads the nine
    family maps; README/method cards still regenerate from a second table.
-   Artifact note: maps written before this session carry `defect` and lack
-   `defect_class`/`failing_test`; a re-screen now writes `defective` and
-   stamps the class. The 47 old defect rows were re-derived locally (26
-   refused, 21 stamped) — a fresh clone re-derives them by screening.
+   The `delta` screen now re-runs map-`defective` rows (it did not, so a fixed
+   defect stayed screened forever). Re-screened maps are clean: vision 48
+   measured / 26 refused / 1 unimplemented, sequence 48 / 27, rl 18 / 57,
+   continual 49 / 26 — 0 defective in each. The lm map still carries its 11
+   pre-fix defects until its own delta run; that slice is the costly one (five
+   credit/plasticity rows train 3 epochs on `tiny_shakespeare` at ~90 s/epoch
+   on CPU, ~22 min uncontended; its six geometry rows refuse instantly). Price
+   that run from the map before launching it. A fresh clone re-derives every
+   row by screening; the committed code carries the rules and the locks.
 5. **S9 — five pre-registered claims.** The two tuned coordinates
    (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
    candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI
@@ -216,9 +265,11 @@ verdict, or a capability that works — never on "tests consolidated".
    as declared-space refusals, three locked (token lane, ntm detach, ceiling);
    the row-state gate reads one vocabulary (`sec_status.RowStatus`) and
    `scripts/audit.py` exits 0 over the nine maps.
-6. **Close the 21 defective rows — NEXT** — the three locks' close conditions
-   (§Remaining work 2), then **S7** (10 kernel wrappers), **S8** (map + docs
-   from one source), **S9** (5 pre-registered claims).
+6. ~~**Close the 21 defective rows**~~ ✅ done (S6e): 14 token-lane rows
+   refused by name, NTM trains on cartpole, five ceiling boxes fit by width
+   search, and the tile floor is `unimplemented` with its lock. **NEXT: S7**
+   (10 kernel wrappers), then **S8** (map + docs from one source), **S9**
+   (5 pre-registered claims).
 
 ---
 
@@ -347,19 +398,22 @@ class StepResult:
     metrics: dict[str, float]
     state: dict[str, Any]
 
+
 @dataclass(frozen=True, slots=True)
 class PrimitiveSpec:
     id: str
-    axis: Literal["credit","dynamics","geometry","plasticity","substrate","update"]
+    axis: Literal["credit", "dynamics", "geometry", "plasticity", "substrate", "update"]
     name: str
     equations: str
     invariants: tuple[str, ...]
     task_families: tuple[str, ...]
-    kernel_status: Literal["implemented","wrapper","stub","absent"] = "absent"
+    kernel_status: Literal["implemented", "wrapper", "stub", "absent"] = "absent"
     ontology_class: type
+
 
 class PrimitiveProtocol(Protocol):
     SPEC: PrimitiveSpec
+
     def make_task_case(self, task_id: str, box: dict, seed: int) -> Any: ...
     def reference_step(self, case: Any) -> StepResult: ...
     def kernel_step(self, case: Any) -> StepResult: ...

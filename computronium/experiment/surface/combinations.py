@@ -260,7 +260,9 @@ def declared_space(
     from computronium.experiment.kernel.search_space import (
         BATCH_LAYOUT_RULE,
         TARGET_LANE_RULE,
+        TOKEN_LANE_RULE,
         _compiled_void_constraints,
+        _is_token_lane_compatible,
         _void_pass,
     )
 
@@ -298,7 +300,11 @@ def declared_space(
                 else TARGET_LANE_RULE
             )
         elif name not in axes[GEOMETRY_INDEX] and axis == "geometry":
-            reason = SHAPE_RULE
+            reason = (
+                TOKEN_LANE_RULE
+                if not _is_token_lane_compatible(name, shape)
+                else SHAPE_RULE
+            )
         else:
             reason = _refutation(axis, name, task_id, axes, indep, dep)
         refused.append((key, reason))

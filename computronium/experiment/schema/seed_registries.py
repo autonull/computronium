@@ -349,6 +349,15 @@ CLASS_TARGET_ONLY: frozenset[tuple[StructuralAxis, str]] = frozenset({
     (StructuralAxis.PLASTICITY, "conflict_adaptive"),
 })
 
+# Geometry rows that consume token ids and fold the sequence into their
+# readout. A task declaring ``token_lane`` matches only these; every other
+# geometry is refused by name (measured: tiny_shakespeare/feedforward read 128
+# token positions as one row). Vision patch mode is rank >= 3, not a token
+# lane, and stays admissible for these rows.
+READS_TOKENS: frozenset[tuple[StructuralAxis, str]] = frozenset({
+    (StructuralAxis.GEOMETRY, "causal_transformer"),
+})
+
 
 # Credits whose contract reads no target or loss (``error_blind=True``). The
 # RL lane never calls a credit at all, so an error-aware row there would claim a
@@ -556,6 +565,7 @@ def _seed_axis_primitives() -> None:
                     target_kind=(
                         "class_index" if (axis, name) in CLASS_TARGET_ONLY else "any"
                     ),
+                    reads_tokens=(axis, name) in READS_TOKENS,
                     estimator_kind=estimator_kind,
                     bias_reference=bias_reference,
                     accepted_params=_accepted_params(axis, name),

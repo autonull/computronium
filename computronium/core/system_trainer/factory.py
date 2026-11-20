@@ -265,6 +265,12 @@ def compose_system[  # ruff: ignore[complex-structure]
             """Enable calling the system like a function: model(x, *args, **kwargs)."""
             return self.forward(x, *args, **kwargs)
 
+        def detach_state(self) -> None:
+            """Truncate the graph the geometry's buffers carry between steps."""
+            from computronium.ontology.system import detach_geometry_state
+
+            detach_geometry_state(self.geometry)
+
         def parameters(self):
             """Return an iterator over all learnable parameters (from geometry)."""
             return self.geometry.params.values()
