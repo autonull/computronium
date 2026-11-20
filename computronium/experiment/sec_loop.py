@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from computronium.acceleration.spec import axis_segment
 from computronium.core.continual.metrics import CLConfig, CLMetrics
@@ -473,6 +473,20 @@ CLASS_VOCABULARY_LOCK = (
 NTM_LOCK = (
     "tests/property/test_family_defect_locks.py::test_ntm_detaches_its_recurrent_state"
 )
+#: The token lane is a geometry contract: only a geometry that declares
+#: ``reads_tokens`` consumes token ids, so only a geometry refusal is filed
+#: under it. A credit or plastic read of the raw ids is the token-shape class.
+SHAPE_LOCK = (
+    "tests/property/test_family_defect_locks.py"
+    "::test_a_token_lane_plastic_step_reads_its_settled_input"
+)
+#: The runtime symptoms a token-lane credit or plastic read raises when it
+#: consumes raw token ids: a dtype cast, a folded row count, or a width.
+TOKEN_SHAPE_SYMPTOMS: Final = (
+    "to have the same dtype",
+    "Expected input batch_size",
+    "must match the size of tensor",
+)
 LM_LANE_LOCK = (
     "tests/property/test_family_defect_locks.py"
     "::test_a_language_task_declares_its_token_lane"
@@ -502,13 +516,23 @@ def _is_language_task(task: str) -> bool:
 
 
 DEFECT_LOCKS: tuple[DefectLock, ...] = (
-    # The language task's token lane (dtype, per-token target) is not carried
-    # into the geometry/credit contract.
+    # A geometry that cannot read the task's token lane (or a token geometry
+    # on a per-row task) is refused at the declared space by name.
     DefectLock(
         "token_lane",
         LM_LANE_LOCK,
         lambda task, defect: (
-            _is_language_task(task) and not defect.startswith("param_count")
+            _is_language_task(task) and "token-lane disagreement" in defect
+        ),
+    ),
+    # A credit or plastic step that reads the raw token ids as features is a
+    # runtime shape fault, filed separately from the geometry contract.
+    DefectLock(
+        "token_shape",
+        SHAPE_LOCK,
+        lambda task, defect: (
+            _is_language_task(task)
+            and any(symptom in defect for symptom in TOKEN_SHAPE_SYMPTOMS)
         ),
     ),
     DefectLock(
@@ -841,11 +865,16 @@ def _declared_refusal(coord: Coordinate, shape: TaskShape, task_id: str) -> str 
         _is_geometry_task_compatible,
         _target_lane_rule,
         _token_lane_rule,
+        compiled_void_rules,
+        void_refusal,
     )
 
     token = _token_lane_rule(coord, shape)
     if token is not None:
         return token
+    void = void_refusal(compiled_void_rules(), coord, task_id)
+    if void is not None:
+        return void
     if not _is_geometry_task_compatible(coord.geometry, shape, task_id):
         return (
             f"geometry={coord.geometry} cannot read {task_id}'s "

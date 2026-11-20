@@ -72,7 +72,21 @@ def test_the_writer_emits_the_gates_state() -> None:
             "Trying to backward through the graph a second time",
             "recurrent_state_detach",
         ),
-        ("tiny_shakespeare", "mat1 and mat2 must have the same dtype", "token_lane"),
+        (
+            "tiny_shakespeare",
+            "geometry × task token-lane disagreement: geometry=feedforward",
+            "token_lane",
+        ),
+        (
+            "tiny_shakespeare",
+            "Expected input batch_size (4096) to match target batch_size (32)",
+            "token_shape",
+        ),
+        (
+            "tiny_shakespeare",
+            "expected m1 and m2 to have the same dtype, but got: long int != float",
+            "token_shape",
+        ),
     ],
 )
 def test_every_declared_defect_class_stamps_its_lock(

@@ -268,7 +268,11 @@ def _step_psi(
     acts = settled.activations
     act_list = acts if isinstance(acts, list) else None
     post = acts[-1] if isinstance(acts, list) else acts
-    activity: dict[str, ActivityValue] = {"x": x}
+    # The plastic step reads features, and a layered geometry's first
+    # activation *is* its input: the token lane's raw ``x`` is discrete
+    # ids, so a plastic read of it is a dtype cast, not a projection.
+    pre = act_list[0] if act_list else x
+    activity: dict[str, ActivityValue] = {"x": pre}
     if post is not None:
         activity["y"] = post
     if act_list is not None and len(act_list) >= 2:

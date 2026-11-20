@@ -37,8 +37,8 @@ instrument at it.
 first, calibrates the nine task families, screens at boxes that can answer the
 question, and turns ten primitives into kernel rungs behind a kill test and
 parity; all nine families are accounted, the docs regenerate from the registry,
-and the remaining work is four algorithm rungs (S7b), five LM token-shape
-defects (S8), and five pre-registered claims (S9).
+and the remaining work is four algorithm rungs (S7b) and five pre-registered
+claims (S9).
 
 ---
 
@@ -71,8 +71,8 @@ defects (S8), and five pre-registered claims (S9).
 | S6 | Measure the four params-box overruns at their declared box | ✅ DONE — each fits its declared box: surrogate 234,898/300k, routing 234,898/300k, attention 593,819/600k, tile 629,096/1M, causal_transformer 410,880/600k. They are box-limited, not defective; strict-xfail `test_a_box_overrun_fits_its_family_ceiling` names budget-aware sizing |
 | S6e | Close the 21 defective rows (token lane, NTM, ceiling) | ✅ DONE — 14 token-lane rows refused by name; NTM trains on cartpole (trainer truncates the graph); width search fits routing/attention/graph; tile re-triaged `unimplemented` (628,280 floor at a 150k box) |
 | S7 | 10 primitive kernels across 9 acceleration modules | ✅ DONE — 10 implemented + 65 absent; kill test + parity + microbench; 4 algorithm xfails filed as S7b |
-| S8 | Regenerate map + docs from one source | ◐ PARTIAL — method cards + map doc + README counts read the registry; LM delta run leaves 5 token-shape defects filed |
-| S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING |
+| S8 | Regenerate map + docs from one source | ✅ DONE — method cards + map doc + README counts read the registry; the LM delta re-ran to 0 defective (2 measured, 2 refused, 1 measured routing); the token-shape class is filed with its lock |
+| S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING — 3 tuned ladder records today; add two before pre-registering |
 
 **Session 2026-11-20 (S5f–S6).** The seven remaining family bases were
 screened at their declared boxes: tabular 34/34 measured; continual 48 measured
@@ -106,6 +106,23 @@ case can report instead of raising an `ImportError`. Locks: `test_a_language_tas
 `test_a_box_that_cannot_shrink_is_unimplemented` (all pass) and
 `test_a_tile_mesh_fits_its_family_ceiling` (strict xfail, the capability that
 would fit it).
+
+**Session 2026-11-20 (S8).** The LM map's five token-shape defects closed to
+zero. The credit estimators folded the per-token target into the geometry's
+readout rows (`_align_target_rows` in `_task_loss`), so `forward_tangent` and
+`zeroth_order` train; the plastic step now reads the geometry's *settled* input
+rather than the raw token ids (`_step_psi`), so `routing` trains; `surrogate`
+is refused by the existing `surrogate_credit_requires_routing_geometry` void
+rule because the screen now reads the planner's compiled constraint source; and
+`fast_weights` is refused by `dynamics_plasticity_compatibility`. The
+`token_lane` defect class is narrowed to the geometry contract, and the
+credit/plastic read is filed as `token_shape` with its own lock. The LM delta
+re-ran to **31 measured / 44 refused / 0 defective**; `docs/sec/map.md`
+regenerates unchanged from the vision map, and `scripts/audit.py` reports 0
+findings. A `tests/primitives` directory run was killed at the 600 s tool cap
+with no verdict; the symbol-targeted credit/plasticity contracts (66) and the
+joint-pipeline tests (8) passed instead — the directory's cost is the S5i
+hang's, not this session's gate.
 
 ### Remaining work (dependency order, 2026-11-20)
 
@@ -165,24 +182,53 @@ would fit it).
    `pcalm` (no PC-ALM backend class), `tile` (its backend expects a
    `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and
    `spiking_snn` now attach and move the system's parameters.
-4. **S8 — map + docs from one source.** ◐ partial. ✅ the method cards
-   project the 75 `PrimitiveSpec` rows (no second axis table), `docs/sec/map.md`
-   regenerates with the map's own status columns, and the README counts are
-   generated tokens (96 implementations, 24 kernel-verified, 75 primitives).
-   ✅ the LM delta run is done: its 11 pre-fix defects became 6 refusals and
-   **5 remain** — `forward_tangent`, `surrogate`, `zeroth_order`,
-   `fast_weights`, `routing` die on the token lane with shape/dtype errors.
-   They currently carry `defect_class="token_lane"` and the geometry refusal
-   lock, which is too broad for them. **Next:** narrow that lock to the
-   geometry contract, file the credit/plasticity token-shape class with its
-   own failing test (or implement the token-lane credit path), re-run the LM
-   delta until `defective == 0`, then regenerate `docs/sec/map.md`. A fresh
-   clone re-derives every row by screening; the committed code carries the
-   rules and the locks.
-5. **S9 — five pre-registered claims.** The two tuned coordinates
-   (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
-   candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI
-   against the control. A claim within 1σ of its bar is `marginal`.
+4. ~~**S8 — map + docs from one source**~~ ✅ done (2026-11-20). The method
+   cards project the 75 `PrimitiveSpec` rows (no second axis table),
+   `docs/sec/map.md` regenerates with the map's own status columns, and the
+   README counts are generated tokens (96 implementations, 24 kernel-verified,
+   75 primitives). The LM delta is **0 defective**: `forward_tangent` and
+   `zeroth_order` fold the per-token target (`_align_target_rows`), `routing`
+   reads the geometry's settled input instead of raw token ids, `surrogate` is
+   refused by the existing `surrogate_credit_requires_routing_geometry` void
+   rule (the screen now reads the planner's one source), and `fast_weights` is
+   refused by `dynamics_plasticity_compatibility`. The `token_lane` class is
+   narrowed to the geometry contract (`token-lane disagreement`); the credit and
+   plastic read is filed as `token_shape` with the lock
+   `test_a_token_lane_plastic_step_reads_its_settled_input`, plus the
+   surrogate refusal/necessity lock. Locks: 23 passed in
+   `test_family_defect_locks.py` + `test_row_state_gate.py`; audit 0 findings.
+   A fresh clone re-derives every row by screening; the committed code carries
+   the rules and the locks.
+5. **S9 — five pre-registered viability claims.** *Next session, the only
+   remaining item.*
+   - **Runner.** Extend `sec_deep_dive` into a claim list: one
+     `ThresholdRegistration` per claim, written to
+     `configs/preregistrations/sec_<primitive>.json` **before** its first
+     seed, then 5 index-matched paired seeds of the treatment against the
+     family's base control, then `paired_comparison` → `claim_verdict`.
+     `passes` refuses a claim at another box; a CI that includes the margin
+     leaves `coordinate`, and a point within 1σ of the bar is `marginal`.
+   - **Candidate rule (declared, not prose).** The candidate pool is the maps'
+     ladder records with `verdict == "tuned"`, ranked by the confirm seed's
+     difference from the default rung (the effect that must replicate). Today
+     there are **three** — `local_contrastive` `credit.readout_scale=10.0`
+     (0.4018 best / 0.4986 confirm), `random_projections`
+     `credit.feedback_scale=0.1` (0.3764 / 0.4728), both on the mnist box, and
+     `tile` `geometry.hidden_dim=640` on iris (0.9333 best / 0.8333 confirm vs
+     0.8667 at the default). **The first S9 action is to add two**: run the
+     3-point ladder on the two map rows that are `binding=bound`, carry a
+     declared knob, and have the largest walltime-free margin over their
+     family bar; a ladder that reaches `tuned` joins the pool. Five tuned
+     records is the precondition; with four or three, S9 runs that many claims
+     and records the shortfall rather than inventing a fifth.
+   - **n_max and margin.** `n_max = 5` paired seeds (`CLAIM_SEEDS`), fixed
+     before the first seed; margin = one percentage point of held-out samples
+     (`MARGIN`), or the ruler's own resolution when coarser.
+   - **Cost.** A vision cell is 5–17 s; 5 claims × 10 cells ≈ 5–15 min on
+     GPU. A claim without a committed registration is a budget leak: refuse
+     to run.
+   - **Gate.** 5 claims, each with its CI and box; a marginal or coordinate
+     result is reported as such, never rounded up.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -275,11 +321,11 @@ verdict, or a capability that works — never on "tests consolidated".
    as declared-space refusals, three locked (token lane, ntm detach, ceiling);
    the row-state gate reads one vocabulary (`sec_status.RowStatus`) and
    `scripts/audit.py` exits 0 over the nine maps.
-6. ~~**Close the 21 defective rows**~~ ✅ done (S6e): 14 token-lane rows
-   refused by name, NTM trains on cartpole, five ceiling boxes fit by width
-   search, and the tile floor is `unimplemented` with its lock. **NEXT: S7**
-   (10 kernel wrappers), then **S8** (map + docs from one source), **S9**
-   (5 pre-registered claims).
+6. ~~**Close the 21 defective rows**~~ ✅ done (S6e), and ~~**S7/S8**~~ ✅ done:
+   14 token-lane rows refused by name, NTM trains on cartpole, five ceiling
+   boxes fit by width search, the tile floor is `unimplemented` with its lock,
+   ten kernels carry parity and a kill test, and the LM map is 0 defective.
+   **NEXT: S9** (5 pre-registered claims).
 
 ---
 
@@ -828,7 +874,7 @@ capability skip must be a finding, an environment f-string must not be.
 | **S6 Ceilings** | Measure the 4 param-box overruns at the proper task (surrogate, attention, routing, tile) and causal_transformer on sequence | 4 unimplemented rows with a failing test, a measured box, and a cost | An unimplemented row with no failing test |
 | **S6d Skip scan** | ✅ Scanner reads f-strings and reports non-literal reasons; 14 findings closed | 0 capability skips | A non-literal skip the gate cannot read |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
-| **S8 Map + docs** | Regenerate map with verdict/rung/cost; regenerate README/method cards | 0 unaccounted rows; docs match map | A doc row the map does not carry |
+| **S8 Map + docs** | ✅ Regenerate map with verdict/rung/cost; regenerate README/method cards; LM delta 0 defective | 0 unaccounted rows; docs match map | A doc row the map does not carry |
 | **S9 Results** | 5 pre-registered viability claims (control-relative, 5 seeds, CI) | 5 claims with CI | A claim without pre-registration |
 
 **S1–S3 are repair. S4–S6 are measurement. S7 is optional acceleration. S8 is
@@ -938,6 +984,15 @@ uv run python -m pytest tests/property/test_family_defect_locks.py \
 uv run python scripts/audit.py          # 0 findings over the nine maps
 #    a re-screen now writes RowStatus ("defective", "refused", ...) and stamps
 #    defect_class + failing_test from sec_loop.DEFECT_LOCKS
+# 9. LM delta (DONE, 2026-11-20: 31 measured, 44 refused, 0 defective)
+uv run python -m computronium.experiment.sec_loop --track P0 \
+  --axis substrate --axis geometry --axis dynamics --axis plasticity \
+  --axis credit --axis update --max-primitives 75 \
+  --task tiny_shakespeare --out results/sec_lm --device cuda
+uv run python -m computronium.experiment.documentation.sec_map \
+  --map results/sec/map.json --out docs/sec/map.md
+#    the screen now reads the planner's void constraints: surrogate is refused
+#    without a routing geometry, fast_weights needs non-instantaneous dynamics
 ```
 
 ---

@@ -18,6 +18,7 @@ from torch.func import functional_call, grad, jvp
 from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.losses import cross_entropy, mean_squared_error
 from computronium.ontology._utils import (
+    _align_target_rows,
     _learnable_weight_names,
     apply_norm,
 )
@@ -32,12 +33,15 @@ if TYPE_CHECKING:
 
 
 def _task_loss(logits: Tensor, target: Tensor) -> Tensor:
-    """The declared task loss: class-index targets use CE, values use MSE."""
-    return (
-        cross_entropy(logits, target)
-        if not target.is_floating_point()
-        else mean_squared_error(logits, target)
-    )
+    """The declared task loss: class-index targets use CE, values use MSE.
+
+    The geometry folds the token lane into its readout rows (``[B*T, V]``), so
+    a per-token target must fold with it before the CE broadcast (the same
+    one source the trainer reads: ``_align_target_rows``).
+    """
+    if target.is_floating_point():
+        return mean_squared_error(logits, target)
+    return cross_entropy(logits, _align_target_rows(logits, target))
 
 
 def _functional_names(geometry: Geometry) -> tuple[list[str], list[str]]:

@@ -10,6 +10,7 @@ the NTM detaches the state it carries between steps.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -23,6 +24,9 @@ from computronium.experiment.kernel.search_space import (
     _is_geometry_task_compatible,
 )
 from computronium.experiment.sec_pilot import base_schedule
+
+if TYPE_CHECKING:
+    from computronium.ontology.geometry import Geometry
 
 
 def _coordinate(task_id: str, axis: str, primitive: str):
@@ -47,8 +51,10 @@ def test_a_time_major_credit_is_refused_on_a_flat_task(primitive: str) -> None:
         _coordinate("cartpole", "credit", primitive), "cartpole"
     )
 
+    # The RL lane never calls the credit, so the declared space refuses the
+    # cell before the loader's time axis is consulted.
     assert legal is False
-    assert "batch-layout disagreement" in (reason or "")
+    assert "void constraint: rl_credit_must_be_error_blind" in (reason or "")
     # The same credit composes when the loader does emit a time axis.
     assert _is_batch_layout_compatible("credit", primitive, "time_major") is True
 
@@ -86,6 +92,82 @@ def test_ntm_detaches_its_recurrent_state() -> None:
     schedule = _cpu_schedule("cartpole")
 
     evaluate_cell(_coordinate("cartpole", "geometry", "ntm"), schedule)
+
+
+def test_a_token_lane_plastic_step_reads_its_settled_input() -> None:
+    """A token-lane task's raw ``x`` is discrete ids; the plastic step reads
+    the geometry's settled input.
+
+    Removing the settled-input hand-off (the pipeline passes the raw ids)
+    makes the routing step cast a long matrix through a float gate — measured:
+    tiny_shakespeare/routing.
+    """
+    from typing import cast
+
+    import torch
+
+    from computronium.core.pipeline import _Plasticity, _step_psi
+    from computronium.core.plasticity.routing import RoutingPlasticity
+    from computronium.ontology.credit import CreditAssignmentConfig, GradientCredit
+    from computronium.ontology.credit._base import Phase
+    from computronium.ontology.system import SystemState
+
+    tokens = torch.zeros(2, dtype=torch.long)
+    y = torch.zeros(2, 3)
+    settled = SystemState(
+        x=tokens,
+        y=y,
+        activations=[torch.eye(5)[tokens], y],
+    )
+    routing = RoutingPlasticity(gate_dim=4)
+    psi = routing.initial_psi(None, batch_size=2)
+
+    stepped = _step_psi(
+        cast("_Plasticity", routing),
+        psi,
+        settled,
+        tokens,
+        y,
+        Phase.FREE,
+        GradientCredit(CreditAssignmentConfig.gradient()),
+        None,
+    )
+
+    assert torch.isfinite(stepped["gate_logits"]).all()
+    assert stepped["gate_logits"].shape == psi["gate_logits"].shape
+
+
+def test_a_surrogate_credit_is_refused_without_a_gate() -> None:
+    """A surrogate differentiates a hard top-k gate; a token geometry has none.
+
+    The declared space refuses the cell by name, and the credit's own guard is
+    the necessity test: without a selection it is not an estimator of one.
+    """
+    from typing import cast
+
+    import torch
+
+    from computronium.ontology.credit import CreditAssignmentConfig
+    from computronium.ontology.credit._base import Phase
+    from computronium.ontology.credit._surrogate import SurrogateCredit
+    from computronium.ontology.system import SystemState
+
+    legal, reason = sec_loop._is_legal(
+        _coordinate("tiny_shakespeare", "credit", "surrogate"), "tiny_shakespeare"
+    )
+
+    assert legal is False
+    assert "surrogate_credit_requires_routing_geometry" in (reason or "")
+    with pytest.raises(TypeError, match=r"no hard top-k gate"):
+        SurrogateCredit(CreditAssignmentConfig.surrogate()).compute_pseudo_gradient(
+            {
+                Phase.FREE: SystemState(
+                    x=torch.zeros(2, 3), y=torch.zeros(2, dtype=torch.long)
+                )
+            },
+            None,
+            cast("Geometry", object()),
+        )
 
 
 def test_a_language_task_declares_its_token_lane() -> None:
