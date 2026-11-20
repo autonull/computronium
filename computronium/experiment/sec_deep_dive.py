@@ -57,6 +57,7 @@ __all__ = [
     "preregister",
     "primary_knob",
     "select_candidate",
+    "tuning_candidates",
 ]
 
 #: The ladder's three points, as factors of the knob's declared default. A rung
@@ -121,45 +122,80 @@ class DeepDiveCandidate:
         return asdict(self)
 
 
+def _bound_candidate(
+    primitive: str, row: Mapping[str, Any], bar: float
+) -> DeepDiveCandidate | None:
+    """One knobbed bound row above the bar, or ``None`` when it is not one.
+
+    A row that refused, swapped, went inert, or measured at the bar is not a
+    candidate: the bar already decided it, or the row re-measures the control.
+    """
+    if row.get("status") != "measured" or row.get("swapped"):
+        return None
+    if row.get("binding") != "bound":
+        return None
+    val_acc = _val_acc(row)
+    if val_acc is None or val_acc <= bar:
+        return None
+    axis = axis_segment(str(row.get("axis", "")))
+    level = primitive.rsplit(".", 1)[-1]
+    knob = primary_knob(axis, level)
+    if knob is None:
+        return None
+    return DeepDiveCandidate(
+        primitive=primitive,
+        axis=axis,
+        level=level,
+        val_acc=val_acc,
+        margin=val_acc - bar,
+        knob=knob[0],
+        default=knob[1],
+        walltime_s=(row.get("resource") or {}).get("walltime_s"),
+    )
+
+
+def _bound_candidates(map_data: Mapping[str, Any]) -> list[DeepDiveCandidate]:
+    bar = (map_data.get("inventory") or {}).get("bar")
+    if bar is None:
+        return []
+    return [
+        candidate
+        for primitive, row in (map_data.get("primitives") or {}).items()
+        if (candidate := _bound_candidate(str(primitive), row, float(bar))) is not None
+    ]
+
+
 def select_candidate(map_data: Mapping[str, Any]) -> DeepDiveCandidate | None:
     """The bound row with the smallest margin over the bar, with a knob.
 
-    A row that refused, swapped, went inert, or measured at the bar is not a
-    candidate: the bar already decided it. The map's ranking is the selection,
-    never a second table (TODO95 P4).
+    The map's ranking is the selection, never a second table (TODO95 P4).
     """
-    bar = (map_data.get("inventory") or {}).get("bar")
-    if bar is None:
-        return None
-    rows: list[DeepDiveCandidate] = []
-    for primitive, row in (map_data.get("primitives") or {}).items():
-        if row.get("status") != "measured" or row.get("swapped"):
-            continue
-        if row.get("binding") != "bound":
-            continue
-        val_acc = _val_acc(row)
-        if val_acc is None or val_acc <= float(bar):
-            continue
-        axis = axis_segment(str(row.get("axis", "")))
-        level = str(primitive).rsplit(".", 1)[-1]
-        knob = primary_knob(axis, level)
-        if knob is None:
-            continue
-        rows.append(
-            DeepDiveCandidate(
-                primitive=str(primitive),
-                axis=axis,
-                level=level,
-                val_acc=val_acc,
-                margin=val_acc - float(bar),
-                knob=knob[0],
-                default=knob[1],
-                walltime_s=(row.get("resource") or {}).get("walltime_s"),
-            )
-        )
+    rows = _bound_candidates(map_data)
     if not rows:
         return None
     return min(rows, key=lambda candidate: (candidate.margin, candidate.primitive))
+
+
+def tuning_candidates(
+    map_data: Mapping[str, Any], limit: int | None = 2
+) -> tuple[DeepDiveCandidate, ...]:
+    """The rows S9 ladders for the claim list: the largest margin over the bar.
+
+    Walltime does not rank them: a cheap row and a costly row are compared by
+    the margin their own family bar leaves, so the two added ladders are the
+    rows with the most headroom (TODO97 S9). The base axis's own value
+    re-measures the family's control, so it is not a tuning candidate.
+    """
+    base = map_data.get("base") or {}
+    primitives = map_data.get("primitives") or {}
+    rows = [
+        candidate
+        for candidate in _bound_candidates(map_data)
+        if (primitives[candidate.primitive].get("box") or {}).get(candidate.axis)
+        != base.get(candidate.axis)
+    ]
+    rows.sort(key=lambda candidate: (-candidate.margin, candidate.primitive))
+    return tuple(rows if limit is None else rows[:limit])
 
 
 def ladder_points(candidate: DeepDiveCandidate) -> tuple[tuple[float, float], ...]:

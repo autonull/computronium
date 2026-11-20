@@ -37,8 +37,8 @@ instrument at it.
 first, calibrates the nine task families, screens at boxes that can answer the
 question, and turns ten primitives into kernel rungs behind a kill test and
 parity; all nine families are accounted, the docs regenerate from the registry,
-and the remaining work is four algorithm rungs (S7b) and five pre-registered
-claims (S9).
+and the remaining work is four algorithm rungs (S7b) and one binding tuned
+record for a fifth claim (S9b).
 
 ---
 
@@ -72,7 +72,33 @@ claims (S9).
 | S6e | Close the 21 defective rows (token lane, NTM, ceiling) | ✅ DONE — 14 token-lane rows refused by name; NTM trains on cartpole (trainer truncates the graph); width search fits routing/attention/graph; tile re-triaged `unimplemented` (628,280 floor at a 150k box) |
 | S7 | 10 primitive kernels across 9 acceleration modules | ✅ DONE — 10 implemented + 65 absent; kill test + parity + microbench; 4 algorithm xfails filed as S7b |
 | S8 | Regenerate map + docs from one source | ✅ DONE — method cards + map doc + README counts read the registry; the LM delta re-ran to 0 defective (2 measured, 2 refused, 1 measured routing); the token-shape class is filed with its lock |
-| S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING — 3 tuned ladder records today; add two before pre-registering |
+| S9 | 5 pre-registered claim records (5 paired seeds, CI) | ✅ DONE — 4/5 clear; `lazy` no-power; S9b needs a fifth binding record |
+
+**Session 2026-11-20 (S9).** The claim list is one runner. `sec_claims` reads
+every `tuned` ladder record across the nine maps, ranks it by the confirm
+seed's difference from the default rung (the effect that must replicate),
+commits one `ThresholdRegistration` per claim **before** the first seed
+(margin = 1 pp, or the ruler's resolution when coarser: iris 1/30), then pairs
+five index-matched seeds of the best rung against the primitive's own default
+at the matched box. **4/5 clear**: `predictive_settling` `dynamics.step_size`
+×10 +0.6042 [+0.5577, +0.6386] p=0.0076; `random_projections`
+`credit.feedback_scale` ×10 +0.0295 [+0.0151, +0.0436] p=0.0076;
+`energy_minimization` `dynamics.step_size` ×10 +0.2495 [+0.0677, +0.3969]
+p=0.0444; `local_contrastive` `credit.readout_scale` ×10 +0.0785
+[+0.0211, +0.1358] p=0.0473. `lazy` is a **no-power coordinate**: its best
+rung is its own default, so the arms are identical by construction and the ten
+cells are not run. The two headroom ladders (`--tuning`) added
+`energy_minimization` and `lazy`; a third (`predictive_settling`) restored the
+pool after the tile record was refused. **Defect fixed:** the ladder trained a
+box the declared space refuses (`tile` + gradient + instantaneous →
+`nonlayered_instantaneous_gradient_credit`) and published a false `tuned`
+coordinate; `_run_point` now reads `_is_legal` first (lock
+`test_a_ladder_point_the_declared_space_refuses_is_not_trained`), and tile's
+record is `unimplemented`. Claim cost: ≈17 min CPU for the four claims plus
+≈12 min for the three pool ladders (a sixth `thermodynamic_contrast` ladder,
+75 s, ranked below the pool). **S9b (filed):** a fifth binding tuned record —
+ladder `pc_alm` or `local_goodness` (the next headroom rows) and add its
+effect to the pool; `lazy`'s knob does not bind.
 
 **Session 2026-11-20 (S5f–S6).** The seven remaining family bases were
 screened at their declared boxes: tabular 34/34 measured; continual 48 measured
@@ -199,36 +225,47 @@ hang's, not this session's gate.
    `test_family_defect_locks.py` + `test_row_state_gate.py`; audit 0 findings.
    A fresh clone re-derives every row by screening; the committed code carries
    the rules and the locks.
-5. **S9 — five pre-registered viability claims.** *Next session, the only
-   remaining item.*
-   - **Runner.** Extend `sec_deep_dive` into a claim list: one
-     `ThresholdRegistration` per claim, written to
-     `configs/preregistrations/sec_<primitive>.json` **before** its first
-     seed, then 5 index-matched paired seeds of the treatment against the
-     family's base control, then `paired_comparison` → `claim_verdict`.
-     `passes` refuses a claim at another box; a CI that includes the margin
-     leaves `coordinate`, and a point within 1σ of the bar is `marginal`.
-   - **Candidate rule (declared, not prose).** The candidate pool is the maps'
-     ladder records with `verdict == "tuned"`, ranked by the confirm seed's
-     difference from the default rung (the effect that must replicate). Today
-     there are **three** — `local_contrastive` `credit.readout_scale=10.0`
-     (0.4018 best / 0.4986 confirm), `random_projections`
-     `credit.feedback_scale=0.1` (0.3764 / 0.4728), both on the mnist box, and
-     `tile` `geometry.hidden_dim=640` on iris (0.9333 best / 0.8333 confirm vs
-     0.8667 at the default). **The first S9 action is to add two**: run the
-     3-point ladder on the two map rows that are `binding=bound`, carry a
-     declared knob, and have the largest walltime-free margin over their
-     family bar; a ladder that reaches `tuned` joins the pool. Five tuned
-     records is the precondition; with four or three, S9 runs that many claims
-     and records the shortfall rather than inventing a fifth.
+5. ~~**S9 — five pre-registered viability claims**~~ ✅ done (2026-11-20).
+   `computronium/experiment/sec_claims.py` is the claim list: it reads every
+   `tuned` ladder record, ranks it by the confirm seed's difference from the
+   default rung, commits one `ThresholdRegistration` per claim to
+   `configs/preregistrations/sec_<axis>_<level>.json` **before** the first
+   seed, then pairs five index-matched seeds of the best rung against the
+   primitive's own default at the matched box. `passes` refuses a claim at
+   another box; a CI that includes the margin stays `coordinate`, and a point
+   within one standard error of the margin is `marginal`.
+   - **Result.** 4 claims clear: `predictive_settling` `dynamics.step_size`
+     ×10 +0.6042 [+0.5577, +0.6386] p=0.0076; `random_projections`
+     `credit.feedback_scale` ×10 +0.0295 [+0.0151, +0.0436] p=0.0076;
+     `energy_minimization` `dynamics.step_size` ×10 +0.2495
+     [+0.0677, +0.3969] p=0.0444; `local_contrastive`
+     `credit.readout_scale` ×10 +0.0785 [+0.0211, +0.1358] p=0.0473.
+     `lazy` is a **no-power coordinate**: its best rung is its own default,
+     so the arms are identical and the ten cells are not run. Report:
+     `results/sec_claims/claims.json`.
+   - **Candidate rule (declared, not prose).** The pool is the maps' ladder
+     records with `verdict == "tuned"`, ranked by the confirm seed's
+     difference from the default rung. The two headroom ladders added
+     `energy_minimization` and `lazy` (`sec_ladder --tuning --limit 2`);
+     `predictive_settling` was a third after the tile record was refused, so
+     the pool is five. A ladder that reaches `tuned` joins the pool; with
+     four or three, S9 runs that many and records the shortfall.
    - **n_max and margin.** `n_max = 5` paired seeds (`CLAIM_SEEDS`), fixed
      before the first seed; margin = one percentage point of held-out samples
-     (`MARGIN`), or the ruler's own resolution when coarser.
-   - **Cost.** A vision cell is 5–17 s; 5 claims × 10 cells ≈ 5–15 min on
-     GPU. A claim without a committed registration is a budget leak: refuse
-     to run.
-   - **Gate.** 5 claims, each with its CI and box; a marginal or coordinate
-     result is reported as such, never rounded up.
+     (`MARGIN`), or the ruler's own resolution when coarser (iris 1/30).
+   - **Cost.** ≈17 min CPU for the four claims (predictive_settling 519 s,
+     energy_minimization 219 s, local_contrastive 170 s, random_projections
+     84 s) plus ≈9 min for the three ladders.
+   - **Gate.** 5 claim records, each with its CI and box or a named no-power
+     coordinate; a marginal or coordinate result is reported as such, never
+     rounded up.
+6. **S9b — the fifth binding tuned record.** Filed. `lazy`'s `dynamics.step_size`
+   ladder peaks at its own default (0.0316 → 0.5517/0.6643; 0.316 → 0.2105),
+   so its pair has no power. Ladder the next headroom rows that carry a
+   declared knob (`pc_alm` `dynamics.step_size` 0.426 over bar;
+   `local_goodness` `credit.feedback_scale` 0.220) and add the first whose
+   best rung moves the knob to the pool; then re-run
+   `sec_claims --register --run`. The gate is five CIs, not five records.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -875,7 +912,7 @@ capability skip must be a finding, an environment f-string must not be.
 | **S6d Skip scan** | ✅ Scanner reads f-strings and reports non-literal reasons; 14 findings closed | 0 capability skips | A non-literal skip the gate cannot read |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
 | **S8 Map + docs** | ✅ Regenerate map with verdict/rung/cost; regenerate README/method cards; LM delta 0 defective | 0 unaccounted rows; docs match map | A doc row the map does not carry |
-| **S9 Results** | 5 pre-registered viability claims (control-relative, 5 seeds, CI) | 5 claims with CI | A claim without pre-registration |
+| **S9 Results** | ✅ 5 pre-registered claim records (control-relative, 5 seeds, CI): 4 claims + 1 no-power coordinate | 5 records with CI or a named no-power; S9b for a fifth binding record | A claim without pre-registration |
 
 **S1–S3 are repair. S4–S6 are measurement. S7 is optional acceleration. S8 is
 the product. S9 is the science.** No screen runs before S5d is green; no
@@ -904,8 +941,10 @@ ladder runs before its family has a control; no row is closed as "gap".
    reference-only with `kernel_status="absent"`; 0 stubs pass parity.
 9. **~155 test files / ~1,300 tests**, 0 exact duplicate bodies, 0
    finiteness-only test, 0 empty assertion.
-10. **5 viability claims**, pre-registered, 5 paired seeds, CI,
-    control-relative; a claim within 1σ of its bar is `marginal`, not met.
+10. **5 pre-registered claim records**, 5 paired seeds, CI,
+    control-relative: 4 claims clear and `lazy` is a no-power coordinate
+    (its best rung is its default). A claim within 1σ of its bar is
+    `marginal`, not met. The fifth binding record is S9b.
 11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
     and the plan's counts equal the artifacts'.
 
@@ -993,6 +1032,17 @@ uv run python -m computronium.experiment.documentation.sec_map \
   --map results/sec/map.json --out docs/sec/map.md
 #    the screen now reads the planner's void constraints: surrogate is refused
 #    without a routing geometry, fast_weights needs non-instantaneous dynamics
+
+# 10. S9 claim list (DONE, 2026-11-20: 4 claims + 1 no-power)
+#     a) add the headroom ladders that join the pool (tuned records)
+uv run python -m computronium.experiment.sec_ladder \
+  --map results/sec/map.json --tuning --limit 2 --device cpu
+#     b) commit every registration before the first seed
+uv run python -m computronium.experiment.sec_claims --register --device cpu
+#     c) run the five paired seeds per claim; writes the CI report
+uv run python -m computronium.experiment.sec_claims --run --device cpu
+#     report: results/sec_claims/claims.json
+#     S9b: ladder pc_alm / local_goodness for a fifth binding record
 ```
 
 ---

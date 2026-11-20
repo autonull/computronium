@@ -290,7 +290,15 @@ def test_the_ladder_sweeps_the_primitive_own_axis(spec_id: str) -> None:
             task_id=run.task_id,
         )
 
-    row = {"task": "mnist", "ruler": "val_acc on mnist (chance 0.100)"}
+    row = {
+        "task": "mnist",
+        "ruler": "val_acc on mnist (chance 0.100)",
+        "box": (
+            {"credit": "local_goodness"}
+            if spec_id.split(".")[1] == "state_dynamics"
+            else {}
+        ),
+    }
     record = run_ladder(spec_id, row, 0.1, evaluate=fake, schedule=schedule)
     axis = spec_id.split(".")[1]
     expected = {"state_dynamics": "dynamics", "geometry": "geometry"}[axis]
@@ -298,3 +306,44 @@ def test_the_ladder_sweeps_the_primitive_own_axis(spec_id: str) -> None:
     assert record.knob is not None and record.knob.startswith(f"{expected}.")
     assert record.runs == 4
     assert record.verdict == "tuned"
+
+
+def test_a_ladder_point_the_declared_space_refuses_is_not_trained() -> None:
+    """A point the planner would never propose is refused, never trained.
+
+    Measured 2026-11-20: ``tile`` + gradient credit + instantaneous dynamics
+    is refused by ``nonlayered_instantaneous_gradient_credit``, but the ladder
+    trained it and published a false ``tuned`` coordinate; the S9 claim then
+    refused the same box before its first cell.
+    """
+    from computronium.experiment.sec_ladder import run_ladder
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("iris")
+    assert schedule is not None
+
+    def boom(_coord: Any, _run: Any) -> None:
+        raise AssertionError("the ladder trained a refused box")
+
+    row = {
+        "task": "iris",
+        "ruler": "val_acc on iris (chance 0.333)",
+        "box": {
+            "substrate": "digital",
+            "geometry": "tile",
+            "dynamics": "instantaneous",
+            "plasticity": "null",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    }
+    record = run_ladder(
+        "primitive.geometry.tile", row, 1.0 / 3.0, evaluate=boom, schedule=schedule
+    )
+    assert record.rungs
+    assert all(rung.status == "refused" for rung in record.rungs)
+    assert all(
+        rung.reason and "nonlayered_instantaneous_gradient_credit" in rung.reason
+        for rung in record.rungs
+    )
+    assert record.verdict == "unimplemented"

@@ -49,6 +49,7 @@ __all__ = [
     "record_problems",
     "replay_hash",
     "run_ladder",
+    "tuning_rows",
 ]
 
 #: The ladder's seed; the confirmation seed is one step past it. One seed per
@@ -264,6 +265,28 @@ def ladder_rows(
     return rows
 
 
+def tuning_rows(
+    document: Mapping[str, Any], limit: int | None = 2
+) -> list[tuple[str, Mapping[str, Any], float]]:
+    """The above-bar rows S9 ladders for the claim list.
+
+    The rows are the map's own ranking (``tuning_candidates``): the largest
+    margin over the family bar, walltime aside. A row's chance rate is its
+    ruler's, not the tabular default, so the band the ladder must clear is
+    the band its family declares.
+    """
+    from computronium.experiment.sec_deep_dive import tuning_candidates
+
+    primitives = document.get("primitives") or {}
+    rows: list[tuple[str, Mapping[str, Any], float]] = []
+    for candidate in tuning_candidates(document, limit):
+        row = primitives[candidate.primitive]
+        chance = chance_of(str(row.get("ruler", "")))
+        if chance is not None:
+            rows.append((candidate.primitive, row, chance))
+    return rows
+
+
 def map_findings(document: Mapping[str, Any]) -> list[str]:
     """Every near-chance row's record problems, each naming its primitive."""
     ladders = document.get("ladders") or {}
@@ -356,6 +379,15 @@ def _run_point(
     seed: int,
 ) -> LadderRung:
     """One rung: the coordinate at the seed, or the execution fact it raised."""
+    from computronium.experiment.sec_loop import _is_legal
+
+    legal, refusal = _is_legal(coordinate, schedule.task_id)
+    if not legal:
+        # The declared space refuses the box: a ladder point that cannot
+        # exist is refused by name, never trained around the rule. Measured
+        # 2026-11-20: the tile record's illegal box trained and published a
+        # false coordinate.
+        return LadderRung(factor, value, "refused", None, 0.0, refusal)
     started = time.perf_counter()
     try:
         evaluation = evaluate(coordinate, replace(schedule, seed=seed, n_seeds=1))
@@ -653,14 +685,30 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         help="Ladder only this primitive (repeatable; default: every row)",
     )
+    parser.add_argument(
+        "--tuning",
+        action="store_true",
+        help="Also ladder the map's largest-margin bound rows (S9)",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=2,
+        help="How many tuning rows --tuning adds (default: 2)",
+    )
+    parser.add_argument("--device", default="auto", help="Run device for the box")
     parser.add_argument("--dry-run", action="store_true", help="Print, do not write")
     args = parser.parse_args(argv)
 
     document = json.loads(args.map.read_text(encoding="utf-8"))
     out = args.out or args.map
+    rows = ladder_rows(document)
+    if args.tuning:
+        seen = {spec_id for spec_id, *_ in rows}
+        rows += [row for row in tuning_rows(document, args.limit) if row[0] not in seen]
     rows = [
         (spec_id, row, chance)
-        for spec_id, row, chance in ladder_rows(document)
+        for spec_id, row, chance in rows
         if not args.only or spec_id in args.only
     ]
     if args.dry_run:
@@ -668,16 +716,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ladder {spec_id}")
         return 0
     records: dict[str, dict[str, Any]] = {}
+    from computronium.experiment.sec_pilot import base_schedule
+
     for spec_id, row, chance in rows:
-        print(f"ladder {spec_id}")
-        record = run_ladder(spec_id, row, chance)
+        print(f"ladder {spec_id}", flush=True)
+        schedule = base_schedule(str(row.get("task") or _TASK), args.device)
+        record = run_ladder(spec_id, row, chance, schedule=schedule)
         records[spec_id] = record.to_dict()
         best = record.best.val_acc if record.best else None
         print(
             f"  {record.verdict}: best={best} runs={record.runs} "
-            f"{record.walltime_s:.1f}s"
+            f"{record.walltime_s:.1f}s",
+            flush=True,
         )
-        print(f"  {record.close_condition or 'a coordinate'}")
+        print(f"  {record.close_condition or 'a coordinate'}", flush=True)
     document.setdefault("ladders", {}).update(records)
     document["updated"] = datetime.now(UTC).isoformat()
     out.write_text(json.dumps(document, indent=2, default=str), encoding="utf-8")
