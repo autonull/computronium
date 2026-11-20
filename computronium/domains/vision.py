@@ -20,8 +20,9 @@ from computronium.domains.base import (
 )
 
 __all__ = [
-    "SplitMNIST",
     "PermutedMNIST",
+    "SpikingMNISTTask",
+    "SplitMNIST",
     "VisionTask",
 ]
 
@@ -240,6 +241,61 @@ class VisionTask(DomainTask):
                 model.train()
 
         return Metrics(loss=avg_loss, accuracy=accuracy)
+
+
+class SpikingMNISTTask(VisionTask):
+    """MNIST frames as binary spike rasters for a neuromorphic substrate.
+
+    A pixel carries a spike when its intensity clears a fixed rate threshold.
+    The frame stays flat ``(784,)``, so a layer geometry reads the rate code
+    directly while the substrate owns the event semantics; the threshold is the
+    rate code's one knob, and it changes the spike density, not the dataset.
+    """
+
+    def __init__(
+        self,
+        name: str = "spiking_mnist",
+        data_dir: str = "./data",
+        download: bool = True,
+        num_workers: int = 0,
+        rate: float = 0.5,
+        **kwargs,
+    ):
+        super().__init__(
+            name=name,
+            dataset_name="mnist",
+            data_dir=data_dir,
+            download=download,
+            num_workers=num_workers,
+            **kwargs,
+        )
+        self.rate = rate
+
+    def setup(self) -> None:
+        from torch.utils.data import DataLoader, TensorDataset
+        from torchvision import datasets
+
+        def frames(dataset) -> TensorDataset:
+            spikes = (dataset.data.float() / 255.0 > self.rate).float()
+            return TensorDataset(spikes.view(len(dataset), -1), dataset.targets)
+
+        train_ds = frames(
+            datasets.MNIST(self.data_dir, train=True, download=self.download)
+        )
+        val_ds = frames(
+            datasets.MNIST(self.data_dir, train=False, download=self.download)
+        )
+        batch_size = 32 if self.quick_mode else 64
+        self._train_loader = DataLoader(
+            train_ds, batch_size=batch_size, shuffle=True, num_workers=self.num_workers
+        )
+        self._val_loader = DataLoader(
+            val_ds, batch_size=batch_size, shuffle=False, num_workers=self.num_workers
+        )
+        self._test_loader = self._val_loader
+        self._input_dim = 784
+        self._output_dim = 10
+        self._setup_done = True
 
 
 class SplitMNIST(DomainTask):
@@ -466,7 +522,9 @@ class PermutedMNIST(DomainTask):
             permutations.append(perm)
         return permutations
 
-    def _apply_permutation(self, data: torch.Tensor, perm: torch.Tensor) -> torch.Tensor:
+    def _apply_permutation(
+        self, data: torch.Tensor, perm: torch.Tensor
+    ) -> torch.Tensor:
         """Apply permutation to flattened images."""
         # data shape: (N, 1, 28, 28) -> flatten to (N, 784), permute, reshape
         flat = data.view(data.size(0), -1)
@@ -532,7 +590,9 @@ class PermutedMNIST(DomainTask):
     def set_task(self, task_id: int) -> None:
         """Set the active task for this PermutedMNIST instance."""
         if task_id < 0 or task_id >= self.num_tasks:
-            raise ValueError(f"task_id must be in [0, {self.num_tasks - 1}], got {task_id}")
+            raise ValueError(
+                f"task_id must be in [0, {self.num_tasks - 1}], got {task_id}"
+            )
         self.task_id = task_id
         self._train_loader = None
         self._val_loader = None

@@ -42,6 +42,8 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "cifar10",
     # sequential vision
     "sequential_mnist",
+    # neuromorphic vision
+    "spiking_mnist",
     # continual learning
     "split_mnist",
     # memory/sequence tasks

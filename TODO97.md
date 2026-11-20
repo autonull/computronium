@@ -4,6 +4,8 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-19] ✅ **S3b COMPLETE (the calibration gate)** — all nine family bases measured at their declared boxes over `CONTROL_SEEDS=3`, each with bar, cost and replay hash (`results/sec/pilot.json`; 9/9 calibrated, and 9/9 controls clear their bar). The calibration exposed four defects, all fixed: `BASE_COORDINATES` was a second source of the base axes (deleted; `BASE_BOXES[*].base_coordinate` is the one source, read by the calibration, screens, P3 and P4); `tiny_shakespeare` declared `(100,)` while its loader emits 128 tokens; the LM base ran on the default MLP instead of its declared causal transformer; the RL base declared recurrent geometry with gradient/instantaneous dynamics, which cannot compute recurrent grads (now feedforward). Added `spiking_mnist` (MNIST frames as binary spike rasters) because the neuromorphic base named a task that did not exist. `Calibration` now carries the `PassBar`, so perplexity and loss bars clear from below (`has_power` reads `clears_task_bar`); the P0/P3 power checks use the same rule. `scripts/probes/todo97_s3b_calibration.py` reproduces the sweep. Open defect: the graph base composes at 200,967 parameters over its 200,000 ceiling because an explicit `geometry.hidden_dim` bypasses `_fit_geometry`; the failing test is `test_the_graph_base_fits_its_declared_ceiling` (strict xfail).
+
 **Progress:** [2026-11-19] ✅ **S5d COMPLETE (the hard gate)** — `ReferenceAdapter` is real: `make_task_case` builds the axis micro-case from a composed `SystemConfig`, and `reference_step` runs the law through `cases.step`, with no exception swallowed anywhere. `computronium/primitives/cases.py` is the one case/step layer (one builder and one step per axis; the per-primitive difference is data). The declared space is now the legality oracle through `_compiled_void_constraints`, so a law that only runs beside a particular companion gets that companion: credit laws on recurrent/module geometry, sequence credits on a time-major batch, diffusion on a settled geometry. Green: `tests/primitives` 666 passed / 152 declared skips; contract suite 519 passed / 2 declared no-op skips; parity 14 passed / 150 declared absent-kernel skips; the six property locks + the extension path 71 passed. Deleted `test_primitive_wiring.py` (~284 duplicate rung-0 tests, 12 capability skips) — the adapter contract plus the six axis contracts carry the same rungs. Fixed along the way: `update_pseudo_grads` emitted one gradient per parameter instead of one per learnable weight (the credit contract's order); `SystemConfig.validate` now refuses a diffusion settling on a time-major geometry (measured crash in `_compute_interaction_energy`); the plasticity dispatch is one `plasticity_from_config`; `_credit_from_config` is the one credit dispatcher.
 
 **Progress:** [2026-11-19] ✅ **S6c COMPLETE (the audit reads all 13 predicates)** — the six completeness predicates landed in `scripts/audit.py`: `capability_skip`, `impossible_without_lock`, `quiet_row_without_lock`, `unaccounted_row`, `claim_count_mismatch`, `compatibility_alias`. A skip names the environment, or the row's own declaration (`declared:`), and nothing else. `--static` now reports **0 findings**: the seven-finding queue (below) closed, and the environment markers are matched case-insensitively (`triton`, `CuPy`, `CPU fallback`, `no --experiment-db`), so a tool-less skip names the tool and only a capability skip names a missing mechanism. `unaccounted_row`, `claim_count_mismatch`, and `impossible_without_lock` stay 0.
@@ -17,10 +19,8 @@ instrument at it.
 **Progress:** [2026-11-19] ✅ **S5c TRIAGED** — target_inversion on vision is **unimplemented**: feedback alignment / learned inverses are missing, so the transpose feedback vanishes (val_acc=0.119 ≈ chance 0.10). Works on graph (0.68 @ 6 epochs). The failing lock is the ladder cell; the close condition is a feedback-alignment primitive.
 **Progress:** [2026-11-19] ✅ **S4 COMPLETE (extended)** — All 75 primitives pass Rung 0 wiring tests (284 tests, 16 skipped). Created `tests/primitives/test_primitive_wiring.py` covering: instantiate, forward pass, pseudo-gradients (finite & non-zero for error-aware), settle convergence. 6/6 property locks still pass.
 **Progress:** [2026-11-19] ✅ **S6a AUDIT GATE INSTALLED** — `scripts/audit.py` implements the seven structural §8.2 predicates (duplicate test bodies, empty assertions, per-primitive subdirectories, primitive-without-spec, family-without-base, near-chance-without-ladder, kernel-stub-pass). Static checks are green; it reports the 5 unimplemented ladders (S6b). The five completeness predicates are specified in §8.2 and land in **S6c**.
-**Progress:** [2026-11-19] ✅ **S3 BASES DECLARED** — `TASK_FAMILIES` (9) is now the one family universe, and `BASE_BOXES` carries a row for every family (sequence, continual, rl, scientific, neuromorphic, lm added). Calibration controls (3 seeds, bar, cost, replay hash) remain S3b.
+**Progress:** [2026-11-19] ✅ **S3 BASES DECLARED** — `TASK_FAMILIES` (9) is now the one family universe, and `BASE_BOXES` carries a row for every family (sequence, continual, rl, scientific, neuromorphic, lm added). Calibration controls (3 seeds, bar, cost, replay hash) closed in S3b (above).
 **Progress:** [2026-11-19] ✅ **S2b MIGRATION REPAIR** — Removed the stale per-primitive `kernel_entrypoint`/`kernel_technology` tables (they pointed at deleted modules); `kernel_status` now uses the protocol vocabulary (`absent`, 75/75) until S7. Repaired the four algorithm kernels that imported deleted primitive modules, the `rungbench` per-package sites, and the registry config/ontology name bugs (`PepitaCredit`, `ParameterUpdateConfig`, `GeometryConfig.recurrent`, `SubstrateConfig.optical`).
-
-**Progress:** [2026-11-19] ⏳ **S5d ADAPTER DEFECT (open)** — `ReferenceAdapter.make_task_case` still cannot build typed configs for geometry (factories need task facts), and `_update_reference`/`_plasticity_reference` return empty results without a harness. Consequence: `tests/primitives/test_primitive_contract.py` has 116 failures on those axes. Named mechanism: compose the config from `compose_configs` and instantiate via `geometry_from_config`/`*_from_config`. The 116 failures are the **defect lock**; they stay failing until fixed.
 
 **Progress:** [2026-11-19] ✅ **S0 TAXONOMY (binding)** — Three states: **impossible / unimplemented / defective**. Only `impossible` may be refused, and only with a refusal test plus a necessity test. `unimplemented` and `defective` are always failing tests. Capability skips and the word "gap" are retired; the audit enforces all three (§8.2).
 
@@ -42,7 +42,7 @@ question.
 | S2b | Repair stale kernel tables, algorithm imports, rungbench | ✅ DONE |
 | S3 | Verify 6 property locks pass | ✅ DONE |
 | S3a | 9/9 task families declared in `BASE_BOXES` | ✅ DONE |
-| S3b | 3-seed controls, bar, cost, replay hash per family | ⏳ PENDING |
+| S3b | 3-seed controls, bar, cost, replay hash per family | ✅ DONE — 9/9 calibrated; graph ceiling defect filed |
 | S4 | Fix cheap wiring (graph batching, conv/pc_alm/EPC probes) | ✅ DONE |
 | S4x | Rung 0 wiring tests for all 75 primitives (284 tests) | ✅ DONE |
 | S5 | First family base (graph) + first ladder (target_inversion) | 🔄 PARTIAL |
@@ -139,11 +139,12 @@ verdict, or a capability that works — never on "tests consolidated".
    `forward_tangent`, `pc_alm`, and `target_inversion` are `unimplemented`
    with named mechanisms and strict-xfail locks. The records live in the
    map's `ladders` table; the full `scripts/audit.py` exits 0.
-4. **S3b — NEXT** — calibrate the 6 new family bases (3-seed control, bar,
-   cost, replay hash); `family_without_base` is green, calibration is not.
-5. **S7** — point the 10 verified primitives at the existing acceleration
-   modules; flip their `kernel_status` to `implemented` and satisfy
-   `test_implemented_kernel_carries_its_evidence`.
+4. ~~**S3b**~~ ✅ done: 9/9 family bases calibrated (3 seeds, bar, cost,
+   replay hash); the graph base's 200,967-parameter ceiling defect is filed
+   as a strict xfail.
+5. **S7 — NEXT** — point the 10 verified primitives at the existing
+   acceleration modules; flip their `kernel_status` to `implemented` and
+   satisfy `test_implemented_kernel_carries_its_evidence`.
 6. **S6d** — close the audit's blind spot on non-literal skip reasons (§8.2);
    the gate must see the 28 f-string/variable skips before it can claim
    "0 capability skips".
@@ -183,7 +184,7 @@ the wrong product for a laboratory.
 | Rows with no bound, usable result | 45 | 27 + 12 + 6 |
 | Defects | 6 (5 ceilings + 1 shape) | map |
 | Refused | 12 (8 family, 2 cost, 2 gaps) | map |
-| Task families with a base box | 9 of 9 declared (3 calibrated) | `BASE_BOXES` |
+| Task families with a base box | 9 of 9 calibrated (3-seed controls) | `BASE_BOXES` |
 | Declared family rows | ~159 | sum of `task_families` |
 | Source scaffolding files | 563 | 383 primitives + 96 generated + 84 algorithms |
 | Source files that survive | ~1,400 | ontology 33, experiment 206, acceleration 34, core/domains/models/scripts etc. |
@@ -508,17 +509,27 @@ missing), not impossible. `defect` is a named mechanism with a failing test.
 
 ### 6.1 The 9 bases
 
-| Family | Base task | Bar | Cost | Status |
-|---|---|---|---|---|
-| vision | mnist | 0.106 | medium | calibrated |
-| tabular | iris | 0.333 | cheap | calibrated |
-| graph | cora | 0.316 | medium | add |
-| sequence | char_ngram | 27.0 | medium | add |
-| continual | copy_task | — | cheap | add |
-| rl | cartpole | 20.0 | cheap | add |
-| scientific | lorenz_state | 67.4 | cheap | add |
-| neuromorphic | spiking_mnist | — | medium | add task + base |
-| lm | tiny_shakespeare | 65.0 | expensive | add, pre-register |
+Measured 2026-11-19 over `CONTROL_SEEDS=3` at each box's declared axes
+(`results/sec/pilot.json`); every control clears its bar.
+
+| Family | Base task | Control | Bar (direction) | Seconds | Params / ceiling | Replay |
+|---|---|---|---:|---:|---|---|
+| vision | mnist | val_acc 0.8908 | 0.106 (max) | 13.8 | 134,794 / 150,000 | `f01b12b9cb206b2a` |
+| tabular | iris | val_acc 0.7333 | 0.5055 (max) | 5.5 | 83,587 / 150,000 | `7fb3b41574b1d85e` |
+| graph | cora | val_acc 0.4333 | 0.316 (max) | 2.0 | 200,967 / 200,000 † | `970b2defcb782c76` |
+| sequence | char_ngram | val_ppl 6.8593 | 27.0 (min) | 15.3 | 86,555 / 150,000 | `750bfeb941d6bbc7` |
+| continual | copy_task | val_acc 0.2670 | 0.125 (max) | 15.7 | 86,408 / 150,000 | `26887f83ff31275b` |
+| rl | cartpole | mean_reward 45.9333 | 20.0 (max) | 25.1 | 83,458 / 150,000 | `11524dfa975ab009` |
+| scientific | lorenz_state | val_loss 0.0891 | 67.415 (min) | 13.4 | 83,459 / 150,000 | `2740a90a0d980e46` |
+| neuromorphic | spiking_mnist | val_acc 0.1354 | 0.106 (max) | 3.5 | 134,794 / 150,000 | `41d0d6aa8663370f` |
+| lm | tiny_shakespeare | val_ppl 15.2785 | 65.0 (min) | 11.8 | 410,880 / 600,000 | `e0f89bde3c8f633a` |
+
+† The graph base is 967 parameters over its 200,000 ceiling. Mechanism: an
+explicit `geometry.hidden_dim` bypasses `_fit_geometry`'s sizing, so the
+budget never bounds the build. Failing test:
+`test_the_graph_base_fits_its_declared_ceiling` (strict xfail). The control
+still clears its bar, so the family is calibrated; the ceiling is a separate
+defect, not a low cell.
 
 Each base gets a 3-seed control, measured walltime, parameter budget, and
 replay hash. No screen runs on a family without a base.
@@ -664,7 +675,7 @@ capability skip; do not call the current 0 findings complete.
 | **S0 Baseline** | Tag `pre-todo97`; run six locks; save output | Six locks green | Any lock red |
 | **S1 Migrate** | Add `protocol.py` + `registry.py`; delete ~560 scaffolding files; update six locks | Six locks green; 75 ids registered; `comp verify` works | A lock fails; revert to tag |
 | **S2 Wiring** | Fix graph batching; one-step probes for conv, pc_alm, EPC | 4 rows resolved or named defect | A probe with no named mechanism |
-| **S3 Bases** | Explicit `task_families`; 7 bases; 3-seed controls; 2 unimplemented; 2 cost caps | 9/9 calibrated; 12/12 refusals mapped | A family without control/bar |
+| **S3 Bases** | Explicit `task_families`; 9 bases; 3-seed controls; bar, cost, replay | 9/9 calibrated; 12/12 refusals mapped | A family without control/bar |
 | **S4x Rung-0 Tests** | 284 wiring tests for all 75 primitives (instantiate, forward, pseudograds, settle) | All pass; 6/6 locks green | A test fails |
 | **S4 Ladders** | 3-point ladders for the remaining 8 near-chance + 7 mid | 15 triaged (tuned/defect/unimplemented) | An untriaged row |
 | **S5 Screens** | Real screens on the 30 bound rows at declared families; 3 seeds | 30 rows with verdict; ~159 family rows planned | A screen on MNIST for a sequence primitive |

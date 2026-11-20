@@ -641,6 +641,38 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         tags=("vision", "sequential", "continual"),
         description="Sequential MNIST for continual learning",
     ),
+    "spiking_mnist": TaskSpecEnriched(
+        name="spiking_mnist",
+        domain=DomainType.VISION,
+        task_families=("neuromorphic",),
+        input_shape=(784,),
+        output_dim=10,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        resolution=10_000,
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("neuromorphic", "spiking", "mnist"),
+        description="MNIST frames as binary spike rasters",
+    ),
     "copy_task": TaskSpecEnriched(
         name="copy_task",
         domain=DomainType.MEMORY,
@@ -707,7 +739,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         name="tiny_shakespeare",
         domain=DomainType.LANGUAGE,
         task_families=("sequence", "lm"),
-        input_shape=(100,),  # seq_len
+        input_shape=(128,),  # seq_len
         output_dim=65,  # character vocab
         cost_class=CostClass.EXPENSIVE,
         primary_objective="perplexity",

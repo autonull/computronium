@@ -65,6 +65,7 @@ if TYPE_CHECKING:
         InteractionEffect,
         SlicePlan,
     )
+    from computronium.experiment.sec_pilot import Calibration
 
 logger = get_logger(__name__)
 
@@ -501,31 +502,23 @@ def _screen_status() -> Status:
     )
 
 
-def _control_stats(
-    schedule: Schedule, device: str
-) -> tuple[float | None, float | None]:
-    """The base control over ``CONTROL_SEEDS`` seeds: mean and spread.
+def _control_stats(schedule: Schedule, device: str) -> Calibration | None:
+    """The base control over ``CONTROL_SEEDS`` seeds, with its bar and cost.
 
     One seed is a cell, not a control. A control whose mean sits inside the
-    bar's 2σ band has no power, and its slice is refused before it is priced
+    bar's band has no power, and its slice is refused before it is priced
     (TODO95 S2). The calibration rule is ``sec_pilot.calibrate_control``;
     this is its measurement at the screen's box.
     """
     del device  # the schedule carries the device the control runs on
     try:
-        from computronium.experiment.sec_pilot import (
-            base_family,
-            calibrate_control,
-        )
+        from computronium.experiment.sec_pilot import calibrate_control
 
-        family = base_family(schedule.task_id)
-        calibration = calibrate_control(schedule, evaluate=evaluate_cell, family=family)
+        calibration = calibrate_control(schedule, evaluate=evaluate_cell)
     except Exception:  # ruff: ignore[blind-except] - a broken control must not end the screen
         logger.exception("P0 control cell failed at the box")
-        return None, None
-    if calibration is None:
-        return None, None
-    return calibration.control_mean, calibration.control_std
+        return None
+    return calibration
 
 
 def _ruler(task_id: str) -> tuple[str, str]:
@@ -553,6 +546,34 @@ _AXIS_DEFAULTS = {
     "credit": "gradient",
     "update": "euclidean",
 }
+
+
+def _base_axes(task_id: str) -> dict[str, str]:
+    """The declared base box's six axes: defaults plus the family's overrides.
+
+    ``BASE_BOXES`` is the one source; a screen, a calibration and a P3 cell
+    all read the same axes, so none can run at a box the family did not
+    declare.
+    """
+    from computronium.experiment.sec_pilot import BASE_BOXES, base_family
+
+    axes = dict(_AXIS_DEFAULTS)
+    family = base_family(task_id)
+    box = BASE_BOXES.get(family) if family is not None else None
+    if box is not None and box.base_coordinate:
+        axes.update(box.base_coordinate)
+    return axes
+
+
+def _clears_bar(bar: Any, value: float | None) -> bool:
+    """Whether a control value clears the task's bar in the bar's direction."""
+    if bar is None:
+        return value is not None
+    if value is None:
+        return False
+    from computronium.experiment.kernel.evaluate import clears_task_bar
+
+    return clears_task_bar(bar, {bar.metric_key: value})
 
 
 # Companion axes are enumerated from the registry, never hardcoded: a second
@@ -711,6 +732,7 @@ def _iter_legal_coordinates(
     entry: PrimitiveCensusEntry,
     limit: int = 64,
     own_knobs: bool = False,
+    task_id: str = "mnist",
 ) -> list[Coordinate]:
     """Compose-legal boxes for a primitive, nearest-to-default first.
 
@@ -723,7 +745,7 @@ def _iter_legal_coordinates(
         return []
     primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
     axis = axis_segment(entry.axis)
-    base = dict(_AXIS_DEFAULTS)
+    base = _base_axes(task_id)
     base[axis] = primitive_key
     own = axis if own_knobs else None
 
@@ -767,7 +789,7 @@ def get_legal_coordinate_for_primitive(
     task_id: str = "mnist",
 ) -> Coordinate | None:
     """Nearest legal box for a primitive (compose-validated), or None."""
-    coords = _iter_legal_coordinates(entry, limit=1)
+    coords = _iter_legal_coordinates(entry, limit=1, task_id=task_id)
     return coords[0] if coords else None
 
 
@@ -933,7 +955,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             "status": "UNAVAILABLE",
             "reason": "no legal box or not available",
             "ruler": ruler,
-            "box": _box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
+            "box": _box_summary(_coordinate(_base_axes(schedule.task_id)), schedule),
             "rule": "refused at the base box",
             "binding": "inert" if box_binding else "bound",
             "binding_reason": box_binding,
@@ -954,7 +976,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             axis=axis,
             primitive_key=primitive_key,
             own_knobs=own_knobs,
-            box=_box_summary(_coordinate(_AXIS_DEFAULTS), schedule),
+            box=_box_summary(_coordinate(_base_axes(schedule.task_id)), schedule),
         )
 
     defect, within = _defect_for(eval_result, schedule)
@@ -1069,7 +1091,10 @@ def _screen_entries(
             _screen_coordinate(
                 entry,
                 _iter_legal_coordinates(
-                    entry, limit=P0_MAX_COORDINATES, own_knobs=own_knobs
+                    entry,
+                    limit=P0_MAX_COORDINATES,
+                    own_knobs=own_knobs,
+                    task_id=schedule.task_id,
                 ),
                 schedule,
                 control_acc=control_acc,
@@ -1136,8 +1161,11 @@ def run_p0_track(
     schedule = base_schedule(task_id, device)
     criterion, ruler = _ruler(task_id)
     base_box = (
-        {} if schedule is None else _box_summary(_coordinate(_AXIS_DEFAULTS), schedule)
+        {}
+        if schedule is None
+        else _box_summary(_coordinate(_base_axes(schedule.task_id)), schedule)
     )
+    calibration: Calibration | None = None
     control_acc: float | None = None
     control_spread: float | None = None
     powered = False
@@ -1149,12 +1177,15 @@ def run_p0_track(
         reason = f"{task_id} declares no base box; the slice is refused"
         results = _refused_cells(entries_to_screen, reason, ruler, base_box)
     else:
-        control_acc, control_spread = _control_stats(schedule, device)
+        calibration = _control_stats(schedule, device)
+        if calibration is not None:
+            control_acc = calibration.control_mean
+            control_spread = calibration.control_std
         logger.info(
             f"P0 control at this box: val_acc={control_acc} "
             f"(spread {control_spread}, bar {None if bar is None else bar.value})"
         )
-        powered = control_acc is not None and (bar is None or control_acc > bar.value)
+        powered = calibration is not None and calibration.has_power
         if not powered:
             # The control is inside the bar's band: the slice measures noise,
             # so it is refused before it is priced (TODO95 S2).
@@ -1386,7 +1417,7 @@ def _interaction_cell(
     """One run of the factorial: its box, its seed and its replay hash."""
     from computronium.experiment.sec_interaction import InteractionCell
 
-    axes = {**_AXIS_DEFAULTS, **levels}
+    axes = {**_base_axes(schedule.task_id), **levels}
     measured = _measure(_coordinate(axes), replace(schedule, seed=seed, n_seeds=1))
     return InteractionCell(
         levels=dict(levels),
@@ -1401,9 +1432,10 @@ def _interaction_cell(
     )
 
 
-def legal_levels(levels: dict[str, str]) -> bool:
+def legal_levels(levels: dict[str, str], task_id: str | None = None) -> bool:
     """The system's validator on a pair's levels: it seats or refuses the cell."""
-    legal, _reason = _is_legal(_coordinate({**_AXIS_DEFAULTS, **levels}))
+    axes = _base_axes(task_id) if task_id is not None else dict(_AXIS_DEFAULTS)
+    legal, _reason = _is_legal(_coordinate({**axes, **levels}))
     return legal
 
 
@@ -1425,11 +1457,13 @@ def _p3_setup(out_dir: Path, device: str) -> tuple[SlicePlan, Schedule] | None:
     if len(axis_spreads(map_data)) < 2:
         logger.warning("P3: fewer than two axes rank at this box; slice refused")
         return None
-    plan = plan_slice(map_data, legal=legal_levels)
+    task_id = str((map_data.get("base") or {}).get("task") or P0_TASK)
+    plan = plan_slice(
+        map_data, legal=lambda levels: legal_levels(levels, task_id=task_id)
+    )
     if plan is None:
         logger.warning("P3: the top pair seats no legal 2×2 at this box; slice refused")
         return None
-    task_id = str((map_data.get("base") or {}).get("task") or P0_TASK)
     schedule = base_schedule(task_id, device)
     if schedule is None:
         logger.warning(f"P3: {task_id} declares no base box; slice refused")
@@ -1462,7 +1496,7 @@ def run_p3_track(out_dir: Path, device: str = "auto") -> dict[str, Any] | None:
     base_values = [cell.val_acc for cell in base_runs if cell.val_acc is not None]
     control = sum(base_values) / len(base_values) if base_values else None
     bar = _task_bar(schedule.task_id)
-    if control is None or (bar is not None and control <= bar.value):
+    if control is None or not _clears_bar(bar, control):
         return _no_power_slice(plan, schedule, base_runs, control, bar)
     return _confirmed_slice(plan, schedule, base_runs, levels, control)
 
@@ -1482,7 +1516,7 @@ def _no_power_slice(
         f"{None if bar is None else bar.value}; the slice is refused before "
         "it is priced (TODO95 S2)"
     )
-    box = _box_summary(_coordinate(_AXIS_DEFAULTS), schedule)
+    box = _box_summary(_coordinate(_base_axes(schedule.task_id)), schedule)
     cells: list[InteractionCell] = list(base_runs)
     for level in plan.combinations()[1:]:
         cells.append(
@@ -1599,9 +1633,11 @@ def _interaction_result(
 DEEP_DIVE_REGISTRATION = Path("configs/preregistrations/sec_deep_dive.json")
 
 
-def _deep_dive_coordinate(candidate: Any, factor: float) -> Coordinate:
+def _deep_dive_coordinate(
+    candidate: Any, factor: float, task_id: str = "mnist"
+) -> Coordinate:
     """The candidate's base box with its primary knob at one ladder point."""
-    axes = {**_AXIS_DEFAULTS, candidate.axis: candidate.level}
+    axes = {**_base_axes(task_id), candidate.axis: candidate.level}
     coord = _coordinate(axes)
     return replace(
         coord,
@@ -1720,7 +1756,7 @@ def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
     rungs: list[LadderRung] = []
     for factor, value in ladder_points(candidate):
         measured = _measure(
-            _deep_dive_coordinate(candidate, factor),
+            _deep_dive_coordinate(candidate, factor, schedule.task_id),
             replace(schedule, seed=0, n_seeds=1),
         )
         rungs.append(
@@ -1746,7 +1782,7 @@ def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[
     for seed in range(CLAIM_SEEDS):
         for arm, factor in (("control", 1.0), ("treatment", treatment)):
             measured = _measure(
-                _deep_dive_coordinate(candidate, factor),
+                _deep_dive_coordinate(candidate, factor, schedule.task_id),
                 replace(schedule, seed=seed, n_seeds=1),
             )
             cells.append(

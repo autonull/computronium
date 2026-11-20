@@ -17,13 +17,17 @@ This module is the binding half: it does not screen; ``sec_loop`` screens.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
+import json
 import math
+import time
 from dataclasses import dataclass, fields, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.registry.task_registry import (
+    PassBar,
     TaskRegistry,
     primary_pass_bar,
 )
@@ -92,7 +96,8 @@ class BaseBox:
 
 #: The declared base per task family. A family with no row has no base box and
 #: its slice is refused before it is priced; the table is the decision, not a
-#: fallback, so graph and sequence wait for their own measured base.
+#: fallback. ``base_coordinate`` is the one source of the family's axes: a
+#: screen, a calibration and the P3 slice all compose from it.
 BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
     "vision": BaseBox("vision", "mnist", 32, 375, 1),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
@@ -115,7 +120,6 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         32,
         0,
         10,
-        base_coordinate={"geometry": "recurrent", "dynamics": "instantaneous"},
     ),
     "continual": BaseBox(
         "continual",
@@ -131,7 +135,6 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         8,
         0,
         5,
-        base_coordinate={"geometry": "recurrent"},
     ),
     "scientific": BaseBox(
         "scientific",
@@ -145,9 +148,12 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         "neuromorphic",
         "spiking_mnist",
         32,
-        0,
-        5,
-        base_coordinate={"substrate": "neuromorphic"},
+        40,
+        1,
+        base_coordinate={
+            "substrate": "neuromorphic",
+            "dynamics": "energy_minimization",
+        },
     ),
     "lm": BaseBox(
         "lm",
@@ -161,27 +167,29 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
 })
 
 
-#: Family-specific base coordinate overrides. Merged with _AXIS_DEFAULTS.
-BASE_COORDINATES: Final[Mapping[str, dict[str, str]]] = MappingProxyType({
-    "graph": {"geometry": "graph"},
-    "sequence": {"geometry": "recurrent", "dynamics": "instantaneous"},
-})
-
-
 @dataclass(frozen=True, slots=True)
 class Calibration:
-    """The control's power at one family's base box."""
+    """The control's power at one family's base box.
+
+    ``bar`` is the task's ``PassBar`` itself, so the direction, metric key and
+    floor travel with the number instead of a second copy of the comparison.
+    """
 
     task_id: str
-    bar: float
+    bar: PassBar
     control_mean: float
     control_std: float
     seeds: int
+    cell_seconds: float = 0.0
+    param_count: int = 0
+    replay: str = ""
 
     @property
     def has_power(self) -> bool:
         """The control clears the bar: otherwise the slice measures noise."""
-        return math.isfinite(self.control_mean) and self.control_mean > self.bar
+        from computronium.experiment.kernel.evaluate import clears_task_bar
+
+        return clears_task_bar(self.bar, {self.bar.metric_key: self.control_mean})
 
     @property
     def sigma(self) -> float:
@@ -301,15 +309,17 @@ def calibrate_control(
     schedule: Schedule,
     *,
     evaluate: Callable[..., CellEvaluation] | None = None,
-    family: str | None = None,
 ) -> Calibration | None:
     """Measure the base control over ``CONTROL_SEEDS`` seeds.
+
+    The base coordinate is the family box's own declaration: the composition is
+    ``sec_loop._base_axes``, so a calibration and a screen cannot run at
+    different axes.
 
     Args:
         schedule: The base box; only its seed varies between runs.
         evaluate: The evaluator (``evaluate_cell`` by default), injectable so
             the calibration rule is testable without a training run.
-        family: Optional task family for family-specific base coordinate.
 
     Returns:
         The control's power, or ``None`` when the task declares no bar.
@@ -323,30 +333,60 @@ def calibrate_control(
         runner: Callable[..., CellEvaluation] = evaluate_cell
     else:
         runner = evaluate
-    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+    from computronium.experiment.sec_loop import _base_axes, _coordinate
 
-    # Use family-specific base coordinate if available
-    base_axes = dict(_AXIS_DEFAULTS)
-    if family is not None and family in BASE_COORDINATES:
-        base_axes.update(BASE_COORDINATES[family])
-    coordinate = _coordinate(base_axes)
-    values = [
-        float(
-            runner(coordinate, replace(schedule, seed=seed, n_seeds=1)).metrics.get(
-                bar.metric_key, math.nan
-            )
-        )
-        for seed in range(CONTROL_SEEDS)
-    ]
+    coordinate = _coordinate(_base_axes(schedule.task_id))
+    values: list[float] = []
+    seconds: list[float] = []
+    evaluations: list[CellEvaluation] = []
+    for seed in range(CONTROL_SEEDS):
+        started = time.monotonic()
+        evaluation = runner(coordinate, replace(schedule, seed=seed, n_seeds=1))
+        seconds.append(time.monotonic() - started)
+        evaluations.append(evaluation)
+        values.append(float(evaluation.metrics.get(bar.metric_key, math.nan)))
     mean = sum(values) / len(values)
     variance = sum((value - mean) ** 2 for value in values) / len(values)
+    cell_seconds = sum(seconds) / len(seconds)
     return Calibration(
         task_id=schedule.task_id,
-        bar=bar.value,
+        bar=bar,
         control_mean=mean,
         control_std=math.sqrt(variance),
         seeds=CONTROL_SEEDS,
+        cell_seconds=cell_seconds,
+        param_count=evaluations[0].param_count,
+        replay=calibration_replay(schedule.task_id, schedule, bar, values),
     )
+
+
+def calibration_replay(
+    task_id: str,
+    schedule: Schedule,
+    bar: PassBar,
+    values: list[float],
+) -> str:
+    """The replay identity of a measured control.
+
+    The box, the ruler and the three numbers are the record; a rerun that
+    changes any of them is a different calibration, not a confirmation. The
+    cost is beside the number, not part of its identity.
+    """
+    payload = {
+        "task": task_id,
+        "schedule": schedule.to_dict(),
+        "bar": {
+            "metric_key": bar.metric_key,
+            "direction": bar.direction,
+            "value": bar.value,
+            "floor": bar.floor,
+            "resolution": bar.resolution,
+            "sigma": bar.sigma,
+        },
+        "seeds": values,
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()[:16]
 
 
 def resource_vector(metrics: Mapping[str, float]) -> dict[str, float | None]:

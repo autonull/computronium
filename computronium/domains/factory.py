@@ -757,6 +757,12 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
             return SequentialMNISTTask(
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )
+        case "spiking_mnist":
+            from computronium.domains.vision import SpikingMNISTTask
+
+            return SpikingMNISTTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
         case "split_mnist":
             from computronium.domains.vision import SplitMNIST
 

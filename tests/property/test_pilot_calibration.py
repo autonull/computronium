@@ -177,9 +177,53 @@ def test_calibrate_control_measures_the_three_seed_base() -> None:
 
 
 def test_a_calibration_inside_the_bar_has_no_power() -> None:
-    assert Calibration(_TASK, 0.5, 0.5, 0.0, 3).has_power is False
-    assert Calibration(_TASK, 0.5, 0.6, 0.0, 3).has_power is True
-    assert Calibration(_TASK, 0.5, math.nan, 0.0, 3).has_power is False
+    maximize = PassBar("val_acc", "maximize", 0.5)
+    minimize = PassBar("val_loss", "minimize", 0.5)
+
+    assert Calibration(_TASK, maximize, 0.5, 0.0, 3).has_power is False
+    assert Calibration(_TASK, maximize, 0.6, 0.0, 3).has_power is True
+    assert Calibration(_TASK, maximize, math.nan, 0.0, 3).has_power is False
+    # A ceiling bar clears from below: a perplexity of 21 beats a bar of 27.
+    assert Calibration(_TASK, minimize, 0.4, 0.0, 3).has_power is True
+    assert Calibration(_TASK, minimize, 0.6, 0.0, 3).has_power is False
+
+
+def test_the_base_coordinate_is_the_boxes_declaration() -> None:
+    """One source: a screen, a calibration and P3 read the box's own axes."""
+    assert sec_loop._base_axes("mnist")["geometry"] == "feedforward"
+    assert sec_loop._base_axes("cora")["geometry"] == "graph"
+    assert sec_loop._base_axes("tiny_shakespeare")["geometry"] == ("causal_transformer")
+    assert sec_loop._base_axes("spiking_mnist")["substrate"] == "neuromorphic"
+
+
+def test_calibrate_control_runs_at_the_box_coordinate() -> None:
+    """The LM base composes on its causal transformer, not the default MLP."""
+    schedule = base_schedule("tiny_shakespeare")
+    assert schedule is not None
+    seen: list[str] = []
+
+    def capture(coordinate, _schedule):
+        seen.append(coordinate.geometry)
+        return _evaluation(0.2, "tiny_shakespeare")
+
+    calibration = calibrate_control(schedule, evaluate=capture)
+
+    assert calibration is not None
+    assert seen == ["causal_transformer"] * 3
+
+
+def test_calibrate_control_records_cost_and_replay() -> None:
+    schedule = base_schedule(_TASK)
+    assert schedule is not None
+
+    calibration = calibrate_control(schedule, evaluate=_constant(0.2))
+    replay = calibrate_control(schedule, evaluate=_constant(0.2))
+
+    assert calibration is not None
+    assert replay is not None
+    assert calibration.param_count == 100
+    assert calibration.cell_seconds >= 0.0
+    assert calibration.replay == replay.replay
 
 
 def test_the_payload_carries_the_calibrated_bar() -> None:
@@ -188,3 +232,31 @@ def test_the_payload_carries_the_calibrated_bar() -> None:
     bar = PassBar("val_acc", "maximize", 0.106, floor=0.1, resolution=10_000)
     assert clears_task_bar(bar, {"val_acc": 0.103}) is False
     assert clears_task_bar(bar, {"val_acc": 0.11}) is True
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the graph base composes at 200,967 parameters over its declared "
+        "200,000 ceiling: explicit geometry.hidden_dim bypasses the ceiling "
+        "in _fit_geometry, so the sizing path never enforces the budget"
+    ),
+)
+def test_the_graph_base_fits_its_declared_ceiling() -> None:
+    from computronium.experiment.kernel.evaluate import (
+        _compose_cell,
+        _task,
+        _task_shape,
+    )
+
+    schedule = base_schedule("cora")
+    assert schedule is not None
+    task = _task("cora", "cpu")
+    cell = _compose_cell(
+        sec_loop._coordinate(sec_loop._base_axes("cora")),
+        None,
+        _task_shape(task),
+        schedule.param_budget,
+        task,
+    )
+    assert cell.param_count <= schedule.param_budget
