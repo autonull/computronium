@@ -32,6 +32,10 @@ order lives in :data:`_SECTIONS`, the one place it is decided.
 * ``<!-- gen:credit_count -->`` — number of credit primitives.
 * ``<!-- gen:update_count -->`` — number of update primitives.
 * ``<!-- gen:primitive_total -->`` — total number of primitives.
+* ``<!-- gen:implementation_count -->`` — registered implementations.
+* ``<!-- gen:kernel_verified_count -->`` — verified kernel rungs.
+* ``<!-- gen:primitive_kernel_count -->`` — primitive kernel rungs.
+* ``<!-- gen:algorithm_kernel_count -->`` — algorithm kernel rungs.
 * ``<!-- gen:substrate_list -->`` — comma-separated substrate primitive names.
 * ``<!-- gen:geometry_list -->`` — comma-separated geometry primitive names.
 * ``<!-- gen:dynamics_list -->`` — comma-separated dynamics primitive names.
@@ -208,10 +212,16 @@ def _constraint_count() -> str:
 
 
 def _axis_primitives(axis: str) -> tuple[int, list[str]]:
-    from computronium.experiment.schema.axis import AXES_REGISTRIES
+    """A runtime axis's available primitives, projected from the registry.
 
-    reg = AXES_REGISTRIES[axis]
-    names = [s.name for s in reg if s.available]
+    ``AXES_REGISTRIES`` is the search schema's view, a second table over the
+    same rows; the README counts read the ``PrimitiveSpec`` registry instead.
+    """
+    from computronium.primitives.registry import REGISTRY
+
+    names = [
+        spec.name for spec in REGISTRY.values() if spec.axis == axis and spec.available
+    ]
     return len(names), names
 
 
@@ -246,12 +256,9 @@ def _update_count() -> str:
 
 
 def _primitive_total() -> str:
-    from computronium.experiment.schema.axis import AXES_REGISTRIES
+    from computronium.primitives.registry import REGISTRY
 
-    total = sum(
-        len([s for s in reg if s.available]) for reg in AXES_REGISTRIES.values()
-    )
-    return str(total)
+    return str(sum(1 for spec in REGISTRY.values() if spec.available))
 
 
 def _substrate_list() -> str:
@@ -295,6 +302,30 @@ def _algorithm_list() -> str:
 
     names = [s.name for s in algorithms()]
     return ", ".join(names)
+
+
+def _implementation_count() -> str:
+    from computronium.acceleration.registry import all_specs
+
+    return str(len(all_specs()))
+
+
+def _kernel_verified_count() -> str:
+    from computronium.acceleration.registry import all_specs
+
+    return str(sum(1 for spec in all_specs() if spec.status == "kernel_verified"))
+
+
+def _primitive_kernel_count() -> str:
+    from computronium.primitives.registry import REGISTRY
+
+    return str(sum(1 for s in REGISTRY.values() if s.kernel_status == "implemented"))
+
+
+def _algorithm_kernel_count() -> str:
+    from computronium.acceleration.registry import algorithms
+
+    return str(sum(1 for s in algorithms() if s.status == "kernel_verified"))
 
 
 def _trainer_config_fields() -> str:
@@ -427,6 +458,10 @@ _GENERATORS = {
     "credit_count": _credit_count,
     "update_count": _update_count,
     "primitive_total": _primitive_total,
+    "implementation_count": _implementation_count,
+    "kernel_verified_count": _kernel_verified_count,
+    "primitive_kernel_count": _primitive_kernel_count,
+    "algorithm_kernel_count": _algorithm_kernel_count,
     "substrate_list": _substrate_list,
     "geometry_list": _geometry_list,
     "dynamics_list": _dynamics_list,

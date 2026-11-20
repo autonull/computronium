@@ -28,20 +28,20 @@
 
 ## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
 
-The acceleration layer now provides a **unified registry** of **64 implementations** (43 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
+The acceleration layer now provides a **unified registry** of **<!-- gen:implementation_count --> implementations** (<!-- gen:primitive_total --> primitives + <!-- gen:algorithm_count --> algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
 
 ### Registry Structure
 
 | Axis | Primitives | Algorithms | Total |
 |------|-----------|-----------|-------|
-| **Substrate** | 9 | — | 9 |
-| **Geometry** | 7 | — | 7 |
-| **StateDynamics** | 8 | — | 8 |
-| **Plasticity** | 7 | — | 7 |
-| **CreditAssignment** | 6 | — | 6 |
-| **ParameterUpdate** | 6 | — | 6 |
-| **Algorithms** | — | 21 | 21 |
-| **Total** | **43** | **21** | **64** |
+| **Substrate** | <!-- gen:substrate_count --> | — | <!-- gen:substrate_count --> |
+| **Geometry** | <!-- gen:geometry_count --> | — | <!-- gen:geometry_count --> |
+| **StateDynamics** | <!-- gen:dynamics_count --> | — | <!-- gen:dynamics_count --> |
+| **Plasticity** | <!-- gen:plasticity_count --> | — | <!-- gen:plasticity_count --> |
+| **CreditAssignment** | <!-- gen:credit_count --> | — | <!-- gen:credit_count --> |
+| **ParameterUpdate** | <!-- gen:update_count --> | — | <!-- gen:update_count --> |
+| **Algorithms** | — | <!-- gen:algorithm_count --> | <!-- gen:algorithm_count --> |
+| **Total** | **<!-- gen:primitive_total -->** | **<!-- gen:algorithm_count -->** | **<!-- gen:implementation_count -->** |
 
 Each `ImplementationSpec` carries:
 - **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm)
@@ -66,7 +66,7 @@ backend = select_backend(
 2. `kernel_unverified` — Kernel exists (`kernel.py`), parity not yet validated
 3. `kernel_verified` — Parity passes (max_abs_diff < tolerance), microbench evidence recorded, `dispatch.select_backend(spec, "auto")` routes to kernel
 
-**Current status**: 25 specs `kernel_verified` (11 primitives + 14 algorithms), up from 1 at TODO32 start. The kernel ladder promotes through `reference → torch.compile → Triton` (credit primitives skip compile rung due to autograd incompatibility).
+**Current status**: <!-- gen:kernel_verified_count --> specs `kernel_verified` (<!-- gen:primitive_kernel_count --> primitives + <!-- gen:algorithm_kernel_count --> algorithms), up from 1 at TODO32 start. The kernel ladder promotes through `reference → torch.compile → Triton` (credit primitives skip compile rung due to autograd incompatibility).
 
 ### Registry API
 
@@ -79,9 +79,9 @@ from computronium.acceleration.registry import (
     list_by_axis,
 )
 
-all_specs()  # → tuple[ImplementationSpec, ...] (all 64)
+all_specs()  # → tuple[ImplementationSpec, ...] (all <!-- gen:implementation_count -->)
 algorithms()  # → 21 algorithm specs
-primitives()  # → 43 primitive specs
+primitives()  # → <!-- gen:primitive_total --> primitive specs
 get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```

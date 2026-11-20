@@ -138,28 +138,28 @@ def _discover() -> None:
 
     # Register primitives from the new single-source registry
     try:
-        from computronium.primitives.registry import REGISTRY as PRIMITIVE_REGISTRY
         from computronium.acceleration.spec import (
             ImplementationSpec,
-            ParityTolerance,
+            spec_axis,
         )
+        from computronium.primitives.registry import REGISTRY as PRIMITIVE_REGISTRY
+
         for spec in PRIMITIVE_REGISTRY.values():
-            # Map kernel_status to ImplementationStatus literal
-            status_map = {
-                "missing": "missing",
-                "reference_only": "reference_only",
-                "kernel_unverified": "kernel_unverified",
-                "kernel_verified": "kernel_verified",
-                "microbenched": "microbenched",
-                "campaign_ready": "campaign_ready",
-                "deprecated": "deprecated",
-            }
-            impl_status = status_map.get(spec.kernel_status, "reference_only")
+            # The primitive registry spells the rung, not the promotion ladder:
+            # ``implemented`` is a kernel rung with parity, and ``absent`` is
+            # reference-only. The old table looked up promotion names and
+            # mapped every row to ``reference_only``, so dispatch.auto never
+            # chose a primitive kernel (TODO97 S7).
+            impl_status = (
+                "kernel_verified"
+                if spec.kernel_status in {"implemented", "wrapper"}
+                else "reference_only"
+            )
             impl_spec = ImplementationSpec(
                 id=spec.id,
                 kind="primitive",
                 name=spec.name,
-                axis=spec.axis,
+                axis=spec_axis(spec.axis),
                 reference_entrypoint=spec.reference_entrypoint,
                 kernel_entrypoint=spec.kernel_entrypoint,
                 kernel_technology=spec.kernel_technology,

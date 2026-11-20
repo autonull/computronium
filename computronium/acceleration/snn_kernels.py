@@ -101,15 +101,24 @@ class SNNKernelBackend:
             .float()
             .to(device=self._device, dtype=self._dtype)
         )
-        spike_trains, voltage_traces, telemetry = self.simulate(x, y, neuromodulator)
-        # Compute STDP updates
-        gradients = self.stdp_update(spike_trains, voltage_traces, neuromodulator)
+        spike_trains, _voltage_traces, _telemetry = self.simulate(x, y, neuromodulator)
+        # STDP reads a pre/post spike-train pair, not the whole layer list:
+        # passing the list as ``post_spikes`` raised inside einsum, so the
+        # rung never reported a step.
+        gradients: dict[str, Tensor] = {}
+        for i in range(len(self._layers)):
+            modulator = neuromodulator if i == len(self._layers) - 1 else None
+            gradients.update(
+                self.stdp_update(spike_trains[i], spike_trains[i + 1], modulator, i)
+            )
         # Apply updates
         self.update_weights(gradients, 1.0)
-        # Return metrics
+        # The telemetry dict a settle reports may carry no task metric; the
+        # rung's own spike rate is the readout, so the loss comes from it.
         with torch.no_grad():
-            loss = telemetry.get("loss", 0.0)
-            acc = telemetry.get("accuracy", 0.0)
+            logits = spike_trains[-1].mean(dim=-1)
+            loss = torch.nn.functional.cross_entropy(logits, y).item()
+            acc = (logits.argmax(-1) == y).float().mean().item()
         return {"loss": loss, "accuracy": acc}
 
     def simulate(  # ruff: ignore[too-many-locals]
@@ -364,7 +373,7 @@ class SNNKernelBackend:
 
 
 # Triton kernels for fused SNN operations
-try:  # ruff: ignore[too-many-statements]
+try:  # ruff: ignore[too-many-statements, too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
 

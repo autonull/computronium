@@ -63,7 +63,7 @@ _ONTOLOGY_CLASSES = {
     "primitive.parameter_update.lion": "computronium.ontology.update.LionUpdate",
     "primitive.parameter_update.local_adam": "computronium.ontology.update.LocalAdamUpdate",
     "primitive.parameter_update.mean_norm": "computronium.ontology.update.MeanNormUpdate",
-    "primitive.parameter_update.muon": "computronium.ontology.update.MuonUpdate",
+    "primitive.parameter_update.muon": "computronium.ontology.update.RiemannianOrthogonalUpdate",
     "primitive.parameter_update.natural_gradient": "computronium.ontology.update.NaturalGradientUpdate",
     "primitive.parameter_update.ortho_adam": "computronium.ontology.update.OrthoAdamUpdate",
     "primitive.parameter_update.quantized_adam": "computronium.ontology.update.QuantizedStateUpdate",
@@ -936,6 +936,24 @@ _CAPABILITY_CARDS = {
 }
 
 
+#: The ten primitive kernel rungs, each a wrapper over an acceleration module.
+#:
+#: A row absent from this table is reference-only: the acceleration layer has no
+#: maths for it, which is a complete answer and not a defect (TODO97 §7).
+_KERNEL_RUNGS: dict[str, str] = {
+    "primitive.credit_assignment.gradient": "computronium.primitives.kernels.gradient",
+    "primitive.credit_assignment.random_projections": "computronium.primitives.kernels.random_projections",
+    "primitive.credit_assignment.thermodynamic_contrast": "computronium.primitives.kernels.thermodynamic_contrast",
+    "primitive.credit_assignment.pepita": "computronium.primitives.kernels.pepita",
+    "primitive.credit_assignment.local_goodness": "computronium.primitives.kernels.local_goodness",
+    "primitive.credit_assignment.target_inversion": "computronium.primitives.kernels.target_inversion",
+    "primitive.credit_assignment.temporal_trace": "computronium.primitives.kernels.temporal_trace",
+    "primitive.geometry.tile_mesh": "computronium.primitives.kernels.tile_mesh",
+    "primitive.state_dynamics.energy_minimization": "computronium.primitives.kernels.energy_minimization",
+    "primitive.parameter_update.muon": "computronium.primitives.kernels.muon",
+}
+
+
 # Build the registry
 def _make_spec(primitive_id: str) -> PrimitiveSpec:
     """Create a PrimitiveSpec from the collected data."""
@@ -954,6 +972,7 @@ def _make_spec(primitive_id: str) -> PrimitiveSpec:
     # Special cases for names
     name = name.replace("Pcalm", "PC-ALM").replace("Nca", "NCA").replace("Ntm", "NTM")
 
+    kernel_entrypoint = _KERNEL_RUNGS.get(primitive_id)
     return PrimitiveSpec(
         id=primitive_id,
         axis=runtime_axis,
@@ -968,10 +987,12 @@ def _make_spec(primitive_id: str) -> PrimitiveSpec:
         ontology_class=_ONTOLOGY_CLASSES.get(primitive_id, "object"),
         config_factory=_CONFIG_FACTORIES.get(primitive_id, ""),
         reference_entrypoint=_REFERENCE_ENTRYPOINTS.get(primitive_id, ""),
-        kernel_status="absent",
-        kernel_entrypoint=None,
-        kernel_technology=None,
-        supported_backends=("reference",),
+        kernel_status="implemented" if kernel_entrypoint else "absent",
+        kernel_entrypoint=kernel_entrypoint,
+        kernel_technology="torch" if kernel_entrypoint else None,
+        supported_backends=(
+            ("reference", "kernel") if kernel_entrypoint else ("reference",)
+        ),
         available=True,
         capability_card=_CAPABILITY_CARDS.get(primitive_id, ""),
         summary=_SUMMARIES.get(primitive_id, ""),

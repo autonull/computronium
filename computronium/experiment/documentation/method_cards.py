@@ -31,142 +31,37 @@ class MethodCard:
     source_lines: tuple[int, int] | None = None
 
 
+def _resolve_class(dotted: str) -> type | None:
+    """Resolve a dotted ontology class path, or ``None`` for a non-class row."""
+    from importlib import import_module
+
+    module_path, _, class_name = dotted.rpartition(".")
+    if not module_path:
+        return None
+    try:
+        return getattr(import_module(module_path), class_name)
+    except ImportError, AttributeError:
+        return None
+
+
 def _get_axis_registries() -> dict[str, dict[str, type]]:
-    """Get all axis registries from the ontology."""
-    from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
-    from computronium.ontology.geometry import _GEOMETRY_REGISTRY
-    from computronium.ontology.update import _UPDATE_REGISTRY
+    """The axis registries, projected from the one primitive registry.
 
-    # For substrate, use the concrete classes directly
-    substrate_registry = {
-        "digital": __import__(
-            "computronium.ontology.substrate", fromlist=["DigitalSubstrate"]
-        ).DigitalSubstrate,
-        "analog": __import__(
-            "computronium.ontology.substrate", fromlist=["AnalogSubstrate"]
-        ).AnalogSubstrate,
-        "memristive": __import__(
-            "computronium.ontology.substrate", fromlist=["MemristiveSubstrate"]
-        ).MemristiveSubstrate,
-        "neuromorphic": __import__(
-            "computronium.ontology.substrate", fromlist=["NeuromorphicSubstrate"]
-        ).NeuromorphicSubstrate,
-        "optical": __import__(
-            "computronium.ontology.substrate", fromlist=["OpticalSubstrate"]
-        ).OpticalSubstrate,
-        "quantum": __import__(
-            "computronium.ontology.substrate", fromlist=["QuantumSubstrate"]
-        ).QuantumSubstrate,
-        "sparse": __import__(
-            "computronium.ontology.substrate", fromlist=["SparseSubstrate"]
-        ).SparseSubstrate,
-        "ternary": __import__(
-            "computronium.ontology.substrate", fromlist=["TernarySubstrate"]
-        ).TernarySubstrate,
-        "complex": __import__(
-            "computronium.ontology.substrate", fromlist=["ComplexSubstrate"]
-        ).ComplexSubstrate,
-        "noisy": __import__(
-            "computronium.ontology.substrate", fromlist=["NoisySubstrate"]
-        ).NoisySubstrate,
-        "quantized": __import__(
-            "computronium.ontology.substrate", fromlist=["QuantizedSubstrate"]
-        ).QuantizedSubstrate,
-    }
+    The method cards used to carry a second table of thirteen credit classes,
+    eleven substrates and the rest: a class added to an axis could be missing
+    from the docs, and a renamed one could keep a card for a dead name. The
+    ``PrimitiveSpec`` row is the declaration, so the cards read it.
+    """
+    from computronium.primitives.registry import REGISTRY
 
-    # For credit, use the concrete classes directly
-    credit_registry = {
-        "local_contrastive": __import__(
-            "computronium.ontology.credit", fromlist=["LocalContrastiveCredit"]
-        ).LocalContrastiveCredit,
-        "thermodynamic_contrast": __import__(
-            "computronium.ontology.credit", fromlist=["ThermodynamicContrast"]
-        ).ThermodynamicContrast,
-        "random_projections": __import__(
-            "computronium.ontology.credit", fromlist=["RandomProjectionsCredit"]
-        ).RandomProjectionsCredit,
-        "local_goodness": __import__(
-            "computronium.ontology.credit", fromlist=["LocalGoodnessCredit"]
-        ).LocalGoodnessCredit,
-        "lemma": __import__(
-            "computronium.ontology.credit", fromlist=["LemmaCredit"]
-        ).LemmaCredit,
-        "pepita": __import__(
-            "computronium.ontology.credit", fromlist=["PepitaCredit"]
-        ).PepitaCredit,
-        "pc_alm": __import__(
-            "computronium.ontology.credit", fromlist=["PCALMCredit"]
-        ).PCALMCredit,
-        "temporal_trace": __import__(
-            "computronium.ontology.credit", fromlist=["TemporalTraceCredit"]
-        ).TemporalTraceCredit,
-        "target_inversion": __import__(
-            "computronium.ontology.credit", fromlist=["TargetInversionCredit"]
-        ).TargetInversionCredit,
-        "homeostatic": __import__(
-            "computronium.ontology.credit", fromlist=["HomeostaticCredit"]
-        ).HomeostaticCredit,
-        "gradient": __import__(
-            "computronium.ontology.credit", fromlist=["GradientCredit"]
-        ).GradientCredit,
-        "backprop": __import__(
-            "computronium.ontology.credit", fromlist=["BackpropCredit"]
-        ).BackpropCredit,
-    }
-
-    # For plasticity, use the exported classes
-    plasticity_registry = {
-        "null": getattr(
-            __import__("computronium.state", fromlist=[""]), "NullPlasticity", None
-        ),
-        "fast_weights": getattr(
-            __import__("computronium.core.plasticity.fast_weights", fromlist=[""]),
-            "FastWeightPlasticity",
-            None,
-        ),
-        "routing": getattr(
-            __import__("computronium.core.plasticity.routing", fromlist=[""]),
-            "RoutingPlasticity",
-            None,
-        ),
-        "rule_state": getattr(
-            __import__("computronium.core.plasticity.rule_state", fromlist=[""]),
-            "RuleStatePlasticity",
-            None,
-        ),
-        "substrate_coupled": getattr(
-            __import__("computronium.core.plasticity.substrate_coupled", fromlist=[""]),
-            "SubstrateCoupledPlasticity",
-            None,
-        ),
-        "temporal_psi": getattr(
-            __import__("computronium.core.plasticity.temporal_psi", fromlist=[""]),
-            "TemporalPsiPlasticity",
-            None,
-        ),
-        "conflict_adaptive_psi": getattr(
-            __import__("computronium.core.plasticity.adaptive_psi", fromlist=[""]),
-            "ConflictAdaptivePsiPlasticity",
-            None,
-        ),
-        "closed_form_ridge": getattr(
-            __import__("computronium.core.plasticity.closed_form", fromlist=[""]),
-            "ClosedFormRidgePlasticity",
-            None,
-        ),
-    }
-    plasticity_registry = {
-        k: v for k, v in plasticity_registry.items() if v is not None
-    }
-
-    return {
-        "substrate": substrate_registry,
-        "geometry": {k: v.cls for k, v in _GEOMETRY_REGISTRY.all().items()},
-        "dynamics": dict(DYNAMICS_REGISTRY.items()),
-        "plasticity": plasticity_registry,
-        "credit": credit_registry,
-        "update": {k: v.cls for k, v in _UPDATE_REGISTRY.all().items()},
-    }
+    registries: dict[str, dict[str, type]] = {}
+    for spec in REGISTRY.values():
+        cls = _resolve_class(str(spec.ontology_class))
+        if cls is None:
+            continue
+        name = spec.id.rsplit(".", 1)[-1]
+        registries.setdefault(spec.axis, {})[name] = cls
+    return registries
 
 
 def _extract_docstring_sections(docstring: str | None) -> dict[str, Any]:

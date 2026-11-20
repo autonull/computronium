@@ -171,10 +171,9 @@ def _resolve_step(dotted_path: str, case: Any) -> StepResult:
     """Run a kernel entrypoint named by ``dotted_path`` on ``case``."""
     from importlib import import_module
 
-    owner, _, attribute = dotted_path.rpartition(".")
-    module_path, _, class_name = owner.rpartition(".")
+    module_path, _, attribute = dotted_path.rpartition(".")
     module = import_module(module_path)
-    entrypoint = getattr(getattr(module, class_name, None) or module, attribute, None)
+    entrypoint = getattr(module, attribute, None)
     if entrypoint is None:
         msg = f"Could not import {dotted_path}"
         raise ImportError(msg)

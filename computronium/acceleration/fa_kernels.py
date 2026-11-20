@@ -115,7 +115,7 @@ class FAKernelBackend:
         self._layers = layers
         if activation is not None:
             self._activation = activation
-        if self._layers and not self._feedback_weights:
+        if self._layers and len(self._feedback_weights) != len(self._layers):
             device = self._layers[0].weight.device
             dtype = self._layers[0].weight.dtype
             self._feedback_weights = [
@@ -143,8 +143,11 @@ class FAKernelBackend:
         output = activations[-1]
         target_vec = one_hot_like(y, output)
         error = target_vec - output
-        # Run contrastive backward
-        gradients = self.backward_contrastive(activations, activations, beta=1.0)
+        # FA backward: the fixed feedback pathways carry the output error
+        # down the stack. The contrastive pass compares the free phase with
+        # itself, so every delta is zero and the rung trains nothing — the
+        # defect ``test_an_arm_trains_the_system_it_is_bound_to`` found.
+        gradients = self.backward(activations, error)
         # Apply updates
         self.update_weights(gradients, self._lr if hasattr(self, "_lr") else 0.01)
         # Return metrics

@@ -24,7 +24,7 @@ def _map() -> dict:
     for primitive, axis, val_acc, status in [
         ("primitive.credit_assignment.target_inversion", "credit", 0.1195, "measured"),
         ("primitive.geometry.conv", "geometry", 0.1217, "measured"),
-        ("primitive.substrate.analog", "substrate", None, "defect"),
+        ("primitive.substrate.analog", "substrate", None, "defective"),
         ("primitive.plasticity.null", "plasticity", None, "refused"),
     ]:
         row = {
@@ -42,7 +42,9 @@ def _map() -> dict:
             ),
             "resource": {"walltime_s": 1.0},
             "swapped": False,
-            "defect": "param_count 999999 over ceiling" if status == "defect" else None,
+            "defect": "param_count 999999 over ceiling"
+            if status == "defective"
+            else None,
             "trigger": "no ψ lifecycle" if status == "refused" else None,
             "replay_hash": "a" * 64 if status == "measured" else None,
         }
@@ -131,5 +133,5 @@ def test_every_row_and_layer_appears(tmp_path: Path) -> None:
 
 def test_the_inventory_is_the_census_not_a_second_tally() -> None:
     document = render_map(_map())
-    assert "**total 4** | 2 | 1 | 1 | 0 |" in document
+    assert "**total 4** | 2 | 0 | 1 | 1 |" in document
     assert "| credit | 1 | 0 | 0 | 0 |" in document

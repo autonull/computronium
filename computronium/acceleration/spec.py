@@ -71,6 +71,22 @@ def axis_segment(axis: str) -> str:
     return AXIS_SEGMENT.get(axis, axis)
 
 
+#: The spec label a runtime axis segment projects back to.
+_SPEC_AXIS: Final[dict[str, str]] = {
+    runtime: spec for spec, runtime in AXIS_SEGMENT.items()
+}
+
+
+def spec_axis(runtime_axis: str) -> str:
+    """The spec axis label for a runtime segment.
+
+    The primitive registry stores the runtime segment (``"update"``); an
+    ``ImplementationSpec`` stores the historical label (``"parameter_update"``).
+    One projection, so a filter cannot silently match nothing.
+    """
+    return _SPEC_AXIS.get(runtime_axis, runtime_axis)
+
+
 def coordinate_of_id(spec_id: str) -> tuple[str, str] | None:
     """The ``(runtime axis, runtime coordinate)`` a primitive spec ID names.
 

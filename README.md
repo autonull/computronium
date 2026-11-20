@@ -221,9 +221,9 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 | Panel | Key Contents |
 |-------|--------------|
 | **🚪 Entry Points** | 39 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains, 30 tasks |
+| **🎯 Tasks & Data** | 7 domains, 31 tasks |
 | **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 45 constraints |
-| **🧬 6-Axis Ontology** | 10 substrates, 12 geometries, 8 dynamics, 6 plasticities, 19 credits, 18 updates = 73 primitives |
+| **🧬 6-Axis Ontology** | 10 substrates, 12 geometries, 8 dynamics, 8 plasticities, 19 credits, 18 updates = 75 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
 | **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
@@ -1086,7 +1086,7 @@ Scope: current CI / repository verification status — not evidence of scientifi
 | Energy invariants (property-locked, Level 4) | Lyapunov descent, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
 | Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
 | Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
-| Kernel verified specs | 25 specs `kernel_verified` (11 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
+| Kernel verified specs | 24 specs `kernel_verified` (10 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
 | Registry audit | 0 missing critical fields |
 | Reproducibility | Models bitwise reproducible |
 | Backprop parity | Runs successfully |
@@ -1305,20 +1305,20 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 
 ## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
 
-The acceleration layer now provides a **unified registry** of **64 implementations** (43 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
+The acceleration layer now provides a **unified registry** of **96 implementations** (75 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
 
 ### Registry Structure
 
 | Axis | Primitives | Algorithms | Total |
 |------|-----------|-----------|-------|
-| **Substrate** | 9 | — | 9 |
-| **Geometry** | 7 | — | 7 |
+| **Substrate** | 10 | — | 10 |
+| **Geometry** | 12 | — | 12 |
 | **StateDynamics** | 8 | — | 8 |
-| **Plasticity** | 7 | — | 7 |
-| **CreditAssignment** | 6 | — | 6 |
-| **ParameterUpdate** | 6 | — | 6 |
+| **Plasticity** | 8 | — | 8 |
+| **CreditAssignment** | 19 | — | 19 |
+| **ParameterUpdate** | 18 | — | 18 |
 | **Algorithms** | — | 21 | 21 |
-| **Total** | **43** | **21** | **64** |
+| **Total** | **75** | **21** | **96** |
 
 Each `ImplementationSpec` carries:
 - **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm)
@@ -1343,7 +1343,7 @@ backend = select_backend(
 2. `kernel_unverified` — Kernel exists (`kernel.py`), parity not yet validated
 3. `kernel_verified` — Parity passes (max_abs_diff < tolerance), microbench evidence recorded, `dispatch.select_backend(spec, "auto")` routes to kernel
 
-**Current status**: 25 specs `kernel_verified` (11 primitives + 14 algorithms), up from 1 at TODO32 start. The kernel ladder promotes through `reference → torch.compile → Triton` (credit primitives skip compile rung due to autograd incompatibility).
+**Current status**: 24 specs `kernel_verified` (10 primitives + 14 algorithms), up from 1 at TODO32 start. The kernel ladder promotes through `reference → torch.compile → Triton` (credit primitives skip compile rung due to autograd incompatibility).
 
 ### Registry API
 
@@ -1356,9 +1356,9 @@ from computronium.acceleration.registry import (
     list_by_axis,
 )
 
-all_specs()  # → tuple[ImplementationSpec, ...] (all 64)
+all_specs()  # → tuple[ImplementationSpec, ...] (all 96)
 algorithms()  # → 21 algorithm specs
-primitives()  # → 43 primitive specs
+primitives()  # → 75 primitive specs
 get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```
@@ -1605,14 +1605,14 @@ uv run python -m computronium.acceleration.matrix \
 
 ### 🧪 Registry Integrity Locks (Extended Verification Framework)
 
-These locks protect the 64-spec registry from silent drift — extending TODO32's `test_dynamics_wiring_lock.py` doctrine.
+These locks protect the 96-spec registry from silent drift — extending TODO32's `test_dynamics_wiring_lock.py` doctrine.
 
 | Lock | File | Purpose |
 |------|------|---------|
 | **Completeness** | `tests/property/test_registry_completeness_lock.py` | Every ontology class ↔ exactly one primitive spec; every spec resolves to live class (13 tests) |
 | **Scaffolder round-trip** | Template rendering verified | `scaffold_primitive.py`/`scaffold_algorithm.py` output passes own tests |
 | **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
-| **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
+| **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (24 tests) |
 
 ## Status and scope
 

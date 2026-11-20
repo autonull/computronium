@@ -92,7 +92,7 @@ Scope: current CI / repository verification status — not evidence of scientifi
 | Energy invariants (property-locked, Level 4) | Lyapunov descent, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
 | Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
 | Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
-| Kernel verified specs | 25 specs `kernel_verified` (11 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
+| Kernel verified specs | <!-- gen:kernel_verified_count --> specs `kernel_verified` (<!-- gen:primitive_kernel_count --> primitives + <!-- gen:algorithm_kernel_count --> algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
 | Registry audit | 0 missing critical fields |
 | Reproducibility | Models bitwise reproducible |
 | Backprop parity | Runs successfully |

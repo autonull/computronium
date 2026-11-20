@@ -120,7 +120,9 @@ def _backend(module: str, name: str) -> type:
     return getattr(import_module(f"computronium.acceleration.{module}"), name)
 
 
-def select_backend_class(key: DispatchKey, variant: str | None = None) -> type | None:
+def select_backend_class(  # ruff: ignore[too-many-return-statements] - the dispatch arms are the table
+    key: DispatchKey, variant: str | None = None
+) -> type | None:
     """The backend class that serves ``key``, or ``None`` if none does.
 
     The arms name only the axes their backend reads; ``match`` therefore reads a
@@ -146,6 +148,16 @@ def select_backend_class(key: DispatchKey, variant: str | None = None) -> type |
             return _variant(variant, "eqprop_kernel_backend", "EqPropKernelBackend")
         case (_, "predictive_settling", "local_goodness", _, _):
             return _variant(variant, "pc_kernels", "PCKernelBackend")
+        case (_, "instantaneous", "random_projections", _, _):
+            return _variant(variant, "fa_kernels", "FAKernelBackend")
+        case (_, "spike_integration", "temporal_trace", _, _):
+            return _variant(variant, "snn_kernels", "SNNKernelBackend")
+        case (_, "instantaneous", "local_goodness", _, _):
+            return _variant(variant, "ff_kernels", "FFKernelBackend")
+        case (_, "instantaneous", "pepita", _, _):
+            return _variant(variant, "ff_kernels", "PEPITAKernelBackend")
+        case (_, "predictive_settling", "target_inversion", _, _):
+            return _variant(variant, "tp_kernels", "TPKernelBackend")
         case ("feedforward", "instantaneous", _, _, _):
             return _instantaneous(variant, credit, plasticity)
         case _:

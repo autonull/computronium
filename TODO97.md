@@ -4,6 +4,10 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-20] ✅ **S7 CLOSED (ten primitive kernels; four algorithm xfails filed)** — ten `PrimitiveSpec` rows are `kernel_status="implemented"` with an entrypoint, a technology and microbench evidence (`artifacts/benchmarks/<id>.jsonl`): `gradient` (backprop), `random_projections` (FA), `thermodynamic_contrast` (PC), `pepita`/`local_goodness` (FF), `target_inversion` (TP), `temporal_trace` (SNN), `tile_mesh` (tile), `energy_minimization`/`muon` (MEP). Each is a wrapper in `computronium/primitives/kernels.py` over its acceleration module; the other 65 stay `absent`, which is a complete answer. The kill test (`tests/acceleration/test_primitive_kernel_kill.py`) patches `ReferenceAdapter.reference_step` to raise: all 75 rows pass — an implemented row returns its step, an absent row refuses by name, an impossible row is quiet only through its refusal test. Defects fixed on the way: `_resolve_step` imported the module's parent and missed `computronium.primitives.kernels`; `acceleration.registry` mapped the primitive rung through a promotion-name table that had no `"implemented"` key, so `dispatch.auto` never selected a primitive kernel; `microbench` built a deleted per-primitive `cases` module instead of `primitives.cases.build_case`; FA's contrastive pass compared the free phase with itself (every delta zero) and built one feedback matrix for two layers; SNN passed a list as `post_spikes` and reported the settle's empty telemetry as a zero-loss step. **S7b (filed, not closed):** four algorithm factories still `xfail` in `test_backend_reach.py` — `ff` (its preset cannot take a backend, `_attachable` names why), `fast_weight` (no fast-weight kernel), `pcalm` (no PC-ALM backend class), `tile` (its backend expects a `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and `spiking_snn` now attach and move the system's own parameters. `scripts/audit.py` exits 0.
+
+**Progress:** [2026-11-20] ◐ **S8 PARTIAL (docs regenerate from one source; LM delta run)** — the method cards (`comp method-card`) no longer carry a second axis table: `_get_axis_registries` projects the 75 `PrimitiveSpec` rows, so a class added to an axis cannot be missing from the docs. `docs/sec/map.md` is regenerated from `results/sec/map.json` with the map's own status vocabulary (`measured`, `unimplemented`, `defective`, `refused`), so the one unimplemented row is counted instead of dropped. The README counts are generated tokens: `implementation_count`, `kernel_verified_count`, `primitive_kernel_count`, `algorithm_kernel_count`; the acceleration panel now reads 96 implementations (75 primitives + 21 algorithms), 24 kernel-verified (10 primitives + 14 algorithms), and the ontology panel reads 75 primitives (from the registry, not `AXES_REGISTRIES`). The LM delta run re-screened its 11 pre-fix defects: 6 became refusals, **5 remain** — `forward_tangent`, `surrogate`, `zeroth_order`, `fast_weights`, `routing` die on the token lane with shape/dtype errors and are filed as `token_lane` under `test_a_language_task_declares_its_token_lane`. That lock is too broad for the class: it is a geometry refusal test, while these five are credit/plasticity token-shape facts. **Next in S8:** narrow the lock, file the credit/plasticity token-shape class with its failing test, and re-run the LM delta; `scripts/audit.py` already exits 0.
+
 **Progress:** [2026-11-20] ✅ **S5h CLOSED (defect classes filed; the row-state gate repaired)** — the six classes the family screens found are now evidence, not prose. Three closed as **refusals in the declared space** (a capability that works): `sec_loop._is_legal` now applies the planner's own three rules (`_is_geometry_task_compatible`, `_target_lane_rule`, `_batch_layout_rule`), so three time-major credits on `cartpole`/`copy_task`, `nca` on a 21-feature task, and `causal_transformer` on a flat classifier are refused by name instead of dying at train time; `nca` gained its grid branch in the geometry×task table. Three remain **defective with a strict-xfail lock**: the language token lane (14 rows on `tiny_shakespeare`/`char_ngram`), `ntm`'s double backward (1 row on `cartpole`), and the family ceiling (6 rows, already locked in S6). The 47 defect rows were re-derived: 26 became `refused` with the rule that refuses them, 21 carry `defect_class` + `failing_test` from the new one register (`sec_loop.DEFECT_LOCKS`). **The gate was dead**: the screen wrote `defect` and `scripts/audit.py` compared `defective`, so `row_without_lock` and `impossible_without_lock` could never fire; `computronium/experiment/sec_status.py` is now the one row-state source (writer, gate, tests), and its necessity test fails when a defective row omits its lock. `scripts/audit.py` exits 0 (full, reading the nine maps).
 
 **Progress:** [2026-11-20] ✅ **S5 SCREENS COMPLETE (vision + graph) and S6d CLOSED** — the vision map now accounts all **52 declared rows**: **45 measured** (37 bound, 8 inert), **4 defective** (the param-box overruns `credit.surrogate` 234,898 / `geometry.attention` 494,986 / `geometry.routing` 234,898 / `geometry.tile` 628,280 over the 150,000 vision ceiling), **26 refused** (family mismatch or unavailable). The graph map accounts **9/9 declared rows measured** (gradient 0.402, feedforward 0.402, graph 0.362 on cora); the other 66 rows are refused at the graph box, so no graph screen remains. **Eight ladder records** (up from the five S6b wrote): `local_contrastive` **tuned** (readout_scale 10 → 0.4018) and `random_projections` **tuned** (feedback_scale 0.1 → 0.3764); `forward_tangent` 0.1653, `pc_alm` 0.1224, `target_inversion` 0.1137, `geometry.conv` 0.1217 and `error_predictive_coding` 0.0980 and `quantized_adam` 0.0999 stay inside the near-chance band and are `unimplemented` with strict-xfail locks. Three instrument defects surfaced and are fixed with locks: `update_map` **dropped the `ladders` table** on every P0 write (`test_a_screen_keeps_the_ladder_table`); the ladder was **credit-only** (axis from the spec id, base from the row's measured box, axis-aware record validation; `test_the_ladder_sweeps_the_primitive_own_axis`); and `LADDER_KNOBS` named fields the update/plasticity/substrate configs do not declare (`step_size`/`momentum`, `trace_decay`, `noise_level`/`sparsity`; `test_the_knob_table_names_the_axis_own_fields`). `sec_ladder --dry-run` no longer runs the cells it printed. **S6d**: `capability_skip` reads an f-string's constant text and reports a reason it cannot read; the 14 findings are closed — 9 rungless factories are `xfail` with the S7 close, the credit-adapter sources are constructed instead of skipped, declared rows say `declared:` literally, and the dead finite-difference test (0 collected params over deleted modules) is deleted. `scripts/audit.py --static` reports **0 findings**.
@@ -30,11 +34,11 @@ instrument at it.
 
 **One sentence:** Eighteen sessions built a microscope; TODO97 migrates the
 563-file scaffolding into a 3-file protocol, fixes the cheap wiring defects
-first, calibrates the nine task families, and screens at boxes that can answer
-the question — all nine families are accounted (243 measured, 21 defective,
-each with a failing test); three defect classes were closed by refusing them
-in the declared space, and the remaining work is S7 kernels, S8 one source,
-and S9 claims.
+first, calibrates the nine task families, screens at boxes that can answer the
+question, and turns ten primitives into kernel rungs behind a kill test and
+parity; all nine families are accounted, the docs regenerate from the registry,
+and the remaining work is four algorithm rungs (S7b), five LM token-shape
+defects (S8), and five pre-registered claims (S9).
 
 ---
 
@@ -66,8 +70,8 @@ and S9 claims.
 | S6d | Skip scanner reads f-strings and non-literal reasons | ✅ DONE — 14 findings closed; 0 static findings |
 | S6 | Measure the four params-box overruns at their declared box | ✅ DONE — each fits its declared box: surrogate 234,898/300k, routing 234,898/300k, attention 593,819/600k, tile 629,096/1M, causal_transformer 410,880/600k. They are box-limited, not defective; strict-xfail `test_a_box_overrun_fits_its_family_ceiling` names budget-aware sizing |
 | S6e | Close the 21 defective rows (token lane, NTM, ceiling) | ✅ DONE — 14 token-lane rows refused by name; NTM trains on cartpole (trainer truncates the graph); width search fits routing/attention/graph; tile re-triaged `unimplemented` (628,280 floor at a 150k box) |
-| S7 | 10 primitive kernels across 9 acceleration modules | ⏳ PENDING — 9 factories `xfail` on a missing rung; all 75 are `kernel_status="absent"` |
-| S8 | Regenerate map + docs from one source | ⏳ PENDING — `MAPS` now carries the 7 new family maps; README/method cards still read a second table |
+| S7 | 10 primitive kernels across 9 acceleration modules | ✅ DONE — 10 implemented + 65 absent; kill test + parity + microbench; 4 algorithm xfails filed as S7b |
+| S8 | Regenerate map + docs from one source | ◐ PARTIAL — method cards + map doc + README counts read the registry; LM delta run leaves 5 token-shape defects filed |
 | S9 | 5 pre-registered viability claims (5 paired seeds, CI) | ⏳ PENDING |
 
 **Session 2026-11-20 (S5f–S6).** The seven remaining family bases were
@@ -153,22 +157,28 @@ would fit it).
    the suite reports pass / skip / fail in one run. The two dead imports this
    session fixed (`get_spec`, `task.spec.primary_pass_bar`) were separate test
    defects; the row now reads `error_blind_credit` and the task's own bar key.
-3. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
-   carries 9 `xfail` factories (ff, fa, tp, tile, pcalm, dfa, spiking_snn,
-   fast_weight, pepita) whose rung does not attach; each is a wrapper over an
-   existing acceleration module (§7). A kernel is claimed only with a kill test
-   and measured parity.
-4. **S8 — map + docs from one source.** `scripts/audit.py` reads the nine
-   family maps; README/method cards still regenerate from a second table.
-   The `delta` screen now re-runs map-`defective` rows (it did not, so a fixed
-   defect stayed screened forever). Re-screened maps are clean: vision 48
-   measured / 26 refused / 1 unimplemented, sequence 48 / 27, rl 18 / 57,
-   continual 49 / 26 — 0 defective in each. The lm map still carries its 11
-   pre-fix defects until its own delta run; that slice is the costly one (five
-   credit/plasticity rows train 3 epochs on `tiny_shakespeare` at ~90 s/epoch
-   on CPU, ~22 min uncontended; its six geometry rows refuse instantly). Price
-   that run from the map before launching it. A fresh clone re-derives every
-   row by screening; the committed code carries the rules and the locks.
+3. ~~**S7 — ten kernel wrappers**~~ ✅ done (2026-11-20): the ten primitive
+   rows carry a kernel rung, a kill test and parity; the 65 other rows stay
+   reference-only. **S7b (filed):** four algorithm factories still `xfail` in
+   `tests/acceleration/test_backend_reach.py` — `ff` (`_attachable` refuses its
+   preset, which cannot take a backend), `fast_weight` (no fast-weight kernel),
+   `pcalm` (no PC-ALM backend class), `tile` (its backend expects a
+   `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and
+   `spiking_snn` now attach and move the system's parameters.
+4. **S8 — map + docs from one source.** ◐ partial. ✅ the method cards
+   project the 75 `PrimitiveSpec` rows (no second axis table), `docs/sec/map.md`
+   regenerates with the map's own status columns, and the README counts are
+   generated tokens (96 implementations, 24 kernel-verified, 75 primitives).
+   ✅ the LM delta run is done: its 11 pre-fix defects became 6 refusals and
+   **5 remain** — `forward_tangent`, `surrogate`, `zeroth_order`,
+   `fast_weights`, `routing` die on the token lane with shape/dtype errors.
+   They currently carry `defect_class="token_lane"` and the geometry refusal
+   lock, which is too broad for them. **Next:** narrow that lock to the
+   geometry contract, file the credit/plasticity token-shape class with its
+   own failing test (or implement the token-lane credit path), re-run the LM
+   delta until `defective == 0`, then regenerate `docs/sec/map.md`. A fresh
+   clone re-derives every row by screening; the committed code carries the
+   rules and the locks.
 5. **S9 — five pre-registered claims.** The two tuned coordinates
    (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
    candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI

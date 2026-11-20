@@ -191,11 +191,11 @@ uv run python -m computronium.acceleration.matrix \
 
 ### 🧪 Registry Integrity Locks (Extended Verification Framework)
 
-These locks protect the 64-spec registry from silent drift — extending TODO32's `test_dynamics_wiring_lock.py` doctrine.
+These locks protect the <!-- gen:implementation_count -->-spec registry from silent drift — extending TODO32's `test_dynamics_wiring_lock.py` doctrine.
 
 | Lock | File | Purpose |
 |------|------|---------|
 | **Completeness** | `tests/property/test_registry_completeness_lock.py` | Every ontology class ↔ exactly one primitive spec; every spec resolves to live class (13 tests) |
 | **Scaffolder round-trip** | Template rendering verified | `scaffold_primitive.py`/`scaffold_algorithm.py` output passes own tests |
 | **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
-| **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
+| **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (<!-- gen:kernel_verified_count --> tests) |

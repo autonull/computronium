@@ -114,8 +114,14 @@ def run_microbench(
     backend_name = select_backend(spec, backend)
 
     step_func, module_path = _import_step_func(spec, backend_name)
-    cases_module = _import_cases_module(module_path)
-    case = _create_case(cases_module, device, dtype, seed)
+    if spec.kind == "primitive":
+        from computronium.primitives.cases import build_case
+        from computronium.primitives.registry import get_primitive_spec
+
+        case = build_case(get_primitive_spec(spec.id), device=device, seed=seed)
+    else:
+        cases_module = _import_cases_module(module_path)
+        case = _create_case(cases_module, device, dtype, seed)
 
     _run_warmup(step_func, case, warmup)
 

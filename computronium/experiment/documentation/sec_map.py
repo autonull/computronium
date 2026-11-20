@@ -25,9 +25,9 @@ __all__ = ["render_map", "write_map_document"]
 
 _STATUS_COLUMNS: Final[tuple[str, ...]] = (
     "measured",
-    "defect",
+    "unimplemented",
+    "defective",
     "refused",
-    "unmeasured",
 )
 
 
@@ -76,7 +76,7 @@ def _rows(map_data: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def _inventory_table(map_data: Mapping[str, Any]) -> list[str]:
     inventory = map_data.get("inventory") or {}
-    totals: dict[str, int] = {status: 0 for status in _STATUS_COLUMNS}
+    totals: dict[str, int] = dict.fromkeys(_STATUS_COLUMNS, 0)
     by_axis: dict[str, dict[str, int]] = {}
     for row in _rows(map_data):
         status = str(row.get("status"))
@@ -119,7 +119,7 @@ def _census_table(map_data: Mapping[str, Any]) -> list[str]:
 
 def _notes(map_data: Mapping[str, Any]) -> list[str]:
     lines: list[str] = []
-    defects = [row for row in _rows(map_data) if row.get("status") == "defect"]
+    defects = [row for row in _rows(map_data) if row.get("status") == "defective"]
     if defects:
         lines.append("### Defects (execution facts, with their mechanism)")
         for row in defects:
