@@ -188,28 +188,6 @@ def test_a_calibration_inside_the_bar_has_no_power() -> None:
     assert Calibration(_TASK, minimize, 0.6, 0.0, 3).has_power is False
 
 
-@pytest.mark.parametrize(
-    "primitive_id",
-    [
-        "primitive.credit_assignment.eligibility_prop",
-        "primitive.credit_assignment.rtrl_reference",
-        "primitive.credit_assignment.unbiased_rtrl",
-    ],
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "D18: the credit declares no time-major batch layout, so a batch-major "
-        "task composes and dies at train time; close: declare the task's "
-        "batch_layout and refuse a credit that disagrees in the declared space"
-    ),
-)
-def test_a_time_major_credit_is_refused_on_a_batch_major_task(
-    primitive_id: str,
-) -> None:
-    assert refusal_for(_entry(primitive_id), "cartpole") is not None
-
-
 def test_the_base_coordinate_is_the_boxes_declaration() -> None:
     """One source: a screen, a calibration and P3 read the box's own axes."""
     assert sec_loop._base_axes("mnist")["geometry"] == "feedforward"

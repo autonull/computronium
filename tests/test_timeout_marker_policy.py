@@ -260,6 +260,14 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         "tests/property/test_hyperparameter_display_lock.py::test_run_loop_prints_hyperparams_even_with_no_swept",
         300,
     ),
+    (
+        "tests/property/test_family_defect_locks.py::test_ntm_detaches_its_recurrent_state",
+        300,
+    ),
+    (
+        "tests/property/test_family_defect_locks.py::test_a_language_task_declares_its_token_lane",
+        300,
+    ),
 )
 
 _MARKER = re.compile(r"^pytest\.mark\.timeout$")

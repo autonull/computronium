@@ -4,6 +4,8 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-20] ✅ **S5h CLOSED (defect classes filed; the row-state gate repaired)** — the six classes the family screens found are now evidence, not prose. Three closed as **refusals in the declared space** (a capability that works): `sec_loop._is_legal` now applies the planner's own three rules (`_is_geometry_task_compatible`, `_target_lane_rule`, `_batch_layout_rule`), so three time-major credits on `cartpole`/`copy_task`, `nca` on a 21-feature task, and `causal_transformer` on a flat classifier are refused by name instead of dying at train time; `nca` gained its grid branch in the geometry×task table. Three remain **defective with a strict-xfail lock**: the language token lane (14 rows on `tiny_shakespeare`/`char_ngram`), `ntm`'s double backward (1 row on `cartpole`), and the family ceiling (6 rows, already locked in S6). The 47 defect rows were re-derived: 26 became `refused` with the rule that refuses them, 21 carry `defect_class` + `failing_test` from the new one register (`sec_loop.DEFECT_LOCKS`). **The gate was dead**: the screen wrote `defect` and `scripts/audit.py` compared `defective`, so `row_without_lock` and `impossible_without_lock` could never fire; `computronium/experiment/sec_status.py` is now the one row-state source (writer, gate, tests), and its necessity test fails when a defective row omits its lock. `scripts/audit.py` exits 0 (full, reading the nine maps).
+
 **Progress:** [2026-11-20] ✅ **S5 SCREENS COMPLETE (vision + graph) and S6d CLOSED** — the vision map now accounts all **52 declared rows**: **45 measured** (37 bound, 8 inert), **4 defective** (the param-box overruns `credit.surrogate` 234,898 / `geometry.attention` 494,986 / `geometry.routing` 234,898 / `geometry.tile` 628,280 over the 150,000 vision ceiling), **26 refused** (family mismatch or unavailable). The graph map accounts **9/9 declared rows measured** (gradient 0.402, feedforward 0.402, graph 0.362 on cora); the other 66 rows are refused at the graph box, so no graph screen remains. **Eight ladder records** (up from the five S6b wrote): `local_contrastive` **tuned** (readout_scale 10 → 0.4018) and `random_projections` **tuned** (feedback_scale 0.1 → 0.3764); `forward_tangent` 0.1653, `pc_alm` 0.1224, `target_inversion` 0.1137, `geometry.conv` 0.1217 and `error_predictive_coding` 0.0980 and `quantized_adam` 0.0999 stay inside the near-chance band and are `unimplemented` with strict-xfail locks. Three instrument defects surfaced and are fixed with locks: `update_map` **dropped the `ladders` table** on every P0 write (`test_a_screen_keeps_the_ladder_table`); the ladder was **credit-only** (axis from the spec id, base from the row's measured box, axis-aware record validation; `test_the_ladder_sweeps_the_primitive_own_axis`); and `LADDER_KNOBS` named fields the update/plasticity/substrate configs do not declare (`step_size`/`momentum`, `trace_decay`, `noise_level`/`sparsity`; `test_the_knob_table_names_the_axis_own_fields`). `sec_ladder --dry-run` no longer runs the cells it printed. **S6d**: `capability_skip` reads an f-string's constant text and reports a reason it cannot read; the 14 findings are closed — 9 rungless factories are `xfail` with the S7 close, the credit-adapter sources are constructed instead of skipped, declared rows say `declared:` literally, and the dead finite-difference test (0 collected params over deleted modules) is deleted. `scripts/audit.py --static` reports **0 findings**.
 
 **Progress:** [2026-11-19] ✅ **S3b COMPLETE (the calibration gate)** — all nine family bases measured at their declared boxes over `CONTROL_SEEDS=3`, each with bar, cost and replay hash (`results/sec/pilot.json`; 9/9 calibrated, and 9/9 controls clear their bar). The calibration exposed four defects, all fixed: `BASE_COORDINATES` was a second source of the base axes (deleted; `BASE_BOXES[*].base_coordinate` is the one source, read by the calibration, screens, P3 and P4); `tiny_shakespeare` declared `(100,)` while its loader emits 128 tokens; the LM base ran on the default MLP instead of its declared causal transformer; the RL base declared recurrent geometry with gradient/instantaneous dynamics, which cannot compute recurrent grads (now feedforward). Added `spiking_mnist` (MNIST frames as binary spike rasters) because the neuromorphic base named a task that did not exist. `Calibration` now carries the `PassBar`, so perplexity and loss bars clear from below (`has_power` reads `clears_task_bar`); the P0/P3 power checks use the same rule. `scripts/probes/todo97_s3b_calibration.py` reproduces the sweep. Open defect: the graph base composes at 200,967 parameters over its 200,000 ceiling because an explicit `geometry.hidden_dim` bypasses `_fit_geometry`; the failing test is `test_the_graph_base_fits_its_declared_ceiling` (strict xfail).
@@ -29,8 +31,10 @@ instrument at it.
 **One sentence:** Eighteen sessions built a microscope; TODO97 migrates the
 563-file scaffolding into a 3-file protocol, fixes the cheap wiring defects
 first, calibrates the nine task families, and screens at boxes that can answer
-the question — vision and graph are accounted (54 rows measured, 4 param-box
-defects named); six families and the size boxes remain.
+the question — all nine families are accounted (243 measured, 21 defective,
+each with a failing test); three defect classes were closed by refusing them
+in the declared space, and the remaining work is S7 kernels, S8 one source,
+and S9 claims.
 
 ---
 
@@ -55,7 +59,7 @@ defects named); six families and the size boxes remain.
 | S5e | Screen every declared vision row; ladder every near-chance bound row | ✅ DONE — 52/52 vision accounted (45 measured, 4 defective, 26 refused); 8 ladder records |
 | S5f | Screen the remaining families at their base boxes | ✅ DONE — tabular 34/34, continual 48 measured + 6 defect, rl 16 + 6, scientific 6, neuromorphic 11, sequence 46 + 6, lm 28 + 25 |
 | S5g | Fix the family-declaration gap the screens exposed | ✅ DONE — every base axis declares its family (lock: `test_every_base_axis_declares_its_family`); lm/scientific/neuromorphic now have declared rows |
-| S5h | File the defects the new screens found | ⏳ PENDING — time-major credits on rl (D18, 1 xfail filed), nca grid (D16), causal_transformer vocabulary, ntm double backward, lm token layout (25 rows) |
+| S5h | File the defects the family screens found; repair the row-state gate | ✅ DONE — 6 classes: 3 refused by the declared space, 3 locked (token lane, ntm, ceiling); 47 rows re-derived |
 | S6a | Audit gate, static predicates | ✅ DONE — `scripts/audit.py` |
 | S6b | Audit measurement gate (5 ladders) | ✅ DONE — 2 tuned, 3 unimplemented; audit 0 |
 | S6c | Six completeness predicates in `scripts/audit.py` | ✅ DONE — 0 findings |
@@ -78,42 +82,45 @@ defective; budget-aware sizing stays the close condition.
 
 ### Remaining work (dependency order, 2026-11-20)
 
-1. **S5h — file the six defect classes the family screens found.** Each is
-   `defect` with a named mechanism in its map row; the failing test is the
-   deliverable:
-   - **D18, time-major credit on a batch-major task**: `eligibility_prop`,
-     `rtrl_reference`, `unbiased_rtrl` compose on `cartpole`/`copy_task` and
-     die at train time (`got x (1, 4)` / `(32, 21)`). Close: declare
-     `DomainTask.batch_layout` and refuse a credit that disagrees in the
-     declared space. Locked by
-     `test_a_time_major_credit_is_refused_on_a_batch_major_task` (strict xfail).
-   - **D16, NCA guesses its grid**: `nca` on `copy_task` requires 784
-     features for a 28×28 grid and ignores the task's 21. Close: size the grid
-     from `input_shape`.
-   - **causal_transformer assumes a class vocabulary**: `copy_task` raises
-     "Class values must be smaller than num_classes"; `cartpole` raises
-     "Tensor can't be converted to Scalar". Close: a shape/domain contract or
-     a refusal for non-class tasks.
-   - **ntm reuses the graph**: `cartpole` raises "backward through the graph a
-     second time". Close: detach the recurrent state between steps.
-   - **attention over the family ceiling**: 397,064 (`copy_task`) / 394,114
-     (`cartpole`) > 150k; measured 593,819 at its 600k box. Covered by the
-     S6 ceiling lock.
-   - **language token layout (lm)**: 25 rows crash on `tiny_shakespeare`
-     because a token-id input (`Long`) and a `(batch, seq)` target are not
-     carried into the geometry/credit contract (`normal_kernel_cuda` not
-     implemented for `Long`, `4096 vs 32`, `0D or 1D target`). Close: declare
-     the language task's input dtype/layout and refuse or adapt the contract.
-2. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
+1. ~~**S5h — file the six defect classes**~~ ✅ done. The three classes the
+   declared space can refuse are **closed as refusals**: `sec_loop._is_legal`
+   now reads the planner's three rules, so `eligibility_prop`/`rtrl_reference`/
+   `unbiased_rtrl` on a flat task, `nca` on a 21-feature task, and
+   `causal_transformer` on a flat classifier are refused by name. The rows
+   became `refused` with the rule as their trigger (26 rows). The three
+   remaining classes carry a strict-xfail lock and a `defect_class` on every
+   row: `token_lane` (14 rows; lock
+   `test_a_language_task_declares_its_token_lane`), `recurrent_state_detach`
+   (1 row; `test_ntm_detaches_its_recurrent_state`), and `ceiling_overrun`
+   (6 rows; `test_a_box_overrun_fits_its_family_ceiling`). The row-state
+   vocabulary is one source (`computronium/experiment/sec_status.py`); the
+   gate now reports a defective row without its lock.
+2. **Close the 21 defective rows** — each has a failing test, so each is a
+   named mechanism, not a gap:
+   - **token lane (14)**: declare the language task's input dtype and
+     per-token target on `TaskShape` and refuse (or adapt) a geometry/credit
+     that cannot read them. Close condition: the lock's two cases pass —
+     `feedforward` on `tiny_shakespeare` and `causal_transformer` on
+     `char_ngram` train, or the declared space refuses them.
+   - **recurrent state detach (1)**: detach `ntm`'s recurrent state between
+     steps so the second `backward` has a live graph. Close condition:
+     `test_ntm_detaches_its_recurrent_state` passes on `cartpole`.
+   - **budget-aware sizing (6)**: `_fit_geometry` must enforce the family
+     ceiling when an explicit `hidden_dim` is set (the same defect the graph
+     base's 200,967/200,000 lock names). Close condition: the ceiling lock
+     passes at the declared box.
+3. **S7 — ten kernel wrappers.** `tests/acceleration/test_backend_reach.py`
    carries 9 `xfail` factories (ff, fa, tp, tile, pcalm, dfa, spiking_snn,
    fast_weight, pepita) whose rung does not attach; each is a wrapper over an
    existing acceleration module (§7). A kernel is claimed only with a kill test
    and measured parity.
-3. **S8 — map + docs from one source.** `scripts/audit.py` now reads the nine
-   family maps; README/method cards still regenerate from a second table. Maps
-   written before 2026-11-20 07:37 carry no `measurement.primary` (the row still
-   carries `val_acc`/`loss` and its ruler); a re-screen adds it.
-4. **S9 — five pre-registered claims.** The two tuned coordinates
+4. **S8 — map + docs from one source.** `scripts/audit.py` reads the nine
+   family maps; README/method cards still regenerate from a second table.
+   Artifact note: maps written before this session carry `defect` and lack
+   `defect_class`/`failing_test`; a re-screen now writes `defective` and
+   stamps the class. The 47 old defect rows were re-derived locally (26
+   refused, 21 stamped) — a fresh clone re-derives them by screening.
+5. **S9 — five pre-registered claims.** The two tuned coordinates
    (`local_contrastive` 0.4018, `random_projections` 0.3764) are the first
    candidates; each needs a pre-registered `n_max`, 5 paired seeds and a CI
    against the control. A claim within 1σ of its bar is `marginal`.
@@ -205,12 +212,13 @@ verdict, or a capability that works — never on "tests consolidated".
 4. ~~**S3b**~~ ✅ done: 9/9 family bases calibrated (3 seeds, bar, cost,
    replay hash); the graph base's 200,967-parameter ceiling defect is filed
    as a strict xfail.
-5. **S7 — NEXT** — point the 10 verified primitives at the existing
-   acceleration modules; flip their `kernel_status` to `implemented` and
-   satisfy `test_implemented_kernel_carries_its_evidence`.
-6. **S6d** — close the audit's blind spot on non-literal skip reasons (§8.2);
-   the gate must see the 28 f-string/variable skips before it can claim
-   "0 capability skips".
+5. ~~**S5h**~~ ✅ done: the six screen defect classes are filed — three closed
+   as declared-space refusals, three locked (token lane, ntm detach, ceiling);
+   the row-state gate reads one vocabulary (`sec_status.RowStatus`) and
+   `scripts/audit.py` exits 0 over the nine maps.
+6. **Close the 21 defective rows — NEXT** — the three locks' close conditions
+   (§Remaining work 2), then **S7** (10 kernel wrappers), **S8** (map + docs
+   from one source), **S9** (5 pre-registered claims).
 
 ---
 
@@ -752,6 +760,7 @@ capability skip must be a finding, an environment f-string must not be.
 | **S4 Ladders** | 3-point ladders for the near-chance rows | 9 triaged: 2 tuned, 7 unimplemented with a lock | An untriaged row |
 | **S5 Screens** | Vision + graph: every declared row screened at its family box | ✅ 52/52 vision accounted, 9/9 graph measured; 45+9 measured | A screen on MNIST for a sequence primitive |
 | **S5b–S5g Families** | Screen sequence, tabular, continual, rl, neuromorphic, lm, scientific declared rows | 155 rows with verdict | A screen on a family with no control |
+| **S5h Defect filing** | ✅ File the six screen defect classes; one row-state source | 0 defective rows without a failing test; audit 0 | A defect class named in prose |
 | **S6 Ceilings** | Measure the 4 param-box overruns at the proper task (surrogate, attention, routing, tile) and causal_transformer on sequence | 4 unimplemented rows with a failing test, a measured box, and a cost | An unimplemented row with no failing test |
 | **S6d Skip scan** | ✅ Scanner reads f-strings and reports non-literal reasons; 14 findings closed | 0 capability skips | A non-literal skip the gate cannot read |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
@@ -770,7 +779,8 @@ ladder runs before its family has a control; no row is closed as "gap".
    analytic invariant, and a fingerprint.
 2. **0 unaccounted rows.** Every declared `(primitive, family, box)` row is
    `measured`, `unimplemented` (with a failing test), `defective` (with a
-   failing test), or `impossible` (with a refusal test + a necessity test).
+   failing test), `impossible` (with a refusal test + a necessity test), or
+   `refused` (a box statement: its trigger names the rule or the scope).
 3. **0 capability skips and no "gap" label.** A capability `pytest.skip` is a
    test defect; the map carries the four states only.
 4. **0 open defects at the audit.** `defective == 0`; the adapter defect
@@ -852,11 +862,18 @@ uv run python -m computronium.experiment.sec_ladder          # every row
 uv run python -m computronium.experiment.sec_ladder --only <id>
 uv run python -m computronium.experiment.sec_ladder --dry-run  # prints, runs nothing
 
-# 7. Remaining families (NEXT): one out dir per family base task
+# 7. Remaining families (DONE — nine maps): one out dir per family base task
 uv run python -m computronium.experiment.sec_loop --track P0 \
   --axis <axis> --max-primitives 60 --task <char_ngram|iris|copy_task|cartpole|spiking_mnist> \
   --out results/sec_<family> --device cuda
 #    then sec_ladder on that map, then the audit with the new map in MAPS
+
+# 8. Defect classes + the row-state gate (DONE, 2026-11-20)
+uv run python -m pytest tests/property/test_family_defect_locks.py \
+  tests/property/test_row_state_gate.py -q
+uv run python scripts/audit.py          # 0 findings over the nine maps
+#    a re-screen now writes RowStatus ("defective", "refused", ...) and stamps
+#    defect_class + failing_test from sec_loop.DEFECT_LOCKS
 ```
 
 ---
@@ -879,6 +896,10 @@ uv run python -m computronium.experiment.sec_loop --track P0 \
 - **Accepting "defeat" without a failing test and a named mechanism.**
 - **Quoting a plan count the artifacts do not carry.**
 - **Closing a session on "tests consolidated" or "docs regenerated".**
+- **Writing a row state the gate does not read** (`defect` vs `defective` made
+  two lock predicates dead for a session).
+- **Publishing a defect class as prose**; a class is filed by landing its
+  failing test.
 
 ---
 
@@ -891,6 +912,7 @@ uv run python -m computronium.experiment.sec_loop --track P0 \
 **Every row is impossible, unimplemented, or defective — and only impossible may be quiet.**
 **Impossible is proved: a refusal test and a necessity test, or it is not impossible.**
 **Unimplemented and defective are failing tests; a skip is a test defect.**
+**The screen and the audit read one row-state source; a state nobody reads is a comment.**
 **0 unaccounted rows is the completeness gate; 0 open defects is the quality gate.**
 **No backwards compatibility: the old shape is deleted, not aliased.**
 

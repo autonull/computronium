@@ -289,6 +289,12 @@ def _is_geometry_task_compatible(
     if geometry == "conv":
         return rank >= 3
 
+    # nca updates a cell grid, so it needs the task's real H and W. A flat
+    # feature vector has no grid: sizing 28x28 from a constant ignored a
+    # 21-feature task and died at the first update (measured: copy_task).
+    if geometry == "nca":
+        return rank >= 3
+
     # The causal transformer's token mode shifts targets per token. A flat
     # classifier input is read as a token sequence whose labels are per
     # sample, which the settle nudge cannot broadcast (measured: iris refused

@@ -20,7 +20,7 @@ import json
 import logging
 import math
 import time
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -33,6 +33,7 @@ from computronium.experiment.kernel.compose import compose_configs
 from computronium.experiment.kernel.evaluate import (
     CellEvaluation,
     EvaluationError,
+    TaskShape,
     evaluate_cell,
     record_from_evaluation,
 )
@@ -58,8 +59,11 @@ from computronium.experiment.sec_census import (
     build_census,
 )
 from computronium.experiment.sec_pilot import base_schedule, resource_vector
+from computronium.experiment.sec_status import CELL_STATUS, RowStatus
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.experiment.sec_interaction import (
         InteractionCell,
         InteractionEffect,
@@ -445,6 +449,102 @@ CEILING_LOCK = (
     "tests/property/test_pilot_calibration.py"
     "::test_a_box_overrun_fits_its_family_ceiling"
 )
+#: The locks for the defect classes the family screens found (TODO97 S5h).
+#: A row stamps its class and the lock the audit reads, so a defect cannot be
+#: published without a failing test.
+TIME_MAJOR_LOCK = (
+    "tests/property/test_family_defect_locks.py"
+    "::test_a_time_major_credit_is_refused_on_a_flat_task"
+)
+GRID_LOCK = (
+    "tests/property/test_family_defect_locks.py::test_nca_refuses_a_flat_feature_task"
+)
+CLASS_VOCABULARY_LOCK = (
+    "tests/property/test_family_defect_locks.py"
+    "::test_a_causal_transformer_refuses_a_flat_classifier_task"
+)
+NTM_LOCK = (
+    "tests/property/test_family_defect_locks.py::test_ntm_detaches_its_recurrent_state"
+)
+LM_LANE_LOCK = (
+    "tests/property/test_family_defect_locks.py"
+    "::test_a_language_task_declares_its_token_lane"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DefectLock:
+    """One defect class, the symptom that names it, and its lock.
+
+    The symptom is the mechanism the traceback exposed, routed to the class
+    the screen files it under; the lock is the test that passes only when the
+    mechanism is fixed. Rows in this class share one lock, so the table is the
+    defect register, not a per-row restatement.
+    """
+
+    name: str
+    lock: str
+    matches: Callable[[str, str], bool]
+
+
+def _is_language_task(task: str) -> bool:
+    """Whether the task declares the language domain (one source: the registry)."""
+    from computronium.experiment.kernel.search_space import _task_domain
+
+    return _task_domain(task) == "language"
+
+
+DEFECT_LOCKS: tuple[DefectLock, ...] = (
+    # The language task's token lane (dtype, per-token target) is not carried
+    # into the geometry/credit contract.
+    DefectLock(
+        "token_lane",
+        LM_LANE_LOCK,
+        lambda task, _defect: _is_language_task(task),
+    ),
+    DefectLock(
+        "ceiling_overrun",
+        CEILING_LOCK,
+        lambda _task, defect: defect.startswith("param_count"),
+    ),
+    DefectLock(
+        "time_major_credit",
+        TIME_MAJOR_LOCK,
+        lambda _task, defect: (
+            "a sequence geometry reads x (time, batch, input)" in defect
+        ),
+    ),
+    DefectLock(
+        "grid_from_input_shape",
+        GRID_LOCK,
+        lambda _task, defect: "grid requires" in defect,
+    ),
+    DefectLock(
+        "class_vocabulary",
+        CLASS_VOCABULARY_LOCK,
+        lambda _task, defect: "Class values must be smaller than num_classes" in defect,
+    ),
+    DefectLock(
+        "recurrent_state_detach",
+        NTM_LOCK,
+        lambda _task, defect: "backward through the graph a second time" in defect,
+    ),
+)
+
+
+def defect_lock(task: str | None, defect: str) -> DefectLock | None:
+    """The declared class a defect belongs to, or ``None`` when unfiled.
+
+    An unfiled defect leaves the row without a lock, and the audit reports it:
+    a defect class is filed by landing its failing test, never by naming it in
+    prose.
+    """
+    for row in DEFECT_LOCKS:
+        if row.matches(task or "", defect):
+            return row
+    return None
+
+
 P0_HIDDEN_DIM = 128
 # The parameter ceiling is the base box's own field (``Schedule.param_budget``),
 # not a second literal: a 10k ceiling with a 128-wide layer was an impossible
@@ -718,25 +818,70 @@ def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinat
     )
 
 
-def _is_legal(coord: Coordinate, task_id: str = "mnist") -> tuple[bool, str | None]:
+def _declared_refusal(coord: Coordinate, shape: TaskShape, task_id: str) -> str | None:
+    """The declared-space rule this cell violates, else ``None``.
+
+    The planner (:func:`search_space.iter_candidates`) applies these three
+    rules before it proposes a cell; the screen must read the same source, or
+    a cell the space refuses composes here and dies at train time (measured:
+    three time-major credits on ``cartpole``, nca on a 21-feature task, a
+    causal transformer on a flat classifier).
+    """
+    from computronium.experiment.kernel.search_space import (
+        _batch_layout_rule,
+        _is_geometry_task_compatible,
+        _target_lane_rule,
+    )
+
+    if not _is_geometry_task_compatible(coord.geometry, shape, task_id):
+        return (
+            f"geometry={coord.geometry} cannot read {task_id}'s "
+            f"input shape {shape.input_shape}"
+        )
+    for rule in (
+        _target_lane_rule(coord, shape.target_kind),
+        _batch_layout_rule(coord, shape.batch_layout),
+    ):
+        if rule is not None:
+            return rule
+    return None
+
+
+def _is_legal(
+    coord: Coordinate, task_id: str = "mnist", shape: TaskShape | None = None
+) -> tuple[bool, str | None]:
     """Ask the system's own validator whether this cell can exist on the task.
 
     The task's declared ``input_shape``/``output_dim`` are the geometry facts;
     validating every candidate against MNIST's shape admits cells (a causal
     transformer on a 4-feature table) that then fail at training time, and a
     CUDA fault inside one such cell poisons the context for every later row.
+    The declared-space rules run first: a cell the planner would never propose
+    is refused here by name, not discovered inside the cell.
     """
+    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.registry.task_registry import TaskRegistry
 
     spec = TaskRegistry().get(task_id)
-    if spec.input_shape is None or spec.output_dim is None:
+    if shape is None:
+        try:
+            shape = task_shape(task_id, "cpu")
+        except Exception:  # ruff: ignore[blind-except] - a shape-less task uses its declaration
+            shape = None
+    if shape is not None:
+        refusal = _declared_refusal(coord, shape, task_id)
+        if refusal is not None:
+            return False, refusal
+    input_shape = spec.input_shape if shape is None else shape.input_shape
+    output_dim = spec.output_dim if shape is None else shape.output_dim
+    if input_shape is None or output_dim is None:
         return False, f"{task_id}: task declares no input shape or output dimension"
     try:
         compose_configs(
             coordinate=coord,
             geometry={},
-            input_shape=spec.input_shape,
-            output_dim=spec.output_dim,
+            input_shape=input_shape,
+            output_dim=output_dim,
         )
     except ValueError as exc:
         return False, str(exc)
@@ -750,6 +895,7 @@ def _iter_legal_coordinates(
     limit: int = 64,
     own_knobs: bool = False,
     task_id: str = "mnist",
+    shape: TaskShape | None = None,
 ) -> list[Coordinate]:
     """Compose-legal boxes for a primitive, nearest-to-default first.
 
@@ -760,7 +906,7 @@ def _iter_legal_coordinates(
     """
     if not entry.available:
         return []
-    primitive_key = entry.id.split(".")[-1] if "." in entry.id else entry.id
+    primitive_key = entry.id.rsplit(".", 1)[-1]
     axis = axis_segment(entry.axis)
     base = _base_axes(task_id)
     base[axis] = primitive_key
@@ -768,7 +914,7 @@ def _iter_legal_coordinates(
 
     def emit(axes: dict[str, str]) -> Coordinate | None:
         coord = _coordinate(axes, own_knobs=own)
-        ok, _ = _is_legal(coord, task_id)
+        ok, _ = _is_legal(coord, task_id, shape)
         return coord if ok else None
 
     seen_keys: set[tuple[tuple[str, str], ...]] = set()
@@ -974,6 +1120,23 @@ def _defect_for(
     ), within
 
 
+def _refusal_reason(
+    entry: PrimitiveCensusEntry, task_id: str, axis: str, primitive_key: str
+) -> str:
+    """Why the primitive's own row composes no box at the base, by name.
+
+    A slice that refuses every candidate names the rule it hit, so the row is
+    a box statement (``refused``) rather than a silent unmeasured row.
+    """
+    fallback = "no legal box or not available"
+    if not entry.available:
+        return fallback
+    axes = _base_axes(task_id)
+    axes[axis] = primitive_key
+    _, why = _is_legal(_coordinate(axes), task_id)
+    return why or fallback
+
+
 def _screen_coordinate(  # ruff: ignore[too-many-arguments]
     entry: PrimitiveCensusEntry,
     candidates: list[Coordinate],
@@ -1001,7 +1164,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             "track": "P0",
             "primitive": entry.id,
             "status": "UNAVAILABLE",
-            "reason": "no legal box or not available",
+            "reason": _refusal_reason(entry, schedule.task_id, axis, primitive_key),
             "ruler": ruler,
             "box": _box_summary(_coordinate(_base_axes(schedule.task_id)), schedule),
             "rule": "refused at the base box",
@@ -1126,8 +1289,10 @@ def _screen_entries(
     own_knobs: bool,
 ) -> list[dict[str, Any]]:
     """Screen every entry at the base box: one cell each, refusals included."""
+    from computronium.experiment.kernel.evaluate import task_shape
     from computronium.experiment.sec_pilot import refusal_for
 
+    shape = task_shape(schedule.task_id, schedule.device)
     cells: list[dict[str, Any]] = []
     for entry in entries:
         family_reason = refusal_for(entry, schedule.task_id)
@@ -1145,6 +1310,7 @@ def _screen_entries(
                     limit=P0_MAX_COORDINATES,
                     own_knobs=own_knobs,
                     task_id=schedule.task_id,
+                    shape=shape,
                 ),
                 schedule,
                 control_acc=control_acc,
@@ -1183,9 +1349,9 @@ def run_p0_track(
         map_data = json.loads(map_path.read_text())
         for prim_id, entry in map_data.get("primitives", {}).items():
             if entry.get("last_screened") and entry.get("status") in {
-                "measured",
-                "defect",
-                "refused",
+                RowStatus.MEASURED,
+                RowStatus.DEFECTIVE,
+                RowStatus.REFUSED,
             }:
                 screened_primitives.add(prim_id)
 
@@ -2126,7 +2292,7 @@ def _map_row(
         "primitive": entry.id,
         "axis": entry.axis,
         "capability": entry.capability_card,
-        "status": "unmeasured",
+        "status": RowStatus.UNMEASURED.value,
         "binding": None,
         "binding_reason": None,
         "task": None,
@@ -2143,25 +2309,17 @@ def _map_row(
         "last_screened": None,
     }
     if not entry.available:
-        row["status"] = "refused"
+        row["status"] = RowStatus.REFUSED.value
         row["trigger"] = entry.unavailable_reason
         return row
     if cell is None:
         return row
 
-    status = {
-        "MEASURED": "measured",
-        "DEFECT": "defect",
-        "UNAVAILABLE": "refused",
-    }[cell["status"]]
+    status = CELL_STATUS[cell["status"]]
     row["status"] = status
     row["last_screened"] = datetime.now().isoformat()
     row["trigger"] = cell.get("reason")
     row["defect"] = cell.get("defect") or cell.get("error")
-    if row["defect"] and str(row["defect"]).startswith("param_count"):
-        # A ceiling overrun is closed by budget-aware sizing; the lock is one
-        # test for the class, so the row names it instead of a second table.
-        row["failing_test"] = CEILING_LOCK
     if "box" in cell:
         box = cell["box"]
         row["box"] = box
@@ -2185,7 +2343,12 @@ def _map_row(
             # The replay hash is the record's provenance, not a second hash:
             # a row whose claim cannot be replayed is not reproducible.
             row["replay_hash"] = record["provenance"]["code_sha"]
-    if status == "measured":
+    if row["defect"]:
+        lock = defect_lock(row["task"], str(row["defect"]))
+        if lock is not None:
+            row["defect_class"] = lock.name
+            row["failing_test"] = lock.lock
+    if status is RowStatus.MEASURED:
         row["measurement"] = {
             "val_acc": cell.get("val_acc"),
             "loss": cell.get("loss"),
@@ -2349,10 +2512,10 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
         + ", ".join(
             f"{status}={totals.get(status, 0)}"
             for status in (
-                "measured",
-                "defect",
-                "refused",
-                "unmeasured",
+                RowStatus.MEASURED,
+                RowStatus.DEFECTIVE,
+                RowStatus.REFUSED,
+                RowStatus.UNMEASURED,
             )
         )
     )
@@ -2362,12 +2525,16 @@ def _print_map_report(map_data: dict[str, Any]) -> None:
         )
         print(f"  {axis:22} {detail}")
     defects = [
-        row for row in map_data["primitives"].values() if row["status"] == "defect"
+        row
+        for row in map_data["primitives"].values()
+        if row["status"] == RowStatus.DEFECTIVE
     ]
     for row in defects:
         print(f"  defect: {row['primitive']} — {row['defect']}")
     refused = [
-        row for row in map_data["primitives"].values() if row["status"] == "refused"
+        row
+        for row in map_data["primitives"].values()
+        if row["status"] == RowStatus.REFUSED
     ]
     for row in refused:
         print(f"  refused: {row['primitive']} — {row['trigger']}")
@@ -2527,7 +2694,7 @@ def main() -> None:
             p0_candidates = [
                 k
                 for k, v in map_data.get("primitives", {}).items()
-                if v.get("status") == "measured" and v.get("binding") == "bound"
+                if v.get("status") == RowStatus.MEASURED and v.get("binding") == "bound"
             ]
             logger.info(f"P1 from map: {len(p0_candidates)} measured, bound primitives")
     else:

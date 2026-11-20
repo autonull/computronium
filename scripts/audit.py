@@ -25,6 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from computronium.experiment.sec_status import RowStatus, missing_locks, row_state
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -364,8 +366,10 @@ def capability_skip(tests: Path = TESTS) -> list[Finding]:
     return findings
 
 
-def _map_rows() -> Iterable[tuple[Path, str, dict]]:
-    for map_path in MAPS:
+def _map_rows(
+    maps: Iterable[Path] | None = None,
+) -> Iterable[tuple[Path, str, dict]]:
+    for map_path in MAPS if maps is None else maps:
         if not map_path.exists():
             continue
         document = json.loads(map_path.read_text(encoding="utf-8"))
@@ -373,15 +377,13 @@ def _map_rows() -> Iterable[tuple[Path, str, dict]]:
             yield map_path, spec_id, row
 
 
-def impossible_without_lock() -> list[Finding]:
+def impossible_without_lock(maps: Iterable[Path] | None = None) -> list[Finding]:
     """A quiet ``impossible`` row without a refusal test and a necessity test."""
     findings = []
-    for map_path, spec_id, row in _map_rows():
-        if row.get("status") != "impossible":
+    for map_path, spec_id, row in _map_rows(maps):
+        if row.get("status") != RowStatus.IMPOSSIBLE:
             continue
-        missing = [
-            key for key in ("refusal_test", "necessity_test") if not row.get(key)
-        ]
+        missing = missing_locks(row)
         if missing:
             findings.append(
                 Finding(
@@ -392,24 +394,35 @@ def impossible_without_lock() -> list[Finding]:
     return findings
 
 
-def quiet_row_without_lock() -> list[Finding]:
-    """A ``gap`` label anywhere, or an unimplemented row without a failing test.
+def row_without_lock(maps: Iterable[Path] | None = None) -> list[Finding]:
+    """A row whose state owes a test it does not name, or an unknown state.
 
-    ``unimplemented`` and ``defective`` rows are always failing tests; "gap"
-    is retired vocabulary (TODO97 §0.2). The register's ``refused`` means the
-    declared family excludes the task, so it is scope, not a row state.
+    ``unimplemented`` and ``defective`` rows are failing tests; ``impossible``
+    owes a refusal and a necessity test. A ``refused`` row is a box statement
+    and is quiet by declaration. "gap" is retired vocabulary (TODO97 §0).
     """
     findings = []
-    for map_path, spec_id, row in _map_rows():
+    for map_path, spec_id, row in _map_rows(maps):
         status = row.get("status")
-        labelled = status == "gap" or "gap" in json.dumps(row).lower()
-        if labelled:
-            findings.append(Finding("quiet_row_without_lock", f"{spec_id}: gap label"))
-        if status in {"unimplemented", "defective"} and not row.get("failing_test"):
+        if row_state(row) is None:
             findings.append(
                 Finding(
-                    "quiet_row_without_lock",
-                    f"{map_path.name}:{spec_id} {status} without a failing test",
+                    "row_without_lock",
+                    f"{map_path.name}:{spec_id} has no declared state: {status!r}",
+                )
+            )
+            continue
+        if status == RowStatus.REFUSED:
+            continue
+        labelled = "gap" in json.dumps(row).lower()
+        if labelled:
+            findings.append(Finding("row_without_lock", f"{spec_id}: gap label"))
+        missing = missing_locks(row)
+        if missing:
+            findings.append(
+                Finding(
+                    "row_without_lock",
+                    f"{map_path.name}:{spec_id} {status} missing {', '.join(missing)}",
                 )
             )
     return findings
@@ -484,7 +497,7 @@ CHECKS: dict[str, Callable[[], list[Finding]]] = {
     "kernel_stub_pass": kernel_stub_pass,
     "capability_skip": capability_skip,
     "impossible_without_lock": impossible_without_lock,
-    "quiet_row_without_lock": quiet_row_without_lock,
+    "quiet_row_without_lock": row_without_lock,
     "unaccounted_row": unaccounted_row,
     "claim_count_mismatch": claim_count_mismatch,
     "compatibility_alias": compatibility_alias,
