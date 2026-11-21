@@ -410,13 +410,29 @@ edit pass, then one gate block, then one measurement (§10).
 | T1 | declare `AXIS_KIND` (6 rows: 4 carrier, 2 signal) and expose `Law.kind` through `comp test --surface` | `experiment/schema/axis.py`, `primitives/surface.py` | +6 rows, +1 field |
 | T2 | `fit.control` dispatches on `kind`: carriers return the companion cell, signals the zeroed channel. Delete the four-way companion match and the per-axis dispatch; the two signal proxies stay | `primitives/fit.py` | −60 / +40 |
 | T3 | `fit.decide` gains the carrier verdict (`digest(law) != digest(companion)`); `test defect` only for a signal law; L-c reads digest, then fit | `primitives/fit.py`, `scripts/probes/p1_law_surface.py` | edit |
-| T4 | `--kind carrier\|signal` selects a class in the batch, so the 200-step box runs only on signal laws | `scripts/probes/p1_law_surface.py` | +1 flag |
+| T4 | `--only {all,unmeasured,signal,carrier}` selects a class: `unmeasured` reads the screen cache so the fit is bought only where no row exists | `scripts/probes/p1_law_surface.py` | +1 flag |
 | T5 | locks: `test_a_carrier_law_is_tested_by_its_digest`, `test_a_signal_law_is_tested_by_its_fit`; retitle the two fit locks "signal" | `tests/primitives/test_surface_fit.py` | +2 tests |
 
+**Allocation: the digest is free, the fit is priced.** 55 of the 75 laws
+already carry a measured family row (§1); **20** carry no law-level evidence —
+the 10 with no measured row ∪ the 11 ladder-`unimplemented`, less `conv`. The
+batch spends accordingly:
+
+| Applied to | Instrument | Cost |
+|---|---|---|
+| all 75 | the digest: L-a plus carrier-vs-companion equality | µs each |
+| the 20 informative laws, plus any law whose digest fails | the fit, its control and L-c | ~0.3–1 s each |
+| the 55 already measured | reuse the row; buy no new fit | 0 |
+
+The 55 are not re-tested to confirm a number the repository published; a fit
+adds evidence only where a law has none. The 200-step box therefore runs on
+~20 laws, not 75 — measured, not guessed (26 laws at 60 steps cost 188 s, so
+the box is minutes, not seconds).
+
 **After T5 (expected):** 49 carrier rows from µs digests, 26 signal rows from
-fits, 0 `test defect` from companions, 0 retracted declaration defects, and the
-declared 200-step box costs ~15 s because it runs on 26 laws. Exit 0 requires
-every signal law to keep a failing control and every carrier digest to differ.
+fits (of which ~20 are new evidence), 0 `test defect` from companions, 0
+retracted declaration defects. Exit 0 requires every signal law to keep a
+failing control and every carrier digest to differ.
 
 **Do not** buy the 200-step box for all 75 first: it prices an instrument the
 fork is about to replace (measured: 354 s for the 60-step box, and the fit is
@@ -468,6 +484,20 @@ seed); its biggest-swing lever is the box, and P1 already proved the law.
 - **The search space is L-c's output**: HPO sweeps only the knobs that moved
   a fit (plus the declared availability predicates). A dead knob in the search
   space is wasted trials, and L-c names it for free.
+
+**The first ladder and the first claim are named, not implied.** The loop's
+first ladder runs on the highest-`works` signal law at its cheapest family —
+`update.adam` on `mnist` is the current candidate — 3 points on
+`update.step_size` plus 1 confirmation seed, recorded as a coordinate range.
+The first claim is that coordinate at a pre-registered `n_max = 5`
+(`configs/preregistrations/` committed before the first seed), using the
+screen cache's row where it exists. Until it lands, the 5 existing E3 rows
+(`results/sec_claims/claims.json`) are the branch's claim-grade evidence, and
+`comp gate breadth` (17/17) is the cross-family one.
+
+A session that ends without a named ladder target has not entered the loop:
+the surface is the entry ticket, and one ladder plus one claim is the price of
+admission.
 
 ### P5 — Kernels, priced per module, only for clean laws
 
@@ -522,8 +552,10 @@ E1; a width search is not a mechanism fix.
   ≈ 1–89 s per seed, ×5 for E2. Spend the first, buy the second only where the
   loop will act.
 - **The fork is the measured price.** 75 laws at 60 steps cost 354 s at 12
-  lanes; the fork makes the declared 200-step box a 26-law box (~15 s). A
-  200-step box over all 75 prices 49 laws the digest decides.
+  lanes; 26 of them (wave 2) cost 188 s. The digest decides 49 laws in µs, so
+  the fit's 200-step box runs on the 20 laws with no measured row — and the
+  other 55 reuse their row. A 200-step box over all 75 prices laws the digest
+  already decides and rows the repository already published.
 - **The batch is the unit of spend.** A wave is one process tree at 12 lanes;
   a single law is a debugging step, not a session. 300 fits ≈ 105 s serial,
   under a minute at 12 lanes.
@@ -584,15 +616,18 @@ uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 uv run python -m pytest tests/primitives/test_surface_fit.py \
   tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # Law.kind printed; 75 laws, 6 seams
-# the carrier box (digests) and the signal box (fits), one process each
-uv run python scripts/probes/p1_law_surface.py --kind carrier \
+# the digests first (µs each), then the fit only where no row exists
+uv run python scripts/probes/p1_law_surface.py --only carrier \
   --lanes 12 --row-budget 150 --out results/p1
-uv run python scripts/probes/p1_law_surface.py --kind signal --resume \
-  --steps 200 --row-budget 60 --out results/p1
+uv run python scripts/probes/p1_law_surface.py --only unmeasured --resume \
+  --steps 200 --row-budget 120 --out results/p1
+# 3. SEC admission: one ladder, one claim (§4 P4)
+uv run python scripts/probes/a3_ladder_epc.py --help   # the ladder instrument
+uv run comp gate breadth                             # 17/17 stays green
 # exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial class.
 # Do not re-run interactively to "check" a nonzero exit.
 # --resume never re-runs a finished row, and a later run never erases an
-# earlier one's verdicts. The 200-step box applies to the signal class only.
+# earlier one's verdicts. The 200-step box applies to the unmeasured class.
 
 # 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q
@@ -647,11 +682,12 @@ uv run pyright computronium/primitives/fit.py
 uv run python -m pytest tests/primitives/test_surface_fit.py \
   tests/primitives/test_surface_lock.py -q
 # 3. the measurement, background, polled at <=2 min, one log per run
-nohup uv run python scripts/probes/p1_law_surface.py --kind carrier \
-  --lanes 12 --row-budget 150 --out results/p1 > logs/p1_carrier.log 2>&1 &
-uv run python scripts/probes/p1_law_surface.py --kind signal --resume \
-  --steps 200 --row-budget 60 --out results/p1
-# 4. one commit: plan, instrument, locks, measurement
+nohup uv run python scripts/probes/p1_law_surface.py --only carrier \
+  --lanes 12 --row-budget 150 --out results/p1 > logs/p1_digest.log 2>&1 &
+uv run python scripts/probes/p1_law_surface.py --only unmeasured --resume \
+  --steps 200 --row-budget 120 --out results/p1
+# 4. one ladder on the best works row, one pre-registered claim OR nothing
+# 5. one commit: plan, instrument, locks, measurement
 ```
 
 Rules for the session:
@@ -664,3 +700,6 @@ Rules for the session:
   they are one rule (the fork); each ticket is not its own commit.
 - **Leave the plan as the queue.** A landed ticket leaves §4; an open one stays
   with its file, its size and its command.
+- **A session ends at the loop's door or inside it.** A green table is the
+  entry ticket; the session's result is a ladder coordinate or a claim, and a
+  session that stops at the table says so and names next session's ladder.
