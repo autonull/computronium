@@ -347,3 +347,151 @@ def test_a_ladder_point_the_declared_space_refuses_is_not_trained() -> None:
         for rung in record.rungs
     )
     assert record.verdict == "unimplemented"
+
+
+def test_a_ladder_runs_at_its_rows_box() -> None:
+    """The ladder's base is the screened row's box, not a compose default.
+
+    Measured 2026-11-20 (S9b): the ladder rebuilt the coordinate from the six
+    axes alone, so ``energy_minimization``'s factor-1.0 rung measured 0.2176
+    against the row's 0.8709: the base's structural params were dropped, and
+    the row's own knob value never entered the ladder.
+    """
+    from computronium.experiment.sec_ladder import _ladder_setup, ladder_knob
+    from computronium.experiment.sec_loop import _params_for
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+    row = {
+        "task": "mnist",
+        "axis": "dynamics",
+        "box": {
+            "substrate": "digital",
+            "geometry": "feedforward",
+            "dynamics": "pc_alm",
+            "plasticity": "null",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    }
+    _, _, base = _ladder_setup("primitive.state_dynamics.pc_alm", row, None, schedule)
+    expected = _params_for(
+        {
+            "substrate": "digital",
+            "geometry": "feedforward",
+            "dynamics": "pc_alm",
+            "plasticity": "null",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+        own_knobs="dynamics",
+    )
+
+    assert base.params == expected
+    assert base.params["dynamics.step_size"] == 0.1
+    assert ladder_knob("primitive.state_dynamics.pc_alm", base, "dynamics") == (
+        "dynamics.step_size",
+        0.1,
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the ALM settle diverges at a step above its stability bound; close: a "
+        "declared stability ceiling or a backtracking step"
+    ),
+)
+def test_a_pc_alm_step_above_its_stability_bound_trains() -> None:
+    """A step the settle cannot take is refused by name, or it trains.
+
+    Measured 2026-11-20 (S9b): ``pc_alm``'s ×10 rung (``dynamics.step_size``
+    1.0 against the row's 0.1) crashed at settle step 6 with "NaN/Inf
+    detected in activations"; the declared space proposed it, so the row is a
+    defect, not a coordinate.
+    """
+    from dataclasses import replace
+
+    from computronium.experiment.kernel.evaluate import evaluate_cell
+    from computronium.experiment.sec_loop import _is_legal, screen_coordinate
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+    base = screen_coordinate(
+        {
+            "substrate": "digital",
+            "geometry": "feedforward",
+            "dynamics": "pc_alm",
+            "plasticity": "null",
+            "credit": "pc_alm",
+            "update": "euclidean",
+        },
+        "dynamics",
+        "pc_alm",
+    )
+    large = replace(base, params={**base.params, "dynamics.step_size": 1.0})
+    legal, _reason = _is_legal(large, "mnist")
+    if not legal:
+        return
+    evaluate_cell(large, replace(schedule, seed=0, n_seeds=1, batch_limit=8))
+
+
+def test_a_crashed_ladder_names_its_defect_lock() -> None:
+    """A defective record names a real lock and the capability that closes it.
+
+    The unimplemented lock is parameterized over near-chance rows only, so a
+    defective above-bar row that pointed at it would name a test no run
+    collects (D26). The defect declares its own lock instead.
+    """
+    from computronium.experiment.sec_ladder import run_ladder
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+
+    def boom(_coord: Any, _run: Any) -> None:
+        raise RuntimeError("NaN/Inf detected in activations (pc_alm settle) at step 6")
+
+    row = {
+        "task": "mnist",
+        "axis": "dynamics",
+        "box": {
+            "substrate": "digital",
+            "geometry": "feedforward",
+            "dynamics": "pc_alm",
+            "plasticity": "null",
+            "credit": "pc_alm",
+            "update": "euclidean",
+        },
+    }
+    record = run_ladder(
+        "primitive.state_dynamics.pc_alm", row, 0.1, evaluate=boom, schedule=schedule
+    )
+
+    assert record.verdict == "defective"
+    assert record.failing_test is not None
+    assert record.failing_test.endswith(
+        "test_a_pc_alm_step_above_its_stability_bound_trains"
+    )
+    assert record.close_condition
+
+
+def test_a_tie_goes_to_the_point_nearest_the_default() -> None:
+    """A tie is not a change: the best of three equal rungs is the default.
+
+    Measured 2026-11-20 (S9b): ``thermodynamic_contrast`` measured 0.7056 at
+    every factor, and the smallest factor was published as a tuned point whose
+    claim then had identical arms.
+    """
+    from computronium.experiment.sec_ladder import LadderRung, _best
+
+    rungs = [
+        LadderRung(factor, 0.01 * factor, "measured", 0.7056, 1.0, None)
+        for factor in (0.1, 1.0, 10.0)
+    ]
+
+    best = _best(rungs)
+    assert best is not None
+    assert best.factor == 1.0

@@ -16,7 +16,7 @@
     "budget_id": "base-vision",
     "task_id": "mnist",
     "param_budget": 150000,
-    "device": "cpu",
+    "device": "auto",
     "deterministic": true,
     "num_workers": 0,
     "precision": "fp32",

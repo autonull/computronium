@@ -1,5 +1,5 @@
 {
-  "claim": "tuning dynamics.step_size on primitive.state_dynamics.lazy moves val_acc by at least 0.0100 at the mnist base",
+  "claim": "tuning credit.feedback_scale on primitive.credit_assignment.local_goodness moves val_acc by at least 0.0100 at the mnist base",
   "metric": "val_acc",
   "threshold": 0.01,
   "alpha": 0.05,
@@ -16,7 +16,7 @@
     "budget_id": "base-vision",
     "task_id": "mnist",
     "param_budget": 150000,
-    "device": "cpu",
+    "device": "auto",
     "deterministic": true,
     "num_workers": 0,
     "precision": "fp32",

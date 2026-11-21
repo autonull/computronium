@@ -39,7 +39,7 @@ from computronium.experiment.sec_deep_dive import (
     claim_verdict,
     load_registration,
 )
-from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _measure
+from computronium.experiment.sec_loop import _measure
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
     PairedComparison,
@@ -112,31 +112,19 @@ class ClaimCandidate:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-    @property
-    def axes(self) -> dict[str, str]:
-        """The six declared axes, with the candidate's own axis at its level."""
-        axes = {
-            name: str(self.box.get(name) or _AXIS_DEFAULTS[name])
-            for name in _AXIS_DEFAULTS
-        }
-        axes[self.axis] = self.level
-        return axes
-
     def coordinate(self, value: float) -> Coordinate:
         """The candidate's box with its primary knob at one value.
 
-        The params are the row's own declared knobs plus the one varied: the
-        ladder ran at this box, so the claim's two arms share it.
+        The box is the row's screened box, rebuilt by the screen's own builder
+        (:func:`screen_coordinate`): the ladder's base params travel, so the
+        two arms are the row's box, not a compose default (TODO97 S9b).
         """
-        from computronium.experiment.schema.coordinate import Coordinate
+        from dataclasses import replace
 
-        params = {
-            key: value
-            for key, value in self.box.items()
-            if isinstance(key, str) and "." in key
-        }
-        params[self.knob] = value
-        return Coordinate(**self.axes, params=params)
+        from computronium.experiment.sec_loop import screen_coordinate
+
+        base = screen_coordinate(self.box, self.axis, self.level)
+        return replace(base, params={**base.params, self.knob: value})
 
 
 def _candidate_from_record(

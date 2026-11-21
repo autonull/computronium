@@ -107,6 +107,19 @@ _TRIAGE: Final[Mapping[str, str]] = {
 }
 
 
+#: A ladder point that crashes at the primitive's own box is a defect, and a
+#: defect names the lock that fails today and the capability that closes it.
+#: Measured 2026-11-20 (S9b): ``pc_alm``'s ×10 step diverged at settle step 6.
+_DEFECT_LOCKS: Final[Mapping[str, tuple[str, str]]] = MappingProxyType({
+    "primitive.state_dynamics.pc_alm": (
+        "tests/property/test_ladder_record_lock.py"
+        "::test_a_pc_alm_step_above_its_stability_bound_trains",
+        "the ALM settle diverges at a step above its stability bound: close "
+        "with a backtracking step or a declared stability ceiling, then re-run "
+        "the ladder",
+    ),
+})
+
 #: Each near-chance primitive's primary knob (TODO97 §4.2), in preference
 #: order. A name the primitive's active space does not declare is skipped: a
 #: missing knob is the record's close condition, not a fallback to another one.
@@ -228,7 +241,10 @@ def replay_hash(record: Mapping[str, Any]) -> str:
 
 
 def failing_test(primitive: str) -> str:
-    """The lock test a non-clearance leaves failing (strict xfail)."""
+    """The lock test a non-tuned verdict leaves failing (strict xfail)."""
+    lock = _DEFECT_LOCKS.get(primitive)
+    if lock is not None:
+        return lock[0]
     return (
         "tests/property/test_ladder_record_lock.py"
         f"::test_an_unimplemented_ladder_clears_its_band[{primitive}]"
@@ -453,13 +469,25 @@ def spec_axis(spec_id: str) -> str:
 
 
 def _best(rungs: Iterable[LadderRung]) -> LadderRung | None:
-    """The highest measured rung; a tie goes to the point nearest the default."""
+    """The highest measured rung; a tie goes to the point nearest the default.
+
+    A tie is not a change: picking the farthest factor would publish a
+    ``tuned`` record whose knob never moved the number (measured 2026-11-20:
+    ``thermodynamic_contrast`` and ``local_goodness`` tied at all three points,
+    and the smallest factor was read as the best).
+    """
     measured = [
         rung for rung in rungs if rung.status == "measured" and rung.val_acc is not None
     ]
     if not measured:
         return None
-    return min(measured, key=lambda rung: (-(rung.val_acc or 0.0), rung.factor))
+    return min(
+        measured,
+        key=lambda rung: (
+            -(rung.val_acc or 0.0),
+            abs(math.log10(rung.factor)) if rung.factor > 0 else math.inf,
+        ),
+    )
 
 
 def _unimplemented(
@@ -559,13 +587,13 @@ def _ladder_setup(
     """The row's own box as the ladder's base, with its companions.
 
     The screen found a compose-legal box for the primitive (it swapped a
-    companion when the base box refused). The ladder starts from that box: a
-    default-companion base refuses ``error_predictive_coding`` + gradient
-    credit, which the screen had already resolved (measured 2026-11-20).
+    companion when the base box refused). The ladder starts from that box, and
+    the box is rebuilt by the screen's own builder (:func:`screen_coordinate`),
+    so the factor-1.0 rung is the row's measurement and not another box
+    (TODO97 S9b: the axes alone dropped the base's structural params).
     """
     from computronium.experiment.kernel.evaluate import evaluate_cell
-    from computronium.experiment.schema.coordinate import Coordinate
-    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
+    from computronium.experiment.sec_loop import screen_coordinate
     from computronium.experiment.sec_pilot import base_schedule
 
     task = str(row.get("task") or _TASK)
@@ -573,22 +601,7 @@ def _ladder_setup(
     if sched is None:
         raise ValueError(f"{task}: no base schedule for the ladder")
     axis = spec_axis(spec_id)
-    box = row.get("box") or {}
-    axes = {name: box.get(name) or _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
-    axes[axis] = spec_id.rsplit(".", 1)[-1]
-    base = Coordinate(
-        substrate=axes["substrate"],
-        geometry=axes["geometry"],
-        dynamics=axes["dynamics"],
-        plasticity=axes["plasticity"],
-        credit=axes["credit"],
-        update=axes["update"],
-        params={
-            key: value
-            for key, value in box.items()
-            if isinstance(key, str) and "." in key
-        },
-    )
+    base = screen_coordinate(row.get("box") or {}, axis, spec_id.rsplit(".", 1)[-1])
     return evaluate or evaluate_cell, sched, base
 
 
@@ -649,7 +662,12 @@ def _triage(
     crashed = [rung for rung in rungs if rung.status == "crashed"]
     measured = [rung for rung in rungs if rung.status == "measured"]
     if crashed:
-        return "defective", crashed[0].reason or "a ladder point crashed", None
+        lock = _DEFECT_LOCKS.get(spec_id)
+        return (
+            "defective",
+            crashed[0].reason or "a ladder point crashed",
+            lock[1] if lock is not None else None,
+        )
     if not measured:
         reason, close = _unimplemented(
             spec_id,

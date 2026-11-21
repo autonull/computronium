@@ -20,6 +20,7 @@ import json
 import logging
 import math
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -849,6 +850,27 @@ def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinat
         update=axes["update"],
         params=_params_for(axes, own_knobs=own_knobs),
     )
+
+
+def screen_coordinate(box: Mapping[str, Any], axis: str, level: str) -> Coordinate:
+    """The coordinate a map row was screened in: its base box, one axis at its level.
+
+    A row's box carries the six axes and the schedule; its structural
+    hyperparameters come from the screen's one source (:func:`_params_for`), and
+    the varied axis runs at its own declared knobs (the viability pass). A
+    ladder or a claim that rebuilds the coordinate from the axes alone runs
+    another box, so its number is not the row's (TODO97 S9b).
+    """
+    axes = {name: box.get(name) or _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
+    if axis in axes:
+        axes[axis] = level
+    base = _coordinate(axes, own_knobs=axis or None)
+    params = {
+        key: value for key, value in box.items() if isinstance(key, str) and "." in key
+    }
+    if not params:
+        return base
+    return replace(base, params={**base.params, **params})
 
 
 def _declared_refusal(coord: Coordinate, shape: TaskShape, task_id: str) -> str | None:
