@@ -304,6 +304,18 @@ class ZerothOrderCredit(_EstimatorCredit):
 
         super().__init__(config or CreditAssignmentConfig.zeroth_order())
 
+    @classmethod
+    def reads(cls, config: CreditAssignmentConfig) -> frozenset[str] | None:
+        """The SPSA pair budget and the finite-difference step are read.
+
+        Measured 2026-11-20 (S9e probe): ``feedback_scale`` leaves the
+        pseudo-gradient norm bit-identical, while ``fd_step`` moves it
+        (76.8 / 79.4 / 115.9 at 0.001/0.01/0.1). The ladder therefore
+        withdraws ``feedback_scale`` and sweeps ``credit.fd_step``.
+        """
+        del config  # the pair budget and the step are the whole config read
+        return frozenset({"estimator_samples", "fd_step", "credit_norm"})
+
     def compute_pseudo_gradient(
         self,
         states: Mapping[Phase, SettableState],

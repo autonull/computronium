@@ -1,6 +1,6 @@
 # SEC map — the census of learning primitives
 
-Version SEC-v3, updated 2026-11-21T04:26:47.037134+00:00. 75 primitives, 73 available, all rows at one base box:
+Version SEC-v3, updated 2026-11-21T06:04:22.321783+00:00. 75 primitives, 73 available, all rows at one base box:
 
 `mnist · 32 samples/step · 375 batches · 1 epoch · 150000 ceiling · control 0.8884 · bar 0.1060`
 

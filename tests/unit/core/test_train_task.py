@@ -84,6 +84,45 @@ def test_a_task_without_batches_is_refused_with_the_way_out() -> None:
         list(batches)
 
 
+class _LoaderTask:
+    """A task whose train loader yields ten batches."""
+
+    name = "ten_batches"
+    input_dim = 4
+    output_dim = 2
+    device = "cpu"
+    quick_mode = False
+
+    def setup(self) -> None:
+        return None
+
+    def get_dataloader(self, split: str) -> list[tuple]:
+        import torch
+
+        return [
+            (torch.zeros(4, 4), torch.zeros(4, dtype=torch.long)) for _ in range(10)
+        ]
+
+    def get_batch(self, split: str, batch_size: int) -> tuple:  # pragma: no cover
+        raise AssertionError("the loader lane must not call get_batch")
+
+
+def test_batches_per_epoch_caps_the_loader_lane() -> None:
+    """The rung's step budget bounds the loader lane, not only ``get_batch``.
+
+    Measured 2026-11-21 (S5i): four credit rows trained through the loader
+    lane past the 120s timeout at one epoch and the suite reported no
+    verdict. One budget caps both lanes, so a costly row fails its bar
+    instead of outrunning the clock.
+    """
+    capped = TaskBatches(_LoaderTask(), "train", 8, 3)  # type: ignore[arg-type]
+    assert len(capped) == 3
+    assert len(list(capped)) == 3
+    full = TaskBatches(_LoaderTask(), "train", 8, None)  # type: ignore[arg-type]
+    assert len(full) == 10
+    assert len(list(full)) == 10
+
+
 @pytest.mark.parametrize("rule", RULES)
 def test_every_named_rule_builds_a_system(rule: str) -> None:
     system = rule_system(rule, 6, 3, hidden_dims=(8,), device="cpu")

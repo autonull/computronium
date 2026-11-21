@@ -121,6 +121,8 @@ class TaskBatches:
             )
             if self._lane == "loader":
                 self._length = len(loader)  # type: ignore[arg-type]
+                if self.batches_per_epoch is not None:
+                    self._length = min(self._length, self.batches_per_epoch)
             elif self.batches_per_epoch is None:
                 raise ValueError(
                     f"task {self.task.name!r} has no {self.split!r} dataloader "
@@ -135,7 +137,9 @@ class TaskBatches:
         lane = self._resolve()
         if lane == "loader":
             loader = self.task.get_dataloader(self.split)  # type: ignore[arg-type]
-            for batch in loader:  # type: ignore[union-attr]
+            for index, batch in enumerate(loader):  # type: ignore[union-attr]
+                if index >= self._length:
+                    break
                 if _is_graph_data(batch):
                     # Graph classification: yield Data object as inputs, y as targets
                     yield batch, batch.y
@@ -160,11 +164,6 @@ class TaskBatches:
     def __len__(self) -> int:
         self._resolve()
         return self._length
-
-
-def _is_pair(batch: object) -> bool:
-    """Is this batch an ``(inputs, targets)`` pair? Mapping batches are not."""
-    return isinstance(batch, (tuple, list)) and len(batch) == 2
 
 
 def flat_input_dim(input_dim: object, task: str) -> int:

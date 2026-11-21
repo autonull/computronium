@@ -51,6 +51,7 @@ __all__ = [
     "LadderRung",
     "PairedCell",
     "best_rung",
+    "candidate_box",
     "claim_verdict",
     "ladder_points",
     "load_registration",
@@ -73,7 +74,7 @@ MARGIN: Final[float] = 0.01
 #: declared numeric knob of the primitive's own config is the one laddered. The
 #: declaration names the knob; the default value stays the config classmethod's.
 LADDER_KNOBS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType({
-    "credit": ("feedback_scale", "beta", "readout_scale", "lr"),
+    "credit": ("feedback_scale", "beta", "readout_scale", "fd_step", "lr"),
     "dynamics": ("step_size", "max_steps"),
     "geometry": ("hidden_dim", "depth", "width"),
     "update": ("step_size", "momentum"),
@@ -116,6 +117,10 @@ class DeepDiveCandidate:
     margin: float
     knob: str
     default: float
+    #: The row's screened box: its six axes, its structural params and the
+    #: schedule. The pair's arms rebuild from it, so a row screened before
+    #: the box carried its params has no dive (TODO97 S9c).
+    box: dict[str, Any]
     walltime_s: float | None
 
     def to_dict(self) -> dict[str, Any]:
@@ -150,6 +155,7 @@ def _bound_candidate(
         margin=val_acc - bar,
         knob=knob[0],
         default=knob[1],
+        box=dict(row.get("box") or {}),
         walltime_s=(row.get("resource") or {}).get("walltime_s"),
     )
 
@@ -290,13 +296,30 @@ def best_rung(rungs: tuple[LadderRung, ...]) -> LadderRung | None:
     )
 
 
+def candidate_box(
+    candidate: DeepDiveCandidate, factor: float, schedule: Schedule
+) -> dict[str, Any]:
+    """The box one arm trains at: the row's coordinate, its params too.
+
+    One builder: the screen's own ``_box_summary`` reads the coordinate's six
+    axes, its structural params and the schedule, so a registration and a pair
+    compare the same fields (TODO97 S9c). The factor is the arm's ladder point,
+    so the control arm's box is the row's own box.
+    """
+    from computronium.experiment.sec_loop import _box_summary, _deep_dive_coordinate
+
+    return _box_summary(_deep_dive_coordinate(candidate, factor), schedule)
+
+
 def claim_registration(
     candidate: DeepDiveCandidate, schedule: Schedule
 ) -> ThresholdRegistration:
     """The pre-registered threshold, written before the first paired seed.
 
-    The box is the base schedule's own serialization: a registration that
-    declares a box decides only a run at that box (TODO95 D2).
+    The box is the row's own coordinate, not the base schedule alone: a
+    registration that declares a box decides only a run at that box, and a
+    claim re-boxed between the ladder and the pair is refused by name
+    (TODO95 D2, TODO97 S9c).
     """
     return ThresholdRegistration(
         claim=(
@@ -308,7 +331,7 @@ def claim_registration(
         alpha=DEFAULT_ALPHA,
         min_seeds=CLAIM_SEEDS,
         created=date.today().isoformat(),
-        box=schedule.to_dict(),
+        box=candidate_box(candidate, 1.0, schedule),
     )
 
 

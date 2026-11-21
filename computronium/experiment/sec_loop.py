@@ -2053,16 +2053,46 @@ def _interaction_result(
 DEEP_DIVE_REGISTRATION = Path("configs/preregistrations/sec_deep_dive.json")
 
 
-def _deep_dive_coordinate(
-    candidate: Any, factor: float, task_id: str = "mnist"
-) -> Coordinate:
-    """The candidate's base box with its primary knob at one ladder point."""
-    axes = {**_base_axes(task_id), candidate.axis: candidate.level}
-    coord = _coordinate(axes)
+def _deep_dive_coordinate(candidate: Any, factor: float) -> Coordinate:
+    """The row's box with its primary knob at one ladder point.
+
+    The arm rebuilds from the row's screened box, so the ladder's base params
+    travel: a coordinate built from the six axes alone runs another box than
+    the row (TODO97 S9c).
+    """
+    base = screen_coordinate(candidate.box, candidate.axis, candidate.level)
     return replace(
-        coord,
-        params={**coord.params, candidate.knob: candidate.default * factor},
+        base,
+        params={**base.params, candidate.knob: candidate.default * factor},
     )
+
+
+def _dive_candidate(
+    map_data: Mapping[str, Any],
+) -> tuple[Any | None, str | None]:
+    """The map's dive candidate, or the one reason it sends none.
+
+    One reader for the three refusals, so the setup returns once instead of
+    once per rule: a map at another version, a row without a declared knob,
+    and a row screened before its box carried its params (TODO97 S9c).
+    """
+    from computronium.experiment.sec_deep_dive import select_candidate
+
+    if map_data.get("version") != MAP_VERSION:
+        return (
+            None,
+            f"map version {map_data.get('version')} is not {MAP_VERSION}",
+        )
+    candidate = select_candidate(map_data)
+    if candidate is None:
+        return None, "no surprising bound row with a declared knob"
+    if not box_params(candidate.box):
+        return (
+            None,
+            "the row's box carries no structural params: re-screen the row "
+            "before the dive (TODO97 S9c)",
+        )
+    return candidate, None
 
 
 def _deep_dive_setup(
@@ -2070,8 +2100,8 @@ def _deep_dive_setup(
 ) -> tuple[Any, Any, Schedule] | None:
     """The map's candidate, the committed claim and the base box, or ``None``."""
     from computronium.experiment.sec_deep_dive import (
+        candidate_box,
         load_registration,
-        select_candidate,
     )
 
     map_path = out_dir / "map.json"
@@ -2079,22 +2109,18 @@ def _deep_dive_setup(
         logger.warning("P4: no map.json — the census is not screened; dive refused")
         return None
     map_data = json.loads(map_path.read_text())
-    if map_data.get("version") != MAP_VERSION:
-        logger.warning(
-            f"P4: map version {map_data.get('version')} is not {MAP_VERSION}; "
-            "dive refused"
-        )
-        return None
-    candidate = select_candidate(map_data)
+    candidate, refusal = _dive_candidate(map_data)
     if candidate is None:
-        logger.warning("P4: no surprising bound row with a declared knob; dive refused")
+        logger.warning(f"P4: {refusal}; dive refused")
         return None
     task_id = str((map_data.get("base") or {}).get("task") or P0_TASK)
     schedule = base_schedule(task_id, device)
     if schedule is None:
         logger.warning(f"P4: {task_id} declares no base box; dive refused")
         return None
-    registration = load_registration(registration_path, schedule)
+    registration = load_registration(
+        registration_path, candidate_box(candidate, 1.0, schedule)
+    )
     if registration is None:
         logger.warning(
             f"P4: no pre-registration for {task_id} at {registration_path}; "
@@ -2176,7 +2202,7 @@ def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
     rungs: list[LadderRung] = []
     for factor, value in ladder_points(candidate):
         measured = _measure(
-            _deep_dive_coordinate(candidate, factor, schedule.task_id),
+            _deep_dive_coordinate(candidate, factor),
             replace(schedule, seed=0, n_seeds=1),
         )
         rungs.append(
@@ -2202,7 +2228,7 @@ def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[
     for seed in range(CLAIM_SEEDS):
         for arm, factor in (("control", 1.0), ("treatment", treatment)):
             measured = _measure(
-                _deep_dive_coordinate(candidate, factor, schedule.task_id),
+                _deep_dive_coordinate(candidate, factor),
                 replace(schedule, seed=seed, n_seeds=1),
             )
             cells.append(
@@ -2239,7 +2265,7 @@ def _pair_verdict(  # ruff: ignore[too-many-arguments]
     """
     from dataclasses import asdict
 
-    from computronium.experiment.sec_deep_dive import claim_verdict
+    from computronium.experiment.sec_deep_dive import candidate_box, claim_verdict
     from computronium.validation.preregistration import paired_comparison
 
     treatments = [cell for cell in cells if cell.arm == "treatment"]
@@ -2270,7 +2296,9 @@ def _pair_verdict(  # ruff: ignore[too-many-arguments]
         [float(cell.val_acc or 0.0) for cell in controls],
         seed=schedule.seed,
     )
-    verdict = claim_verdict(paired, registration, schedule)
+    verdict = claim_verdict(
+        paired, registration, candidate_box(candidate, 1.0, schedule)
+    )
     logger.info(
         f"P4 complete: {candidate.primitive} best={best.factor} "
         f"effect={paired.mean_diff:.4f} verdict={verdict}"

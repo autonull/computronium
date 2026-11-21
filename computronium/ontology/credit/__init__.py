@@ -2670,6 +2670,18 @@ class TargetInversionCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.target_inversion()
 
+    @classmethod
+    def reads(cls, config: CreditAssignmentConfig) -> frozenset[str] | None:
+        """The transpose feedback is scaled by ``feedback_scale``; nothing else.
+
+        Measured 2026-11-20 (S9e probe): the pseudo-gradient norm moves
+        ×10 with the scale (0.0121 / 0.1213 / 1.2128), so the knob is read
+        at this box. The accuracy ruler still ties at chance — a plateau on
+        an unimplemented row, not an inert knob.
+        """
+        del config  # the scale is the only credit field the walk reads
+        return frozenset({"feedback_scale"})
+
     def compute_pseudo_gradient(  # ruff: ignore[too-many-return-statements]
         self,
         states: Mapping[Phase, SettableState],

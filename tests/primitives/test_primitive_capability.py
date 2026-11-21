@@ -4,8 +4,10 @@ Every primitive must demonstrate basic learning capability on its declared
 task families. These are the minimum viable tests that should pass before
 any SEC screen runs.
 
-The test uses 1 epoch, 1 seed to keep it fast. A primitive that cannot
-clear the bar at this level has a defect or capability gap.
+The test uses 1 epoch over ``CAPABILITY_BATCHES`` batches and 1 seed, so the
+rung is a wiring check and a cost cap, not the screen's 375-batch
+measurement. A row that cannot train then fails its bar instead of
+outrunning the budget and reporting no verdict (TODO97 S5i).
 """
 
 from __future__ import annotations
@@ -21,6 +23,11 @@ from computronium.primitives.registry import list_primitives
 CAPABILITY_EPOCHS = 1
 CAPABILITY_SEED = 42
 CAPABILITY_DEVICE = "cpu"
+#: The rung's step budget. A declared ladder holds one epoch at the full
+#: ``batch_limit``; this check must also bound the ``get_batch`` lane, which
+#: otherwise raises for an RL row and hangs a slow credit past the timeout
+#: (measured 2026-11-20: four credit rows timed out at 120s with no verdict).
+CAPABILITY_BATCHES = 64
 
 
 def _base_coordinate(primitive_id: str, task=None) -> Coordinate:
@@ -240,7 +247,12 @@ def test_primitive_on_declared_families(spec):
                 log_every_n_epochs=1,
             )
 
-            train_on_task(lambda *_, **__: cell.system, task, config)
+            train_on_task(
+                lambda *_, **__: cell.system,
+                task,
+                config,
+                batches_per_epoch=CAPABILITY_BATCHES,
+            )
             metrics = task.evaluate(cell.system)
 
             # Error-blind credits: check non-zero update, not accuracy

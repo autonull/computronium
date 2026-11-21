@@ -271,6 +271,12 @@ def test_the_ladder_withdraws_a_knob_the_law_declares_unread() -> None:
     ``feedback_scale``, and their pseudo-gradient norm is bit-identical at
     those scales. The ladder sweeps the knob the law declares it reads; a
     credit whose declared ff law reads none has no ladder point here.
+
+    S9e follow-up: the two credits S9b also swept still laddered the
+    withdrawn knob. ``target_inversion`` declares it reads ``feedback_scale``
+    (the norm moves ×10), and ``zeroth_order`` declares it reads the SPSA
+    pair budget and ``fd_step`` (the norm moves 76.8 / 79.4 / 115.9), so the
+    ladder sweeps ``fd_step`` instead.
     """
     from computronium.experiment.sec_ladder import ladder_knob
     from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
@@ -282,6 +288,8 @@ def test_the_ladder_withdraws_a_knob_the_law_declares_unread() -> None:
     assert knob("thermodynamic_contrast") == ("credit.beta", 0.5)
     assert knob("local_goodness") is None
     assert knob("random_projections") == ("credit.feedback_scale", 0.01)
+    assert knob("target_inversion") == ("credit.feedback_scale", 0.01)
+    assert knob("zeroth_order") == ("credit.fd_step", 0.01)
 
 
 @_RUNS

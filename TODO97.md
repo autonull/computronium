@@ -4,6 +4,11 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-21] ✅ **S9f/S9g CLOSED (the deep dive's pair rebuilds the row's box; the two remaining `feedback_scale` ladders declare what they read); S5i reports a verdict** — three items in dependency order:
+**S9f — the deep dive's box (S9c follow-up).** `sec_loop._deep_dive_coordinate` now rebuilds the arm from the row's screened box (`screen_coordinate(candidate.box, ...)`), `sec_deep_dive.DeepDiveCandidate` carries that box, and `candidate_box(candidate, factor, schedule)` is the one builder: `claim_registration` commits `_box_summary(_deep_dive_coordinate(candidate, 1.0))`, `_deep_dive_setup` loads with the candidate's box (a params-less row is refused by name with the close "re-screen the row"), and `_pair_verdict` compares against the same box. `configs/preregistrations/sec_deep_dive.json` is re-registered: the map's candidate is now `state_dynamics.diffusion` at `dynamics.step_size` (the old file named `target_inversion` and the schedule alone, so it decided a run at another box). Locks: `test_the_deep_dive_pair_runs_at_the_rows_box`, `test_a_row_without_box_params_has_no_dive`, and `test_paired_ci.py`'s registration/claim assertions (11 passed).
+**S9g — the two remaining inert credits.** The probe measured the knob each law declares it reads: `beta` binds for `thermodynamic_contrast` (19.44 / 1.94 / 0.19), `feedback_scale` binds for `target_inversion` (norm ×10; the ACC ruler ties at chance, a plateau on an unimplemented row, not an inert knob), and `fd_step` binds for `zeroth_order` (76.82 / 79.42 / 115.89). `TargetInversionCredit.reads` is `{feedback_scale}`, `ZerothOrderCredit.reads` is `{estimator_samples, fd_step, credit_norm}`, and `LADDER_KNOBS["credit"]` gains `fd_step`, so the ladder sweeps `credit.fd_step` for `zeroth_order`. Re-laddered at the rows' boxes: `target_inversion` **unimplemented** (0.1032, band 0.200, 245 s); `zeroth_order` **tuned** (0.1331 / 0.1444 / 0.0998, confirm 0.2004) — its best point is its own default, so the claim is a no-power coordinate at the new knob. `sec_credit_zeroth_order.json` is re-registered (`credit.fd_step`); the four other claim boxes did not move. Lock: `test_the_ladder_withdraws_a_knob_the_law_declares_unread` (26 passed / 4 xfailed in the ladder lock).
+**S5i — the capability suite's verdict.** The mechanism was a cost cap, not a missing verdict: four credit rows trained through the loader lane past the 120 s timeout at one epoch. `TaskBatches` now caps the loader lane with `batches_per_epoch` (the budget bounded only `get_batch`), and the rung passes `CAPABILITY_BATCHES = 64`: the suite reports **7 failed / 67 passed / 2 xfailed in one run** (14m11s). Lock: `test_batches_per_epoch_caps_the_loader_lane`. The seven failures are filed as one class (S5j): the rung builds its own `_base_coordinate`, so four rows train a box the declared space refuses and three cost rows exceed the rung's budget.
+
 **Progress:** [2026-11-20] ✅ **S9c/S9d/S9e CLOSED (the box carries its params; the settle declares its bound; the inert knob is withdrawn)** — three record defects closed in dependency order, each with a lock. Code and locks are landed; the artifacts re-derive from them (item 0 below: the re-screen, then the ladders, the registrations and the five-seed run):
 **Result at the row's box (2026-11-21, five paired seeds each): 2 claims + 1
 coordinate with a CI + 2 no-power coordinates** — `local_contrastive`
@@ -57,8 +62,8 @@ the two registrations whose candidates left the pool are deleted.
 first, calibrates the nine task families, screens at boxes that can answer the
 question, and turns ten primitives into kernel rungs behind a kill test and
 parity; all nine families are accounted, the docs regenerate from the registry,
-and the remaining work is four algorithm rungs (S7b) and one binding tuned
-record for a fifth claim (S9b).
+every claim and ladder rebuilds the row's box, and the remaining work is four
+algorithm rungs (S7b) and the capability rung's own box (S5j).
 
 ---
 
@@ -93,6 +98,10 @@ record for a fifth claim (S9b).
 | S7 | 10 primitive kernels across 9 acceleration modules | ✅ DONE — 10 implemented + 65 absent; kill test + parity + microbench; 4 algorithm xfails filed as S7b |
 | S8 | Regenerate map + docs from one source | ✅ DONE — method cards + map doc + README counts read the registry; the LM delta re-ran to 0 defective (2 measured, 2 refused, 1 measured routing); the token-shape class is filed with its lock |
 | S9 | 5 pre-registered claim records (5 paired seeds, CI) | ✅ DONE — 4/5 clear; `lazy` no-power; S9b needs a fifth binding record |
+| S9f | Deep dive's pair + registration rebuild the row's box | ✅ DONE — re-registered `sec_deep_dive.json`; 3 locks |
+| S9g | The remaining `feedback_scale` ladders declare `reads(config)` | ✅ DONE — `zeroth_order` ladders `credit.fd_step`; re-registered |
+| S5i | Capability suite reports pass / skip / fail in one run | ✅ DONE — 7 failed / 67 passed / 2 xfailed (14m11s); loader bounded |
+| S5j | Capability rung builds its own base coordinate | ❌ FILED — 4 rows train a refused box, 3 cost rows time out |
 
 **Session 2026-11-20 (S9).** The claim list is one runner. `sec_claims` reads
 every `tuned` ladder record across the nine maps, ranks it by the confirm
@@ -235,35 +244,47 @@ including the defective row (lock and close stamped).
    fallback), so a box is a fixed point in every family. The full
    `scripts/audit.py` reports **0 findings** over all nine maps, and
    `docs/sec/map.md` is regenerated (48 measured / 26 refused / 1 defective).
-1. **S9c follow-up — the deep dive's box (P4).** `sec_loop._deep_dive_coordinate`
-   rebuilds the arm from the six axes alone and `sec_deep_dive.claim_registration`
-   commits the schedule alone, so P4 has the same defect the S9 claim path just
-   closed; its two arms run at another box than the registration names.
-   `test_paired_ci` still passes because both sides drop the params. Close: build
-   the arm and the registration with `_box_summary(_deep_dive_coordinate(...))`,
-   load with the candidate's box, and re-register `sec_deep_dive.json`.
-2. **S5i — the capability suite's hang** (filed, not closed). The full
-   `uv run python -m pytest tests/primitives/test_primitive_capability.py` run
-   hits the 300 s marker inside `train_on_task`'s DataLoader and produces no
-   verdict: a killed run yields no verdict, collect (`pytest <file> --co -q >
-   ids.txt`) before any re-run. Mechanism: a capability row trains through an
-   unbounded loader, so a row that cannot train hangs instead of failing.
-   Close condition: the loader is bounded (`num_workers=0`, bounded steps), and
-   the suite reports pass / skip / fail in one run. The two dead imports this
-   session fixed (`get_spec`, `task.spec.primary_pass_bar`) were separate test
-   defects; the row now reads `error_blind_credit` and the task's own bar key.
-3. **S7b (filed):** four algorithm factories still `xfail` in
+1. ✅ **S9f CLOSED (2026-11-21) — the deep dive's box.** `_deep_dive_coordinate`
+   rebuilds the arm from the row's screened box and `candidate_box`/
+   `claim_registration` commit `_box_summary(...)`; the setup loads with the
+   candidate's box and refuses a params-less row by name. `sec_deep_dive.json`
+   is re-registered at the map's candidate. Locks:
+   `test_the_deep_dive_pair_runs_at_the_rows_box`,
+   `test_a_row_without_box_params_has_no_dive`.
+2. ✅ **S5i CLOSED (2026-11-21) — the capability suite reports a verdict.**
+   `TaskBatches` caps the loader lane with `batches_per_epoch` and the rung
+   passes `CAPABILITY_BATCHES = 64`: 7 failed / 67 passed / 2 xfailed in one
+   run (14m11s). The seven failures are filed as **S5j** (below), not fixed:
+   a session cannot close a defect it discovers.
+3. **S5j — the capability rung's own box** (filed 2026-11-21, not closed).
+   `tests/primitives/test_primitive_capability.py::_base_coordinate` builds a
+   box from `_AXIS_DEFAULTS` instead of the primitive's declared box, so the
+   rung trains rows the declared space refuses and pays for a heavier cell
+   than the screen's: `geometry.graph` on cora (`'NoneType' object has no
+   attribute 'to'`), `geometry.causal_transformer` on char_ngram (`shape
+   '[32,1,0,4,0,4]' for 96 tokens`), `plasticity.conflict_adaptive` on
+   copy_task (`GradientCredit: no gradient reached target indices [2]`),
+   `plasticity.fast_weights` on char_ngram (val_ppl 42.6 misses 27.0 — the
+   map refuses that row at the base box), and `riemannian_orthogonal` /
+   `schedule_free` / `closed_form_ridge` time out at 120 s over 64 batches
+   against 4.7–8.9 s at their screened boxes. Failing test: the seven
+   `test_primitive_on_declared_families[...]` rows. Close: the rung reads
+   `_is_legal` and the row's screened box (the map's box, or a screen run
+   that writes one locally), so a refused row is refused by name and a
+   measured row runs at its priced cell.
+4. **S7b (filed):** four algorithm factories still `xfail` in
    `tests/acceleration/test_backend_reach.py` — `ff` (`_attachable` refuses its
    preset, which cannot take a backend), `fast_weight` (no fast-weight kernel),
    `pcalm` (no PC-ALM backend class), `tile` (its backend expects a
    `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and
    `spiking_snn` attach and move the system's own parameters.
-4. **S9e follow-up — the other inert credits.** The probe covered the two
-   credits S9b measured. `target_inversion` and `zeroth_order` still ladder
-   `credit.feedback_scale` and still tie at all three points; either they read
-   the knob (declare it, and wire it) or they declare it unread (one class
-   declaration each). The ladder now reads the declaration, so the fix is one
-   `reads(config)` per class, not another table.
+5. ✅ **S9g CLOSED (2026-11-21) — the other inert credits.** The probe
+   measured the knob each law reads (`beta` binds, `feedback_scale` binds for
+   `target_inversion`, `fd_step` binds for `zeroth_order`), both classes
+   declare `reads(config)`, and the ladder sweeps `credit.fd_step` for
+   `zeroth_order`. The re-ladder re-derived both records; the claim list's
+   four other boxes did not move, and `zeroth_order`'s best point is its own
+   default (no power by construction), so the S9c claim report stands.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -1083,6 +1104,28 @@ uv run python scripts/probes/s9e_feedback_scale.py
 #     e) a family map screened before S9c: restore the boxes from the cells'
 #        own records (0 cost; idempotent), then re-run the audit
 uv run python -m computronium.experiment.sec_loop --repair-boxes --out results/sec_lm
+
+# 12. S9f/S9g/S5i (DONE 2026-11-21)
+#     a) S9f: the deep dive's pair rebuilds the row's box; re-register it
+uv run python -m computronium.experiment.sec_deep_dive \
+  --map results/sec/map.json --out configs/preregistrations/sec_deep_dive.json
+uv run python -m pytest tests/property/test_paired_ci.py -q
+#     b) S9g: the probe, the two declarations, the re-ladder at the row's box
+uv run python scripts/probes/s9e_feedback_scale.py
+uv run python -m computronium.experiment.sec_ladder --map results/sec/map.json \
+  --only primitive.credit_assignment.target_inversion \
+  --only primitive.credit_assignment.zeroth_order --device cpu
+uv run python -m computronium.experiment.sec_claims --register \
+  --only primitive.credit_assignment.zeroth_order --device cpu
+uv run python -m pytest tests/property/test_ladder_record_lock.py -q
+#     c) S5i: bound the loader lane, then one capability run reports verdicts
+uv run python -m pytest tests/primitives/test_primitive_capability.py \
+  -q --tb=line -rf        # 7 failed / 67 passed / 2 xfailed, 14m11s
+uv run python -m pytest tests/unit/core/test_train_task.py -q
+#     d) the audit and the map doc read the new ladders
+uv run python scripts/audit.py && uv run python scripts/audit.py --static
+uv run python -m computronium.experiment.documentation.sec_map \
+  --map results/sec/map.json --out docs/sec/map.md
 ```
 
 ---
@@ -1109,6 +1152,8 @@ uv run python -m computronium.experiment.sec_loop --repair-boxes --out results/s
   two lock predicates dead for a session).
 - **Publishing a defect class as prose**; a class is filed by landing its
   failing test.
+- **Reading a timeout as a capability verdict.** A rung over its budget is a
+  cost row, and the failing test names its mechanism.
 
 ---
 
@@ -1122,6 +1167,7 @@ uv run python -m computronium.experiment.sec_loop --repair-boxes --out results/s
 **Impossible is proved: a refusal test and a necessity test, or it is not impossible.**
 **Unimplemented and defective are failing tests; a skip is a test defect.**
 **The screen and the audit read one row-state source; a state nobody reads is a comment.**
+**A ladder, a claim or a rung rebuilds the row's box, never the six axes alone.**
 **0 unaccounted rows is the completeness gate; 0 open defects is the quality gate.**
 **No backwards compatibility: the old shape is deleted, not aliased.**
 

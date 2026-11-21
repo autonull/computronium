@@ -49,6 +49,21 @@ def _schedule(**extra) -> Schedule:
     return replace(schedule, **extra)
 
 
+def _row_box(primitive: str) -> dict:
+    """The box a screen writes for one row: axes, params and the schedule."""
+    from computronium.experiment.sec_ladder import spec_axis
+    from computronium.experiment.sec_loop import (
+        _AXIS_DEFAULTS,
+        _box_summary,
+        screen_coordinate,
+    )
+
+    level = primitive.rsplit(".", 1)[-1]
+    axis = spec_axis(primitive)
+    coord = screen_coordinate({**_AXIS_DEFAULTS, axis: level}, axis, level)
+    return _box_summary(coord, _schedule())
+
+
 def _row(
     primitive: str,
     axis: str,
@@ -66,6 +81,7 @@ def _row(
         "swapped": swapped,
         "measurement": {"val_acc": val_acc, "loss": 1.0},
         "resource": {"walltime_s": 1.0},
+        "box": _row_box(primitive),
     }
 
 
@@ -154,15 +170,62 @@ def test_the_best_rung_is_measured_and_nearest_on_a_tie() -> None:
 
 def test_the_registration_is_written_before_the_first_seed(tmp_path: Path) -> None:
     """The margin, alpha, box and n_max exist before a cell is run."""
+    from computronium.experiment.sec_deep_dive import candidate_box
+
     schedule = _schedule()
+    candidate = select_candidate(_map())
+    assert candidate is not None
     path = tmp_path / "sec_deep_dive.json"
     registration = preregister(_map(), schedule, path)
     assert registration.min_seeds == CLAIM_SEEDS == 5
     assert registration.threshold == pytest.approx(MARGIN)
     assert registration.box
     assert path.exists()
-    assert load_registration(path, schedule) == registration
+    assert load_registration(path, candidate_box(candidate, 1.0, schedule)) == (
+        registration
+    )
+    # The schedule alone is another box: a registration that names the row
+    # refuses a run that names only the base schedule (TODO97 S9c).
+    assert load_registration(path, schedule) is None
     assert json.loads(path.read_text())["min_seeds"] == 5
+
+
+def test_the_deep_dive_pair_runs_at_the_rows_box() -> None:
+    """The arm and the registration rebuild the row, not the base axes.
+
+    Measured 2026-11-20 (S9c follow-up): the arm rebuilt from the six axes
+    alone and the registration committed the schedule alone, so the pair ran at
+    another box than the registration named. The row's box is the builder.
+    """
+    from computronium.experiment.sec_deep_dive import candidate_box
+    from computronium.experiment.sec_loop import _deep_dive_coordinate, box_params
+
+    schedule = _schedule()
+    candidate = select_candidate(_map())
+    assert candidate is not None
+    control = _deep_dive_coordinate(candidate, 1.0)
+    assert candidate_box(candidate, 1.0, schedule) == candidate.box
+    assert control.params[candidate.knob] == pytest.approx(candidate.default)
+    assert box_params(candidate.box).keys() <= control.params.keys()
+
+
+def test_a_row_without_box_params_has_no_dive(tmp_path: Path) -> None:
+    """A row screened before its box carried params refuses the dive by name.
+
+    The quiet refusal is executable, not prose: the setup returns ``None``
+    and the close is the screen's own repair (TODO97 S9c).
+    """
+    from computronium.experiment.sec_loop import MAP_VERSION, _deep_dive_setup
+
+    document = _map()
+    document["version"] = MAP_VERSION
+    document["base"] = {"task": "mnist"}
+    for row in document["primitives"].values():
+        row.pop("box")
+    out = tmp_path / "sec"
+    out.mkdir()
+    (out / "map.json").write_text(json.dumps(document))
+    assert _deep_dive_setup(out, "cpu", tmp_path / "absent.json") is None
 
 
 def test_a_claim_refuses_a_missing_or_foreign_registration(tmp_path: Path) -> None:
@@ -187,29 +250,34 @@ def test_five_paired_seeds_carry_the_interval() -> None:
 
 
 def test_the_claim_reads_the_registered_margin_and_box() -> None:
+    from computronium.experiment.sec_deep_dive import candidate_box
+
     schedule = _schedule()
-    registration = claim_registration(
-        DeepDiveCandidate(
-            primitive="primitive.credit_assignment.target_inversion",
-            axis="credit",
-            level="target_inversion",
-            val_acc=0.12,
-            margin=0.014,
-            knob="credit.feedback_scale",
-            default=0.01,
-            walltime_s=1.0,
-        ),
-        schedule,
+    candidate = DeepDiveCandidate(
+        primitive="primitive.credit_assignment.target_inversion",
+        axis="credit",
+        level="target_inversion",
+        val_acc=0.12,
+        margin=0.014,
+        knob="credit.feedback_scale",
+        default=0.01,
+        box=_row_box("primitive.credit_assignment.target_inversion"),
+        walltime_s=1.0,
     )
+    box = candidate_box(candidate, 1.0, schedule)
+    registration = claim_registration(candidate, schedule)
     clear = PairedComparison(
         n=5, mean_diff=0.05, ci_lower=0.03, ci_upper=0.07, p_value=0.01, cohens_dz=1.0
     )
-    assert claim_verdict(clear, registration, schedule) == "claim"
+    assert claim_verdict(clear, registration, box) == "claim"
     inside = replace(clear, mean_diff=0.005, ci_lower=0.0, ci_upper=0.01)
-    assert claim_verdict(inside, registration, schedule) == "coordinate"
-    assert claim_verdict(None, registration, schedule) == "coordinate"
+    assert claim_verdict(inside, registration, box) == "coordinate"
+    assert claim_verdict(None, registration, box) == "coordinate"
+    assert claim_verdict(clear, registration, schedule) == "coordinate"
     elsewhere = replace(schedule, batch_size=8)
     assert claim_verdict(clear, registration, elsewhere) == "coordinate"
+    reboxed = {**box, "credit.feedback_scale": 0.02}
+    assert claim_verdict(clear, registration, reboxed) == "coordinate"
 
 
 def test_an_inert_knob_is_a_capability_gap_not_a_claim() -> None:
