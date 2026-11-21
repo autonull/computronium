@@ -236,24 +236,29 @@ fix that flips it):**
 | a carrier digest read the law's axis config, not the composed companion's | `build_case(cell=...)`; the case carries its composed cell |
 | a signal control skipped when `best.reached` was false (error-blind laws) | the control runs on the fit's own criterion |
 
-### P3 — Close the 15 `defect-or-gap` rows (next)
+### P3 — Close the 15 `defect-or-gap` rows (the capability queue, by cost)
 
 Each row names its mechanism and the fix that would flip it; a fix lands with
-a failing test:
+a failing test. The order is cost: the one-session fixes first, the base
+boxes next, the credit implementations last (**the long pole**: seven pseudo-
+gradient paths, not plumbing).
 
-| Rows | Named mechanism / closing primitive |
-|---|---|
-| `plasticity.substrate_coupled` | the step has nothing to transform: the plasticity protocol never calls `modulate()`. Close with the `modulate()` hook and a failing test. |
-| `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
-| `update.quantized_adam` | the fit reaches NaN: a defect (clamp/init), with a failing test. |
-| `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | the fit moves, but not to a tenth at 200 steps: a mechanism/implementation defect or a declared limit; name which. |
-| `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
+| Order | Rows | Named mechanism / closing primitive |
+|---|---|---|
+| 1 | `update.quantized_adam` | the fit reaches NaN (1.34 → 3.2e10 → NaN at step 3): the int8 second-moment block collapses to zero, so the next step divides by `eps`. Clamp the dequantized moment (or the scale floor), with a failing test. |
+| 2 | `plasticity.substrate_coupled` | the step has nothing to transform: the plasticity protocol never calls `modulate()`. Close with the hook and a failing test. |
+| 3 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | the fit moves, but not to a tenth at 200 steps: triage each as defect (clamp/init/lr scale) or declared limit; name which. |
+| 4 | `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
+| 5 | `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
+
+**P4 does not wait for P3.** The loop starts on the 40 clean laws now; P3's
+rows are the capability queue and land in parallel.
 
 **Close:** every row is a fixed law, or a capability gap with the primitive
 that closes it and the family it unlocks. A refusal is allowed only with a
 test that fails without it.
 
-### P4 — SEC optimization (after P3's fixes, reusing the cache)
+### P4 — SEC optimization (in parallel with P3, reusing the cache)
 
 The loop optimizes hyperparameters; it is worthless on a defective law.
 
@@ -280,6 +285,14 @@ claim is "works here and elsewhere" until this runs.
 ---
 
 ## 5. Definition of done
+
+**Two scopes, stated once.** *Working* is the AGENTS acceptance:
+`comp gate breadth` 17/17, 6/6 seams, a viable cell for each error-aware
+credit on its task family, and the domain bars (vision > 0.95, Cora > 0.75,
+Iris > 0.90, Pendulum > −200). *Complete surface* is stricter: all 75 laws
+either work or carry a capability gap that has been closed (the primitive
+implemented). P3 is the difference between the two; P4 turns *working* into
+claims.
 
 1. **The surface is declared**: 75 laws, 6 seams, the rule tables — and no
    per-family test exists. **Done** (`surface.py`, `comp test --surface`).
