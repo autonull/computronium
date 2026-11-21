@@ -26,7 +26,7 @@ COMMON_GEOMETRY_KEYS: Final[frozenset[str]] = frozenset({
 
 TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
     "feedforward": frozenset({"residual"}),
-    "recurrent": frozenset(),
+    "recurrent": frozenset({"sequence"}),
     "tile": frozenset({"neurons_per_tile", "tiles_per_layer"}),
     "tile_mesh": frozenset({"neurons_per_tile", "tiles_per_layer"}),
     "attention": frozenset({"num_heads", "head_dim"}),

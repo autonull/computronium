@@ -46,6 +46,7 @@ _SURFACE = "computronium.experiment.surface.cli"
 # is no second command tree to keep in step.
 _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "demo": (_SURFACE, "main", ("demo",)),
+    "test": (_SURFACE, "main", ("test",)),
     "run": (_SURFACE, "main", ("run",)),
     "report": (_SURFACE, "main", ("report",)),
     "export": (_SURFACE, "main", ("export",)),
@@ -99,6 +100,7 @@ _CORE_COMMANDS: frozenset[str] = frozenset({
 
 _SUMMARIES: dict[str, str] = {
     "demo": "Run the seven-beat demonstration: space, run, ledger, report, coverage",
+    "test": "List the declared test surface: 75 laws, 6 seams, the rule tables",
     "run": "Execute a run profile (dry-run with --dry-run)",
     "report": "Generate report from store",
     "export": "Export store data for round-trip",

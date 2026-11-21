@@ -6,6 +6,13 @@ rows before anyone knew whether the laws work. This plan buys the cheapest
 test that separates a defect from a bad hyperparameter, then hands the rest to
 SEC as optimization.
 
+**Progress 2026-11-21:** P0 and P2 landed. `comp test --surface` lists 75 laws,
+6 seams and 78 rules (29 task-independent + 1 task-dependent + 48
+availability). The P2 seams found and closed one composer defect: `recurrent`
+never received `sequence` through the geometry builder, so the time axis could
+not unroll from a composed cell. P1 is next and unstarted; its design blockers
+are recorded in §4.
+
 **One sentence:** 75 laws × a positive/negative control pair, 6 protocol
 seams, and the declared composition rules are the whole test surface; a
 tiny-batch fit whose mechanism-removed control must fail is the defect line;
@@ -177,7 +184,7 @@ tuning (last row, SEC's job). No fifth reading.
 
 ## 4. The program (dependency order, prices measured or explicitly priced first)
 
-### P0 — Declare the surface (0 cost, first)
+### P0 — Declare the surface (0 cost, first) — **done 2026-11-21**
 
 - One `SURFACE` table: 75 laws (id + knobs), 6 seams (exemplar task + cell),
   2 rule tables with their accept/refuse pairs. `comp test --surface` lists
@@ -197,7 +204,16 @@ tuning (last row, SEC's job). No fifth reading.
 - **Close:** the surface count equals 75 + 6 + rules; no test names a family
   box; an unchanged fingerprint does not re-run.
 
-### P1 — Run L-a/b/c on all 75 (the decisive spend, ≤ 15 min wall)
+**Landed:** `computronium/primitives/surface.py` derives laws (registry +
+`AxisSpec.accepted_params`), seams, and rules (compiled void tables +
+harvested availability predicates) on call — no second list.
+`tests/primitives/test_surface_lock.py` proves registry derivation (a fake
+row appears), six declared exemplars, the rule tables, no family-screen test,
+and the refusal's failing test. `test_no_test_names_a_family_box` passes
+with only `test_primitive_capability.py` declared. **Not landed:** the
+fingerprint cache; it is the first P1 task, not a P0 row.
+
+### P1 — Run L-a/b/c on all 75 (the decisive spend, ≤ 15 min wall) — **next**
 
 Tiny fits: 200 steps × 16 samples ≈ 1 s each (measured cell ≈ 4.4 ms/step on
 the 12×32 sequence box); 75 × 3 lr × 2 (fit + control) ≈ 450 runs ≈ 11 min
@@ -214,13 +230,40 @@ serial, 1–2 min with 12 lanes on 16 cores. L-a/L-c are negligible.
 - **Close:** every primitive is in one of the five states, each non-pass has
   the failing control that proves it, and the calibration set is reproduced.
 
-### P2 — The 6 seams (one E1 cell each, ≤ 10 min)
+**Measured before the harness (2026-11-21), three facts that shape it:**
+
+1. The micro-case fit works: 200 `train_step`s on the case's 4-sample batch
+   drop CE 1.33 → 0.004 in ~0.35 s on CPU (`gradient`, `feedforward`,
+   `euclidean`, `digital`, `instantaneous` all measured). One fit is cheaper
+   than the plan's budget, so a fit is not the expensive part.
+2. That fit converges through geometry + credit on *every* axis, so a single
+   uniform fit does not isolate a substrate, dynamics or plasticity law. A
+   control that replaces those laws with a neutral companion still fits; the
+   per-axis control is the P1 design work, not a grid sweep.
+3. `case.config` is not read by the migrated references (`cases.step` rebuilds
+   from `cell_config`), so `config_reads` is empty for all 75. L-c must vary
+   the composed axis config (`CellConfig` / coordinate params), not the case
+   dict; `AxisSpec.accepted_params` is the live knob declaration.
+
+Per-axis fit/control pairs P1 still needs: credit (zero pseudo-gradient),
+dynamics (instantaneous settle), geometry (frozen/zeroed weights), update
+(unchanged parameters), plasticity (null psi), substrate (identity forward).
+Each pair is a named check, not a grid point.
+
+### P2 — The 6 seams (one E1 cell each, ≤ 10 min) — **done 2026-11-21**
 
 Each seam's exemplar runs its 1-batch or 1-epoch cell and asserts the exchange
 it declares (label reaches credit, ids broadcast, time axis unrolls,
 edge_index reaches topology, settle converges, both update paths run).
 
 - **Close:** 6/6 pass, or a named defect with a lock.
+
+**Landed:** `tests/property/test_protocol_seams.py` runs all six exchanges,
+keyed by the surface's seam declaration (a declared seam without a check
+fails). **Defect closed:** `recurrent` + `sequence` was unreachable through
+`compose_configs`; `sequence` is now a declared recurrent geometry key and
+the builder passes it, so `(time, batch, features)` unrolls from a composed
+cell (measured `(3, 4, 4) → (3, 4, 4)`).
 
 ### P3 — Close the defects the surface found
 
@@ -263,19 +306,25 @@ claim is "works here and elsewhere" until this runs.
 ## 5. Definition of done
 
 1. **The surface is declared**: 75 laws, 6 seams, the rule tables — and no
-   per-family test exists.
+   per-family test exists. **Done 2026-11-21** (`surface.py`, `comp test
+   --surface`, `test_surface_lock.py`).
 2. **All 75 laws are in exactly one state** from §3's table, each with the
    control that proves it. 0 defects, 0 unexplained fits, 0 inert knobs
-   presented as tuning.
-3. **6/6 seams pass** their declared exchange.
+   presented as tuning. **Open, P1.**
+3. **6/6 seams pass** their declared exchange. **Done 2026-11-21**
+   (`test_protocol_seams.py`).
 4. **Every refusal carries a test that fails without it**; every refusal
-   trigger names a rule, not a missing mechanism.
+   trigger names a rule, not a missing mechanism. **Partial:** the one
+   declared refusal (`primitive.substrate.complex`) fails without its void
+   constraint; the two gap rows (`rule_state`, `substrate_coupled`) name the
+   mechanism that would close them, and P3 owes them their failing controls.
 5. **SEC runs on clean laws only**, reusing the screen cache; a claim exists
-   only where a knob binds.
+   only where a knob binds. **Open, P4.**
 6. **Every kernel row passes kill + parity**; every absent row is documented
-   as reference-only.
+   as reference-only. **Open, P5.**
 7. The audit answers the same questions: no test names a family box, no
-   refusal without a failing test, no kernel without parity.
+   refusal without a failing test, no kernel without parity. **Partial:** the
+   family-box lock passes; the other two are P3/P5.
 
 **Not done because a row closed.** A refusal is a box statement; a screen is
 E1; a width search is not a mechanism fix.
@@ -311,26 +360,31 @@ E1; a width search is not a mechanism fix.
 | `test_no_test_names_a_family_box` | a per-family screen returns as a test |
 | `test_a_surface_row_is_registry_derived` | a second list disagrees with the registry |
 | `test_a_refusal_has_a_failing_test` | a refusal exists without a test that fails without it |
+| `test_every_seam_has_a_check` | a declared seam has no check |
+| `test_seam_exchanges_what_it_declares` | the exemplar does not exchange what it declares |
+
+**Landed 2026-11-21:** family-box, surface-row, refusal, and both seam locks.
+**Open:** the three fit/knob locks, which arrive with the P1 harness.
 
 ---
 
 ## 8. First commands
 
 ```sh
-# 1. P0: the surface, then prove it is the registry's own list
+# 1. P0: the surface, then prove it is the registry's own list   [DONE]
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
-uv run comp test --surface            # 75 laws + 6 seams + rules
+uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P1: the decisive spend - 75 tiny fits, each with its negative control
+# 2. P1: the decisive spend - 75 tiny fits, each with its negative control [NEXT]
 uv run python scripts/probes/p1_law_surface.py --seeds 1 --lr-grid 0.1,1,10 \
   --samples 16 --steps 200 --lanes 12 --out results/p1
 
-# 3. P2: the six seams
+# 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q
 
 # 4. The gates that must stay green while the work lands
-uv run comp gate breadth              # 17/17, exit 0
-uv run python scripts/audit.py --static   # 0 findings
+uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
+uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 ```
 
 ---

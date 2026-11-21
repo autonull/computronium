@@ -38,6 +38,14 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
         "--run-id", default=None, help="Report on this run (latest if omitted)"
     )
 
+    # Test command: the declared surface (TODO98)
+    p_test = sub.add_parser("test", help="List the declared test surface")
+    p_test.add_argument(
+        "--surface",
+        action="store_true",
+        help="List the 75 laws, the 6 seams and the rule tables",
+    )
+
     # Run command
     p_run = sub.add_parser("run", help="Execute a run profile or a spec file")
     p_run.add_argument(

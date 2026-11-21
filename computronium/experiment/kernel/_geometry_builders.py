@@ -474,6 +474,7 @@ def build_recurrent_config(
         hidden_dims=hidden_dims,
         init_scale=init_scale,
         init_scheme=init_scheme,  # type: ignore[arg-type]
+        sequence=bool(geometry.get("sequence")),
     )
 
 

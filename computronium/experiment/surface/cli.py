@@ -68,6 +68,7 @@ from ._cli._science import (
     _cmd_stability_plasticity,
 )
 from ._cli._stats import _cmd_diff, _cmd_pareto, _cmd_stats
+from ._cli._surface import _cmd_test
 
 __all__ = [
     "CORE_COMMANDS",
@@ -107,6 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.profile = args.profile_flag
     command_handlers = {
         "run": _cmd_run,
+        "test": _cmd_test,
         "demo": _cmd_demo,
         "report": _cmd_report,
         "export": _cmd_export,
