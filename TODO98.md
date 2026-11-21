@@ -18,9 +18,14 @@ samples, 60 of the ≤200 steps, three learning rates, 12 lanes and a 150 s row
 budget: 354 s, one row per law, exit 1. States: **9 `works`, 7 `test defect`,
 12 `declaration defect`, 21 `defect-or-gap`, 17 `refused`, 7 `unproven
 control`, 2 `defect (invariant)`**. Its pre-registered calibration gate fired
-on that first run and is corrected in §4; P1's close is open on the declared
-200-step box and on a mechanism-removing control for the four axes a companion
-cannot price.
+on that first run and is corrected in §4; the fork amendment below retracts its
+two largest classes and sets P1's close.
+
+**Fork amendment 2026-11-21 (binding, §3).** The six axes split into four
+*carrier* laws — tested by a digest against their declared companion, µs — and
+two *signal* laws — tested by the fit, ~0.3 s. The first run's 7 `test defect`
+and 12 `declaration defect` rows are the instrument's blindness, retracted in
+§3; P1's close is the five-ticket landing in §4.
 
 **One sentence:** 75 laws × a positive/negative control pair, 6 protocol
 seams, and the declared composition rules are the whole test surface; a
@@ -201,6 +206,47 @@ measure a law on an axis whose control is not demonstrated. It is never a
 verdict and never counts toward done. A program that reports it as `works`
 has produced a test defect, not a result.
 
+### Amendment 2026-11-21 (binding): the fork comes first
+
+The first batch run measured the fork instead of assuming it. The six axes
+split by what the law transforms, and that split — not a per-axis strategy
+table — decides the instrument:
+
+| Class | Axes | The law transforms | Removal (declared) | Test | Cost |
+|---|---|---|---|---|---|
+| **carrier** | substrate, geometry, dynamics, plasticity | a value that flows | the neutral companion: `digital`, `feedforward`, `instantaneous`, `null` | `digest(step(law)) != digest(step(companion))` | µs |
+| **signal** | credit, update | the learning channel | zero pseudo-gradient, identity step | the fit must die | ~0.3 s |
+
+The rules that follow supersede the table above where they differ:
+
+- **L-b is the signal laws' test.** For a carrier law a fit is not a test: the
+  companion reaches it by construction (measured 2026-11-21: `nca` control
+  0.184; `energy_minimization`, `noisy`, `sparse`, `ternary`, `routing`,
+  `closed_form_ridge`). A companion that reaches is not a defect of the law;
+  it is the wrong instrument.
+- **A carrier law's L-b⁻ is a digest inequality**, not a loss. Equal digests
+  mean the law *is* its companion: a declaration defect, named.
+- **L-c reads the digest first.** A knob is *read* when it changes the case's
+  digest, inert when the digest is unchanged. The fit is L-c's second reading,
+  for signal laws only. The first run's 12 `declaration defect` rows are
+  **retracted**: `feedback_lr`, `hidden_dim`, `grad_clip` and `fisher_damping`
+  are read, and the fit at one box does not bind them.
+- **The corrected table:**
+
+| L-a | carrier: digest vs companion | signal: fit | control | L-c | Verdict |
+|---|---|---|---|---|---|
+| fail | — | — | — | — | **defect**, named invariant |
+| pass | differs | — | — | read | **works (E1)**, carrier law |
+| pass | equal | — | — | — | **declaration defect**: the law is its companion |
+| pass | — | fails everywhere | — | — | **defect or capability gap**, signal law |
+| pass | — | passes | **passes** | — | **test defect**, signal law only |
+| pass | — | passes | fails | inert | **declaration defect**, signal law |
+| pass | — | passes | fails | responds | **works (E1)**, signal law |
+
+`test defect` now means exactly one thing: a *signal* law's control still fits.
+Exit 0 becomes reachable without inventing controls, and the 200-step box
+applies to 26 laws instead of 75.
+
 ---
 
 ## 4. The program (dependency order, prices measured or explicitly priced first)
@@ -337,8 +383,8 @@ named resolved into four rules:
 
 | Finding | Rows | Evidence |
 |---|---|---|
-| the fit cannot test geometry, settle, substrate or plasticity | 7 `test defect` | the neutral companion reaches (`nca` control 0.184, `energy_minimization`, `noisy`, `sparse`, `ternary`, `routing`, `closed_form_ridge`) |
-| declared knobs that move no fit | 12 `declaration defect` | `feedback_lr` (4 credits), `hidden_dim` (2 geometry), `grad_clip` (5 updates), `fisher_damping` |
+| the fit cannot test geometry, settle, substrate or plasticity (**retracted as a defect: this is the fork**) | 7 `test defect` | the companion reaches (`nca` control 0.184, `energy_minimization`, `noisy`, `sparse`, `ternary`, `routing`, `closed_form_ridge`) |
+| declared knobs that move no fit (**retracted: the knobs are read, the fit does not bind them**) | 12 `declaration defect` | `feedback_lr` (4 credits), `hidden_dim` (2 geometry), `grad_clip` (5 updates), `fisher_damping` |
 | no legal setting fits | 21 `defect-or-gap` | `forward_tangent`, `target_inversion`, `temporal_trace`, `rule_state`, `euclidean` at 60 steps |
 | the declared space refuses the cell | 17 `refused` | 13 void constraints + 3 batch-layout disagreements + `complex` |
 | the law's L-a fails | 2 `defect (invariant)` | `plasticity.null`, `substrate_coupled` — both return an empty plastic state by contract, so this is the *instrument's* L-a, not the law |
@@ -355,9 +401,33 @@ the screen's wiring (P3), and conv's cell trains at a cost the wave cannot pay
 → `refused` (declared void constraint) and `credit_assignment.forward_tangent`
 → `defect-or-gap` (a ladder `unimplemented` row) — and reproduces both.
 
-**Open (P1 close):** the declared 200-step box (`--resume --steps 200
---row-budget 400`), and the four mechanism-removing controls. Until those
-exist, 7 rows are `test defect`, which is exit 1 by the plan's own table.
+**Open (P1 close) — the fork landing: five tickets, one session, one commit.**
+Each names its file, its change and its size; the session runs them as one
+edit pass, then one gate block, then one measurement (§10).
+
+| # | Ticket | File | Size |
+|---|---|---|---|
+| T1 | declare `AXIS_KIND` (6 rows: 4 carrier, 2 signal) and expose `Law.kind` through `comp test --surface` | `experiment/schema/axis.py`, `primitives/surface.py` | +6 rows, +1 field |
+| T2 | `fit.control` dispatches on `kind`: carriers return the companion cell, signals the zeroed channel. Delete the four-way companion match and the per-axis dispatch; the two signal proxies stay | `primitives/fit.py` | −60 / +40 |
+| T3 | `fit.decide` gains the carrier verdict (`digest(law) != digest(companion)`); `test defect` only for a signal law; L-c reads digest, then fit | `primitives/fit.py`, `scripts/probes/p1_law_surface.py` | edit |
+| T4 | `--kind carrier\|signal` selects a class in the batch, so the 200-step box runs only on signal laws | `scripts/probes/p1_law_surface.py` | +1 flag |
+| T5 | locks: `test_a_carrier_law_is_tested_by_its_digest`, `test_a_signal_law_is_tested_by_its_fit`; retitle the two fit locks "signal" | `tests/primitives/test_surface_fit.py` | +2 tests |
+
+**After T5 (expected):** 49 carrier rows from µs digests, 26 signal rows from
+fits, 0 `test defect` from companions, 0 retracted declaration defects, and the
+declared 200-step box costs ~15 s because it runs on 26 laws. Exit 0 requires
+every signal law to keep a failing control and every carrier digest to differ.
+
+**Do not** buy the 200-step box for all 75 first: it prices an instrument the
+fork is about to replace (measured: 354 s for the 60-step box, and the fit is
+idle for 49 of those laws).
+
+**The one unknown, named so the session does not guess.** A carrier digest
+needs the *companion's* case, and `cases.build_case` builds from the law's own
+cell. T2/T3 add one helper (`fit.companion_case`) that composes the companion
+cell and reuses `cases._payload`; the alternative is `cases.step` on the law's
+case with the axis config replaced. Measure which composes; do not hand-roll a
+second payload builder (that is the duplicate-body defect the audit forbids).
 
 ### P2 — The 6 seams (one E1 cell each, ≤ 10 min) — **done 2026-11-21**
 
@@ -420,11 +490,11 @@ claim is "works here and elsewhere" until this runs.
 2. **All 75 laws are in exactly one state** from §3's table, each with the
    control that proves it. 0 defects, 0 unexplained fits, 0 inert knobs
    presented as tuning, 0 `unproven control`. **Partial, P1 (batch landed):**
-   all 75 are measured at 60 steps (§4); 7 `test defect` rows name the axes a
-   companion cannot price, 12 `declaration defect` rows name declared knobs
-   that move no fit, and the two `defect (invariant)` rows are the instrument's
-   L-a on no-op plasticity. The 200-step box and the four controls are the
-   close.
+   all 75 are measured at 60 steps (§4). The fork amendment (§3) retracts the
+   7 `test defect` and 12 `declaration defect` rows as instrument blindness; the
+   five-ticket landing (§4) replaces the fit with a digest for the 49 carrier
+   laws and keeps it for the 26 signal laws. The two `defect (invariant)` rows
+   are the instrument's L-a on no-op plasticity and go with T5.
 3. **6/6 seams pass** their declared exchange. **Done 2026-11-21**
    (`test_protocol_seams.py`).
 4. **Every refusal carries a test that fails without it**; every refusal
@@ -447,9 +517,13 @@ E1; a width search is not a mechanism fix.
 
 ## 6. Cost model and stop rules
 
-- **The unit of cost is the law, not the row.** One law ≤4 fits (3 lr + 1
-  control); one family row ≈ 1–89 s per seed, ×5 for E2. Spend the first,
-  buy the second only where the loop will act.
+- **The unit of cost is the law, not the row.** One signal law ≤4 fits (3 lr +
+  1 control, ~0.3 s each); one carrier law one digest pair (µs); one family row
+  ≈ 1–89 s per seed, ×5 for E2. Spend the first, buy the second only where the
+  loop will act.
+- **The fork is the measured price.** 75 laws at 60 steps cost 354 s at 12
+  lanes; the fork makes the declared 200-step box a 26-law box (~15 s). A
+  200-step box over all 75 prices 49 laws the digest decides.
 - **The batch is the unit of spend.** A wave is one process tree at 12 lanes;
   a single law is a debugging step, not a session. 300 fits ≈ 105 s serial,
   under a minute at 12 lanes.
@@ -458,8 +532,11 @@ E1; a width search is not a mechanism fix.
 - **A grid is capped by declared ceilings, not by luck**: 3 lr values inside
   the stability bound. If a law needs a 4th grid point to fit, the ceiling is
   the finding.
-- **Watchdog = 2× the wave's measured cost.** A wave killed past it is a
-  compose or cost defect; record, re-price, do not retry blind.
+- **The row budget, not the family price, is the watchdog.** A per-fit
+  watchdog priced from the family's base fit killed legitimate laws (measured
+  2026-11-21: half of wave 1); the batch now gives each row a wall budget
+  (150 s measured) and refuses a row that spends it. A wave killed past it is
+  a compose or cost defect: record, re-price, do not retry blind.
 - **Lanes:** 12 concurrent processes, 2 threads each (measured on 16 cores).
   A 4-worker run's 300 s timeouts were contention, not verdicts.
 - **A green wave is not a verdict.** Exit 0 requires the calibration gate;
@@ -487,10 +564,12 @@ E1; a width search is not a mechanism fix.
 | `test_the_batch_calibration_gate_exits_nonzero` | a known non-pass fits and the batch still exits 0 |
 | `test_the_batch_is_restartable` | a finished row re-runs, or a killed row reads as `works` |
 | `test_the_batch_marks_unproven_axes` | a law on an unproven axis is `works` instead of `unproven control` |
+| `test_a_carrier_law_is_tested_by_its_digest` | a carrier law is called `works` from a fit, or `defect` without its digest |
+| `test_a_signal_law_is_tested_by_its_fit` | a signal law is called `works` from a digest |
 
 **Landed 2026-11-21:** family-box, surface-row, refusal, both seam locks, the
-three fit/knob locks and the four batch locks (`test_surface_fit.py`). A fit or
-batch rule lands with its lock; nothing on this table is open.
+three fit/knob locks and the four batch locks (`test_surface_fit.py`).
+**Open:** the two fork locks, which arrive with T5. A rule lands with its lock.
 
 ---
 
@@ -501,16 +580,19 @@ batch rule lands with its lock; nothing on this table is open.
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P1: the batch, all 75 laws, waves in axis order                 [LANDED]
-uv run python scripts/probes/p1_law_surface.py --lanes 12 --steps 60 \
-  --row-budget 150 --out results/p1      # 75 rows, 354 s, exit 1
-# the declared 200-step box and the four controls the batch named
-uv run python scripts/probes/p1_law_surface.py --resume --steps 200 \
-  --row-budget 400 --out results/p1      # exit 0 requires every control
-# exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial wave.
+# 2. P1: the fork landing, T1-T5 in one pass (§4)                    [NEXT]
+uv run python -m pytest tests/primitives/test_surface_fit.py \
+  tests/primitives/test_surface_lock.py -q
+uv run comp test --surface            # Law.kind printed; 75 laws, 6 seams
+# the carrier box (digests) and the signal box (fits), one process each
+uv run python scripts/probes/p1_law_surface.py --kind carrier \
+  --lanes 12 --row-budget 150 --out results/p1
+uv run python scripts/probes/p1_law_surface.py --kind signal --resume \
+  --steps 200 --row-budget 60 --out results/p1
+# exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial class.
 # Do not re-run interactively to "check" a nonzero exit.
-# A wave is a selection (--axes), not a second program: --resume never re-runs
-# a finished row, and a later wave never erases an earlier one's verdicts.
+# --resume never re-runs a finished row, and a later run never erases an
+# earlier one's verdicts. The 200-step box applies to the signal class only.
 
 # 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q
@@ -545,3 +627,40 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 - **Calibrating a fit on a row the screen priced.** A cross-config wiring
   defect and a cost cap are the screen's classes; a fit reproduces neither, and
   a gate made of them can only trip.
+- **Running one instrument over six axes.** A fit is the signal laws' test; a
+  carrier law's removal is its declared companion, and the digest decides it.
+  One ladder for all six produces 7 test defects and 12 false declaration
+  defects by construction.
+
+---
+
+## 10. Running a session in one batch
+
+The unit of a session is one landing: one edit pass, one gate block, one
+measurement, one commit. A per-ticket run is a prompt, not a result.
+
+```sh
+# 1. edit T1-T5 in one pass (no intermediate runs)
+# 2. gates, one block, streamed, walltime visible
+uv run ruff format <changed files> && uv run ruff check --fix <changed files>
+uv run pyright computronium/primitives/fit.py
+uv run python -m pytest tests/primitives/test_surface_fit.py \
+  tests/primitives/test_surface_lock.py -q
+# 3. the measurement, background, polled at <=2 min, one log per run
+nohup uv run python scripts/probes/p1_law_surface.py --kind carrier \
+  --lanes 12 --row-budget 150 --out results/p1 > logs/p1_carrier.log 2>&1 &
+uv run python scripts/probes/p1_law_surface.py --kind signal --resume \
+  --steps 200 --row-budget 60 --out results/p1
+# 4. one commit: plan, instrument, locks, measurement
+```
+
+Rules for the session:
+
+- **One shard run, once.** The fit locks plus the surface lock are the gate; a
+  green run is not repeated "to confirm".
+- **A nonzero exit is the verdict.** Record it and its named rows; do not
+  re-run to see a different number.
+- **Batch the edits, not the judgments.** Five files change in one pass because
+  they are one rule (the fork); each ticket is not its own commit.
+- **Leave the plan as the queue.** A landed ticket leaves §4; an open one stays
+  with its file, its size and its command.
