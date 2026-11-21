@@ -1,9 +1,9 @@
-"""TODO98 P1 locks: the fit, its control, and the batch's verdicts.
+"""TODO98 P1 locks: one question per law, and the control that answers it.
 
-A fit that passes with its mechanism removed measures the optimizer, not the
-law: these locks make that a test defect and never a result. The batch's
-calibration gate, its restart, and its refusal to report an unproven axis
-as ``works`` are locks too, so a green table cannot stand without them.
+A carrier law is decided by its step against its declared neutral companion;
+a signal law by a fit whose cut-channel control must fail. These locks fail
+when the wrong instrument decides a law, when a fit survives its control, and
+when the batch reports a state it did not measure.
 """
 
 from __future__ import annotations
@@ -27,18 +27,19 @@ def _law(suffix: str, axis: str) -> str:
     )
 
 
-def test_a_law_fit_fails_without_its_mechanism() -> None:
-    """A fit whose mechanism-removed control still fits is a test defect."""
-    state, _ = fit.decide(invariant=True, fits=True, control=True, knob=True)
+def test_a_signal_law_fit_fails_without_its_mechanism() -> None:
+    """A fit whose cut-channel control still fits is a test defect."""
+    state, _ = fit.decide(law_kind="signal", invariant=True, fits=True, control=True)
     assert state == "test defect"
-    state, _ = fit.decide(invariant=True, fits=True, control=False, knob=True)
+    state, _ = fit.decide(law_kind="signal", invariant=True, fits=True, control=False)
     assert state == "works"
 
 
-def test_a_law_fit_passes_under_some_legal_setting() -> None:
+def test_a_signal_law_fit_passes_under_some_legal_setting() -> None:
     """A law with a passing grid point is never called a defect."""
     spec = get_primitive_spec(_law("gradient", "credit"))
     assert spec is not None
+    assert fit.kind(spec) == "signal"
     declared = fit.coordinate(spec)
     composed = fit.cell(spec, declared)
     measured = fit.measure(
@@ -46,28 +47,57 @@ def test_a_law_fit_passes_under_some_legal_setting() -> None:
     )
     assert measured.reached, (measured.loss, measured.final)
     state, _ = fit.decide(
-        invariant=True, fits=measured.reached, control=False, knob=True
+        law_kind="signal", invariant=True, fits=measured.reached, control=False
     )
     assert state == "works"
-    state, _ = fit.decide(invariant=True, fits=False, control=False, knob=True)
+    state, _ = fit.decide(law_kind="signal", invariant=True, fits=False)
     assert state == "defect-or-gap (mechanism)"
 
 
-def test_an_inert_knob_is_a_declaration_defect() -> None:
-    """A declared knob that moves no fit is a declaration defect, not tuning."""
-    state, reason = fit.decide(invariant=True, fits=True, control=False, knob=False)
-    assert state == "declaration defect"
-    assert "inert" in reason
-    assert fit.decide(invariant=True, fits=True, control=False, knob=True)[0] == "works"
-
-
-def test_the_batch_refuses_a_verdict_without_a_control() -> None:
-    """An axis with no demonstrated control is never reported as ``works``."""
-    state, reason = fit.decide(invariant=True, fits=True, control=None, knob=True)
-    assert state == "unproven control"
-    assert "control" in reason
-    state, _ = fit.decide(invariant=True, fits=False, control=None, knob=None)
+def test_a_carrier_law_is_tested_by_its_digest() -> None:
+    """A carrier law is decided by its companion digest, and a fit that runs
+    without one is not a verdict."""
+    state, reason = fit.decide(law_kind="carrier", invariant=True)
     assert state == "defect-or-gap (mechanism)"
+    assert "digest" in reason
+    differs = fit.Removal(digest="law", companion="companion")
+    assert fit.decide(law_kind="carrier", invariant=True, removal=differs)[0] == "works"
+    equal = fit.Removal(digest="law", companion="law")
+    state, reason = fit.decide(law_kind="carrier", invariant=True, removal=equal)
+    assert state == "inert"
+    assert "companion" in reason
+    silent = fit.Removal(digest="law", companion="law", silent=True)
+    assert (
+        fit.decide(law_kind="carrier", invariant=True, removal=silent)[0]
+        == "defect-or-gap (mechanism)"
+    )
+
+
+def test_the_digest_separates_a_law_from_its_companion() -> None:
+    """A quantizing substrate digests differently from ``digital``; the
+    neutral law itself digests equal, so the reading is not always differ."""
+    from computronium.primitives.registry import get_primitive_spec
+
+    ternary = get_primitive_spec(_law("ternary", "substrate"))
+    feedforward = get_primitive_spec(_law("feedforward", "geometry"))
+    assert ternary is not None and feedforward is not None
+    assert fit.bound(ternary, fit.coordinate(ternary)).differs
+    assert not fit.bound(feedforward, fit.coordinate(feedforward)).differs
+
+
+def test_a_signal_law_is_tested_by_its_fit() -> None:
+    """A signal law is decided by the fit and its control, not a digest."""
+    removal = fit.Removal(digest="law", companion="companion")
+    state, _ = fit.decide(
+        law_kind="signal",
+        invariant=True,
+        removal=removal,
+        fits=True,
+        control=False,
+    )
+    assert state == "works"
+    state, _ = fit.decide(law_kind="signal", invariant=True, fits=True, control=True)
+    assert state == "test defect"
 
 
 def test_the_batch_calibration_gate_exits_nonzero(tmp_path: Path) -> None:
@@ -108,16 +138,11 @@ def test_the_batch_is_restartable(tmp_path: Path) -> None:
     assert json.loads((tmp_path / "surface.json").read_text())["rows"]
 
 
-def test_the_batch_marks_unproven_axes(tmp_path: Path) -> None:
-    """An unproven axis is a partial wave (exit 3), never a verdict."""
+def test_the_batch_reports_a_missing_law(tmp_path: Path) -> None:
+    """A selected law with no row is partial (exit 3), never a verdict."""
     from scripts.probes import p1_law_surface as batch
 
     options = batch.Options(axes=("credit",), steps=3, out=tmp_path)
     report = batch.Report(options=options)
-    report.rows["a"] = {"id": "primitive.credit_assignment.gradient", "state": "works"}
-    report.rows["b"] = {
-        "id": "primitive.credit_assignment.homeostatic",
-        "state": "unproven control",
-    }
-    selected = list(laws())
+    selected = list(laws())[:2]
     assert batch._exit(report, selected) == 3

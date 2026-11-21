@@ -28,11 +28,11 @@ def _render(declared: Surface) -> None:
         f"{availability} availability)"
     )
     print()
-    print(f"{'law':54} {'axis':10} {'family':12} state")
+    print(f"{'law':54} {'axis':10} {'kind':8} {'family':12} state")
     for law in declared.laws:
         state = (law.refusal and f"refused: {law.refusal}") or ""
         state = state or (law.gap and "gap: no mechanism") or "declared"
-        print(f"{law.id:54} {law.axis:10} {law.family:12} {state}")
+        print(f"{law.id:54} {law.axis:10} {law.kind:8} {law.family:12} {state}")
     print()
     print(f"{'seam':18} {'axis':10} {'task':18} exchange")
     for seam in declared.seams:

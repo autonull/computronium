@@ -56,6 +56,19 @@ def test_knobs_are_the_axis_declaration() -> None:
         assert law.knobs == tuple(sorted(axis_spec.accepted_params)), law.id
 
 
+def test_the_kind_is_the_axis_declaration() -> None:
+    """A law's kind is its axis's one row: 4 carrier axes, 2 signal axes."""
+    from computronium.experiment.schema.axis import AXIS_KIND, StructuralAxis
+
+    assert len(AXIS_KIND) == 6
+    axes: dict[str, int] = {"carrier": 0, "signal": 0}
+    for axis, kind in AXIS_KIND.items():
+        axes[kind] += 1
+    assert axes == {"carrier": 4, "signal": 2}
+    for law in laws():
+        assert law.kind == AXIS_KIND[StructuralAxis(law.axis)], law.id
+
+
 def test_seams_are_six_declared_exemplars() -> None:
     """Exactly six seams, each anchored on a registered primitive."""
     from computronium.primitives.registry import get_primitive_spec

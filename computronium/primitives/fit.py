@@ -1,11 +1,18 @@
-"""TODO98 P1's instrument: the tiny fit, its control, and the declared knob.
+"""TODO98's law instruments: the carrier digest and the signal fit.
 
-A law is tested by one deterministic fit on the family's declared shape:
-16 samples, at most 200 optimizer steps, at three learning rates. The fit
-must reach a tenth of its untrained loss under some legal setting (L-b), the
-same fit must fail with the law's mechanism removed (L-b⁻), and the knob the
-law declares must move the fit (L-c). A fit that passes with the mechanism
-removed measures the optimizer: that is a test defect, never a result.
+The six axes split by what their laws transform. A *carrier* law (substrate,
+geometry, dynamics, plasticity) transforms a value that flows through the
+cell, so its test is a digest against the axis's declared neutral companion:
+equal digests mean the law *is* its companion. A *signal* law (credit,
+update) transforms the learning channel, so its test is a deterministic fit
+on the family's declared shape: 16 samples, at most 200 optimizer steps, at
+three learning rates. The fit must reach a tenth of its untrained loss under
+some legal setting, and the same fit must fail with the channel cut. A fit
+that passes with the channel cut measures the optimizer: that is a test
+defect.
+
+Knob binding is not a test here: a knob that moves nothing at one box is a
+coordinate, and the search space discovers it at the cost it already pays.
 
 The cell is the one the screen prices: the family's base box, with the law's
 own axis, at the family's declared input shape and parameter budget. The
@@ -28,6 +35,7 @@ from computronium.primitives import cases
 
 if TYPE_CHECKING:
     from computronium.experiment.kernel.compose import ComposedCell
+    from computronium.experiment.schema.axis import LawKind
     from computronium.experiment.schema.coordinate import Coordinate
     from computronium.primitives.registry import PrimitiveSpec
 
@@ -40,15 +48,16 @@ __all__ = [
     "Fit",
     "FitError",
     "Problem",
+    "Removal",
+    "bound",
     "cell",
     "control",
     "coordinate",
     "decide",
     "family",
-    "knob",
+    "kind",
     "measure",
     "problem",
-    "values",
 ]
 
 #: The declared fit: samples per batch, the step ceiling, the reach factor
@@ -65,11 +74,36 @@ GRID: Final[tuple[float, ...]] = (1.0, 10.0, 0.1)
 FLAT: Final[int] = 20
 
 
-#: The knob each axis reads, in preference order. The first one the law
-#: declares is L-c's knob; an axis none of whose knobs the law declares has
-#: no L-c, and the row says so instead of tuning something else.
 class FitError(RuntimeError):
     """The fit could not run: the cell refuses its batch, or the step raises."""
+
+
+@dataclass(frozen=True, slots=True)
+class Removal:
+    """A carrier law's removal reading: its step and its companion's.
+
+    The companion is the axis's declared neutral element, so a differ is the
+    law's own mechanism; an equal pair says the law *is* its companion, a
+    silent pair says the case gave the law nothing to transform, and
+    ``baseline`` says the law is the declared neutral element itself.
+    """
+
+    digest: str
+    companion: str
+    silent: bool = False
+    baseline: bool = False
+
+    @property
+    def differs(self) -> bool:
+        """The law's step differs from its declared companion's."""
+        return self.digest != self.companion
+
+
+def kind(spec: PrimitiveSpec) -> LawKind:
+    """The fork's class: a carrier law transforms a value, a signal a channel."""
+    from computronium.experiment.schema.axis import axis_kind
+
+    return axis_kind(spec.axis)
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,11 +125,6 @@ class Fit:
     def moved(self) -> bool:
         """The loss is finite and not constant: an error-blind law's contract."""
         return not self.killed and self.final != self.loss
-
-    @property
-    def signature(self) -> tuple[float, int]:
-        """What a knob must move: the last loss and the steps it took."""
-        return (round(self.final, 6), self.steps)
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,122 +322,151 @@ class _FrozenUpdate:
         return dict(params)
 
 
+def _companion(
+    spec: PrimitiveSpec, declared: Coordinate, seed: int = 0
+) -> ComposedCell:
+    """The law's cell with its axis replaced by the declared neutral element.
+
+    The neutral element is the base box's own value (``feedforward``,
+    ``instantaneous``, ``digital``, ``null``), so the removal is the one the
+    repository already declares, not a per-axis table here. The companion is
+    the declared coordinate for those six axes: its own structural params are
+    recomputed, not inherited from the law's axis, where they would be dead
+    configuration the composer refuses by name.
+    """
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+
+    axes = {axis: getattr(declared, axis) for axis in cases.AXES}
+    axes[spec.axis] = _AXIS_DEFAULTS[spec.axis]
+    return cell(spec, _coordinate(axes), seed)
+
+
+def _summary(
+    spec: PrimitiveSpec, composed: ComposedCell, seed: int = 0
+) -> tuple[str, bool]:
+    """The digest of the law's reference step inside ``composed``, and silence.
+
+    Silence means the step produced no weights, no activations and no tensor
+    state: a law the case gives nothing to transform.
+    """
+    from computronium.acceleration.parity import digest
+
+    case = cases.build_case(spec, "", {}, seed, cell=composed.config)
+    result = cases.step(spec, case)
+    silent = not (
+        result.weights
+        or result.activations
+        or any(isinstance(value, torch.Tensor) for value in result.state.values())
+    )
+    return digest(result), silent
+
+
+def bound(spec: PrimitiveSpec, declared: Coordinate, seed: int = 0) -> Removal:
+    """A carrier law's removal: its step digest against its companion's.
+
+    ``baseline`` records whether the law *is* the axis's declared neutral
+    element: then its companion is itself by construction, and the row is the
+    baseline's, not a law that failed to differ.
+    """
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
+
+    digest, silent = _summary(spec, cell(spec, declared, seed), seed)
+    companion, _ = _summary(spec, control(spec, declared, seed), seed)
+    baseline = getattr(declared, spec.axis) == _AXIS_DEFAULTS[spec.axis]
+    return Removal(digest=digest, companion=companion, silent=silent, baseline=baseline)
+
+
 def control(spec: PrimitiveSpec, declared: Coordinate, seed: int = 0) -> ComposedCell:
     """The same cell with the law's mechanism removed.
 
-    A credit's pseudo-gradient is zeroed and an update's step is identity:
-    those are the axis's own contribution, so removing it keeps the cell and
-    cuts the signal. A geometry, a settle, a substrate and a plasticity law
-    are replaced by their declared neutral companion — feedforward,
-    instantaneous, digital, null — because each of those laws is a mechanism
-    *over* its companion, and the companion is the removal the repository
-    already declares.
+    A carrier law's axis is replaced by its declared neutral companion — a
+    geometry by ``feedforward``, a settle by ``instantaneous``, a substrate by
+    ``digital``, a plasticity law by ``null`` — because each of those laws is a
+    mechanism *over* its companion, and the companion is the removal the
+    repository already declares. A signal law's channel is cut in place: a
+    credit's pseudo-gradient is zeroed and an update's step is identity.
 
     The replacement is a recipe, not a parameter patch: the pipeline rebuilds
     a geometry's weights each step, so zeroing them in place is undone at the
     first step (measured: a zeroed nca cell trained to the same loss).
     """
-    from dataclasses import replace
-
-    # A companion is another law: the varied axis's own overrides would be
-    # dead configuration on it, and `compose_configs` refuses them by name.
-    def companion(**axes: str) -> ComposedCell:
-        params = {
-            key: value
-            for key, value in declared.params.items()
-            if not key.startswith(f"{spec.axis}.")
-        }
-        return cell(spec, replace(declared, params=params, **axes), seed)
-
+    if kind(spec) == "carrier":
+        return _companion(spec, declared, seed)
+    composed = cell(spec, declared, seed)
     match spec.axis:
-        case "geometry":
-            return companion(geometry="feedforward")
-        case "dynamics":
-            return companion(dynamics="instantaneous")
-        case "substrate":
-            return companion(substrate="digital")
-        case "plasticity":
-            return companion(plasticity="null")
         case "credit":
-            composed = cell(spec, declared, seed)
             composed.system.credit = _ZeroGradient(composed.system.credit)
-            return composed
         case "update":
-            composed = cell(spec, declared, seed)
             composed.system.update = _FrozenUpdate(composed.system.update)
-            return composed
         case other:
-            msg = f"no control for axis {other!r}"
+            msg = f"no control for signal axis {other!r}"
             raise ValueError(msg)
-
-
-def knob(
-    spec: PrimitiveSpec, declared: Coordinate
-) -> tuple[str, Any, dict[str, Any]] | None:
-    """The first active numeric knob of the law's axis, with its params.
-
-    The composed cell is the authority: it records the values the harvest
-    actually applied (``axis.name``), so a declared-but-inactive knob — the
-    one its availability predicate switches off at this box — is never L-c's
-    knob, and the override that varies it is never refused as dead config.
-    The order is the axis's own (sorted names), so no preference list is
-    kept here.
-
-    Returns:
-        The knob's name, its composed value, and the params that set it; or
-        ``None`` when the cell records no numeric knob on the axis.
-    """
-    applied = cell(spec, declared).params
-    prefix = f"{spec.axis}."
-    for key in sorted(key for key in applied if key.startswith(prefix)):
-        value = applied[key]
-        if isinstance(value, int | float) and not isinstance(value, bool):
-            name = key[len(prefix) :]
-            return name, value, {key: value}
-    return None
-
-
-def values(value: float) -> tuple[Any, ...]:
-    """Three legal values of a declared knob, scaled by its own type."""
-    if isinstance(value, int):
-        return (value, value + 1, max(1, value - 1))
-    return (value, value * 2, value / 2)
+    return composed
 
 
 def decide(
     *,
+    law_kind: LawKind,
     invariant: bool,
-    fits: bool | None,
-    control: bool | None,
-    knob: bool | None,
+    removal: Removal | None = None,
+    fits: bool | None = None,
+    control: bool | None = None,
     refused: str | None = None,
 ) -> tuple[str, str]:
-    """The verdict and what decided it, from TODO98 §3's decision table.
+    """The verdict and what decided it: one question per law.
+
+    A carrier law is asked whether its step differs from the axis's declared
+    neutral companion. A signal law is asked whether its cell trains and its
+    cut-channel control does not. Knob binding is not a test here: a knob
+    that moves nothing at one box is a coordinate, and the search space
+    discovers it at the cost it already pays (TODO98 §3).
 
     Args:
+        law_kind: Which instrument the law's axis declares.
         invariant: Whether L-a held on the law's case.
+        removal: The carrier law's digest against its companion's.
         fits: Whether some admissible setting satisfied the law's criterion;
             ``None`` when no grid point was priced (all killed or refused).
         control: Whether the mechanism-removed fit satisfied the criterion;
             ``None`` when no control ran.
-        knob: Whether L-c's knob moved the fit; ``None`` when not measured.
         refused: The declaration that refuses the cell, or the cost that
             killed every setting.
 
     Returns:
         The row's state and the step that decided it.
     """
-    table = (
-        (refused is not None, "refused", refused or ""),
-        (not invariant, "defect (invariant)", "l-a invariant"),
-        (fits is None, "defect-or-gap (mechanism)", "no priced grid point"),
-        (fits is False, "defect-or-gap (mechanism)", "l-b fit"),
-        (control is None, "unproven control", "no control ran"),
-        (control is True, "test defect", CONTROL_REACHES),
-        (knob is None, "unproven control", "the law records no knob on its axis"),
-        (knob is False, "declaration defect", "l-c knob is inert"),
+    if refused is not None:
+        return "refused", refused
+    if not invariant:
+        return "defect (invariant)", "l-a invariant"
+    return (
+        _carrier_verdict(removal)
+        if law_kind == "carrier"
+        else _signal_verdict(fits, control)
     )
-    for decided, state, reason in table:
-        if decided:
-            return state, reason
-    return "works", "l-b + control + l-c"
+
+
+def _carrier_verdict(removal: Removal | None) -> tuple[str, str]:
+    """The carrier row: a differing digest is its mechanism, an equal one is not."""
+    if removal is None:
+        return "defect-or-gap (mechanism)", "no companion digest"
+    if removal.baseline:
+        return "inert", "the law is the axis's declared neutral element"
+    if removal.silent:
+        return "defect-or-gap (mechanism)", "the step has nothing to transform"
+    if not removal.differs:
+        return "inert", "the law is its companion"
+    return "works", "l-a + digest"
+
+
+def _signal_verdict(fits: bool | None, control: bool | None) -> tuple[str, str]:
+    """The signal row: a fit that survives its cut channel is a test defect."""
+    if fits is None:
+        return "defect-or-gap (mechanism)", "no priced grid point"
+    if not fits:
+        return "defect-or-gap (mechanism)", "l-b fit"
+    if control is None:
+        return "defect-or-gap (mechanism)", "no control ran"
+    if control:
+        return "test defect", CONTROL_REACHES
+    return "works", "l-b + control"

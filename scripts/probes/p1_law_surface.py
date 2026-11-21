@@ -1,18 +1,22 @@
 """TODO98 P1: the law-surface batch.
 
-One program enumerates the declared surface, runs each law's tiny fit, its
-mechanism-removed control and its declared knob, writes one row per law, and
-exits a verdict. Waves run cheapest axis pair first and reuse finished rows.
+One program enumerates the declared surface, asks each law the one question
+its axis declares, writes one row per law, and exits a verdict. A carrier
+law: does its step differ from its declared neutral companion (µs)? A signal
+law: does its cell train, and does it stop training with the channel cut?
+Knob binding is not asked: the search space discovers it at the cost it
+already pays.
 
 Run:
-    uv run python scripts/probes/p1_law_surface.py --axes credit,geometry \
-        --out results/p1
-    uv run python scripts/probes/p1_law_surface.py --axes dynamics,update \
-        --resume --out results/p1
+    uv run python scripts/probes/p1_law_surface.py --only carrier \
+        --lanes 12 --row-budget 150 --out results/p1
+    uv run python scripts/probes/p1_law_surface.py --only signal --resume \
+        --steps 200 --row-budget 120 --out results/p1
 
-Exit: 0 measured rows carry a failing control; 1 a test defect (a declared
-non-pass fits, or a control reaches); 2 the surface disagrees with the
-registry; 3 partial (an unproven control or an unfinished row remains).
+Exit: 0 every selected law has a state (a named defect or gap is a result);
+1 a test defect (a declared non-pass fits, or a signal control reaches); 2
+the surface disagrees with the registry; 3 partial (an unfinished row or a
+missing law remains).
 """
 
 from __future__ import annotations
@@ -38,22 +42,19 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUT = ROOT / "results" / "p1"
 
-#: The three waves, cheapest axis pair first. A wave is one process tree:
-#: nothing in a later wave re-runs a row an earlier wave finished.
-WAVES: Final[dict[str, tuple[str, ...]]] = {
-    "wave 1": ("credit", "geometry"),
-    "wave 2": ("dynamics", "update"),
-    "wave 3": ("plasticity", "substrate"),
-}
+#: The instrument's version. A change to what a row measures invalidates
+#: the rows written before it: a version bump starts the merge from zero
+#: instead of keeping verdicts the current instrument did not produce.
+INSTRUMENT: Final[int] = 3
 
 #: The calibration gate: a row the repository already declares non-pass must
-#: not come out ``works``, and a fit that clears one is the instrument's
-#: defect — the program then writes no law table. The rows are the ones a
-#: *fit* can price: a declared void constraint (``refused``) and a ladder
-#: row with no legal setting (``defect-or-gap``). ``geometry.nca`` and
-#: ``geometry.conv`` are not here: the screen priced them as a cross-config
-#: wiring defect and a 60 s cost cap, and a fit that composes one cell from
-#: one coordinate cannot reproduce either (measured 2026-11-21).
+#: not come out ``works``, and one that does is the instrument's defect — the
+#: program then writes no law table. The rows are the ones this instrument
+#: can price: a declared void constraint (``refused``) and a ladder row with
+#: no legal setting (``defect-or-gap``). ``geometry.nca`` and ``geometry.conv``
+#: are not here: the screen priced them as a cross-config wiring defect and a
+#: 60 s cost cap, and P1 prices both classes with its own cells (measured
+#: 2026-11-21: nca ``works``, conv ``works`` at the digest).
 CALIBRATION: Final[dict[str, str]] = {
     "primitive.substrate.complex": "refused",
     "primitive.credit_assignment.forward_tangent": "defect-or-gap (mechanism)",
@@ -65,6 +66,7 @@ class Options:
     """The batch's declared box: what it runs, on how many lanes, in what time."""
 
     axes: tuple[str, ...] = ()
+    only: str = "all"
     steps: int = fit.STEPS
     samples: int = fit.SAMPLES
     lanes: int = 12
@@ -73,16 +75,6 @@ class Options:
     resume: bool = False
     limit: int = 0
     row_budget: float = 180.0
-    calibration: bool = True
-
-    @property
-    def waves(self) -> tuple[str, ...]:
-        """The waves this selection runs, in declared order."""
-        return tuple(
-            name
-            for name, axes in WAVES.items()
-            if not self.axes or set(axes) & set(self.axes)
-        )
 
 
 @dataclass(slots=True)
@@ -97,10 +89,11 @@ class Report:
 
 
 def declaration(spec: Any) -> str:
-    """The law's declaration hash: its ID, axis, families and equations."""
+    """The law's declaration hash: its ID, axis, kind, families and equations."""
     payload = {
         "id": spec.id,
         "axis": spec.axis,
+        "kind": fit.kind(spec),
         "families": list(spec.task_families),
         "equations": spec.equations,
         "invariants": list(spec.invariants),
@@ -117,6 +110,15 @@ def fingerprint(spec: Any, task_id: str) -> str:
         return digest(cases.step(spec, case))
     except Exception:  # ruff: ignore[blind-except] - a refused case has no fingerprint
         return ""
+
+
+def _previous(out: Path) -> list[dict[str, Any]]:
+    """The finished rows of this instrument; an older one's rows are ignored."""
+    path = Path(out) / "surface.json"
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text())
+    return payload["rows"] if payload.get("instrument") == INSTRUMENT else []
 
 
 def _spec(law: Law) -> Any:
@@ -159,35 +161,6 @@ def _fit_at(
         seconds=seconds,
         criterion=_criterion(spec),
     )
-
-
-def _responds(
-    spec: Any,
-    declared: Coordinate,
-    knob: tuple[str, Any, dict[str, Any]],
-    *,
-    steps: int,
-    seconds: float,
-    seed: int,
-) -> bool | None:
-    """Whether the declared knob moves the fit: three values, one comparison."""
-    name, value, _ = knob
-    signatures = set()
-    legal = 0
-    for candidate in fit.values(value):
-        trial = fit.coordinate(spec)
-        trial = replace(
-            trial, params={**trial.params, f"{spec.axis}.{name}": candidate}
-        )
-        try:
-            measured = _fit_at(spec, trial, steps=steps, seconds=seconds, seed=seed)
-        except ValueError, fit.FitError:
-            continue
-        legal += 1
-        signatures.add(measured.signature if not measured.killed else ("killed",))
-    if legal < 2:
-        return None
-    return len(signatures) > 1
 
 
 def _grid(
@@ -251,32 +224,32 @@ def _control(
     return control
 
 
-def _knob(
-    spec: Any,
-    base: Coordinate,
-    row: dict[str, Any],
-    options: Options,
-    watchdog: float,
-) -> bool | None:
-    """The declared knob's response, recorded on the row."""
-    knob = fit.knob(spec, base)
-    if knob is None:
+def _carrier(
+    spec: Any, base: Coordinate, row: dict[str, Any], seed: int
+) -> fit.Removal | None:
+    """The carrier reading: its step digest against its declared companion."""
+    try:
+        removal = fit.bound(spec, base, seed)
+    except (ValueError, RuntimeError) as exc:
+        row["error"] = f"companion: {type(exc).__name__}: {exc}"
         return None
-    row["knob"], row["knob_value"] = knob[0], knob[1]
-    responds = _responds(
-        spec, base, knob, steps=options.steps, seconds=watchdog, seed=options.seed
+    row.update(
+        digest=removal.digest,
+        companion=removal.companion,
+        differs=removal.differs,
+        silent=removal.silent,
     )
-    row["responds"] = responds
-    return responds
+    return removal
 
 
 def run_row(law: Law, options: Options) -> dict[str, Any]:
-    """One law's row: invariant, fit, control, knob, verdict."""
+    """One law's row, tested by the instrument its axis declares."""
     started = time.monotonic()
     spec = _spec(law)
     row: dict[str, Any] = {
         "id": spec.id,
         "axis": spec.axis,
+        "kind": fit.kind(spec),
         "family": fit.family(spec),
         "task": "",
         "state": "incomplete",
@@ -284,9 +257,10 @@ def run_row(law: Law, options: Options) -> dict[str, Any]:
         "fit_loss": None,
         "fit_final": None,
         "control_loss": None,
-        "knob": None,
-        "knob_value": None,
-        "responds": None,
+        "digest": "",
+        "companion": "",
+        "differs": None,
+        "silent": None,
         "steps": 0,
         "seconds": 0.0,
         "killed": False,
@@ -302,8 +276,8 @@ def run_row(law: Law, options: Options) -> dict[str, Any]:
         return row
     if not row["family"]:
         row.update(
-            state="unproven control",
-            decided_by="the law declares no family base box",
+            state="defect-or-gap (mechanism)",
+            decided_by="no declared family base box: the box that would price it",
         )
         row["seconds"] = time.monotonic() - started
         return row
@@ -330,6 +304,15 @@ def run_row(law: Law, options: Options) -> dict[str, Any]:
         invariant = False
         row["error"] = f"l-a: {type(exc).__name__}: {exc}"
 
+    if row["kind"] == "carrier":
+        removal = _carrier(spec, base, row, options.seed)
+        state, decided_by = fit.decide(
+            law_kind="carrier", invariant=invariant, removal=removal
+        )
+        row.update(state=state, decided_by=decided_by)
+        row["seconds"] = time.monotonic() - started
+        return row
+
     watchdog = max(1.0, options.row_budget - (time.monotonic() - started))
     best, dropped = _grid(spec, base, row, options, watchdog)
     row["box"] = {**row["box"], "dropped": dropped}
@@ -343,17 +326,15 @@ def run_row(law: Law, options: Options) -> dict[str, Any]:
         return row
 
     row.update(fit_loss=best.loss, fit_final=best.final, steps=best.steps, killed=False)
+    trained = _satisfied(best, _criterion(spec))
     remaining = max(1.0, options.row_budget - (time.monotonic() - started))
-    control = _control(spec, base, row, options, remaining) if best.reached else None
-    responds = _knob(spec, base, row, options, remaining) if best.reached else None
+    control = _control(spec, base, row, options, remaining) if trained else None
 
     state, decided_by = fit.decide(
+        law_kind="signal",
         invariant=invariant,
-        fits=_satisfied(best, _criterion(spec))
-        if best.reached or best.moved
-        else False,
+        fits=trained,
         control=None if control is None else _satisfied(control, _criterion(spec)),
-        knob=responds,
     )
     row.update(
         state=state, decided_by=decided_by, box={**row["box"], "dropped": dropped}
@@ -367,6 +348,15 @@ def _key(row: dict[str, Any]) -> str:
     return f"{row['id']}:{row['declaration']}:{row.get('fingerprint', '')}"
 
 
+def _select(options: Options) -> list[Law]:
+    """The laws this run selects: an axis filter, then the class filter."""
+    selected = [law for law in laws() if not options.axes or law.axis in options.axes]
+    if options.only in {"carrier", "signal"}:
+        selected = [law for law in selected if law.kind == options.only]
+    selected.sort(key=lambda law: (law.axis, law.id))
+    return selected[: options.limit] if options.limit else selected
+
+
 def _run(options: Options) -> Report:
     """Run the selected waves and collect their rows."""
     report = Report(options=options)
@@ -374,17 +364,11 @@ def _run(options: Options) -> Report:
     if report.problems:
         report.exit_code = 2
         return report
-    selected = [law for law in laws() if not options.axes or law.axis in options.axes]
-    selected.sort(key=lambda law: (law.axis, law.id))
-    if options.limit:
-        selected = selected[: options.limit]
+    selected = _select(options)
 
-    previous: dict[str, dict[str, Any]] = {}
-    if options.resume and (options.out / "surface.json").exists():
-        previous = {
-            row["key"]: row
-            for row in json.loads((options.out / "surface.json").read_text())["rows"]
-        }
+    previous = (
+        {row["key"]: row for row in _previous(options.out)} if options.resume else {}
+    )
 
     started = time.monotonic()
     pending: list[Law] = []
@@ -401,7 +385,10 @@ def _run(options: Options) -> Report:
                 if row["id"] == known["id"]
                 and row["declaration"] == known["declaration"]
                 and row.get("state") != "incomplete"
-                and row.get("box", {}).get("steps") == options.steps
+                and (
+                    law.kind == "carrier"
+                    or row.get("box", {}).get("steps") == options.steps
+                )
             ),
             None,
         )
@@ -420,6 +407,10 @@ def _run(options: Options) -> Report:
             row["key"] = _key(row)
             report.rows[row["key"]] = row
 
+    report.rows = {
+        **{row["key"]: row for row in _previous(options.out)},
+        **report.rows,
+    }
     report.exit_code = _exit(report, selected)
     report.calibration = _calibrate(report)
     if report.calibration and any(
@@ -453,6 +444,7 @@ def _failed(law: Law, exc: Exception) -> dict[str, Any]:
     return {
         "id": spec.id,
         "axis": spec.axis,
+        "kind": fit.kind(spec),
         "family": fit.family(spec),
         "task": "",
         "state": "defect-or-gap (mechanism)",
@@ -460,9 +452,10 @@ def _failed(law: Law, exc: Exception) -> dict[str, Any]:
         "fit_loss": None,
         "fit_final": None,
         "control_loss": None,
-        "knob": None,
-        "knob_value": None,
-        "responds": None,
+        "digest": "",
+        "companion": "",
+        "differs": None,
+        "silent": None,
         "steps": 0,
         "seconds": 0.0,
         "killed": False,
@@ -474,11 +467,15 @@ def _failed(law: Law, exc: Exception) -> dict[str, Any]:
 
 
 def _exit(report: Report, selected: list[Law]) -> int:
-    """The batch's verdict: defect, partial, or measured rows only."""
+    """The batch's verdict: a test defect, a partial run, or measured rows.
+
+    A named defect or gap is a result, so it does not block exit 0; an
+    unfinished row or a missing selected law is partial (exit 3).
+    """
     states = [row["state"] for row in report.rows.values()]
     if any(state == "test defect" for state in states):
         return 1
-    if any(state in {"unproven control", "incomplete"} for state in states):
+    if any(state == "incomplete" for state in states):
         return 3
     measured = {row["id"] for row in report.rows.values()}
     missing = [law.id for law in selected if law.id not in measured]
@@ -502,28 +499,19 @@ def _calibrate(report: Report) -> dict[str, dict[str, Any]]:
 def _write(report: Report) -> None:
     """Write the rows and the table: a table only when the gate reproduced.
 
-    A run owns its selection, not the whole table: the rows already on disk
-    from another wave are merged in, keyed by declaration and fingerprint, so
-    a later wave never erases an earlier one's verdicts.
+    The rows are the caller's: ``_run`` merged the earlier waves in before
+    the verdict, so the calibration and the exit code describe the table as a
+    whole and not just this run's selection.
     """
     out = Path(report.options.out)
     out.mkdir(parents=True, exist_ok=True)
-    existing = (
-        json.loads((out / "surface.json").read_text())["rows"]
-        if (out / "surface.json").exists()
-        else []
-    )
-    merged = {row["key"]: row for row in existing}
-    merged.update(report.rows)
-    report.rows = merged
-    calibrated = all(
-        entry["state"] != "works" and entry["state"] != "unmeasured"
-        for entry in report.calibration.values()
-    )
+    calibrated = all(entry["state"] != "works" for entry in report.calibration.values())
     payload = {
         "version": 1,
+        "instrument": INSTRUMENT,
         "options": {
             "axes": list(report.options.axes),
+            "only": report.options.only,
             "steps": report.options.steps,
             "samples": report.options.samples,
             "seed": report.options.seed,
@@ -554,14 +542,23 @@ def _table(rows: Any, *, calibration: bool = False) -> str:
         ]
         return "\n".join(lines) + "\n"
     lines = [
-        "| Law | Axis | Family | State | Fit | Control | Knob | s |",
+        "| Law | Axis | Kind | Family | State | Fit | Removal | s |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for row in sorted(rows.values(), key=lambda row: (row["axis"], row["id"])):
+        if row.get("kind") == "carrier":
+            removal = (
+                f"digest {'differs' if row['differs'] else 'equal'}"
+                if row["differs"] is not None
+                else "-"
+            )
+        else:
+            removal = _number(row["control_loss"])
         lines.append(
-            f"| {row['id'].rsplit('.', 1)[-1]} | {row['axis']} | {row['family']} "
-            f"| {row['state']} | {_number(row['fit_loss'], row['fit_final'])} "
-            f"| {_number(row['control_loss'])} | {row['knob'] or '-'} | {row['seconds']:.1f} |"
+            f"| {row['id'].rsplit('.', 1)[-1]} | {row['axis']} "
+            f"| {row.get('kind', '-')} | {row['family']} | {row['state']} "
+            f"| {_number(row['fit_loss'], row['fit_final'])} "
+            f"| {removal} | {row['seconds']:.1f} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -579,6 +576,12 @@ def main(argv: list[str] | None = None) -> int:
     """Parse the batch's box, run it, and exit its verdict."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--axes", default="")
+    parser.add_argument(
+        "--only",
+        choices=("all", "signal", "carrier"),
+        default="all",
+        help="Select a class: carriers are digested, signals are fitted",
+    )
     parser.add_argument("--steps", type=int, default=fit.STEPS)
     parser.add_argument("--samples", type=int, default=fit.SAMPLES)
     parser.add_argument("--lanes", type=int, default=12)
@@ -591,6 +594,7 @@ def main(argv: list[str] | None = None) -> int:
     axes = tuple(axis for axis in options.axes.split(",") if axis)
     declared = Options(
         axes=axes,
+        only=options.only,
         steps=options.steps,
         samples=options.samples,
         lanes=options.lanes,

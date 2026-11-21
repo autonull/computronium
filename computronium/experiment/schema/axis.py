@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium.core.identity_card import BiasReference, EstimatorKind
     from computronium.experiment.legality.dsl import Expr
 
@@ -28,6 +31,28 @@ class StructuralAxis(StrEnum):
     PLASTICITY = "plasticity"
     CREDIT = "credit"
     UPDATE = "update"
+
+
+#: What a law on an axis transforms (TODO98 §3, measured 2026-11-21). A
+#: carrier law transforms a value that flows through the cell, so its removal
+#: is the axis's declared neutral companion; a signal law transforms the
+#: learning channel, so its removal is the channel zeroed. The split is a
+#: property of the axis, so it lives with the axes: one table, no per-law list.
+type LawKind = Literal["carrier", "signal"]
+
+AXIS_KIND: Final[Mapping[StructuralAxis, LawKind]] = MappingProxyType({
+    StructuralAxis.SUBSTRATE: "carrier",
+    StructuralAxis.GEOMETRY: "carrier",
+    StructuralAxis.DYNAMICS: "carrier",
+    StructuralAxis.PLASTICITY: "carrier",
+    StructuralAxis.CREDIT: "signal",
+    StructuralAxis.UPDATE: "signal",
+})
+
+
+def axis_kind(axis: str) -> LawKind:
+    """The kind of a law on ``axis``, read from the one declaration."""
+    return AXIS_KIND[StructuralAxis(axis)]
 
 
 class AxisKind(StrEnum):

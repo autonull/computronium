@@ -310,6 +310,7 @@ def build_case(
     box: dict[str, Any] | None = None,
     seed: int = 0,
     device: str = "cpu",
+    cell: SystemConfig | None = None,
 ) -> PrimitiveCase:
     """Build the deterministic case the primitive's reference step consumes.
 
@@ -320,14 +321,17 @@ def build_case(
         box: The hyperparameter box the case is filed under.
         seed: The seed for every draw, the geometry, and the config.
         device: The device the case's tensors live on.
+        cell: The composed cell the case runs in; ``None`` reads the law's own
+            registry cell. A companion cell is the removal's case, and it must
+            carry the whole composed config, not the law's axis config alone.
 
     Returns:
         The case, with its typed config, its seeded payload, and its companions.
     """
-    cell = cell_config(spec, task_id)
+    cell = cell_config(spec, task_id) if cell is None else cell
     axis_config = getattr(cell, spec.axis)
     config = {**asdict(axis_config), "seed": seed}
-    extra = _payload(spec, cell, seed, device)
+    extra = {**_payload(spec, cell, seed, device), "cell": cell}
     batch = extra.get("batch")
     return PrimitiveCase(
         config=config,
@@ -451,6 +455,11 @@ def _logits(activations: list[torch.Tensor]) -> torch.Tensor:
     return activations[-1]
 
 
+def _cell(spec: PrimitiveSpec, case: PrimitiveCase) -> SystemConfig:
+    """The composed cell the case runs in, or the law's own registry cell."""
+    return case.extra.get("cell") or cell_config(spec, case.task_id)
+
+
 def step(spec: PrimitiveSpec, case: PrimitiveCase) -> StepResult:  # ruff: ignore[too-many-return-statements]
     """Run one reference step of the primitive's law on ``case``.
 
@@ -465,13 +474,13 @@ def step(spec: PrimitiveSpec, case: PrimitiveCase) -> StepResult:  # ruff: ignor
         case "geometry":
             return _geometry_step(case)
         case "credit":
-            return _credit_step(cell_config(spec, case.task_id), case)
+            return _credit_step(_cell(spec, case), case)
         case "dynamics":
-            return _dynamics_step(cell_config(spec, case.task_id), case)
+            return _dynamics_step(_cell(spec, case), case)
         case "update":
-            return _update_step(cell_config(spec, case.task_id), case)
+            return _update_step(_cell(spec, case), case)
         case "plasticity":
-            return _plasticity_step(cell_config(spec, case.task_id), case)
+            return _plasticity_step(_cell(spec, case), case)
         case "substrate":
             return _substrate_step(case)
         case other:
@@ -599,11 +608,29 @@ def _plasticity_step(cell: SystemConfig, case: PrimitiveCase) -> StepResult:
 
 
 def _substrate_step(case: PrimitiveCase) -> StepResult:
-    """One forward operation through the case's substrate."""
+    """One forward operation through the case's substrate.
+
+    The probe weight is dense and seeded, not the identity: a quantizer maps
+    the identity to itself (every 1 is above any magnitude threshold), so an
+    identity probe makes ``ternary``, ``sparse`` and ``noisy`` digest equal
+    to ``digital`` and the removal unobservable. The output then passes the
+    substrate's own state noise, so a law whose mechanism is that noise is
+    measured rather than silently equal to its companion.
+    """
+    from computronium.harness import seeded_rng
+
     substrate = case.extra["substrate"]
     x = case.extra["state"]
-    weight = substrate.quantize_weights(torch.eye(x.shape[-1], device=x.device))
-    output = substrate.get_forward_operator()(x, weight)
+    width = x.shape[-1]
+    weight = torch.randn(
+        (width, width),
+        generator=_generator(case.seed, str(x.device), 11),
+        device=x.device,
+    )
+    weight = substrate.quantize_weights(weight)
+    with seeded_rng(case.seed):
+        output = substrate.get_forward_operator()(x, weight)
+        output = substrate.inject_state_noise(output)
     return StepResult(
         weights=[weight],
         activations=[output],
@@ -642,7 +669,9 @@ def invariant(  # ruff: ignore[too-many-return-statements]
         ),
     ]
     if not tensors:
-        return False
+        # A plasticity law whose case declares no plastic state has nothing to
+        # move: the empty step is its declared state, not a failed invariant.
+        return spec.axis == "plasticity" and not case.extra.get("psi")
     if not all(tensor.isfinite().all() for tensor in tensors):
         return False
     match spec.axis:

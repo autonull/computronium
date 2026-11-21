@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from computronium.experiment.schema.axis import LawKind
     from computronium.primitives.protocol import PrimitiveSpec
 
 __all__ = [
@@ -39,6 +40,7 @@ class Law:
 
     id: str
     axis: str
+    kind: LawKind
     family: str
     knobs: tuple[str, ...]
     refusal: str | None = None
@@ -174,6 +176,7 @@ def _axis_spec(spec: PrimitiveSpec) -> Any:
 
 def laws() -> tuple[Law, ...]:
     """One row per registered law, joined with its axis declaration."""
+    from computronium.experiment.schema.axis import axis_kind
     from computronium.primitives.cases import IMPOSSIBLE
     from computronium.primitives.registry import list_primitives
 
@@ -186,6 +189,7 @@ def laws() -> tuple[Law, ...]:
             Law(
                 id=spec.id,
                 axis=spec.axis,
+                kind=axis_kind(spec.axis),
                 family=_family(spec),
                 knobs=tuple(sorted(axis_spec.accepted_params)) if axis_spec else (),
                 refusal=refusal,
