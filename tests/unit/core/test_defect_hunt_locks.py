@@ -229,9 +229,26 @@ class TestR5StepSemantics:
             ParameterUpdateConfig.mean_norm(),
             ParameterUpdateConfig.riemannian_orthogonal(),
             ParameterUpdateConfig.spectral_constrained(),
-            ParameterUpdateConfig.elastic_consolidation(),
+            ParameterUpdateConfig.natural_gradient(),
         ):
             assert cfg.step_semantics == "per_element_displacement", cfg.update_type
+
+    def test_penalty_and_posterior_rules_are_gradient_relative(self) -> None:
+        """Measured: their first step at one step_size equals plain SGD's.
+
+        EWC, SI and the cascade all compute ``param − step_size·g`` (the
+        regularization is zero before a boundary), so their lr is
+        gradient-relative; VON scales by its own trust region. A displacement
+        reading would move each element by ``step_size`` — 1.3 for a 128²
+        tensor, not the measured 3.6e-4.
+        """
+        for cfg in (
+            ParameterUpdateConfig.elastic_consolidation(),
+            ParameterUpdateConfig.synaptic_intelligence(),
+            ParameterUpdateConfig.cascade_synapse(),
+            ParameterUpdateConfig.bayesian_online(),
+        ):
+            assert cfg.step_semantics == "gradient_relative", cfg.update_type
 
     def test_validate_warns_on_borrowed_lr_grid(self) -> None:
         with pytest.warns(UserWarning, match="per-element-displacement"):

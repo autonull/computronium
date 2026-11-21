@@ -3,12 +3,45 @@
 **Status:** 2026-11-21. P0, P1 and P2 landed. P1 asks each law one question:
 a carrier's step against its declared neutral companion (µs), or a signal's
 fit against its cut channel (~1–10 s). `results/p1/surface.json` (instrument
-4) holds all 75 states and exits 0. No family box is a test. The first fixed
+5) holds all 75 states and exits 0. No family box is a test. The first fixed
 law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
 loop owns, never a test.
+
+**Progress 2026-11-21 (second landing).** The primitive plasticity protocol
+now runs what the trainer runs: ψ steps once, then the law's `modulate` hook
+applies it to the activity (`cases._plasticity_step`). The digest had read
+only ψ, so a law whose declared channel is the modulation was measured by
+half its mechanism. The full surface was re-bought under instrument 5 (75
+states, both calibration rows reproduced, exit 0, 488 s); no state moved.
+
+**P3 row 1 — `plasticity.substrate_coupled` is a recorded capability gap,
+not a fixable law.** Its identity card declares ψ ≡ σ and a no-op at the
+plasticity protocol; the joint transition carries no σ (`_step_psi` builds
+`substrate={}`), so the law has nothing to evolve. `schema.gaps.GAPS`
+already declares the gap with its trigger ("a substrate carries a separate
+state through the joint transition and the standard step reads it"). The
+obligation the plan owed it was a test that fails today; that test is now
+`test_the_plastic_step_carries_the_substrate_state` (`strict=True` xfail).
+Closing the gap is the σ channel — a joint-transition primitive, not a
+one-session instrument fix.
+
+**P3 row 2 — the four stalled update rows are triaged (measured).** Their
+real defect was a **step-semantics mislabel**: `_STEP_SEMANTICS` declared
+`elastic_consolidation`, `synaptic_intelligence`, `cascade_synapse` and
+`bayesian_online` as `per_element_displacement`, but EWC/SI/cascade compute
+`param − step_size·g` (not normalized) and VON scaled by `von_alpha`, a
+duplicate lr the search space cannot sweep. Measured: at step_size 0.1 the
+first step of EWC/SI is bit-equal to plain SGD's (‖ΔW‖ 3.6e-4, not 1.3).
+The table now says `gradient_relative` for those four, and VON's lr is
+`step_size` (`von_alpha` deleted: one learning rate per rule). Re-measured:
+`bayesian_online` 0.999× → 0.719×, `elastic_consolidation` and
+`synaptic_intelligence` 0.717×, `cascade_synapse` 0.633× at the declared
+`update.step_size` ceiling (0.1). EWC/SI reach a tenth at 0.3 (0.096×),
+outside the declared domain, so all four are **coordinate results at the
+ceiling**, not missing mechanisms: each law moves, and none is frozen.
 
 **Progress 2026-11-21.** The surface and the seams landed first. P1 then
 found and fixed three instrument defects before it could ask its question:
@@ -257,8 +290,8 @@ reaches 0.102 and the row is `works`. Lock:
 
 | Order | Rows | Named mechanism / closing primitive |
 |---|---|---|
-| 1 | `plasticity.substrate_coupled` | the step has nothing to transform: the plasticity protocol never calls `modulate()`. Close with the hook and a failing test. |
-| 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | the fit moves, but not to a tenth at 200 steps: triage each as defect (clamp/init/lr scale) or declared limit; name which. |
+| 1 | `plasticity.substrate_coupled` | **Closed as a named gap 2026-11-21.** ψ ≡ σ, and the joint transition carries no σ (`substrate={}`); `gaps.GAPS` declares the trigger. The failing test is `test_the_plastic_step_carries_the_substrate_state`. The closing primitive is the σ channel through the joint transition, not a plasticity-law fix. |
+| 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | **Triaged 2026-11-21 (defect fixed, then coordinate at the ceiling).** The defect was the step-semantics table: four rules were declared `per_element_displacement` while their algebra is gradient-relative, and VON's lr was a duplicate `von_alpha` the space cannot sweep. Fixed (table + VON `step_size`, lock `test_penalty_and_posterior_rules_are_gradient_relative`). Re-measured best legal fit: 0.719× / 0.633× / 0.717× / 0.717× at `step_size` 0.1; EWC/SI reach 0.096× at 0.3, outside the declared domain `[1e-5, 0.1]` — the **lr domain is the limit**, not the law. |
 | 3 | `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
 | 4 | `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
 
@@ -313,8 +346,10 @@ claims.
 3. **6/6 seams pass** their declared exchange. **Done**
    (`test_protocol_seams.py`).
 4. **Every `defect-or-gap` names the mechanism or box that closes it**, and
-   every `refused` names the rule or box that refuses it. **Partial:** the 15
-   rows are named in §4 P3; P3 owes each a failing test.
+   every `refused` names the rule or box that refuses it. **Partial:** the 14
+   rows are named in §4 P3. Row 1 is a declared gap with its failing test;
+   row 2's four rows are triaged (defect fixed, coordinate at the lr ceiling);
+   rows 3–4 still owe their failing tests.
 5. **SEC runs on clean laws only**, reusing the cache; a claim exists only
    where a knob binds. **Open, P4.**
 6. **Every kernel row passes kill + parity**; every absent row is documented
@@ -369,6 +404,9 @@ to SEC, not a claim.
 | `test_a_refusal_has_a_failing_test` | a refusal exists without a test that fails without it |
 | `test_every_seam_has_a_check` | a declared seam has no check |
 | `test_seam_exchanges_what_it_declares` | the exemplar does not exchange what it declares |
+| `test_a_plastic_laws_modulation_reaches_the_digest` | the primitive step skips `modulate`, or a law's modulation is dropped from the digest |
+| `test_the_plastic_step_carries_the_substrate_state` | the σ channel lands (strict xfail): the P-axis step still passes `substrate={}` |
+| `test_penalty_and_posterior_rules_are_gradient_relative` | a penalty/posterior rule is re-declared `per_element_displacement`, or VON regains a second lr |
 
 ---
 
@@ -379,7 +417,7 @@ to SEC, not a claim.
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P1: the two class batches (prices measured)                 [DONE]
+# 2. P1: the two class batches (prices measured; instrument 5)     [DONE]
 uv run python scripts/probes/p1_law_surface.py --only carrier \
   --lanes 12 --row-budget 150 --out results/p1
 uv run python scripts/probes/p1_law_surface.py --only signal --resume \
@@ -389,6 +427,10 @@ uv run python scripts/probes/p1_law_surface.py --only all --resume \
   --steps 200 --out results/p1
 # exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial run.
 # Do not re-run a finished class to "check" a nonzero exit.
+# Instrument 5: ψ then modulate, and the four penalty/posterior update
+# rows re-measured after the step-semantics fix (75 rows, 488 s, exit 0).
+# A re-measure of selected rows must delete them from surface.json first:
+# the resume match keys on the declaration, not on the case fingerprint.
 
 # 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q

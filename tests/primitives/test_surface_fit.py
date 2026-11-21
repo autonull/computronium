@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from computronium.primitives import fit
+from computronium.primitives import cases, fit
 from computronium.primitives.registry import get_primitive_spec
 from computronium.primitives.surface import laws
 
@@ -98,6 +99,61 @@ def test_a_signal_law_is_tested_by_its_fit() -> None:
     assert state == "works"
     state, _ = fit.decide(law_kind="signal", invariant=True, fits=True, control=True)
     assert state == "test defect"
+
+
+def test_a_plastic_laws_modulation_reaches_the_digest() -> None:
+    """The primitive step runs step then modulate, as the trainer does: a law
+    whose declared channel is the modulation is measured, not only its ψ."""
+    spec = get_primitive_spec(_law("routing", "plasticity"))
+    assert spec is not None
+    result = cases.step(spec, cases.build_case(spec, "", {}))
+    assert result.activations
+
+
+@pytest.mark.xfail(
+    reason="gaps.GAPS['primitive.plasticity.substrate_coupled']: the P-axis "
+    "carries no σ, so ψ ≡ σ has nothing to evolve",
+    strict=True,
+)
+def test_the_plastic_step_carries_the_substrate_state() -> None:
+    """The gap's trigger: the standard step must give ψ ≡ σ a substrate state."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    import torch
+
+    from computronium.core.pipeline import _step_psi
+    from computronium.ontology import CreditAssignment, Phase, SystemState
+
+    class _Reader:
+        psi_phase: str | None = None
+
+        def __init__(self) -> None:
+            self.sigma: dict = {}
+
+        def step(self, psi: dict, z: Any, context: object) -> dict:
+            self.sigma = dict(z.substrate)
+            return psi
+
+        def modulate(self, activations: Any, psi: dict) -> Any:
+            return activations
+
+    x = torch.randn(4, 8)
+    y = torch.zeros(4, dtype=torch.long)
+    settled = SystemState(x=x, y=y)
+    settled.activations = [x, torch.randn(4, 16), torch.randn(4, 4)]
+    reader = _Reader()
+    _step_psi(
+        reader,
+        {},
+        settled,
+        x,
+        y,
+        Phase.FREE,
+        cast("CreditAssignment", SimpleNamespace(phases=(Phase.FREE,))),
+        object(),
+    )
+    assert reader.sigma
 
 
 def test_the_batch_calibration_gate_exits_nonzero(tmp_path: Path) -> None:

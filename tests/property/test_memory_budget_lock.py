@@ -45,9 +45,7 @@ def _grads(geometry: FeedforwardGeometry, seed: int = 0) -> list[torch.Tensor]:
 
 
 def _weights(geometry: FeedforwardGeometry) -> dict[str, torch.Tensor]:
-    return {
-        name: param for name, param in geometry.params.items() if param.ndim == 2
-    }
+    return {name: param for name, param in geometry.params.items() if param.ndim == 2}
 
 
 def test_the_factored_second_moment_is_not_the_square() -> None:
@@ -76,12 +74,8 @@ def test_the_quantized_state_four_times_smaller_and_exact() -> None:
     from computronium.ontology.update import update_from_config
 
     reference = update_from_config(plain)
-    first = reference.step(
-        dict(geometry.params), _grads(geometry), geometry
-    )
-    second = reference.step(
-        dict(geometry.params), _grads(geometry), geometry
-    )
+    first = reference.step(dict(geometry.params), _grads(geometry), geometry)
+    second = reference.step(dict(geometry.params), _grads(geometry), geometry)
     assert torch.allclose(first["0.weight"], second["0.weight"], atol=1e-8)
 
 
@@ -110,7 +104,7 @@ def test_the_von_variance_falls_and_floors() -> None:
     """A constant gradient shrinks the variance and it stops at the floor."""
     geometry = _geometry()
     update = BayesianOnlineUpdate(
-        ParameterUpdateConfig.bayesian_online(von_alpha=0.5, von_min_var=0.4)
+        ParameterUpdateConfig.bayesian_online(step_size=0.5, von_min_var=0.4)
     )
     params = dict(geometry.params)
     grad = _grads(geometry)
@@ -174,9 +168,7 @@ def test_schedule_free_averages_toward_the_sequence() -> None:
     zeros = [torch.zeros_like(g) for g in _grads(geometry)]
     for _ in range(50):
         params = update.step(params, zeros, geometry)
-    assert torch.allclose(
-        params["0.weight"], update._z["0.weight"], atol=1e-6
-    )
+    assert torch.allclose(params["0.weight"], update._z["0.weight"], atol=1e-6)
 
 
 def test_the_rules_refuse_a_reused_geometry_state() -> None:

@@ -298,7 +298,7 @@ _UPDATE_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
     (
         "bayesian_online",
         "VON: an online diagonal Gaussian posterior",
-        ("von_alpha", "von_init_var", "von_min_var"),
+        ("von_init_var", "von_min_var"),
     ),
     (
         "adafactor",

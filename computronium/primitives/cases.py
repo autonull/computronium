@@ -592,16 +592,33 @@ def _update_step(cell: SystemConfig, case: PrimitiveCase) -> StepResult:
 
 
 def _plasticity_step(cell: SystemConfig, case: PrimitiveCase) -> StepResult:
-    """One plastic-state transition of the case's law."""
+    """One plastic-state transition of the case's law, then its modulation.
+
+    The primitive runs the same P-axis protocol the trainer runs
+    (``pipeline._run_phases``): ψ steps once, then the law's ``modulate``
+    hook applies the new plastic state to the activity. A digest that read
+    only ψ would miss every law whose declared channel is the modulation.
+    """
     from computronium.harness import seeded_rng
 
     plasticity = _plasticity(cell.plasticity)
-    context = _CaseContext(device=case.extra["state"].activity["x"].device)
+    state = case.extra["state"]
+    context = _CaseContext(device=state.activity["x"].device)
+    activations: list[torch.Tensor] = []
     with seeded_rng(case.seed):
-        psi = plasticity.step(case.extra["psi"], case.extra["state"], context)
+        psi = plasticity.step(case.extra["psi"], state, context)
+        modulate = getattr(plasticity, "modulate", None)
+        if modulate is not None:
+            acts = [
+                value
+                for key in ("h", "y")
+                if isinstance(value := state.activity.get(key), torch.Tensor)
+            ]
+            modulated = modulate(acts, psi)
+            activations = modulated if isinstance(modulated, list) else [modulated]
     return StepResult(
         weights=list(psi.values()),
-        activations=[],
+        activations=activations,
         metrics={},
         state={"psi": psi},
     )

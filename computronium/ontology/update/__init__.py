@@ -55,11 +55,7 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
     "muon": "per_element_displacement",
     "lion": "per_element_displacement",
     "spectral_constrained": "per_element_displacement",
-    "elastic_consolidation": "per_element_displacement",
     "natural_gradient": "per_element_displacement",
-    "synaptic_intelligence": "per_element_displacement",
-    "cascade_synapse": "per_element_displacement",
-    "bayesian_online": "per_element_displacement",
     "adafactor": "per_element_displacement",
     "quantized_adam": "per_element_displacement",
     "schedule_free": "per_element_displacement",
@@ -102,7 +98,6 @@ class ParameterUpdateConfig:
     cascade_levels: int = 8
     cascade_up: float = 0.05
     cascade_down: float = 0.01
-    von_alpha: float = 1e-3
     von_init_var: float = 1.0
     von_min_var: float = 1e-8
     factor_decay: float = 0.999
@@ -569,7 +564,7 @@ class ParameterUpdateConfig:
     def bayesian_online(
         cls,
         *,
-        von_alpha: float = 1e-3,
+        step_size: float = 0.01,
         von_init_var: float = 1.0,
         von_min_var: float = 1e-8,
         grad_clip: float = 1.0,
@@ -577,14 +572,13 @@ class ParameterUpdateConfig:
         """VON: an online diagonal Gaussian posterior per parameter."""
         return cls(
             update_type="bayesian_online",
-            step_size=1.0,
+            step_size=step_size,
             momentum=0.9,
             ortho_steps=0,
             spectral_norm=1.0,
             fisher_damping=1e-3,
             ewc_lambda=1000.0,
             grad_clip=grad_clip,
-            von_alpha=von_alpha,
             von_init_var=von_init_var,
             von_min_var=von_min_var,
             handles_own_clipping=False,
@@ -2038,9 +2032,9 @@ class BayesianOnlineUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
             "factors); the variance is the per-coordinate trust region",
         ),
         objective_function="−log E_{q(θ)}[L] with q = N(μ, σ²)",
-        pseudo_gradient_def="μ ← μ − ασ²g; σ² ← σ²(1 − ασ²g²)",
+        pseudo_gradient_def="μ ← μ − lr·σ²g; σ² ← σ²(1 − lr·σ²g²)",
         symmetry_requirements=("none",),
-        approximation_parameters=("von_alpha", "von_init_var", "von_min_var"),
+        approximation_parameters=("step_size", "von_init_var", "von_min_var"),
         validated_limits=(
             "the variance falls monotonically under a constant gradient",
             "the variance recovers toward its init once gradients vanish",
@@ -2061,7 +2055,7 @@ class BayesianOnlineUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
     ) -> dict[str, Tensor]:
         grads = self._clip(list(pseudo_grads), self.config.grad_clip)
         names = [name for name in params if "weight" in name and params[name].ndim == 2]
-        alpha = self.config.von_alpha
+        lr = self.config.step_size
         for name, grad in zip(names, grads, strict=True):
             param = params[name]
             variance = self._get_buffer(
@@ -2076,11 +2070,11 @@ class BayesianOnlineUpdate(BufferManager, ClippingMixin, StateSnapshotMixin):
             if not torch.isfinite(grad).all():
                 continue
             self._mu[name] = param
-            variance = (variance * (1 - alpha * variance * grad.square())).clamp_min(
+            variance = (variance * (1 - lr * variance * grad.square())).clamp_min(
                 self.config.von_min_var
             )
             self._var[name] = variance
-            params[name] = param - alpha * variance * grad
+            params[name] = param - lr * variance * grad
         return params
 
     def state_tensors(self) -> dict[str, Tensor]:
