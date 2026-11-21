@@ -45,7 +45,7 @@ DEFAULT_OUT = ROOT / "results" / "p1"
 #: The instrument's version. A change to what a row measures invalidates
 #: the rows written before it: a version bump starts the merge from zero
 #: instead of keeping verdicts the current instrument did not produce.
-INSTRUMENT: Final[int] = 3
+INSTRUMENT: Final[int] = 4
 
 #: The calibration gate: a row the repository already declares non-pass must
 #: not come out ``works``, and one that does is the instrument's defect — the

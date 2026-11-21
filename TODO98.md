@@ -3,7 +3,8 @@
 **Status:** 2026-11-21. P0, P1 and P2 landed. P1 asks each law one question:
 a carrier's step against its declared neutral companion (µs), or a signal's
 fit against its cut channel (~1–10 s). `results/p1/surface.json` (instrument
-3) holds all 75 states and exits 0. No family box is a test.
+4) holds all 75 states and exits 0. No family box is a test. The first fixed
+law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -20,7 +21,11 @@ weight and applies the substrate's own state noise; L-a accepts a declared
 empty plastic state. Two more fixes followed: a carrier digest now carries
 the composed companion's cell (not the law's axis config), and a signal's
 control runs on the fit's own criterion rather than on `reached`, which had
-stranded `homeostatic` at `unproven control`.
+stranded `homeostatic` at `unproven control`. The first *law* defect followed:
+`quantized_adam` divided by `eps` whenever an int8 block packed a small
+second-moment element to zero (`1.34 → 3.2e10 → NaN` at step 3); the
+dequantized moment now has a one-LSB floor, the fit reaches 0.102, and the
+row is `works`.
 
 **L-c is dropped (measured, not preferred).** Varying the "declared knob"
 produced 12 `declaration defect` rows; all 12 were the *knob source*, not
@@ -80,13 +85,13 @@ Artifacts: `results/sec*/map.json` (9 family maps, 75 primitives each),
 | Capability suite | 62 passed / 14 skipped at one priced cell (14m11s) | `tests/primitives/test_primitive_capability.py` |
 | Audit | 0 findings | `scripts/audit.py` |
 
-**P1's 75 states** (instrument 3, both calibration gates reproduced, exit 0):
+**P1's 75 states** (instrument 4, both calibration gates reproduced, exit 0):
 
 | State | Laws | Where |
 |---|---|---|
-| `works` | **40** (21 carrier, 19 signal) | digest differs / fit + failed control |
+| `works` | **41** (21 carrier, 20 signal) | digest differs / fit + failed control |
 | `refused` | **16** (10 carrier, 6 signal) | the declared space refuses the base cell |
-| `defect-or-gap (mechanism)` | **15** (3 carrier, 12 signal) | §4 P3 |
+| `defect-or-gap (mechanism)` | **14** (3 carrier, 11 signal) | §4 P3 |
 | `inert` | **4** (`feedforward`, `instantaneous`, `digital`, `null`) | the axis's declared neutral element |
 
 **Named rows the surface must reproduce** (expected hits, not a second list):
@@ -198,7 +203,7 @@ Rules that follow:
 - **Delete** every per-family test that re-screens a box. The audit's
   duplicate-body predicate already forbids a second copy.
 - **Fingerprint-keyed:** a law re-runs only when its declaration or its case
-  fingerprint changes (instrument 3 version-gates the merge).
+  fingerprint changes (instrument 4 version-gates the merge).
 - Rung 1 stays: `test_primitive_capability.py` is the AGENTS one-family gate;
   the tiny fit does not replace it, it decides the defect line more cheaply.
 - **Landed:** `computronium/primitives/surface.py`,
@@ -235,23 +240,29 @@ fix that flips it):**
 | L-a rejected a declared empty plastic state (`null`, `substrate_coupled`) | empty declared state passes L-a |
 | a carrier digest read the law's axis config, not the composed companion's | `build_case(cell=...)`; the case carries its composed cell |
 | a signal control skipped when `best.reached` was false (error-blind laws) | the control runs on the fit's own criterion |
+| `quantized_adam` reached NaN at step 3 (`1.34 → 3.2e10`) | an int8 block packs a small second-moment element to zero, so the step divides by `eps`; dequantize the second moment with one LSB as its floor (`max(v, block scale)`), and a two-step bound lock (`test_the_quantized_state_step_is_bounded`) |
 
-### P3 — Close the 15 `defect-or-gap` rows (the capability queue, by cost)
+### P3 — Close the 14 `defect-or-gap` rows (the capability queue, by cost)
 
 Each row names its mechanism and the fix that would flip it; a fix lands with
 a failing test. The order is cost: the one-session fixes first, the base
 boxes next, the credit implementations last (**the long pole**: seven pseudo-
 gradient paths, not plumbing).
 
+**Fixed 2026-11-21:** `update.quantized_adam` — the int8 second-moment block
+packed small elements to zero, so the step divided by `eps` (1.34 → 3.2e10 →
+NaN at step 3). The dequantized moment now has a one-LSB floor; the fit
+reaches 0.102 and the row is `works`. Lock:
+`test_the_quantized_state_step_is_bounded` (|ΔW| ≤ 2·lr).
+
 | Order | Rows | Named mechanism / closing primitive |
 |---|---|---|
-| 1 | `update.quantized_adam` | the fit reaches NaN (1.34 → 3.2e10 → NaN at step 3): the int8 second-moment block collapses to zero, so the next step divides by `eps`. Clamp the dequantized moment (or the scale floor), with a failing test. |
-| 2 | `plasticity.substrate_coupled` | the step has nothing to transform: the plasticity protocol never calls `modulate()`. Close with the hook and a failing test. |
-| 3 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | the fit moves, but not to a tenth at 200 steps: triage each as defect (clamp/init/lr scale) or declared limit; name which. |
-| 4 | `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
-| 5 | `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
+| 1 | `plasticity.substrate_coupled` | the step has nothing to transform: the plasticity protocol never calls `modulate()`. Close with the hook and a failing test. |
+| 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | the fit moves, but not to a tenth at 200 steps: triage each as defect (clamp/init/lr scale) or declared limit; name which. |
+| 3 | `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
+| 4 | `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
 
-**P4 does not wait for P3.** The loop starts on the 40 clean laws now; P3's
+**P4 does not wait for P3.** The loop starts on the 41 clean laws now; P3's
 rows are the capability queue and land in parallel.
 
 **Close:** every row is a fixed law, or a capability gap with the primitive
@@ -297,8 +308,8 @@ claims.
 1. **The surface is declared**: 75 laws, 6 seams, the rule tables — and no
    per-family test exists. **Done** (`surface.py`, `comp test --surface`).
 2. **All 75 laws are in exactly one of §3's six states**, each with the
-   instrument its kind declares. **Done 2026-11-21:** 40 `works`, 16
-   `refused`, 4 `inert`, 15 `defect-or-gap`; exit 0; both gates reproduced.
+   instrument its kind declares. **Done 2026-11-21:** 41 `works`, 16
+   `refused`, 4 `inert`, 14 `defect-or-gap`; exit 0; both gates reproduced.
 3. **6/6 seams pass** their declared exchange. **Done**
    (`test_protocol_seams.py`).
 4. **Every `defect-or-gap` names the mechanism or box that closes it**, and

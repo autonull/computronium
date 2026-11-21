@@ -33,6 +33,31 @@ def test_step_returns_one_tensor_per_parameter(spec) -> None:
         assert torch.isfinite(tensor).all(), (spec.id, name)
 
 
+def test_the_quantized_state_step_is_bounded() -> None:
+    """A packed second moment must not turn a small element into an eps step.
+
+    An int8 block packs an element below half an LSB to zero; without a one-LSB
+    floor on the dequantized second moment, the next step divides by ``eps``
+    alone. Measured before the fix: ``max|dW|`` 0.01 -> 120.9 -> 1162.8 and
+    the loss 1.34 -> 3.2e10 -> NaN at step 3.
+    """
+    from computronium.harness import update_geometry, update_pseudo_grads
+    from computronium.ontology.update import update_from_config
+    from computronium.primitives.cases import cell_config
+
+    spec = next(row for row in SPECS if row.id.endswith(".quantized_adam"))
+    case = make_case(spec, seed=0)
+    geometry = update_geometry(case)
+    grads = update_pseudo_grads(case, geometry)
+    law = update_from_config(cell_config(spec, case.task_id).update)
+    params = dict(geometry.params)
+    for step in range(3):
+        before = {name: value.detach().clone() for name, value in params.items()}
+        params = law.step(params, grads, geometry)
+        moved = max(float((params[name] - before[name]).abs().max()) for name in params)
+        assert moved <= 2 * law.config.step_size, (step, moved)
+
+
 def test_the_registry_covers_every_update() -> None:
     """The contract runs over the registry's update rows, not a hand-kept list."""
     assert {spec.id for spec in SPECS} == {

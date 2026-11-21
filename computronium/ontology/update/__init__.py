@@ -66,7 +66,7 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True)  # ruff: ignore[too-many-public-methods]
 class ParameterUpdateConfig:
     """Configuration for parameter update rule.
 
@@ -1848,9 +1848,9 @@ class SynapticIntelligenceUpdate(BufferManager, ClippingMixin, StateSnapshotMixi
     def consolidate(self, params: dict[str, Tensor] | None = None) -> None:
         """Close the task at the boundary: finalize Ω̃ on the rule's store."""
         if not self._store and params is not None:
-            self._store.update(
-                {name: tensor.detach().clone() for name, tensor in params.items()}
-            )
+            self._store.update({
+                name: tensor.detach().clone() for name, tensor in params.items()
+            })
             self._intelligence.start_task()
         self._intelligence.update_importance()
 
@@ -1871,9 +1871,9 @@ class SynapticIntelligenceUpdate(BufferManager, ClippingMixin, StateSnapshotMixi
     ) -> dict[str, Tensor]:
         grads = self._clip(list(pseudo_grads), self.config.grad_clip)
         if not self._store:
-            self._store.update(
-                {name: tensor.detach().clone() for name, tensor in params.items()}
-            )
+            self._store.update({
+                name: tensor.detach().clone() for name, tensor in params.items()
+            })
             self._intelligence.start_task()
         self._intelligence.accumulate_pseudo_grads(grads, geometry)
         penalty = self._intelligence.penalty_gradients()
@@ -2103,7 +2103,9 @@ CascadeSynapsePlasticity = CascadeSynapseUpdate
 
 
 @update_backend("adafactor")
-class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin):
+class FactoredSecondMomentUpdate(
+    BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin
+):
     """Adafactor: a factored (row × column) second moment.
 
     ``V ≈ R Cᵀ / mean(R)``; ``m ← β1·m + (1−β1)·g``; ``R ← β2·R + (1−β2)·mean(g², rows)``;
@@ -2114,9 +2116,7 @@ class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin
 
     IDENTITY_CARD = AlgorithmIdentityCard(
         name="FactoredSecondMomentUpdate",
-        reference_equations=(
-            "Adafactor; Shazeer & Stern (2018), arXiv 1804.04235"
-        ),
+        reference_equations=("Adafactor; Shazeer & Stern (2018), arXiv 1804.04235"),
         deviations_from_literature=(
             "the factored second moment is stored per 2-D weight; the update "
             "applies no relative-step clip and no warmup",
@@ -2157,7 +2157,9 @@ class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin
             row = self._second.get(f"{name}.row")
             column = self._second.get(f"{name}.column")
             if row is None or row.shape != (param.shape[0],):
-                row = torch.zeros(param.shape[0], device=param.device, dtype=param.dtype)
+                row = torch.zeros(
+                    param.shape[0], device=param.device, dtype=param.dtype
+                )
             if column is None or column.shape != (param.shape[1],):
                 column = torch.zeros(
                     param.shape[1], device=param.device, dtype=param.dtype
@@ -2168,9 +2170,10 @@ class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin
             self._second[f"{name}.row"] = row
             self._second[f"{name}.column"] = column
             estimate = row[:, None] * column[None, :] / row.mean().clamp_min(1e-12)
-            params[name] = param - self.config.step_size * moment / (
-                estimate + self.config.eps
-            ).sqrt()
+            params[name] = (
+                param
+                - self.config.step_size * moment / (estimate + self.config.eps).sqrt()
+            )
         return params
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
@@ -2184,7 +2187,9 @@ class FactoredSecondMomentUpdate(BufferManager, ClippingMixin, SecondMomentMixin
 
 
 @update_backend("quantized_adam")
-class QuantizedStateUpdate(BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin):
+class QuantizedStateUpdate(
+    BufferManager, ClippingMixin, SecondMomentMixin, StateSnapshotMixin
+):
     """8-bit Adam: blockwise-quantized first and second moments.
 
     Both moments are stored as int8 blocks with one scale per block, so the
@@ -2202,12 +2207,13 @@ class QuantizedStateUpdate(BufferManager, ClippingMixin, SecondMomentMixin, Stat
         deviations_from_literature=(
             "the block size is fixed at ``quant_block`` elements and the "
             "scale is the block absolute maximum over 127",
+            "the second moment is dequantized with a one-LSB floor: a block "
+            "with one dominant gradient packs its small elements to zero, and "
+            "the step would otherwise divide by eps alone (measured 120×)",
             "the step is exact Adam on the dequantized moments",
         ),
         objective_function="the task loss at the FREE-phase input/target",
-        pseudo_gradient_def=(
-            "ΔW = −lr·m̂/(√v̂ + eps); m̂, v̂ = dequantized int8 blocks"
-        ),
+        pseudo_gradient_def=("ΔW = −lr·m̂/(√v̂ + eps); m̂, v̂ = dequantized int8 blocks"),
         symmetry_requirements=("none",),
         approximation_parameters=(
             "momentum (β1)",
@@ -2240,13 +2246,25 @@ class QuantizedStateUpdate(BufferManager, ClippingMixin, SecondMomentMixin, Stat
         packed = torch.round(view / scale[:, None]).to(torch.int8).flatten()
         return packed[: flat.numel()], scale
 
-    def _dequantize(self, packed: Tensor, scale: Tensor, numel: int) -> Tensor:
+    def _dequantize(
+        self, packed: Tensor, scale: Tensor, numel: int, *, floor: bool = False
+    ) -> Tensor:
+        """Int8 blocks back to a tensor, at least one LSB per block when floored.
+
+        ``floor`` is for the second moment only: a block with one dominant
+        gradient packs its small elements to zero, and Adam's denominator
+        would then be ``eps`` alone — the measured 12,000× overshoot. One
+        LSB is the smallest value the quantized state can represent, so it is
+        the honest lower bound on the moment, not a clamp on the step.
+        """
         block = max(1, int(self.config.quant_block))
         blocks = scale.numel()
         flat = packed
         if flat.numel() < blocks * block:
             flat = torch.cat([flat, flat.new_zeros(blocks * block - flat.numel())])
         decoded = flat.view(blocks, block).to(scale.dtype) * scale[:, None]
+        if floor:
+            decoded = torch.maximum(decoded, scale[:, None])
         return decoded.flatten()[:numel]
 
     def step(
@@ -2284,15 +2302,18 @@ class QuantizedStateUpdate(BufferManager, ClippingMixin, SecondMomentMixin, Stat
                     packed_m, self._moment[f"{name}.m.scale"], param.numel()
                 ).view(param.shape)
                 second = self._dequantize(
-                    packed_v, self._second[f"{name}.v.scale"], param.numel()
+                    packed_v,
+                    self._second[f"{name}.v.scale"],
+                    param.numel(),
+                    floor=True,
                 ).view(param.shape)
             first.mul_(beta1).add_(grad, alpha=1 - beta1)
             second.mul_(beta2).add_(grad.square(), alpha=1 - beta2)
             self._moment[f"{name}.m"], self._moment[f"{name}.m.scale"] = self._quantize(
                 first
             )
-            self._second[f"{name}.v"], self._second[f"{name}.v.scale"] = (
-                self._quantize(second)
+            self._second[f"{name}.v"], self._second[f"{name}.v.scale"] = self._quantize(
+                second
             )
             bias1 = 1 - beta1**self._t
             bias2 = 1 - beta2**self._t
@@ -2376,9 +2397,7 @@ class ScheduleFreeUpdate(
             if second is None or second.shape != param.shape:
                 second = torch.zeros_like(param)
             second.mul_(beta2).add_(grad.square(), alpha=1 - beta2)
-            sequence -= self.config.step_size * grad / (
-                second.sqrt() + self.config.eps
-            )
+            sequence -= self.config.step_size * grad / (second.sqrt() + self.config.eps)
             self._z[name] = sequence
             self._second[name] = second
             params[name] = (1 - average) * param + average * sequence
