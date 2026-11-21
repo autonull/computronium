@@ -10,13 +10,22 @@ SEC as optimization.
 6 seams and 78 rules (29 task-independent + 1 task-dependent + 48
 availability). The P2 seams found and closed one composer defect: `recurrent`
 never received `sequence` through the geometry builder, so the time axis could
-not unroll from a composed cell. P1 is next and unstarted; its design blockers
-are recorded in §4.
+not unroll from a composed cell. P1 is next and unstarted. It is a batch
+program, not 75 interactive checks: one driver, a per-axis strategy table, a
+calibration gate, and rows that survive a kill. Its design facts and wave
+order are in §4.
 
 **One sentence:** 75 laws × a positive/negative control pair, 6 protocol
 seams, and the declared composition rules are the whole test surface; a
 tiny-batch fit whose mechanism-removed control must fail is the defect line;
 a family box is a screen the SEC loop owns, never a test.
+
+**Batch-first (amendment 2026-11-21).** The unit of work is a program that
+enumerates the surface, runs the fits and controls, writes one row per law,
+and exits a verdict. Interactive per-law probing is debugging, not
+measurement: it is how P1's three facts were found, and it is not how the 75
+verdicts are bought. A program that cannot return "test defect" and exit
+non-zero is not a batch; it is a green table.
 
 ---
 
@@ -180,6 +189,11 @@ A row below its bar is then one of exactly: a defect (this table), a
 capability gap (the table's second row, with the closing primitive), or
 tuning (last row, SEC's job). No fifth reading.
 
+`unproven control` is not a fifth reading: it is the harness declining to
+measure a law on an axis whose control is not demonstrated. It is never a
+verdict and never counts toward done. A program that reports it as `works`
+has produced a test defect, not a result.
+
 ---
 
 ## 4. The program (dependency order, prices measured or explicitly priced first)
@@ -213,29 +227,67 @@ and the refusal's failing test. `test_no_test_names_a_family_box` passes
 with only `test_primitive_capability.py` declared. **Not landed:** the
 fingerprint cache; it is the first P1 task, not a P0 row.
 
-### P1 — Run L-a/b/c on all 75 (the decisive spend, ≤ 15 min wall) — **next**
+### P1 — Run the batch on all 75 (the decisive spend, ≤ 15 min wall) — **next**
 
-Tiny fits: 200 steps × 16 samples ≈ 1 s each (measured cell ≈ 4.4 ms/step on
-the 12×32 sequence box); 75 × 3 lr × 2 (fit + control) ≈ 450 runs ≈ 11 min
-serial, 1–2 min with 12 lanes on 16 cores. L-a/L-c are negligible.
+The deliverable is one program, `scripts/probes/p1_law_surface.py`, with a
+per-axis strategy table — not 75 interactive checks. It enumerates the
+surface, runs L-a, then a tiny fit at the declared lr grid, then the
+mechanism-removed control at the best passing point, then L-c, and writes
+`results/p1/surface.json` + `surface.md`. One row per law:
 
-- **Output:** one table of 75 rows: `pass`, `defect (invariant)`,
-  `defect-or-gap (mechanism)`, `declaration defect`, `works`.
-- **Calibration (the check the harness must pass):** it must reproduce the
-  known failures — `nca`, `rule_state`, `substrate_coupled` and `conv` — as
-  non-pass. If a law the artifacts call defective fits, the harness is too
-  weak (its grid, its control, or its sample size), and that is a test defect,
-  not good news. If a law the artifacts call `refused` fits, the refusal is
-  the defect.
-- **Close:** every primitive is in one of the five states, each non-pass has
-  the failing control that proves it, and the calibration set is reproduced.
+```
+id, axis, family, state, fit_loss, control_loss, knob, delta,
+walltime_s, box, fingerprint, decided_by
+```
 
-**Measured before the harness (2026-11-21), three facts that shape it:**
+| State | Meaning |
+|---|---|
+| `works` | L-b passes and the control fails (E1; tuning belongs to SEC) |
+| `defect (invariant)` | L-a fails; the named invariant is the finding |
+| `defect-or-gap (mechanism)` | no admissible grid point fits; P3 names the fix or the closing primitive |
+| `declaration defect` | fit passes, control fails, but L-c moves nothing |
+| `refused` | the declared space refuses every cell (the one `impossible` row) |
+| `unproven control` | no demonstrated control on this axis; not measured, not done |
+
+The exit is the verdict, not a log line:
+
+| Exit | Meaning |
+|---|---|
+| 0 | measured rows all carry a failing control; calibration reproduced |
+| 1 | test defect: a known non-pass fits, or a row has no control |
+| 2 | the surface disagrees with the registry (wiring defect) |
+| 3 | partial: `unproven control` remains (wave N is done) |
+
+**Waves, cheapest axis pair first.** The program refuses to emit a verdict
+for an axis whose control is not demonstrated. Each wave adds one strategy
+row and a lock; the driver does not change.
+
+| Wave | Axes | Laws | Control | Fits (≤4/law) |
+|---|---|---|---|---|
+| 1 | credit, geometry | 31 | zero pseudo-gradient; frozen/zeroed weights | 124 ≈ 43 s serial |
+| 2 | dynamics, update | 26 | instantaneous settle; unchanged parameters | 104 ≈ 36 s serial |
+| 3 | plasticity, substrate | 18 | null psi; identity forward | 72 ≈ 25 s serial |
+
+- **Calibration is the gate, not the epilogue.** Wave 1 must reproduce `nca`
+  and `conv` as non-pass before it writes a row; wave 3 must show
+  `rule_state` and `substrate_coupled` as `unproven control` or
+  `defect-or-gap`, never `works`. If a known non-pass fits, the program
+  writes no table and exits 1.
+- **Restart is a row.** Results are keyed by `(id, declaration hash, case
+  fingerprint)`; `--resume` skips finished rows and retries only `incomplete`
+  ones. A killed row is never read as `works`.
+- **The ladder stays in the program.** L-a → fit → control → L-c; every row
+  records `decided_by`. A law that needs a 4th lr point is reported at its
+  ceiling, never retried.
+- **Close:** wave 1 exits 0 or 1; all 75 rows after three waves; 0
+  `unproven control`, 0 unexplained fits, and `validate()` clean.
+
+**Measured before the driver (2026-11-21), three facts that shape it:**
 
 1. The micro-case fit works: 200 `train_step`s on the case's 4-sample batch
    drop CE 1.33 → 0.004 in ~0.35 s on CPU (`gradient`, `feedforward`,
-   `euclidean`, `digital`, `instantaneous` all measured). One fit is cheaper
-   than the plan's budget, so a fit is not the expensive part.
+   `euclidean`, `digital`, `instantaneous` all measured). A fit is cheaper
+   than the plan's budget, so cost is not what P1 spends.
 2. That fit converges through geometry + credit on *every* axis, so a single
    uniform fit does not isolate a substrate, dynamics or plasticity law. A
    control that replaces those laws with a neutral companion still fits; the
@@ -245,10 +297,8 @@ serial, 1–2 min with 12 lanes on 16 cores. L-a/L-c are negligible.
    the composed axis config (`CellConfig` / coordinate params), not the case
    dict; `AxisSpec.accepted_params` is the live knob declaration.
 
-Per-axis fit/control pairs P1 still needs: credit (zero pseudo-gradient),
-dynamics (instantaneous settle), geometry (frozen/zeroed weights), update
-(unchanged parameters), plasticity (null psi), substrate (identity forward).
-Each pair is a named check, not a grid point.
+The three fit/control pairs the driver still needs to prove are named in the
+wave table; each is a strategy row plus a lock, not a new harness.
 
 ### P2 — The 6 seams (one E1 cell each, ≤ 10 min) — **done 2026-11-21**
 
@@ -310,7 +360,7 @@ claim is "works here and elsewhere" until this runs.
    --surface`, `test_surface_lock.py`).
 2. **All 75 laws are in exactly one state** from §3's table, each with the
    control that proves it. 0 defects, 0 unexplained fits, 0 inert knobs
-   presented as tuning. **Open, P1.**
+   presented as tuning, 0 `unproven control`. **Open, P1 (batch).**
 3. **6/6 seams pass** their declared exchange. **Done 2026-11-21**
    (`test_protocol_seams.py`).
 4. **Every refusal carries a test that fails without it**; every refusal
@@ -333,18 +383,25 @@ E1; a width search is not a mechanism fix.
 
 ## 6. Cost model and stop rules
 
-- **The unit of cost is the law, not the row.** One law ≈ 1 s per fit; one
-  family row ≈ 1–89 s per seed, ×5 for E2. Spend the first, buy the second
-  only where the loop will act.
+- **The unit of cost is the law, not the row.** One law ≤4 fits (3 lr + 1
+  control); one family row ≈ 1–89 s per seed, ×5 for E2. Spend the first,
+  buy the second only where the loop will act.
+- **The batch is the unit of spend.** A wave is one process tree at 12 lanes;
+  a single law is a debugging step, not a session. 300 fits ≈ 105 s serial,
+  under a minute at 12 lanes.
 - **A tiny fit is deterministic**: no seed, no CI, no HPO. Its threshold is a
   factor off the untrained loss, so it needs no bar and no noise model.
 - **A grid is capped by declared ceilings, not by luck**: 3 lr values inside
   the stability bound. If a law needs a 4th grid point to fit, the ceiling is
   the finding.
-- **Watchdog = 2× the measured cost.** A fit killed past it is a compose or
-  cost defect; record, re-price, do not retry blind.
+- **Watchdog = 2× the wave's measured cost.** A wave killed past it is a
+  compose or cost defect; record, re-price, do not retry blind.
 - **Lanes:** 12 concurrent processes, 2 threads each (measured on 16 cores).
   A 4-worker run's 300 s timeouts were contention, not verdicts.
+- **A green wave is not a verdict.** Exit 0 requires the calibration gate;
+  a row without a failing control is a test defect, not a result.
+- **Rows land before the summary.** A killed wave keeps its finished rows;
+  only `incomplete` rows are retried.
 - **Stop when decided:** a defect closes on its failing control; a seam
   closes on its exchange; a claim closes on its fifth paired seed.
 
@@ -362,9 +419,14 @@ E1; a width search is not a mechanism fix.
 | `test_a_refusal_has_a_failing_test` | a refusal exists without a test that fails without it |
 | `test_every_seam_has_a_check` | a declared seam has no check |
 | `test_seam_exchanges_what_it_declares` | the exemplar does not exchange what it declares |
+| `test_the_batch_refuses_a_verdict_without_a_control` | an axis with no proven control reports `works` |
+| `test_the_batch_calibration_gate_exits_nonzero` | a known non-pass fits and the batch still exits 0 |
+| `test_the_batch_is_restartable` | a finished row re-runs, or a killed row reads as `works` |
+| `test_the_batch_marks_unproven_axes` | a law on an unproven axis is `works` instead of `unproven control` |
 
 **Landed 2026-11-21:** family-box, surface-row, refusal, and both seam locks.
-**Open:** the three fit/knob locks, which arrive with the P1 harness.
+**Open:** the three fit/knob locks and the four batch locks, which arrive
+with the P1 driver.
 
 ---
 
@@ -375,9 +437,16 @@ E1; a width search is not a mechanism fix.
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P1: the decisive spend - 75 tiny fits, each with its negative control [NEXT]
-uv run python scripts/probes/p1_law_surface.py --seeds 1 --lr-grid 0.1,1,10 \
-  --samples 16 --steps 200 --lanes 12 --out results/p1
+# 2. P1: the batch, cheapest axis pair first                        [NEXT]
+uv run python scripts/probes/p1_law_surface.py --axes credit,geometry \
+  --lr-grid 0.1,1,10 --samples 16 --steps 200 --lanes 12 --out results/p1
+# wave 2, then wave 3 reuse the rows already written
+uv run python scripts/probes/p1_law_surface.py --axes dynamics,update \
+  --resume --out results/p1
+uv run python scripts/probes/p1_law_surface.py --axes plasticity,substrate \
+  --resume --out results/p1
+# exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial wave.
+# Do not re-run interactively to "check" a nonzero exit.
 
 # 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q
@@ -401,3 +470,7 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 - **Treating "0 unaccounted rows" as capability.** It was TODO97's definition
   of done, and it is why 65 primitives never trained on two families while the
   plan reported progress.
+- **Verifying each law interactively** when the batch can enumerate it. A
+  prompt is not a row, and a hand-run fit is not a result.
+- **Reading a green table as a verdict** without the calibration gate. The
+  gate is the reason the batch can be left alone.
