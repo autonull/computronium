@@ -4,6 +4,10 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Status of its acceptance rule:** superseded for "does it work?" claims by
+`TODO98.md`. A closed row is a screen, not a capability; TODO97's history below
+is kept as the record of how the rows were closed.
+
 **Progress:** [2026-11-21] ✅ **S11 CLOSED (the breadth exit is green: 17/17 credits hold two families)** — the S10 gap named a row the repository already declared. `delayed_cue` is a time-major task (`batch_layout=time_major`, loader `(time, batch, features)`), and the three temporal credits compose on it. Two defects kept that row invisible:
 **a. The composer refused the cell it had just built.** `compose_configs` set `sequence=True` and kept the flat default depth, so `Geometry.sequence_states` raised at the first step ("expected two Linears and a recurrent weight, got 7 Linear(s)"). The one-hidden-layer rule lived only in the test harness (`primitives/cases._sequence_shaped`): no evaluator had ever trained a time-major cell. The composer now gives a `requires_sequence` credit the single hidden layer its unroll contract states, and the harness copy is deleted. Lock: `test_the_composer_gives_a_time_major_credit_one_hidden_layer` (one layer on a sequence credit; the derived depth on a flat one).
 **b. The gate read a second family vocabulary.** `breadth_gate` keyed families by the task's registered *domain*, while the declaration is `TaskSpecEnriched.task_families` — the one `refusal_for` composes on. The gap table already named `family="sequence"`, which is not a domain, so the table and the gate disagreed. The gate now counts every declared family: a task that declares two counts for both, and two tasks in one family still count once. Lock: `test_a_task_that_declares_two_families_counts_for_both`.
