@@ -150,6 +150,44 @@ with no verdict; the symbol-targeted credit/plasticity contracts (66) and the
 joint-pipeline tests (8) passed instead — the directory's cost is the S5i
 hang's, not this session's gate.
 
+**Session 2026-11-20 (S9b).** The S9b ladders found a record defect before
+they found a primitive one. The ladder rebuilt its coordinate from the six
+axes alone, so the base box's structural params were dropped and every rung
+ran at another box: `energy_minimization`'s factor-1.0 rung measured 0.2176
+against the row's 0.8709, so the four S9 effects were measured at another box
+(`predictive_settling`'s corrected ladder peaks at its own default, 0.8105).
+The ladder and the claim now build the box with the screen's own builder
+(`sec_loop.screen_coordinate`), so factor 1.0 is the row's measurement. A tie
+no longer picks the farthest factor: `thermodynamic_contrast` and
+`local_goodness` measured the same number at all three points and were
+published as "tuned at ×0.1" with identical claim arms; the best of a tie is
+the point nearest the default.
+
+Re-run at the corrected box: **2 claims** — `local_contrastive`
+`credit.readout_scale` ×10 +0.2533 [+0.2258, +0.2821] p=0.0073;
+`random_projections` `credit.feedback_scale` ×10 +0.2862 [+0.2335, +0.3416]
+p=0.0076 — one **coordinate with a CI** (`energy_minimization`
+`dynamics.step_size` ×10 +0.0092 [−0.0052, +0.0209], inside the 1 pp margin),
+and two **no-power coordinates** (`thermodynamic_contrast`,
+`local_goodness`: identical rungs). The five-CI gate is **open at this box**:
+three records carry a CI, and the rows that would add a fourth (`pc_alm`'s ×10
+step) crash at settle step 6 ("NaN/Inf detected in activations"), so that
+record is **defective** with the strict-xfail lock
+`test_a_pc_alm_step_above_its_stability_bound_trains` and the close "a
+backtracking step or a declared stability ceiling".
+
+The re-build has a limit the maps expose: the row does not record the
+screen's structural params, so three of six sampled rows do not reproduce at
+their rebuilt box (`forward_tangent` 0.1302 vs 0.1623, `zeroth_order` 0.1444
+vs 0.1734, `pc_alm` 0.5319 vs 0.7811) while three do (`local_goodness`
+0.3256, `energy_minimization` 0.8709, `target_inversion` 0.1032). The row's
+box must carry its params; that is S9c, and until it lands a claim's box is
+the ladder's declared box, not provably the row's.
+
+Locks: 20 passed / 6 xfailed in `test_ladder_record_lock.py`, three new (the
+row's box, the tie rule, the defect lock). `scripts/audit.py`: 0 findings,
+including the defective row (lock and close stamped).
+
 ### Remaining work (dependency order, 2026-11-20)
 
 1. ~~**S5h — file the six defect classes**~~ ✅ done. The three classes the
@@ -234,15 +272,12 @@ hang's, not this session's gate.
    primitive's own default at the matched box. `passes` refuses a claim at
    another box; a CI that includes the margin stays `coordinate`, and a point
    within one standard error of the margin is `marginal`.
-   - **Result.** 4 claims clear: `predictive_settling` `dynamics.step_size`
-     ×10 +0.6042 [+0.5577, +0.6386] p=0.0076; `random_projections`
-     `credit.feedback_scale` ×10 +0.0295 [+0.0151, +0.0436] p=0.0076;
-     `energy_minimization` `dynamics.step_size` ×10 +0.2495
-     [+0.0677, +0.3969] p=0.0444; `local_contrastive`
-     `credit.readout_scale` ×10 +0.0785 [+0.0211, +0.1358] p=0.0473.
-     `lazy` is a **no-power coordinate**: its best rung is its own default,
-     so the arms are identical and the ten cells are not run. Report:
-     `results/sec_claims/claims.json`.
+   - **Result (superseded by S9b's corrected box).** The first run reported 4
+     claims (`predictive_settling` ×10 +0.6042, `random_projections` +0.0295,
+     `energy_minimization` +0.2495, `local_contrastive` +0.0785) and `lazy` as
+     a no-power coordinate. Those effects were measured at a box the ladder
+     built from the six axes alone; S9b rebuilt it and re-ran, so the corrected
+     result below is the one to quote. Report: `results/sec_claims/claims.json`.
    - **Candidate rule (declared, not prose).** The pool is the maps' ladder
      records with `verdict == "tuned"`, ranked by the confirm seed's
      difference from the default rung. The two headroom ladders added
@@ -259,13 +294,28 @@ hang's, not this session's gate.
    - **Gate.** 5 claim records, each with its CI and box or a named no-power
      coordinate; a marginal or coordinate result is reported as such, never
      rounded up.
-6. **S9b — the fifth binding tuned record.** Filed. `lazy`'s `dynamics.step_size`
-   ladder peaks at its own default (0.0316 → 0.5517/0.6643; 0.316 → 0.2105),
-   so its pair has no power. Ladder the next headroom rows that carry a
-   declared knob (`pc_alm` `dynamics.step_size` 0.426 over bar;
-   `local_goodness` `credit.feedback_scale` 0.220) and add the first whose
-   best rung moves the knob to the pool; then re-run
-   `sec_claims --register --run`. The gate is five CIs, not five records.
+6. ~~**S9b — the fifth binding tuned record**~~ ✅ done (2026-11-20): the
+   ladder ran at another box (the base's structural params were dropped) and
+   the tie rule published a phantom point; both are fixed, and the corrected
+   re-run gives **2 claims + 1 CI coordinate + 2 no-power coordinates**. The
+   gate is five CIs; it is open on two named defects, not on a knob sweep:
+   - **S9c — a row's box carries its params.** `_box_summary` records the
+     coordinate's params (the screen's own-knob mode included);
+     `screen_coordinate` reads them; a row without them is stale and the
+     ladder refuses to adjudicate it. `ClaimCandidate.coordinate` and the
+     registration carry the same params, so a re-boxed claim is caught before
+     its first seed. Then re-screen the vision map, re-ladder, re-register and
+     re-run. Check: three of six sampled rows do not reproduce at their
+     rebuilt box (`forward_tangent`, `zeroth_order`, `pc_alm`).
+   - **S9d — `pc_alm`'s stability capability.** A backtracking step or a
+     declared ceiling closes the NaN/Inf at settle step 6 and lets the ×10
+     rung decide a fourth CI. Lock (strict xfail):
+     `test_a_pc_alm_step_above_its_stability_bound_trains`.
+   - **S9e — the inert `credit.feedback_scale` probe.** `thermodynamic_contrast`
+     and `local_goodness` measure the same number at 0.001/0.01/0.1; probe the
+     credit's pseudo-gradient at two scales before calling it a plateau. If the
+     knob is never read, wire it or withdraw it from the active space (one
+     declaration), then re-ladder.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -362,7 +412,14 @@ verdict, or a capability that works — never on "tests consolidated".
    14 token-lane rows refused by name, NTM trains on cartpole, five ceiling
    boxes fit by width search, the tile floor is `unimplemented` with its lock,
    ten kernels carry parity and a kill test, and the LM map is 0 defective.
-   **NEXT: S9** (5 pre-registered claims).
+7. ~~**S9 — five pre-registered viability claims**~~ ✅ done (2026-11-20);
+   ~~**S9b — a fifth binding record**~~ ✅ the ladder defect is fixed and the
+   claims are re-run at the corrected box: **2 claims + 1 CI coordinate + 2
+   no-power coordinates** (S9b above). The five-CI gate is **open**: the rows
+   that could add a CI are blocked by two defects, not by an algorithm.
+   **NEXT: S9c** (a row's box carries its params — re-screen, then re-ladder
+   and re-register), **S9d** (`pc_alm`'s stability capability), **S9e** (the
+   inert `credit.feedback_scale` probe) — in that order.
 
 ---
 
@@ -415,6 +472,13 @@ rows** (the graph family's 9 declared rows are measured; 6 are inert
 companions). The earlier 39 (30 vision + 9 graph) was the plan's claim, and the
 13 + 3 = 16 was the stale artifact. Quote the maps, not this line, and
 regenerate both before publishing a count.
+
+**Ladder records (2026-11-20, S9b):** the vision map's `ladders` table carries
+15 records — 7 `tuned` (3 move the knob: `local_contrastive`, `random_projections`,
+`energy_minimization`; 4 are no-power: `lazy`, `predictive_settling`,
+`thermodynamic_contrast`, `local_goodness`), 7 `unimplemented`, and 1
+`defective` (`pc_alm`'s ×10 step: NaN/Inf at settle step 6). `--tuning --limit 10`
+writes them; the audit reads them.
 
 ---
 
@@ -912,7 +976,7 @@ capability skip must be a finding, an environment f-string must not be.
 | **S6d Skip scan** | ✅ Scanner reads f-strings and reports non-literal reasons; 14 findings closed | 0 capability skips | A non-literal skip the gate cannot read |
 | **S7 Kernels** | 10 wrappers to existing acceleration code; kill test; honest `absent` for 65 | 10 implemented; 0 stubs pass | A kernel with no speed/parity |
 | **S8 Map + docs** | ✅ Regenerate map with verdict/rung/cost; regenerate README/method cards; LM delta 0 defective | 0 unaccounted rows; docs match map | A doc row the map does not carry |
-| **S9 Results** | ✅ 5 pre-registered claim records (control-relative, 5 seeds, CI): 4 claims + 1 no-power coordinate | 5 records with CI or a named no-power; S9b for a fifth binding record | A claim without pre-registration |
+| **S9 Results** | ✅ 5 pre-registered claim records (control-relative, 5 seeds, CI); S9b fixed the ladder's box and the tie rule: corrected 2 claims + 1 CI coordinate + 2 no-power; S9c–S9e for the fifth CI | A claim without pre-registration; a ladder at another box than its row |
 
 **S1–S3 are repair. S4–S6 are measurement. S7 is optional acceleration. S8 is
 the product. S9 is the science.** No screen runs before S5d is green; no
@@ -942,9 +1006,12 @@ ladder runs before its family has a control; no row is closed as "gap".
 9. **~155 test files / ~1,300 tests**, 0 exact duplicate bodies, 0
    finiteness-only test, 0 empty assertion.
 10. **5 pre-registered claim records**, 5 paired seeds, CI,
-    control-relative: 4 claims clear and `lazy` is a no-power coordinate
-    (its best rung is its default). A claim within 1σ of its bar is
-    `marginal`, not met. The fifth binding record is S9b.
+    control-relative: the corrected box gives **2 claims** (`local_contrastive`
+    +0.2533, `random_projections` +0.2862), **1 coordinate with a CI**
+    (`energy_minimization` +0.0092, inside the margin) and **2 no-power
+    coordinates** (`thermodynamic_contrast`, `local_goodness`). A claim within
+    1σ of its bar is `marginal`, not met. The fifth CI is S9c/S9d, not a knob
+    sweep; the row's box carries its params first.
 11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
     and the plan's counts equal the artifacts'.
 
@@ -1033,16 +1100,22 @@ uv run python -m computronium.experiment.documentation.sec_map \
 #    the screen now reads the planner's void constraints: surrogate is refused
 #    without a routing geometry, fast_weights needs non-instantaneous dynamics
 
-# 10. S9 claim list (DONE, 2026-11-20: 4 claims + 1 no-power)
-#     a) add the headroom ladders that join the pool (tuned records)
+# 10. S9 claim list (DONE 2026-11-20; corrected by S9b: 2 claims + 1 CI)
+#     a) ladders at the row's box (S9b): the base params travel
 uv run python -m computronium.experiment.sec_ladder \
-  --map results/sec/map.json --tuning --limit 2 --device cpu
+  --map results/sec/map.json --tuning --limit 10 --device cpu
 #     b) commit every registration before the first seed
 uv run python -m computronium.experiment.sec_claims --register --device cpu
 #     c) run the five paired seeds per claim; writes the CI report
 uv run python -m computronium.experiment.sec_claims --run --device cpu
 #     report: results/sec_claims/claims.json
-#     S9b: ladder pc_alm / local_goodness for a fifth binding record
+#     S9b found the ladder's box defect: factor 1.0 now equals the row's
+#     measurement. Corrected: local_contrastive +0.2533 [+0.2258, +0.2821],
+#     random_projections +0.2862 [+0.2335, +0.3416], energy_minimization
+#     +0.0092 [-0.0052, +0.0209], thermodynamic_contrast/local_goodness
+#     no-power (identical rungs). pc_alm is defective: NaN/Inf at settle step 6.
+#     NEXT: S9c (a row's box carries its params), S9d (pc_alm stability),
+#     S9e (the inert credit.feedback_scale probe).
 ```
 
 ---
