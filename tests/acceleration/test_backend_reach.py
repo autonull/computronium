@@ -111,8 +111,8 @@ def test_an_arm_trains_the_system_it_is_bound_to(name: str) -> None:
     backend = getattr(system, "_kernel_backend", None)
     if backend is None:
         pytest.xfail(
-            f"unimplemented: {name} attaches no rung (close: S7 wrapper for its "
-            "acceleration module)"
+            f"unimplemented: {name} has no arm (close: a backend class that "
+            "binds this factory's system and moves its own parameters)"
         )
 
     torch.manual_seed(0)

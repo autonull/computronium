@@ -120,7 +120,7 @@ def _backend(module: str, name: str) -> type:
     return getattr(import_module(f"computronium.acceleration.{module}"), name)
 
 
-def select_backend_class(  # ruff: ignore[too-many-return-statements] - the dispatch arms are the table
+def select_backend_class(  # ruff: ignore[too-many-return-statements, complex-structure] - the dispatch arms are the table
     key: DispatchKey, variant: str | None = None
 ) -> type | None:
     """The backend class that serves ``key``, or ``None`` if none does.
@@ -158,6 +158,12 @@ def select_backend_class(  # ruff: ignore[too-many-return-statements] - the disp
             return _variant(variant, "ff_kernels", "PEPITAKernelBackend")
         case (_, "predictive_settling", "target_inversion", _, _):
             return _variant(variant, "tp_kernels", "TPKernelBackend")
+        case (_, "pc_alm", "pc_alm", _, _):
+            return _variant(variant, "bound_backends", "PCALMKernelBackend")
+        case ("tile_mesh", "instantaneous", _, _, _):
+            return _variant(variant, "bound_backends", "TileMeshKernelBackend")
+        case (_, _, _, _, "fast_weights"):
+            return _variant(variant, "bound_backends", "FastWeightKernelBackend")
         case ("feedforward", "instantaneous", _, _, _):
             return _instantaneous(variant, credit, plasticity)
         case _:

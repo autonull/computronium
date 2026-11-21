@@ -215,13 +215,39 @@ class FFKernelBackend:
         return x.view(x.size(0), -1) if x.dim() > 2 else x
 
     def _labelled_inputs(self, x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
-        """Inputs with the true label and with a decoy label appended."""
+        """Inputs carrying the true label and a decoy label.
+
+        The geometry declares how it reserves the label channel: a first layer
+        wide enough for ``input_dim + output_dim`` gets the one-hot appended;
+        a first layer at ``input_dim`` gets the label written into its leading
+        ``output_dim`` columns. Only these two shapes are legal — anything else
+        would silently train a layer the geometry does not have.
+        """
         one_hot = torch.nn.functional.one_hot(y, num_classes=self._output_dim)
         one_hot = one_hot.to(device=self._device, dtype=self._dtype)
         decoy = torch.nn.functional.one_hot(
             (y + 1) % self._output_dim, num_classes=self._output_dim
         ).to(device=self._device, dtype=self._dtype)
-        return torch.cat([x, one_hot], dim=1), torch.cat([x, decoy], dim=1)
+        if not self._layers:
+            raise ValueError("the Forward-Forward stack binds no layers")
+        width = self._layers[0].weight.shape[1]
+        if width == x.shape[1] + self._output_dim:
+            return torch.cat([x, one_hot], dim=1), torch.cat([x, decoy], dim=1)
+        if width == x.shape[1]:
+            if x.shape[1] < self._output_dim:
+                raise ValueError(
+                    f"a {x.shape[1]}-wide input cannot carry a "
+                    f"{self._output_dim}-wide label channel"
+                )
+            pos = x.clone()
+            neg = x.clone()
+            pos[:, : self._output_dim] = one_hot
+            neg[:, : self._output_dim] = decoy
+            return pos, neg
+        raise ValueError(
+            f"the first layer expects {width} features; Forward-Forward injects "
+            f"a label into {x.shape[1]} or {x.shape[1] + self._output_dim}"
+        )
 
     def _lockstep(self, x: Tensor, y: Tensor, lr: float) -> LayerContrast:
         """Run both passes layer-by-layer, updating each layer in place."""

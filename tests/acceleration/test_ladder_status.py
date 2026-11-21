@@ -12,7 +12,7 @@ TODO36 §4.3 and §6.2. Three claims are locked here:
 """
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -158,15 +158,17 @@ def test_a_triton_spec_without_availability_family_falls_back_rather_than_claimi
 ):
     """No availability family means nothing to compile-test against, which is not a pass.
 
-    Triton specs without availability fixtures are in this state, which is why the branch
-    exists at all: a rung nobody can verify is the rung TODO37 §4.1 was written
-    about, and answering "available" for it would be the lying field again.
+    A triton spec whose kernel module names no fixture is in this state, which
+    is why the branch exists at all: a rung nobody can verify is the rung
+    TODO37 §4.1 was written about, and answering "available" for it would be
+    the lying field again. The case is constructed because the shipped specs all
+    map to a family now — the branch must outlive its last data accident.
     """
-    spec = get("algorithm.fast_weight")
-    assert (
-        spec.kernel_technology == "triton"
-        and _availability_family_from_spec(spec) is None
+    spec = replace(
+        get("algorithm.fast_weight"),
+        kernel_entrypoint="computronium.algorithms.unmapped.kernel",
     )
+    assert _availability_family_from_spec(spec) is None
     resolution = resolve_available_rung(spec, "triton")
     assert resolution.fell_back
     assert resolution.selected.rung == "reference"

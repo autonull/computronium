@@ -126,9 +126,6 @@ def main():  # ruff: ignore[too-many-locals, too-many-statements]
         hidden_dims=(hidden_dim, hidden_dim),
         output_dim=output_dim,
         layer_lr=0.03,
-        classifier_lr=0.01,
-        threshold=2.0,
-        num_layers=2,
         device=device,
     )
 

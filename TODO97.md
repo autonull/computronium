@@ -34,7 +34,11 @@ the two registrations whose candidates left the pool are deleted.
 **S9d — `pc_alm`'s stability capability.** The ×10 rung (`dynamics.step_size` 1.0, rho 1.0) diverged at settle step 6. `SystemConfig._validate_pc_alm_dynamics` now declares the explicit-Euler bound of the primal–dual iterate: the gain `step_size * (1 + rho)` must stay below `PC_ALM_GAIN_CEILING` (2.0, `ontology.system`), so the box is **refused by name** instead of crashing a cell. The ladder records the ×10 rung as `refused`, and `pc_alm` moves from `defective` to a record whose only tuned point is its own default (a no-power coordinate, not a phantom claim). `sec_ladder._DEFECT_LOCKS` is now **empty** by design: the closed class's lock left with it, and a crash no declared class owns names **no** lock — `verdict_lock` returns `None` and `record_problems` reports "defective without a failing test" (never a borrowed parameterized test, D26). Lock: `test_a_pc_alm_step_above_its_stability_bound_is_refused` (the strict xfail removed) and `test_an_unfiled_crash_names_no_borrowed_lock`.
 **S9e — the inert `credit.feedback_scale` probe.** `scripts/probes/s9e_feedback_scale.py` measures the credit's pseudo-gradient norm at 0.001/0.01/0.1: bit-identical for `thermodynamic_contrast` (1.9444) and `local_goodness` in ff mode (0.1056), so the knob was never read at their boxes. A credit law now declares the config fields it reads (`reads(config)`); `thermodynamic_contrast` reads `{beta, credit_norm}`, `local_goodness` reads none of the feedback fields in ff mode (lemma mode keeps them), `forward_tangent` reads `{estimator_samples}`. `sec_ladder.ladder_knob` withdraws a knob its law declares unread: `thermodynamic_contrast` ladders `credit.beta`, `local_goodness` at the ff box has **no ladder point** (unimplemented with the knob that would bind), `random_projections` keeps `feedback_scale`. Lock: `test_the_ladder_withdraws_a_knob_the_law_declares_unread`.
 
-**Progress:** [2026-11-20] ✅ **S7 CLOSED (ten primitive kernels; four algorithm xfails filed)** — ten `PrimitiveSpec` rows are `kernel_status="implemented"` with an entrypoint, a technology and microbench evidence (`artifacts/benchmarks/<id>.jsonl`): `gradient` (backprop), `random_projections` (FA), `thermodynamic_contrast` (PC), `pepita`/`local_goodness` (FF), `target_inversion` (TP), `temporal_trace` (SNN), `tile_mesh` (tile), `energy_minimization`/`muon` (MEP). Each is a wrapper in `computronium/primitives/kernels.py` over its acceleration module; the other 65 stay `absent`, which is a complete answer. The kill test (`tests/acceleration/test_primitive_kernel_kill.py`) patches `ReferenceAdapter.reference_step` to raise: all 75 rows pass — an implemented row returns its step, an absent row refuses by name, an impossible row is quiet only through its refusal test. Defects fixed on the way: `_resolve_step` imported the module's parent and missed `computronium.primitives.kernels`; `acceleration.registry` mapped the primitive rung through a promotion-name table that had no `"implemented"` key, so `dispatch.auto` never selected a primitive kernel; `microbench` built a deleted per-primitive `cases` module instead of `primitives.cases.build_case`; FA's contrastive pass compared the free phase with itself (every delta zero) and built one feedback matrix for two layers; SNN passed a list as `post_spikes` and reported the settle's empty telemetry as a zero-loss step. **S7b (filed, not closed):** four algorithm factories still `xfail` in `test_backend_reach.py` — `ff` (its preset cannot take a backend, `_attachable` names why), `fast_weight` (no fast-weight kernel), `pcalm` (no PC-ALM backend class), `tile` (its backend expects a `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and `spiking_snn` now attach and move the system's own parameters. `scripts/audit.py` exits 0.
+**Progress:** [2026-11-21] ✅ **S7b CLOSED (every algorithm factory has an arm).** The four `test_backend_reach.py` xfails are gone: **16 passed, 0 xfailed**. `ff`'s defect was its preset, not its kernel: `create_ff_mlp` wrapped the composed system with a private `nn.Linear` stack, per-layer Adam and a classifier, copied the geometry's weights once, and synced them back after every step — the exact private-copy failure `_attachable` exists to refuse. The preset now returns the composed axes; `FFKernelBackend` reads the geometry's declared label channel (append the one-hot when the first layer reserves `input_dim + output_dim`, write it into the leading columns when the layer is `input_dim` wide). `fast_weight`, `pcalm` and `tile` gained arm classes in `computronium/acceleration/bound_backends.py`: `bind_system` stores the composed system and `train_step` runs its axes, so the arm trains the parameters the system reads; their fused maths lives where the axis declares it (`FastWeightPlasticity`'s projected Hebbian write, PC-ALM's compiled settle in `pcalm_kernels`, the tile-mesh geometry) — the same delegation `algorithms/<name>/kernel.py` declares. `_NullJointSystem` (the pcalm composition, which uses `NullPlasticity`) now has `attach_kernel_backend` and consults it, so a 6-D coordinate built on a null plasticity primitive is dispatchable; `_availability_family_from_spec` maps `fast_weight` to the Hebbian fixtures. Lock: `test_backend_reach.py`; `test_ladder_status.py`'s no-family case is now constructed (no shipped spec is in that state) instead of reading a data accident.
+
+**Progress:** [2026-11-21] ✅ **3c CLOSED (the diffusion row re-opened at a declared cost).** The corrected recurrence made vision `state_dynamics.diffusion` exceed the shared 60 s cell cap. It measured **76.9 s** at the mnist own-knob box (30 Langevin steps × 2 phases, each an autograd graph), so `sec_loop.P0_BUDGET_OVERRIDES_S` declares **180 s** (2× the measured cell, the SEC watchdog rule) and `_row_budget(primitive_id)` is its one reader; the `--only <primitive>` filter re-screens one row while the map keeps its other rows. At the re-opened box the row is `measured`: **val_acc 0.1069 against chance 0.100**, 134,666 params, within the 150k ceiling — a coordinate result, not a defect. Probe: `scripts/probes/s7b_diffusion_price.py`; map `results/sec/map.json`, doc `docs/sec/map.md` regenerated; audit 0 findings.
+
+**Progress:** [2026-11-20] ✅ **S7 CLOSED (ten primitive kernels; four algorithm xfails filed)** — ten `PrimitiveSpec` rows are `kernel_status="implemented"` with an entrypoint, a technology and microbench evidence (`artifacts/benchmarks/<id>.jsonl`): `gradient` (backprop), `random_projections` (FA), `thermodynamic_contrast` (PC), `pepita`/`local_goodness` (FF), `target_inversion` (TP), `temporal_trace` (SNN), `tile_mesh` (tile), `energy_minimization`/`muon` (MEP). Each is a wrapper in `computronium/primitives/kernels.py` over its acceleration module; the other 65 stay `absent`, which is a complete answer. The kill test (`tests/acceleration/test_primitive_kernel_kill.py`) patches `ReferenceAdapter.reference_step` to raise: all 75 rows pass — an implemented row returns its step, an absent row refuses by name, an impossible row is quiet only through its refusal test. Defects fixed on the way: `_resolve_step` imported the module's parent and missed `computronium.primitives.kernels`; `acceleration.registry` mapped the primitive rung through a promotion-name table that had no `"implemented"` key, so `dispatch.auto` never selected a primitive kernel; `microbench` built a deleted per-primitive `cases` module instead of `primitives.cases.build_case`; FA's contrastive pass compared the free phase with itself (every delta zero) and built one feedback matrix for two layers; SNN passed a list as `post_spikes` and reported the settle's empty telemetry as a zero-loss step. **S7b (closed 2026-11-21, paragraph above):** the four algorithm factories that remained armless here (`ff`, `fast_weight`, `pcalm`, `tile`) now attach and move the system's own parameters, as `fa`/`dfa`, `pepita`, `tp` and `spiking_snn` already did. `scripts/audit.py` exits 0.
 
 **Progress:** [2026-11-20] ◐ **S8 PARTIAL (docs regenerate from one source; LM delta run)** — the method cards (`comp method-card`) no longer carry a second axis table: `_get_axis_registries` projects the 75 `PrimitiveSpec` rows, so a class added to an axis cannot be missing from the docs. `docs/sec/map.md` is regenerated from `results/sec/map.json` with the map's own status vocabulary (`measured`, `unimplemented`, `defective`, `refused`), so the one unimplemented row is counted instead of dropped. The README counts are generated tokens: `implementation_count`, `kernel_verified_count`, `primitive_kernel_count`, `algorithm_kernel_count`; the acceleration panel now reads 96 implementations (75 primitives + 21 algorithms), 24 kernel-verified (10 primitives + 14 algorithms), and the ontology panel reads 75 primitives (from the registry, not `AXES_REGISTRIES`). The LM delta run re-screened its 11 pre-fix defects: 6 became refusals, **5 remain** — `forward_tangent`, `surrogate`, `zeroth_order`, `fast_weights`, `routing` die on the token lane with shape/dtype errors and are filed as `token_lane` under `test_a_language_task_declares_its_token_lane`. That lock is too broad for the class: it is a geometry refusal test, while these five are credit/plasticity token-shape facts. **Next in S8:** narrow the lock, file the credit/plasticity token-shape class with its failing test, and re-run the LM delta; `scripts/audit.py` already exits 0.
 
@@ -67,8 +71,8 @@ the two registrations whose candidates left the pool are deleted.
 first, calibrates the nine task families, screens at boxes that can answer the
 question, and turns ten primitives into kernel rungs behind a kill test and
 parity; all nine families are accounted, the docs regenerate from the registry,
-every claim and ladder rebuilds the row's box, and the remaining work is four
-algorithm rungs (S7b).
+every claim and ladder rebuilds the row's box, every algorithm factory has a
+training arm, and no repair or measurement row is open.
 
 ---
 
@@ -108,6 +112,8 @@ algorithm rungs (S7b).
 | S5i | Capability suite reports pass / skip / fail in one run | ✅ DONE — 7 failed / 67 passed / 2 xfailed (14m11s); loader bounded |
 | S5j | Capability rung reads the row's screened box | ✅ DONE — `map_rows` + `screen_coordinate` + `_is_legal`; refused rows named, measured rows at their box (seed included); suite 62/14/0 after serial re-run |
 | S5k | Recurrent geometry trains under instantaneous gradient | ✅ DONE — recurrent weight applied after every hidden layer; void constraint + duplicate DSL filter deleted; seq row ppl 4.03; 2 locks |
+| S7b | Every algorithm factory has a training arm | ✅ DONE — four xfails closed; `ff` preset composes the axes; 3 bound arm classes; 16 backend-reach tests |
+| 3c | Re-open the diffusion row at a declared cost | ✅ DONE — 180 s declared cap (2× measured 76.9 s cell); re-screened measured at chance; 48/26/1 |
 
 **Session 2026-11-20 (S9).** The claim list is one runner. `sec_claims` reads
 every `tuned` ladder record across the nine maps, ranks it by the confirm
@@ -225,9 +231,11 @@ including the defective row (lock and close stamped).
 
 ### Remaining work (dependency order, 2026-11-20)
 
-**Open (2026-11-21):** **S7b** (four algorithm factories, item 4) and the
-**diffusion cost row** (item 3c). Every other entry below is closed; it stays
-for its lock and its close condition.
+**Open (2026-11-21):** **none.** Every repair and measurement row is closed;
+the entries below stay for their locks and close conditions. What remains is
+science, not repair: the claim pool's fifth binding CI (a capability: `pc_alm`
+at a stable step, or a `zeroth_order` knob that binds) and the breadth check's
+≥2 task families. Both are named in the rows that own them, not session work.
 
 0. **S9c artifacts — DONE (re-screen, re-ladder, re-register, re-run).** The
    vision map was re-screened at the own-knob box (`--breadth full --own-knobs
@@ -300,16 +308,18 @@ for its lock and its close condition.
    primitive.geometry.recurrent]` passes. Locks: `test_recurrent_geometry_
    lock.py` (2: declared legal, the recurrent weight moves at depth 1 and 2),
    plus the updated search-space / prune-diagnostics / campaign-DSL locks.
-3c. **Follow-up (cost, not a defect):** the corrected recurrence makes vision
-   `state_dynamics.diffusion` exceed the screen's 60 s L0 cell cap, so its row
-   is `refused: cost cap`. A budget-aware settle or a declared larger cap
-   re-opens it. The other recurrent rows are re-screened on their axis.
-4. **S7b (filed):** four algorithm factories still `xfail` in
-   `tests/acceleration/test_backend_reach.py` — `ff` (`_attachable` refuses its
-   preset, which cannot take a backend), `fast_weight` (no fast-weight kernel),
-   `pcalm` (no PC-ALM backend class), `tile` (its backend expects a
-   `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and
-   `spiking_snn` attach and move the system's own parameters.
+3c. ✅ **CLOSED (2026-11-21) — the diffusion cost row.** `P0_BUDGET_OVERRIDES_S`
+   declares 180 s for `primitive.state_dynamics.diffusion` (2× its measured
+   76.9 s cell); `_row_budget` is the one reader and `--only` re-screens one
+   row. Re-screened `measured`: val_acc 0.1069 vs chance 0.100, 134,666
+   params, within ceiling. A coordinate result, not a defect.
+4. ✅ **S7b CLOSED (2026-11-21) — every algorithm factory has an arm.**
+   `test_backend_reach.py` is 16 passed, 0 xfailed. `create_ff_mlp` composes
+   the axes (the private layer stack and its weight sync are deleted);
+   `FFKernelBackend` reads the geometry's label channel; `fast_weight`,
+   `pcalm` and `tile` bind through `acceleration/bound_backends.py`; the
+   null-plasticity joint wrapper accepts an arm. Details in the progress
+   paragraph above.
 5. ✅ **S9g CLOSED (2026-11-21) — the other inert credits.** The probe
    measured the knob each law reads (`beta` binds, `feedback_scale` binds for
    `target_inversion`, `fd_step` binds for `zeroth_order`), both classes
@@ -1173,6 +1183,17 @@ uv run python -m pytest \
   -q -n 0
 #     the four other maps holding a recurrent cell: re-screen their axis
 #     (vision dynamics, rl/continual geometry, neuromorphic update)
+
+# 15. S7b + 3c (DONE 2026-11-21)
+uv run python -m pytest tests/acceleration/test_backend_reach.py -q   # 16 passed
+uv run python -m pytest tests/acceleration -q                         # 440 passed / 75 skipped
+uv run python scripts/probes/s7b_diffusion_price.py                   # 76.9 s cell
+uv run python -m computronium.experiment.sec_loop --track P0 --breadth full \
+  --axis dynamics --only primitive.state_dynamics.diffusion \
+  --task mnist --max-primitives 75 --out results/sec --device cpu --own-knobs
+uv run python -m computronium.experiment.documentation.sec_map \
+  --map results/sec/map.json --out docs/sec/map.md
+uv run python scripts/audit.py                                      # 0 findings
 ```
 
 ---

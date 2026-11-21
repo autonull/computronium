@@ -589,6 +589,22 @@ P0_MAX_COORDINATES = 24
 # whole watchdog on 24 training attempts. The cap is a refusal (a box
 # statement), not a verdict, and it is 8× the measured 375-batch cell.
 P0_PRIMITIVE_BUDGET_S = 60.0
+# A row whose declared settle budget makes one cell exceed the shared cap gets
+# a declared cap of its own: 2x its measured cell, the SEC watchdog rule.
+# ``diffusion`` measured 76.9 s (82.3 s on a second run) at the mnist own-knob
+# box, 2026-11-21: 30 Langevin steps x 2 phases, each an autograd graph. The
+# row was `refused: cost cap` at 60 s, which is a box statement, not a verdict
+# (TODO97 §3.3c).
+P0_BUDGET_OVERRIDES_S: Final[dict[str, float]] = {
+    "primitive.state_dynamics.diffusion": 180.0,
+}
+
+
+def _row_budget(primitive_id: str) -> float:
+    """The declared cap a row is screened under."""
+    return P0_BUDGET_OVERRIDES_S.get(primitive_id, P0_PRIMITIVE_BUDGET_S)
+
+
 # The base box shares one step size and one geometry width across primitives.
 # A primitive's own declared defaults are the `own-knobs` pass (TODO95 S2);
 # it runs on request (``--own-knobs``) so the two boxes stay distinct
@@ -1111,7 +1127,7 @@ class CudaContextError(RuntimeError):
 
 
 def _train_nearest(
-    candidates: list[Coordinate], schedule: Schedule
+    candidates: list[Coordinate], schedule: Schedule, budget_s: float
 ) -> tuple[CellEvaluation | None, Coordinate | None, Exception | None, int, bool]:
     """Try compose-legal boxes nearest-to-default until one actually trains.
 
@@ -1121,7 +1137,7 @@ def _train_nearest(
     """
     last_error: Exception | None = None
     started = time.monotonic()
-    deadline = started + P0_PRIMITIVE_BUDGET_S
+    deadline = started + budget_s
 
     def within_budget() -> bool:
         return time.monotonic() < deadline
@@ -1176,6 +1192,7 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
     primitive_key: str,
     box: dict[str, Any],
     own_knobs: bool = False,
+    budget_s: float = P0_PRIMITIVE_BUDGET_S,
 ) -> dict[str, Any]:
     """The cell a primitive emits when no compose-legal box trained."""
     if timed_out:
@@ -1185,7 +1202,7 @@ def _unmeasured_cell(  # ruff: ignore[too-many-arguments]
             "primitive": entry.id,
             "status": "UNAVAILABLE",
             "reason": (
-                f"cost cap: {P0_PRIMITIVE_BUDGET_S:.0f}s after "
+                f"cost cap: {budget_s:.0f}s after "
                 f"{tried}/{candidates} boxes; last error: {last_error}"
             ),
             "ruler": ruler,
@@ -1359,8 +1376,9 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             "binding_reason": box_binding,
         }
 
+    budget_s = _row_budget(entry.id)
     eval_result, coord, last_error, tried, timed_out = _train_nearest(
-        candidates, schedule
+        candidates, schedule, budget_s
     )
     if eval_result is None or coord is None:
         return _unmeasured_cell(
@@ -1374,6 +1392,7 @@ def _screen_coordinate(  # ruff: ignore[too-many-arguments]
             axis=axis,
             primitive_key=primitive_key,
             own_knobs=own_knobs,
+            budget_s=budget_s,
             box=_box_summary(_coordinate(_base_axes(schedule.task_id)), schedule),
         )
 
@@ -2868,6 +2887,12 @@ def main() -> None:
         default="mnist",
         help="Task for P0 screen (determines family and base box)",
     )
+    parser.add_argument(
+        "--only",
+        action="append",
+        metavar="PRIMITIVE",
+        help="Screen only this primitive id (repeatable); the map keeps its other rows",
+    )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument(
         "--repair-boxes",
@@ -2917,7 +2942,8 @@ def main() -> None:
         entries_to_screen = [
             entry
             for entry in census_entries
-            if not args.axis or entry.axis in args.axis
+            if (not args.axis or entry.axis in args.axis)
+            and (not args.only or entry.id in args.only)
         ]
         p0_result = run_p0_track(
             out_dir,

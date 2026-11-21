@@ -1,6 +1,6 @@
 # SEC map — the census of learning primitives
 
-Version SEC-v3, updated 2026-11-21T07:09:46.476266. 75 primitives, 73 available, all rows at one base box:
+Version SEC-v3, updated 2026-11-21T09:28:15.997948. 75 primitives, 73 available, all rows at one base box:
 
 `mnist · 32 samples/step · 375 batches · 1 epoch · 150000 ceiling · control 0.8884 · bar 0.1060`
 
@@ -11,12 +11,12 @@ Generated from `results/sec/map.json`; regenerate with `uv run python -m computr
 | axis | measured | unimplemented | defective | refused |
 |---|---|---|---|---|
 | credit | 16 | 0 | 0 | 3 |
-| dynamics | 6 | 0 | 0 | 2 |
+| dynamics | 7 | 0 | 0 | 1 |
 | geometry | 5 | 0 | 1 | 6 |
 | plasticity | 3 | 0 | 0 | 5 |
 | substrate | 4 | 0 | 0 | 6 |
 | update | 13 | 0 | 0 | 5 |
-| **total 75** | 47 | 0 | 1 | 27 |
+| **total 75** | 48 | 0 | 1 | 26 |
 
 ## Census (the method cards)
 
@@ -44,7 +44,7 @@ hash. A card is a result only when its row is measured.
 | primitive.credit_assignment.thermodynamic_contrast | measured | bound | mnist | 0.7056 | 13.243… | 809f9d6b7cf3… |
 | primitive.credit_assignment.unbiased_rtrl | refused | — | mnist | — | — | — |
 | primitive.credit_assignment.zeroth_order | measured | bound | mnist | 0.1444 | 14.514… | dd84c79a1de1… |
-| primitive.state_dynamics.diffusion | refused | — | mnist | — | — | — |
+| primitive.state_dynamics.diffusion | measured | bound | mnist | 0.1069 | 76.910… | ed1566af3286… |
 | primitive.state_dynamics.energy_minimization | measured | bound | mnist | 0.8709 | 20.431… | b74c7d122abd… |
 | primitive.state_dynamics.error_predictive_coding | measured | bound | mnist | 0.0982 | 21.109… | 17628dc08251… |
 | primitive.state_dynamics.instantaneous | measured | inert | mnist | 0.8943 | 7.4939… | 84453097d227… |
@@ -108,7 +108,6 @@ hash. A card is a result only when its row is measured.
 - `primitive.credit_assignment.eligibility_prop` — `primitive.credit_assignment.eligibility_prop` composes no vision task family (declares rl, sequence); the slice refuses it before it is priced (TODO95 S2)
 - `primitive.credit_assignment.rtrl_reference` — `primitive.credit_assignment.rtrl_reference` composes no vision task family (declares rl, sequence); the slice refuses it before it is priced (TODO95 S2)
 - `primitive.credit_assignment.unbiased_rtrl` — `primitive.credit_assignment.unbiased_rtrl` composes no vision task family (declares rl, sequence); the slice refuses it before it is priced (TODO95 S2)
-- `primitive.state_dynamics.diffusion` — cost cap: 60s after 1/6 boxes; last error: run deadline expired before the first epoch completed
 - `primitive.state_dynamics.spike_integration` — `primitive.state_dynamics.spike_integration` composes no vision task family (declares neuromorphic, rl, sequence); the slice refuses it before it is priced (TODO95 S2)
 - `primitive.geometry.causal_transformer` — `primitive.geometry.causal_transformer` composes no vision task family (declares lm, rl, sequence); the slice refuses it before it is priced (TODO95 S2)
 - `primitive.geometry.conv` — cost cap: 60s after 1/24 boxes; last error: run deadline expired before the first epoch completed

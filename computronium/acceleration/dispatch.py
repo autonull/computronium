@@ -238,6 +238,7 @@ def _availability_family_from_spec(spec: ImplementationSpec) -> str | None:
         "pc": "pc",
         "tile": "tile",
         "hebbian": "hebbian",
+        "fast_weight": "hebbian",
         "fast_weights": "hebbian",  # fast_weights uses hebbian kernels
         "routing": "hebbian",  # routing uses hebbian kernels
         "ff": "ff",
@@ -322,11 +323,11 @@ def _attachable(system: System, backend_cls: type) -> bool:
     ``variant=`` and not from a factory.
 
     The system must be able to *take* a backend, i.e. its ``train_step`` must
-    consult one. ``create_ff_mlp`` is the case in point: it wraps the composed
-    system with its own layer stack, its own per-layer optimizers and a
-    classifier that is not an axis, and copies the geometry's parameters once at
-    construction. A backend that updates the geometry would train weights the
-    preset has stopped reading, so FF keeps the reference rung and says so.
+    consult one. A preset that owns a private layer stack and copies the
+    geometry's parameters once at construction cannot: a backend that updates
+    the geometry would train weights the preset has stopped reading. The
+    attachable surfaces are the composed systems, whose ``train_step`` delegates
+    to the bound backend, and the joint wrapper, which does the same.
     """
     return (
         hasattr(backend_cls, "bind_system")

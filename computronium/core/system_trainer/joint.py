@@ -327,10 +327,23 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 self.update = system.update
                 self.plasticity = NullPlasticity()
                 self.loss_fn = system.loss_fn
+                self._kernel_backend = None
+
+            def attach_kernel_backend(self, backend) -> None:
+                """Bind the arm to this wrapper, the system the caller holds.
+
+                The 5-D inner system also accepts an attach; this wrapper is the
+                object every caller sees, so it is the one whose arm decides the
+                step and whose ``_kernel_backend`` reports the rung.
+                """
+                backend.bind_system(self)
+                self._kernel_backend = backend
 
             def train_step(
                 self, x: Tensor, y: Tensor, **graph_kwargs
             ) -> dict[str, float]:
+                if self._kernel_backend is not None:
+                    return self._kernel_backend.train_step(x, y)
                 return self._system.train_step(x, y, **graph_kwargs)
 
             def forward(self, x: Tensor) -> Tensor:
