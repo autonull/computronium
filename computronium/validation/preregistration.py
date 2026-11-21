@@ -18,6 +18,7 @@ Pure NumPy; reuses the bootstrap/permutation primitives in
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -44,7 +45,6 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
 MIN_SEEDS = DEFAULT_MIN_SEEDS
@@ -88,11 +88,16 @@ class ThresholdRegistration:
         """Serialize for JSON registration files."""
         return asdict(self)
 
-    def box_mismatch(self, schedule: Schedule) -> str | None:
-        """The first declared box field the run's schedule disagrees with."""
+    def box_mismatch(self, box: Schedule | Mapping[str, Any]) -> str | None:
+        """The first declared box field that the run's box disagrees with.
+
+        The run's box is the schedule alone or the coordinate's whole box (its
+        axes and structural params too, TODO97 S9c); either is read by its own
+        mapping, so a registration and a measurement compare field for field.
+        """
         if not self.box:
             return None
-        actual = schedule.to_dict()
+        actual = box if isinstance(box, Mapping) else box.to_dict()
         for key, declared in self.box.items():
             if actual.get(key) != declared:
                 return f"{key}: registered {declared!r}, run {actual.get(key)!r}"
@@ -188,17 +193,18 @@ class PairedComparison:
     cohens_dz: float
 
     def passes(
-        self, registration: ThresholdRegistration, *, schedule: Schedule | None = None
+        self,
+        registration: ThresholdRegistration,
+        *,
+        box: Schedule | Mapping[str, Any] | None = None,
     ) -> bool:
         """Confirm against a registration: CI excludes the margin at alpha.
 
         A registration that declares a box decides only a run at that box: a
-        missing or disagreeing schedule refuses the claim instead of comparing
-        two different instruments (TODO95 D2).
+        missing or disagreeing box refuses the claim instead of comparing two
+        different instruments (TODO95 D2, TODO97 S9c).
         """
-        if registration.box and (
-            schedule is None or registration.box_mismatch(schedule) is not None
-        ):
+        if registration.box and (box is None or registration.box_mismatch(box)):
             return False
         return self.ci_lower > registration.threshold and self.p_value < (
             registration.alpha

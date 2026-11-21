@@ -897,6 +897,12 @@ class CreditAssignment(Protocol):
     requires_autograd: ClassVar[bool]
     error_blind: ClassVar[bool]
 
+    # A law that reads a subset of its config declares
+    # ``reads(config) -> frozenset[str]``: the config dataclass is shared by
+    # every credit, so a field's presence is not evidence the law reads it
+    # (TODO97 S9e). A law with no such declaration reads every field it is
+    # given; the reader is ``sec_ladder._law_reads``.
+
     @abstractmethod
     def compute_pseudo_gradient(
         self,
@@ -992,6 +998,16 @@ class ThermodynamicContrast:
             "energy non-increasing on symmetric-topology settle (property-locked, Level 4)",
         ),
     )
+
+    @classmethod
+    def reads(cls, config: CreditAssignmentConfig) -> frozenset[str] | None:
+        """The contrast is exact: no feedback matrix, so no ``feedback_scale``.
+
+        Measured 2026-11-20 (S9e probe): the pseudo-gradient norm is
+        bit-identical at 0.001/0.01/0.1, so the knob is inert here.
+        """
+        del config  # the contrast reads no feedback field, whatever it carries
+        return frozenset({"beta", "credit_norm"})
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.thermodynamic_contrast()
@@ -1476,6 +1492,18 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
             "dominated: free-loss descent ≈ 0 at matched norms (TODO18 5.1)",
         ),
     )
+
+    @classmethod
+    def reads(cls, config: CreditAssignmentConfig) -> frozenset[str] | None:
+        """FF reads the goodness contrast; lemma routes the error through B.
+
+        The probe measured the ff pseudo-gradient bit-identical at
+        0.001/0.01/0.1 (TODO97 S9e), so ``feedback_scale`` binds only in
+        lemma mode, where the output differential is projected through B.
+        """
+        if config.local_objective == "lemma":
+            return None
+        return frozenset({"credit_norm", "local_objective", "readout_error"})
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_goodness()

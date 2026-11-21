@@ -20,7 +20,6 @@ import json
 import logging
 import math
 import time
-from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -63,7 +62,7 @@ from computronium.experiment.sec_pilot import base_schedule, resource_vector
 from computronium.experiment.sec_status import CELL_STATUS, RowStatus
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from computronium.experiment.sec_interaction import (
         InteractionCell,
@@ -596,22 +595,84 @@ P0_PRIMITIVE_BUDGET_S = 60.0
 # instruments. An update row in the base box is `inert` (see sec_binding).
 
 
+#: The structural params are keyed ``"{axis}.{name}"``, the canonical
+#: hyperparameter spelling. Every other box field is a schedule field or an
+#: axis name, so the prefix is the whole test.
+_PARM_AXES: Final[frozenset[str]] = frozenset(axis.value for axis in StructuralAxis)
+
+
+def box_params(box: Mapping[str, Any]) -> dict[str, Any]:
+    """The structural params a box carries, or ``{}`` when it carries none.
+
+    A box screened before its params were recorded has the six axes and the
+    schedule but no knob values, so the coordinate it describes cannot be
+    rebuilt: the cell's own structural defaults are a guess (TODO97 S9c).
+    """
+    return {
+        key: value
+        for key, value in box.items()
+        if isinstance(key, str) and "." in key and key.partition(".")[0] in _PARM_AXES
+    }
+
+
 def _box_summary(coord: Coordinate, schedule: Schedule | None = None) -> dict[str, Any]:
-    """The box a cell was screened in: the six axes plus the whole schedule.
+    """The box a cell was screened in: the six axes, its params, the schedule.
 
     A row without its task, batch and step count cannot be reproduced and cannot
     be compared with another row (TODO95 D2/D3). The schedule is the box, so its
-    own serialization is the one source; the six axes are added to it.
+    own serialization is the one source; the six axes and the structural params
+    are added to it — the axes alone rebuild another box (TODO97 S9c).
     """
     box: dict[str, Any] = {}
     for field in StructuralAxis:
         box[field.value] = getattr(coord, field.value)
+    box |= dict(coord.params)
     if schedule is not None:
         box |= schedule.to_dict()
         # ``Schedule.to_dict`` names the task ``task_id``; the map's row
         # (and its readers) name it ``task``. One box, one spelling each.
         box["task"] = schedule.task_id
     return box
+
+
+def repair_boxes(out_dir: Path) -> int:
+    """Write each measured row's box params from its cell's own record.
+
+    A row screened before the box carried its params names the six axes and
+    the schedule only, so its coordinate cannot be rebuilt. The cell log's
+    record carries the params the cell ran at, so the box is restored from
+    that record — the same source the row's replay hash names — instead of
+    re-running the screen (TODO97 S9c). Returns the rows repaired.
+    """
+    map_path = out_dir / "map.json"
+    log_path = out_dir / "cells.jsonl"
+    if not (map_path.exists() and log_path.exists()):
+        return 0
+    ran: dict[str, dict[str, Any]] = {}
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        cell = json.loads(line)
+        screen = cell.get("screen") or {}
+        params = (cell.get("record") or {}).get("params")
+        if screen.get("status") == "MEASURED" and isinstance(params, dict):
+            ran[str(screen.get("primitive"))] = params
+    document = json.loads(map_path.read_text(encoding="utf-8"))
+    repaired = 0
+    for spec_id, row in (document.get("primitives") or {}).items():
+        if (row.get("measurement") or {}).get("val_acc") is None:
+            continue
+        box = row.get("box") or {}
+        if box_params(box) or spec_id not in ran:
+            continue
+        row["box"] = {**box, **ran[spec_id]}
+        repaired += 1
+    if repaired:
+        document["updated"] = datetime.now().astimezone().isoformat()
+        map_path.write_text(
+            json.dumps(document, indent=2, default=str), encoding="utf-8"
+        )
+    return repaired
 
 
 def _provenance(task_id: str, box: dict[str, Any], replay_hash: str) -> Provenance:
@@ -853,24 +914,30 @@ def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinat
 
 
 def screen_coordinate(box: Mapping[str, Any], axis: str, level: str) -> Coordinate:
-    """The coordinate a map row was screened in: its base box, one axis at its level.
+    """The coordinate a map row was screened in: its axes and its own params.
 
-    A row's box carries the six axes and the schedule; its structural
-    hyperparameters come from the screen's one source (:func:`_params_for`), and
-    the varied axis runs at its own declared knobs (the viability pass). A
-    ladder or a claim that rebuilds the coordinate from the axes alone runs
-    another box, so its number is not the row's (TODO97 S9b).
+    A row's box carries the six axes, the schedule and the structural params
+    the cell ran at (``_box_summary`` wrote them), so the params are the
+    coordinate: a ladder or a claim that rebuilds from the axes alone runs
+    another box, and its number is not the row's (TODO97 S9b/S9c). A box
+    screened before the params were recorded falls back to the screen's
+    defaults at the varied axis, which is the one box it cannot rebuild.
     """
     axes = {name: box.get(name) or _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
     if axis in axes:
         axes[axis] = level
-    base = _coordinate(axes, own_knobs=axis or None)
-    params = {
-        key: value for key, value in box.items() if isinstance(key, str) and "." in key
-    }
+    params = box_params(box)
     if not params:
-        return base
-    return replace(base, params={**base.params, **params})
+        return _coordinate(axes, own_knobs=axis or None)
+    return Coordinate(
+        substrate=axes["substrate"],
+        geometry=axes["geometry"],
+        dynamics=axes["dynamics"],
+        plasticity=axes["plasticity"],
+        credit=axes["credit"],
+        update=axes["update"],
+        params=params,
+    )
 
 
 def _declared_refusal(coord: Coordinate, shape: TaskShape, task_id: str) -> str | None:
@@ -2775,6 +2842,11 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument(
+        "--repair-boxes",
+        action="store_true",
+        help="Write each measured row's box params from its cell record, then exit",
+    )
+    parser.add_argument(
         "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
     )
     parser.add_argument(
@@ -2787,6 +2859,9 @@ def main() -> None:
 
     out_dir = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
+    if args.repair_boxes:
+        print(f"repaired {repair_boxes(out_dir)} box(es) in {out_dir}")
+        return
 
     # Load census
     census_entries = build_census()

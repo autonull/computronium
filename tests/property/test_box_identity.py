@@ -16,7 +16,12 @@ from typing import TYPE_CHECKING
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.sec_census import MAP_VERSION, build_census
 from computronium.experiment.sec_init import write_map
-from computronium.experiment.sec_loop import _box_summary, update_cell_log, update_map
+from computronium.experiment.sec_loop import (
+    _box_summary,
+    repair_boxes,
+    update_cell_log,
+    update_map,
+)
 from computronium.validation.preregistration import (
     PairedComparison,
     ThresholdRegistration,
@@ -80,8 +85,8 @@ def test_a_registration_at_one_box_refuses_a_run_at_another() -> None:
     registration = _registration({"batch_size": 32, "epochs": 1})
     assert registration.box_mismatch(_SCHEDULE) is None
     assert registration.box_mismatch(replace(_SCHEDULE, batch_size=64)) is not None
-    assert _CONFIRM.passes(registration, schedule=_SCHEDULE) is True
-    assert _CONFIRM.passes(registration, schedule=replace(_SCHEDULE, epochs=5)) is False
+    assert _CONFIRM.passes(registration, box=_SCHEDULE) is True
+    assert _CONFIRM.passes(registration, box=replace(_SCHEDULE, epochs=5)) is False
     # A boxed registration decides only a run whose box it is given.
     assert _CONFIRM.passes(registration) is False
 
@@ -119,6 +124,64 @@ def test_init_then_update_keeps_a_row(tmp_path: Path) -> None:
     assert data["version"] == MAP_VERSION
     assert data["primitives"][entries[0].id]["status"] == "measured"
     assert data["primitives"][entries[0].id]["box"]["batch_size"] == 32
+
+
+def test_a_box_is_repaired_from_its_cells_own_record(tmp_path: Path) -> None:
+    """A box screened before its params is restored from the run's record.
+
+    The cell log's record carries the params the cell ran at, so a row's box is
+    rebuilt from that record — the same source its replay hash names — instead
+    of re-screening (TODO97 S9c). The repair is idempotent: a box that carries
+    its params is left alone.
+    """
+    write_map(tmp_path)
+    entries = build_census()
+    schedule = replace(_SCHEDULE, batch_size=64)
+    coordinate = replace(
+        _COORDINATE, params={"credit.lr": 0.01, "geometry.hidden_dim": 128}
+    )
+    box = _box_summary(coordinate, schedule)
+    update_map(
+        tmp_path,
+        entries,
+        {
+            "cells": [
+                {
+                    "primitive": entries[0].id,
+                    "status": "MEASURED",
+                    "val_acc": 0.5,
+                    "loss": 1.0,
+                    "param_count": 10,
+                    "within_ceiling": True,
+                    "walltime_s": 1.0,
+                    "box": {key: value for key, value in box.items() if "." not in key},
+                    "ruler": "val_acc on mnist",
+                    "control_val_acc": 0.89,
+                    "binding": "bound",
+                    "binding_reason": None,
+                    "swapped": False,
+                }
+            ]
+        },
+    )
+    update_cell_log(
+        tmp_path,
+        [
+            {
+                "track": "P0",
+                "primitive": entries[0].id,
+                "status": "MEASURED",
+                "record": {
+                    "params": {key: value for key, value in box.items() if "." in key}
+                },
+            }
+        ],
+    )
+
+    assert repair_boxes(tmp_path) == 1
+    row = json.loads((tmp_path / "map.json").read_text())["primitives"][entries[0].id]
+    assert row["box"] == box
+    assert repair_boxes(tmp_path) == 0
 
 
 def test_the_cell_log_carries_a_record_and_a_screen(tmp_path: Path) -> None:

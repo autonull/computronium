@@ -89,6 +89,7 @@ def _document(record: dict[str, Any] | None = None) -> dict[str, Any]:
         "primitives": {
             _PRIMITIVE: {
                 "binding": "bound",
+                "box": {"credit": "pc_alm", "credit.beta": 0.5},
                 "measurement": {"val_acc": 0.12},
                 "ruler": "val_acc on mnist (primary validation_accuracy, chance 0.100)",
                 "task": "mnist",
@@ -186,7 +187,7 @@ def test_every_near_chance_row_in_the_map_carries_a_record() -> None:
     assert map_findings(document) == []
 
 
-def _ladder_params() -> list[pytest.param]:
+def _ladder_params() -> list[object]:
     """The map's near-chance rows: strict xfail while unimplemented."""
     if not MAP.exists():
         return []
@@ -262,6 +263,56 @@ def test_the_knob_table_names_the_axis_own_fields(spec_id: str, axis: str) -> No
     assert knob[0].startswith(f"{axis}.")
 
 
+def test_the_ladder_withdraws_a_knob_the_law_declares_unread() -> None:
+    """Three identical numbers on an unwired knob are not a capability boundary.
+
+    Measured 2026-11-20 (S9e probe): ``thermodynamic_contrast`` and
+    ``local_goodness`` measured the same val_acc at 0.001/0.01/0.1 of
+    ``feedback_scale``, and their pseudo-gradient norm is bit-identical at
+    those scales. The ladder sweeps the knob the law declares it reads; a
+    credit whose declared ff law reads none has no ladder point here.
+    """
+    from computronium.experiment.sec_ladder import ladder_knob
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+
+    def knob(credit: str) -> tuple[str, float] | None:
+        base = _coordinate({**_AXIS_DEFAULTS, "credit": credit}, own_knobs="credit")
+        return ladder_knob(f"primitive.credit_assignment.{credit}", base, "credit")
+
+    assert knob("thermodynamic_contrast") == ("credit.beta", 0.5)
+    assert knob("local_goodness") is None
+    assert knob("random_projections") == ("credit.feedback_scale", 0.01)
+
+
+@_RUNS
+def test_a_row_box_rebuilds_its_own_coordinate() -> None:
+    """The box is a fixed point of the screen's builder, params included.
+
+    A row's box must rebuild the coordinate it measured, or a ladder and a
+    claim run another number than the row (TODO97 S9b/S9c: three of six
+    sampled rows did not reproduce at their rebuilt box). The builder adds the
+    params the box carries and nothing else, so a box screened at another mode
+    shows up as a diff.
+    """
+    from computronium.experiment.sec_ladder import spec_axis
+    from computronium.experiment.sec_loop import (
+        _box_summary,
+        screen_coordinate,
+    )
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+    document = json.loads(MAP.read_text(encoding="utf-8"))
+    for spec_id, row in (document.get("primitives") or {}).items():
+        box = row.get("box") or {}
+        if (row.get("measurement") or {}).get("val_acc") is None:
+            continue
+        coord = screen_coordinate(box, spec_axis(spec_id), spec_id.rsplit(".", 1)[-1])
+        rebuilt = json.loads(json.dumps(_box_summary(coord, schedule), default=str))
+        assert rebuilt == json.loads(json.dumps(box, default=str)), spec_id
+
+
 @pytest.mark.parametrize(
     "spec_id",
     ["primitive.state_dynamics.error_predictive_coding", "primitive.geometry.conv"],
@@ -290,18 +341,24 @@ def test_the_ladder_sweeps_the_primitive_own_axis(spec_id: str) -> None:
             task_id=run.task_id,
         )
 
+    from computronium.experiment.sec_loop import (
+        _AXIS_DEFAULTS,
+        _box_summary,
+        _coordinate,
+    )
+
+    kind = "dynamics" if spec_id.split(".")[1] == "state_dynamics" else "geometry"
+    level = spec_id.rsplit(".", 1)[-1]
+    axes = {**_AXIS_DEFAULTS, kind: level}
+    if kind == "dynamics":
+        axes["credit"] = "local_goodness"
     row = {
         "task": "mnist",
         "ruler": "val_acc on mnist (chance 0.100)",
-        "box": (
-            {"credit": "local_goodness"}
-            if spec_id.split(".")[1] == "state_dynamics"
-            else {}
-        ),
+        "box": _box_summary(_coordinate(axes, own_knobs=kind), schedule),
     }
     record = run_ladder(spec_id, row, 0.1, evaluate=fake, schedule=schedule)
-    axis = spec_id.split(".")[1]
-    expected = {"state_dynamics": "dynamics", "geometry": "geometry"}[axis]
+    expected = kind
     assert record.axis == expected
     assert record.knob is not None and record.knob.startswith(f"{expected}.")
     assert record.runs == 4
@@ -335,6 +392,9 @@ def test_a_ladder_point_the_declared_space_refuses_is_not_trained() -> None:
             "plasticity": "null",
             "credit": "gradient",
             "update": "euclidean",
+            "credit.lr": 0.01,
+            "geometry.neurons_per_tile": 8,
+            "geometry.tiles_per_layer": 2,
         },
     }
     record = run_ladder(
@@ -396,29 +456,21 @@ def test_a_ladder_runs_at_its_rows_box() -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the ALM settle diverges at a step above its stability bound; close: a "
-        "declared stability ceiling or a backtracking step"
-    ),
-)
-def test_a_pc_alm_step_above_its_stability_bound_trains() -> None:
-    """A step the settle cannot take is refused by name, or it trains.
+def test_a_pc_alm_step_above_its_stability_bound_is_refused() -> None:
+    """The settle's stability bound is declared, so the box is refused by name.
 
     Measured 2026-11-20 (S9b): ``pc_alm``'s ×10 rung (``dynamics.step_size``
-    1.0 against the row's 0.1) crashed at settle step 6 with "NaN/Inf
-    detected in activations"; the declared space proposed it, so the row is a
-    defect, not a coordinate.
+    1.0 against the row's 0.1, rho 1.0) crashed at settle step 6 with
+    "NaN/Inf detected in activations". The gain ``step_size * (1 + rho)`` is
+    the explicit-Euler curvature of the primal-dual iterate, so the declared
+    space refuses a gain at or above its bound instead of proposing a box that
+    cannot settle (TODO97 S9d).
     """
     from dataclasses import replace
 
-    from computronium.experiment.kernel.evaluate import evaluate_cell
     from computronium.experiment.sec_loop import _is_legal, screen_coordinate
-    from computronium.experiment.sec_pilot import base_schedule
+    from computronium.ontology.system import PC_ALM_GAIN_CEILING
 
-    schedule = base_schedule("mnist", "cpu")
-    assert schedule is not None
     base = screen_coordinate(
         {
             "substrate": "digital",
@@ -432,27 +484,30 @@ def test_a_pc_alm_step_above_its_stability_bound_trains() -> None:
         "pc_alm",
     )
     large = replace(base, params={**base.params, "dynamics.step_size": 1.0})
-    legal, _reason = _is_legal(large, "mnist")
-    if not legal:
-        return
-    evaluate_cell(large, replace(schedule, seed=0, n_seeds=1, batch_limit=8))
+    legal, reason = _is_legal(large, "mnist")
+
+    assert not legal
+    assert reason is not None and "stability bound" in reason
+    assert PC_ALM_GAIN_CEILING <= 1.0 * (1.0 + 1.0)
+    assert _is_legal(base, "mnist")[0]
 
 
-def test_a_crashed_ladder_names_its_defect_lock() -> None:
-    """A defective record names a real lock and the capability that closes it.
+def test_an_unfiled_crash_names_no_borrowed_lock() -> None:
+    """A defect no declared class owns names no lock, and the audit says so.
 
     The unimplemented lock is parameterized over near-chance rows only, so a
-    defective above-bar row that pointed at it would name a test no run
-    collects (D26). The defect declares its own lock instead.
+    defective row that pointed at it would name a test no run collects (D26).
+    A defect class files its own lock when it is filed; an unfiled crash names
+    none, and ``record_problems`` reports the missing lock.
     """
-    from computronium.experiment.sec_ladder import run_ladder
+    from computronium.experiment.sec_ladder import record_problems, run_ladder
     from computronium.experiment.sec_pilot import base_schedule
 
     schedule = base_schedule("mnist", "cpu")
     assert schedule is not None
 
     def boom(_coord: Any, _run: Any) -> None:
-        raise RuntimeError("NaN/Inf detected in activations (pc_alm settle) at step 6")
+        raise RuntimeError("NaN/Inf detected in activations at step 6")
 
     row = {
         "task": "mnist",
@@ -464,6 +519,7 @@ def test_a_crashed_ladder_names_its_defect_lock() -> None:
             "plasticity": "null",
             "credit": "pc_alm",
             "update": "euclidean",
+            "dynamics.step_size": 0.1,
         },
     }
     record = run_ladder(
@@ -471,11 +527,66 @@ def test_a_crashed_ladder_names_its_defect_lock() -> None:
     )
 
     assert record.verdict == "defective"
-    assert record.failing_test is not None
-    assert record.failing_test.endswith(
-        "test_a_pc_alm_step_above_its_stability_bound_trains"
+    assert record.failing_test is None
+    assert "defective without a failing test" in record_problems(
+        "primitive.state_dynamics.pc_alm", record.to_dict()
     )
+
+
+def test_a_ladder_refuses_a_row_whose_box_cannot_be_rebuilt() -> None:
+    """A row screened before the box carried its params is stale, not adjudicated.
+
+    The box named six axes and a schedule, so its coordinate was rebuilt from
+    the screen's defaults — another box (measured 2026-11-20, S9c: three of six
+    sampled rows did not reproduce at their rebuilt box). The ladder refuses by
+    name and the close is the screen's own repair.
+    """
+    from computronium.experiment.sec_ladder import run_ladder
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule("mnist", "cpu")
+    assert schedule is not None
+
+    def boom(_coord: Any, _run: Any) -> None:
+        raise AssertionError("a stale row trained a cell")
+
+    row = {
+        "task": "mnist",
+        "axis": "credit",
+        "box": {
+            "substrate": "digital",
+            "geometry": "feedforward",
+            "dynamics": "instantaneous",
+            "plasticity": "null",
+            "credit": "local_contrastive",
+            "update": "euclidean",
+        },
+    }
+    record = run_ladder(
+        "primitive.credit_assignment.local_contrastive",
+        row,
+        0.1,
+        evaluate=boom,
+        schedule=schedule,
+    )
+
+    assert record.verdict == "stale"
+    assert record.runs == 0
     assert record.close_condition
+    assert "structural params" in (record.reason or "")
+    document = {
+        "primitives": {
+            "primitive.credit_assignment.local_contrastive": {
+                "binding": "bound",
+                "box": row["box"],
+                "measurement": {"val_acc": 0.11},
+                "ruler": "val_acc on mnist (chance 0.100)",
+                "task": "mnist",
+            }
+        },
+        "ladders": {"primitive.credit_assignment.local_contrastive": record.to_dict()},
+    }
+    assert any("stale" in finding for finding in map_findings(document))
 
 
 def test_a_tie_goes_to_the_point_nearest_the_default() -> None:

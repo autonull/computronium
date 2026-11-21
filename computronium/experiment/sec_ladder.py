@@ -24,7 +24,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 from computronium.experiment.sec_deep_dive import LADDER_FACTORS, LADDER_KNOBS
 
@@ -60,8 +60,13 @@ CONFIRM_SEED: Final[int] = LADDER_SEED + 1
 #: factor is the audit's near-chance predicate: one ruler, not two tables.
 NEAR_CHANCE_FACTOR: Final[float] = 2.0
 
-Verdict = Literal["tuned", "unimplemented", "defective"]
-VERDICTS: Final[frozenset[str]] = frozenset({"tuned", "unimplemented", "defective"})
+Verdict = Literal["tuned", "unimplemented", "defective", "stale"]
+VERDICTS: Final[frozenset[str]] = frozenset({
+    "tuned",
+    "unimplemented",
+    "defective",
+    "stale",
+})
 
 _AXIS: Final[str] = "credit"
 _TASK: Final[str] = "mnist"
@@ -109,16 +114,12 @@ _TRIAGE: Final[Mapping[str, str]] = {
 
 #: A ladder point that crashes at the primitive's own box is a defect, and a
 #: defect names the lock that fails today and the capability that closes it.
-#: Measured 2026-11-20 (S9b): ``pc_alm``'s ×10 step diverged at settle step 6.
-_DEFECT_LOCKS: Final[Mapping[str, tuple[str, str]]] = MappingProxyType({
-    "primitive.state_dynamics.pc_alm": (
-        "tests/property/test_ladder_record_lock.py"
-        "::test_a_pc_alm_step_above_its_stability_bound_trains",
-        "the ALM settle diverges at a step above its stability bound: close "
-        "with a backtracking step or a declared stability ceiling, then re-run "
-        "the ladder",
-    ),
-})
+#: Empty by design: every filed defect class has closed, and a lock entry
+#: leaves with its defect. A crash that belongs to no declared class names no
+#: lock, and the audit reports it — a defective record grants no borrowed test
+#: (TODO97 S9d closed ``pc_alm``: the box is refused by the declared gain
+#: ceiling, so no crash is left to file).
+_DEFECT_LOCKS: Final[Mapping[str, tuple[str, str]]] = MappingProxyType({})
 
 #: Each near-chance primitive's primary knob (TODO97 §4.2), in preference
 #: order. A name the primitive's active space does not declare is skipped: a
@@ -241,14 +242,26 @@ def replay_hash(record: Mapping[str, Any]) -> str:
 
 
 def failing_test(primitive: str) -> str:
-    """The lock test a non-tuned verdict leaves failing (strict xfail)."""
-    lock = _DEFECT_LOCKS.get(primitive)
-    if lock is not None:
-        return lock[0]
+    """The lock test an unimplemented verdict leaves failing (strict xfail)."""
     return (
         "tests/property/test_ladder_record_lock.py"
         f"::test_an_unimplemented_ladder_clears_its_band[{primitive}]"
     )
+
+
+def verdict_lock(primitive: str, verdict: Verdict) -> str | None:
+    """The lock a non-tuned verdict names, or ``None`` for a clean one.
+
+    A defect names its own class's lock, never the unimplemented lock: a
+    defective row that points at a test no run collects is a comment (D26). An
+    unfiled defect names nothing, and ``record_problems`` reports it.
+    """
+    if verdict in {"tuned", "stale"}:
+        return None
+    if verdict == "defective":
+        lock = _DEFECT_LOCKS.get(primitive)
+        return None if lock is None else lock[0]
+    return failing_test(primitive)
 
 
 def ladder_rows(
@@ -304,15 +317,36 @@ def tuning_rows(
 
 
 def map_findings(document: Mapping[str, Any]) -> list[str]:
-    """Every near-chance row's record problems, each naming its primitive."""
+    """Every row's record problems, each naming its primitive."""
     ladders = document.get("ladders") or {}
-    findings: list[str] = []
-    for spec_id, _row, _chance in ladder_rows(document):
-        findings += [
-            f"{spec_id} {problem}"
-            for problem in record_problems(spec_id, ladders.get(spec_id))
-        ]
+    findings: list[str] = [
+        f"{spec_id} {problem}"
+        for spec_id, row, _chance in ladder_rows(document)
+        for problem in record_problems(spec_id, ladders.get(spec_id))
+    ]
+    findings += [
+        f"{spec_id} measured at a box with no structural params: the row is "
+        "stale and must be re-screened"
+        for spec_id in stale_rows(document)
+    ]
     return findings
+
+
+def stale_rows(document: Mapping[str, Any]) -> list[str]:
+    """Every measured row whose box cannot rebuild its own coordinate.
+
+    A box screened before the params were recorded names the six axes and the
+    schedule, not the knobs the cell ran at, so its number is not reproducible
+    from the row (TODO97 S9c).
+    """
+    from computronium.experiment.sec_loop import box_params
+
+    return [
+        str(spec_id)
+        for spec_id, row in (document.get("primitives") or {}).items()
+        if (row.get("measurement") or {}).get("val_acc") is not None
+        and not box_params(row.get("box") or {})
+    ]
 
 
 def record_problems(spec_id: str, record: Mapping[str, Any] | None) -> list[str]:
@@ -357,8 +391,10 @@ def _run_problems(record: Mapping[str, Any], verdict: object) -> list[str]:
         problems.append(f"walltime {walltime!r} is not a cost")
     rungs = record.get("rungs")
     if runs == 0:
-        if verdict != "unimplemented":
-            problems.append("no rung ran and the verdict is not unimplemented")
+        if verdict not in {"unimplemented", "stale"}:
+            problems.append(
+                "no rung ran and the verdict is neither unimplemented nor stale"
+            )
         return problems
     if not isinstance(rungs, list) or len(rungs) < 2:
         problems.append(f"runs={runs} but the ladder carries {rungs!r}")
@@ -383,6 +419,11 @@ def _verdict_problems(record: Mapping[str, Any], verdict: object) -> list[str]:
             problems.append("defective without a failing test")
         if not record.get("reason"):
             problems.append("defective without the named mechanism")
+    if verdict == "stale":
+        if not record.get("reason"):
+            problems.append("stale without the reason its box cannot rebuild")
+        if not record.get("close_condition"):
+            problems.append("stale without a close condition")
     return problems
 
 
@@ -454,11 +495,40 @@ def ladder_knob(spec_id: str, base: Any, axis: str = _AXIS) -> tuple[str, float]
 
     names = PRIMARY_KNOBS.get(spec_id, LADDER_KNOBS[axis])
     values = harvest_schema().active(base).values_for_axis(StructuralAxis(axis))
+    if axis == "credit" and (law_reads := _law_reads(base)) is not None:
+        # A knob the law declares it does not read is withdrawn from the
+        # ladder, never swept: three identical numbers are a plateau on a knob
+        # that was never wired, not a capability boundary (TODO97 S9e).
+        names = tuple(name for name in names if name in law_reads)
     for name in names:
         value = values.get(name)
         if isinstance(value, float) and not isinstance(value, bool) and value > 0:
             return f"{axis}.{name}", value
     return None
+
+
+def _law_reads(base: Any) -> frozenset[str] | None:
+    """The credit law's declared config fields at this box, or ``None``.
+
+    The config dataclass is shared by every credit, so the field's presence is
+    not evidence the law reads it: the class declaration is the truth (TODO97
+    S9e). ``None`` means the law makes no declaration, and every field stands.
+    """
+    from computronium.core.system_trainer.spec import _credit_from_config
+    from computronium.experiment.kernel.compose import harvest_schema
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.ontology.credit import CreditAssignmentConfig
+
+    factory = getattr(CreditAssignmentConfig, str(base.credit), None)
+    if not callable(factory):
+        return None
+    build = cast("Callable[..., CreditAssignmentConfig]", factory)
+    kind = StructuralAxis.CREDIT
+    config = build(**harvest_schema().active(base).for_axis(kind, base.credit))
+    reads: Callable[[CreditAssignmentConfig], frozenset[str] | None] | None = getattr(
+        _credit_from_config(config), "reads", None
+    )
+    return None if reads is None else reads(config)
 
 
 def spec_axis(spec_id: str) -> str:
@@ -512,19 +582,25 @@ def run_ladder(
     row: Mapping[str, Any],
     chance: float,
     *,
-    evaluate: Callable[[Any, Schedule], CellEvaluation] | None = None,
+    evaluate: Callable[[Any, Schedule], Any] | None = None,
     schedule: Schedule | None = None,
 ) -> LadderRecord:
     """Run the primitive's 3-point ladder and one confirmation seed.
 
     The ladder points are the primitive's own declared knob times
     ``LADDER_FACTORS``. A primitive with no numeric knob runs no rung: it is
-    ``unimplemented`` with the knob it would need, not a quiet cell.
+    ``unimplemented`` with the knob it would need, not a quiet cell. A row whose
+    box carries no structural params is ``stale``: its coordinate cannot be
+    rebuilt, so the record refuses to adjudicate a number measured elsewhere.
     """
     runner, sched, base = _ladder_setup(spec_id, row, evaluate, schedule)
     task = str(row.get("task") or _TASK)
     axis = spec_axis(spec_id)
     band = near_chance_band(chance)
+    from computronium.experiment.sec_loop import box_params
+
+    if not box_params(row.get("box") or {}):
+        return _stale_record(spec_id, task, axis)
     knob = ladder_knob(spec_id, base, axis)
     if knob is None:
         return _no_knob_record(spec_id, task, band, axis)
@@ -541,7 +617,7 @@ def run_ladder(
         best=measured.best,
         verdict=measured.verdict,
         reason=measured.reason,
-        failing_test=(None if measured.verdict == "tuned" else failing_test(spec_id)),
+        failing_test=verdict_lock(spec_id, measured.verdict),
         close_condition=measured.close,
         runs=len(measured.rungs) + (1 if measured.confirm is not None else 0),
         walltime_s=measured.walltime_s,
@@ -622,6 +698,36 @@ def _run_rungs(
             LADDER_SEED,
         )
         for factor in LADDER_FACTORS
+    )
+
+
+def _stale_record(spec_id: str, task: str, axis: str) -> LadderRecord:
+    """A row whose box carries no params: the ladder refuses to adjudicate it.
+
+    The number was measured at a coordinate the box cannot rebuild, so a ladder
+    on it would compare a knob against another box (TODO97 S9c). The close is
+    the screen's own repair: re-screen the row, which writes its params.
+    """
+    close = (
+        "re-screen the row: the box carries no structural params, so the "
+        "coordinate it measured cannot be rebuilt (close: a screen run that "
+        "writes them)"
+    )
+    return LadderRecord(
+        primitive=spec_id,
+        axis=axis,
+        task=task,
+        knob=None,
+        default=None,
+        rungs=(),
+        confirm=None,
+        best=None,
+        verdict="stale",
+        reason=f"the row's box carries no structural params: {close}",
+        failing_test=None,
+        close_condition=close,
+        runs=0,
+        walltime_s=0.0,
     )
 
 

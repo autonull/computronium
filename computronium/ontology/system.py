@@ -411,6 +411,13 @@ PC_ALM_GEOMETRIES: Final[frozenset[str]] = frozenset({
     "recurrent",
     "tile_mesh",
 })
+#: The explicit-Euler stability bound of the PC-ALM primal-dual iteration: the
+#: stacked (primal, dual) step has curvature ``1 + rho``, so the gain
+#: ``step_size * (1 + rho)`` must stay below 2. Above it the settle diverges
+#: (measured 2026-11-20: non-finite activations at step 6 for step_size=1.0,
+#: rho=1.0). A declared ceiling refuses the box by name instead of crashing the
+#: cell (TODO97 S9d).
+PC_ALM_GAIN_CEILING: Final[float] = 2.0
 # The PC-ALM credit reads ``dual_vars``, which only ``pc_alm`` dynamics
 # writes; with any other dynamics it degenerates to a zero update.
 PC_ALM_DUAL_CREDITS: Final[frozenset[str]] = frozenset({"pc_alm"})
@@ -433,6 +440,7 @@ __all__ = [
     "PC_ALM_CREDITS",
     "PC_ALM_CREDIT_DYNAMICS",
     "PC_ALM_DUAL_CREDITS",
+    "PC_ALM_GAIN_CEILING",
     "PC_ALM_GEOMETRIES",
     "PREDICTIVE_SETTLING_CREDITS",
     "QUANTUM_DYNAMICS",
@@ -702,6 +710,14 @@ class SystemConfig:
             actual_value=self.geometry.topology_type,
             context="PC-ALM dynamics requires layered geometry",
         )
+        gain = self.dynamics.step_size * (1.0 + self.dynamics.rho)
+        if self.dynamics.dynamics_type == "pc_alm" and gain >= PC_ALM_GAIN_CEILING:
+            raise ValueError(
+                f"PC-ALM dynamics with step_size={self.dynamics.step_size:g} and "
+                f"rho={self.dynamics.rho:g} has gain step_size*(1+rho)={gain:g}, "
+                f"at or above the settle's stability bound "
+                f"{PC_ALM_GAIN_CEILING:g}"
+            )
 
     def _validate_residual_connections(self) -> None:
         """Residual connections only supported on feedforward geometry."""

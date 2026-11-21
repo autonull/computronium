@@ -4,6 +4,26 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-20] ✅ **S9c/S9d/S9e CLOSED (the box carries its params; the settle declares its bound; the inert knob is withdrawn)** — three record defects closed in dependency order, each with a lock. Code and locks are landed; the artifacts re-derive from them (item 0 below: the re-screen, then the ladders, the registrations and the five-seed run):
+**Result at the row's box (2026-11-21, five paired seeds each): 2 claims + 1
+coordinate with a CI + 2 no-power coordinates** — `local_contrastive`
+`credit.readout_scale` ×10 **+0.2533 [+0.2258, +0.2821]** p=0.0073;
+`random_projections` `credit.feedback_scale` ×10 **+0.2732 [+0.2163, +0.3209]**
+p=0.0027; `thermodynamic_contrast` `credit.beta` ×0.1 **+0.0095 [−0.0090,
++0.0245]** p=0.4553 (inside the 1 pp margin, so a coordinate with a CI);
+`zeroth_order` and `pc_alm` no-power (their best point is their own default —
+`zeroth_order`'s knob is inert, `pc_alm`'s ×10 step is refused by the ceiling).
+The two claims replicate S9b's effects at now-reproducible boxes; the fourth CI
+is a **capability gap**, named: `pc_alm` cannot take a step at its stability
+bound (the box is refused, not measured), and `zeroth_order` reads no
+`feedback_scale` (S9e follow-up). The committed registrations are the five
+claims' boxes (`configs/preregistrations/sec_*.json`), each carrying its params;
+the two registrations whose candidates left the pool are deleted.
+
+**S9c — a row's box carries its params.** `sec_loop._box_summary` now writes the coordinate's structural params beside the six axes and the schedule, and `sec_loop.box_params` is the one reader (a `"{axis}.{name}"` key, never an axis name). A row screened before that carries no params: `sec_ladder.run_ladder` records it as **`stale`** (`verdict`, `runs=0`, the close "re-screen the row") and `sec_ladder.stale_rows`/`map_findings` report every measured row whose box cannot rebuild its coordinate, so the audit is red until the map is re-screened — the gate is executable, not prose. The claim path reads the same builder: `sec_claims.candidate_box` = `_box_summary(candidate.coordinate(best_value), schedule)`, `register_claim` commits *that* box, `run_claim` refuses a stale candidate or a stale registration before its first seed (`_stale_box`), and `claim_verdict` compares against the coordinate's box, not the schedule alone (`PairedComparison.passes(box=...)`, `ThresholdRegistration.box_mismatch` accepting a mapping). Rows and registrations committed before S9c are refused by name, so a re-boxed claim cannot be priced. Locks: `test_a_ladder_refuses_a_row_whose_box_cannot_be_rebuilt`, `test_a_stale_box_refuses_the_claim_before_its_first_cell`, `test_a_registration_without_params_is_stale`; fixtures now carry their box (a ladder test's row without params was testing another box).
+**S9d — `pc_alm`'s stability capability.** The ×10 rung (`dynamics.step_size` 1.0, rho 1.0) diverged at settle step 6. `SystemConfig._validate_pc_alm_dynamics` now declares the explicit-Euler bound of the primal–dual iterate: the gain `step_size * (1 + rho)` must stay below `PC_ALM_GAIN_CEILING` (2.0, `ontology.system`), so the box is **refused by name** instead of crashing a cell. The ladder records the ×10 rung as `refused`, and `pc_alm` moves from `defective` to a record whose only tuned point is its own default (a no-power coordinate, not a phantom claim). `sec_ladder._DEFECT_LOCKS` is now **empty** by design: the closed class's lock left with it, and a crash no declared class owns names **no** lock — `verdict_lock` returns `None` and `record_problems` reports "defective without a failing test" (never a borrowed parameterized test, D26). Lock: `test_a_pc_alm_step_above_its_stability_bound_is_refused` (the strict xfail removed) and `test_an_unfiled_crash_names_no_borrowed_lock`.
+**S9e — the inert `credit.feedback_scale` probe.** `scripts/probes/s9e_feedback_scale.py` measures the credit's pseudo-gradient norm at 0.001/0.01/0.1: bit-identical for `thermodynamic_contrast` (1.9444) and `local_goodness` in ff mode (0.1056), so the knob was never read at their boxes. A credit law now declares the config fields it reads (`reads(config)`); `thermodynamic_contrast` reads `{beta, credit_norm}`, `local_goodness` reads none of the feedback fields in ff mode (lemma mode keeps them), `forward_tangent` reads `{estimator_samples}`. `sec_ladder.ladder_knob` withdraws a knob its law declares unread: `thermodynamic_contrast` ladders `credit.beta`, `local_goodness` at the ff box has **no ladder point** (unimplemented with the knob that would bind), `random_projections` keeps `feedback_scale`. Lock: `test_the_ladder_withdraws_a_knob_the_law_declares_unread`.
+
 **Progress:** [2026-11-20] ✅ **S7 CLOSED (ten primitive kernels; four algorithm xfails filed)** — ten `PrimitiveSpec` rows are `kernel_status="implemented"` with an entrypoint, a technology and microbench evidence (`artifacts/benchmarks/<id>.jsonl`): `gradient` (backprop), `random_projections` (FA), `thermodynamic_contrast` (PC), `pepita`/`local_goodness` (FF), `target_inversion` (TP), `temporal_trace` (SNN), `tile_mesh` (tile), `energy_minimization`/`muon` (MEP). Each is a wrapper in `computronium/primitives/kernels.py` over its acceleration module; the other 65 stay `absent`, which is a complete answer. The kill test (`tests/acceleration/test_primitive_kernel_kill.py`) patches `ReferenceAdapter.reference_step` to raise: all 75 rows pass — an implemented row returns its step, an absent row refuses by name, an impossible row is quiet only through its refusal test. Defects fixed on the way: `_resolve_step` imported the module's parent and missed `computronium.primitives.kernels`; `acceleration.registry` mapped the primitive rung through a promotion-name table that had no `"implemented"` key, so `dispatch.auto` never selected a primitive kernel; `microbench` built a deleted per-primitive `cases` module instead of `primitives.cases.build_case`; FA's contrastive pass compared the free phase with itself (every delta zero) and built one feedback matrix for two layers; SNN passed a list as `post_spikes` and reported the settle's empty telemetry as a zero-loss step. **S7b (filed, not closed):** four algorithm factories still `xfail` in `test_backend_reach.py` — `ff` (its preset cannot take a backend, `_attachable` names why), `fast_weight` (no fast-weight kernel), `pcalm` (no PC-ALM backend class), `tile` (its backend expects a `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and `spiking_snn` now attach and move the system's own parameters. `scripts/audit.py` exits 0.
 
 **Progress:** [2026-11-20] ◐ **S8 PARTIAL (docs regenerate from one source; LM delta run)** — the method cards (`comp method-card`) no longer carry a second axis table: `_get_axis_registries` projects the 75 `PrimitiveSpec` rows, so a class added to an axis cannot be missing from the docs. `docs/sec/map.md` is regenerated from `results/sec/map.json` with the map's own status vocabulary (`measured`, `unimplemented`, `defective`, `refused`), so the one unimplemented row is counted instead of dropped. The README counts are generated tokens: `implementation_count`, `kernel_verified_count`, `primitive_kernel_count`, `algorithm_kernel_count`; the acceleration panel now reads 96 implementations (75 primitives + 21 algorithms), 24 kernel-verified (10 primitives + 14 algorithms), and the ontology panel reads 75 primitives (from the registry, not `AXES_REGISTRIES`). The LM delta run re-screened its 11 pre-fix defects: 6 became refusals, **5 remain** — `forward_tangent`, `surrogate`, `zeroth_order`, `fast_weights`, `routing` die on the token lane with shape/dtype errors and are filed as `token_lane` under `test_a_language_task_declares_its_token_lane`. That lock is too broad for the class: it is a geometry refusal test, while these five are credit/plasticity token-shape facts. **Next in S8:** narrow the lock, file the credit/plasticity token-shape class with its failing test, and re-run the LM delta; `scripts/audit.py` already exits 0.
@@ -190,45 +210,39 @@ including the defective row (lock and close stamped).
 
 ### Remaining work (dependency order, 2026-11-20)
 
-1. ~~**S5h — file the six defect classes**~~ ✅ done. The three classes the
-   declared space can refuse are **closed as refusals**: `sec_loop._is_legal`
-   now reads the planner's three rules, so `eligibility_prop`/`rtrl_reference`/
-   `unbiased_rtrl` on a flat task, `nca` on a 21-feature task, and
-   `causal_transformer` on a flat classifier are refused by name. The rows
-   became `refused` with the rule as their trigger (26 rows). The three
-   remaining classes carry a strict-xfail lock and a `defect_class` on every
-   row: `token_lane` (14 rows; lock
-   `test_a_language_task_declares_its_token_lane`), `recurrent_state_detach`
-   (1 row; `test_ntm_detaches_its_recurrent_state`), and `ceiling_overrun`
-   (6 rows; `test_a_box_overrun_fits_its_family_ceiling`). The row-state
-   vocabulary is one source (`computronium/experiment/sec_status.py`); the
-   gate now reports a defective row without its lock.
-2. ~~**Close the 21 defective rows**~~ ✅ done (S6e, 2026-11-20). Each became
-   a measured row or a named refusal; none is a gap:
-   - **token lane (14)** — closed as refusals. `DomainTask.token_lane` (true on
-     `LMTask`), `TaskShape.token_lane`, and `AxisSpec.reads_tokens` (true on
-     `causal_transformer`) are the one declaration; `search_space._token_lane_rule`
-     refuses the mismatch by name (`TOKEN_LANE_RULE`). `feedforward` on
-     `tiny_shakespeare` and `causal_transformer` on `char_ngram` are refused
-     before the cell runs; the base pair stays legal. Lock:
-     `test_a_language_task_declares_its_token_lane` (passes).
-   - **recurrent state detach (1)** — fixed. `System.detach_state()`
-     (`detach_geometry_state`) truncates the graph a geometry's buffers carry,
-     and the RL trainer calls it at every environment step (truncated BPTT).
-     `ntm` on `cartpole` trains; `test_ntm_detaches_its_recurrent_state`
-     passes, and the budget-8 combination cover stays green.
-   - **budget-aware sizing (6)** — five rows fixed, one re-triaged. `_fit_geometry`
-     now searches an explicit `hidden_dim` down until the *built* geometry fits
-     the family ceiling (ground truth, not an estimator): routing, attention ×3
-     (mnist/copy_task/cartpole) and the graph base (200,967 → 199,519/200,000)
-     fit. `tile` on mnist has no width to shrink: its input projection is
-     784 × 784 = 614,656 alone, so its floor is 628,280 at a 150k box. The
-     screen now writes such a row as `unimplemented` (status `UNIMPLEMENTED`,
-     `defect_class=ceiling_floor`) and stamps
-     `test_a_tile_mesh_fits_its_family_ceiling` (strict xfail: close = an input
-     compression narrower than `input_dim`). Passing lock:
-     `test_a_box_that_cannot_shrink_is_unimplemented`.
-2b. **S5i — the capability suite's hang** (filed, not closed). The full
+0. **S9c artifacts — DONE (re-screen, re-ladder, re-register, re-run).** The
+   vision map was re-screened at the own-knob box (`--breadth full --own-knobs
+   --max-primitives 75`, ≈30 min): **48 measured / 26 refused / 1 defective**,
+   and *every* measured row's box now carries its structural params — `stale_rows`
+   is empty and the new fixed-point lock (`test_a_row_box_rebuilds_its_own
+   _coordinate`) passes, so the ladder and the claim rebuild the row's own
+   coordinate. The re-ladder then re-derived the rows the knob change touched:
+   `thermodynamic_contrast` now ladders `credit.beta` and the knob *binds*
+   (0.7245 / 0.7056 / 0.4195), `local_goodness` at the ff box has **no ladder
+   point** (unimplemented), and `pc_alm`'s ×10 step is **refused by the gain
+   ceiling** (`tuned` at its own default, 0.7849). One new defect the own-knob
+   box exposed is filed, not fixed: `primitive.geometry.nca`'s own grid
+   (16×16×3 = 768) cannot read mnist's flattened 784 features, so the row is
+   `defective` with `defect_class=grid_from_input_shape` and the strict-xfail
+   lock `test_nca_refuses_a_flat_feature_task`. Close: a `grid_hw` that fits the
+   task's flattened width, or a declared-space refusal by name.
+   The other **eight family maps** were not re-screened: each measured row's box
+   was restored from **its own cell record** (`sec_loop.repair_boxes`, which
+   writes the `record.params` the cell ran at — the source the row's replay hash
+   already names), 206 rows, 0 cost, and `test_a_box_is_repaired_from_its_cells
+   _own_record` proves it is idempotent. `screen_coordinate` now builds the
+   coordinate from the box's own params (the axes alone are the pre-S9c
+   fallback), so a box is a fixed point in every family. The full
+   `scripts/audit.py` reports **0 findings** over all nine maps, and
+   `docs/sec/map.md` is regenerated (48 measured / 26 refused / 1 defective).
+1. **S9c follow-up — the deep dive's box (P4).** `sec_loop._deep_dive_coordinate`
+   rebuilds the arm from the six axes alone and `sec_deep_dive.claim_registration`
+   commits the schedule alone, so P4 has the same defect the S9 claim path just
+   closed; its two arms run at another box than the registration names.
+   `test_paired_ci` still passes because both sides drop the params. Close: build
+   the arm and the registration with `_box_summary(_deep_dive_coordinate(...))`,
+   load with the candidate's box, and re-register `sec_deep_dive.json`.
+2. **S5i — the capability suite's hang** (filed, not closed). The full
    `uv run python -m pytest tests/primitives/test_primitive_capability.py` run
    hits the 300 s marker inside `train_on_task`'s DataLoader and produces no
    verdict: a killed run yields no verdict, collect (`pytest <file> --co -q >
@@ -238,84 +252,18 @@ including the defective row (lock and close stamped).
    the suite reports pass / skip / fail in one run. The two dead imports this
    session fixed (`get_spec`, `task.spec.primary_pass_bar`) were separate test
    defects; the row now reads `error_blind_credit` and the task's own bar key.
-3. ~~**S7 — ten kernel wrappers**~~ ✅ done (2026-11-20): the ten primitive
-   rows carry a kernel rung, a kill test and parity; the 65 other rows stay
-   reference-only. **S7b (filed):** four algorithm factories still `xfail` in
+3. **S7b (filed):** four algorithm factories still `xfail` in
    `tests/acceleration/test_backend_reach.py` — `ff` (`_attachable` refuses its
    preset, which cannot take a backend), `fast_weight` (no fast-weight kernel),
    `pcalm` (no PC-ALM backend class), `tile` (its backend expects a
    `_tile_algo` the geometry does not carry); `fa`/`dfa`, `pepita`, `tp` and
-   `spiking_snn` now attach and move the system's parameters.
-4. ~~**S8 — map + docs from one source**~~ ✅ done (2026-11-20). The method
-   cards project the 75 `PrimitiveSpec` rows (no second axis table),
-   `docs/sec/map.md` regenerates with the map's own status columns, and the
-   README counts are generated tokens (96 implementations, 24 kernel-verified,
-   75 primitives). The LM delta is **0 defective**: `forward_tangent` and
-   `zeroth_order` fold the per-token target (`_align_target_rows`), `routing`
-   reads the geometry's settled input instead of raw token ids, `surrogate` is
-   refused by the existing `surrogate_credit_requires_routing_geometry` void
-   rule (the screen now reads the planner's one source), and `fast_weights` is
-   refused by `dynamics_plasticity_compatibility`. The `token_lane` class is
-   narrowed to the geometry contract (`token-lane disagreement`); the credit and
-   plastic read is filed as `token_shape` with the lock
-   `test_a_token_lane_plastic_step_reads_its_settled_input`, plus the
-   surrogate refusal/necessity lock. Locks: 23 passed in
-   `test_family_defect_locks.py` + `test_row_state_gate.py`; audit 0 findings.
-   A fresh clone re-derives every row by screening; the committed code carries
-   the rules and the locks.
-5. ~~**S9 — five pre-registered viability claims**~~ ✅ done (2026-11-20).
-   `computronium/experiment/sec_claims.py` is the claim list: it reads every
-   `tuned` ladder record, ranks it by the confirm seed's difference from the
-   default rung, commits one `ThresholdRegistration` per claim to
-   `configs/preregistrations/sec_<axis>_<level>.json` **before** the first
-   seed, then pairs five index-matched seeds of the best rung against the
-   primitive's own default at the matched box. `passes` refuses a claim at
-   another box; a CI that includes the margin stays `coordinate`, and a point
-   within one standard error of the margin is `marginal`.
-   - **Result (superseded by S9b's corrected box).** The first run reported 4
-     claims (`predictive_settling` ×10 +0.6042, `random_projections` +0.0295,
-     `energy_minimization` +0.2495, `local_contrastive` +0.0785) and `lazy` as
-     a no-power coordinate. Those effects were measured at a box the ladder
-     built from the six axes alone; S9b rebuilt it and re-ran, so the corrected
-     result below is the one to quote. Report: `results/sec_claims/claims.json`.
-   - **Candidate rule (declared, not prose).** The pool is the maps' ladder
-     records with `verdict == "tuned"`, ranked by the confirm seed's
-     difference from the default rung. The two headroom ladders added
-     `energy_minimization` and `lazy` (`sec_ladder --tuning --limit 2`);
-     `predictive_settling` was a third after the tile record was refused, so
-     the pool is five. A ladder that reaches `tuned` joins the pool; with
-     four or three, S9 runs that many and records the shortfall.
-   - **n_max and margin.** `n_max = 5` paired seeds (`CLAIM_SEEDS`), fixed
-     before the first seed; margin = one percentage point of held-out samples
-     (`MARGIN`), or the ruler's own resolution when coarser (iris 1/30).
-   - **Cost.** ≈17 min CPU for the four claims (predictive_settling 519 s,
-     energy_minimization 219 s, local_contrastive 170 s, random_projections
-     84 s) plus ≈9 min for the three ladders.
-   - **Gate.** 5 claim records, each with its CI and box or a named no-power
-     coordinate; a marginal or coordinate result is reported as such, never
-     rounded up.
-6. ~~**S9b — the fifth binding tuned record**~~ ✅ done (2026-11-20): the
-   ladder ran at another box (the base's structural params were dropped) and
-   the tie rule published a phantom point; both are fixed, and the corrected
-   re-run gives **2 claims + 1 CI coordinate + 2 no-power coordinates**. The
-   gate is five CIs; it is open on two named defects, not on a knob sweep:
-   - **S9c — a row's box carries its params.** `_box_summary` records the
-     coordinate's params (the screen's own-knob mode included);
-     `screen_coordinate` reads them; a row without them is stale and the
-     ladder refuses to adjudicate it. `ClaimCandidate.coordinate` and the
-     registration carry the same params, so a re-boxed claim is caught before
-     its first seed. Then re-screen the vision map, re-ladder, re-register and
-     re-run. Check: three of six sampled rows do not reproduce at their
-     rebuilt box (`forward_tangent`, `zeroth_order`, `pc_alm`).
-   - **S9d — `pc_alm`'s stability capability.** A backtracking step or a
-     declared ceiling closes the NaN/Inf at settle step 6 and lets the ×10
-     rung decide a fourth CI. Lock (strict xfail):
-     `test_a_pc_alm_step_above_its_stability_bound_trains`.
-   - **S9e — the inert `credit.feedback_scale` probe.** `thermodynamic_contrast`
-     and `local_goodness` measure the same number at 0.001/0.01/0.1; probe the
-     credit's pseudo-gradient at two scales before calling it a plateau. If the
-     knob is never read, wire it or withdraw it from the active space (one
-     declaration), then re-ladder.
+   `spiking_snn` attach and move the system's own parameters.
+4. **S9e follow-up — the other inert credits.** The probe covered the two
+   credits S9b measured. `target_inversion` and `zeroth_order` still ladder
+   `credit.feedback_scale` and still tie at all three points; either they read
+   the knob (declare it, and wire it) or they declare it unread (one class
+   declaration each). The ladder now reads the declaration, so the fix is one
+   `reads(config)` per class, not another table.
 
 ## 0. The three states (binding amendment, 2026-11-19)
 
@@ -1006,12 +954,15 @@ ladder runs before its family has a control; no row is closed as "gap".
 9. **~155 test files / ~1,300 tests**, 0 exact duplicate bodies, 0
    finiteness-only test, 0 empty assertion.
 10. **5 pre-registered claim records**, 5 paired seeds, CI,
-    control-relative: the corrected box gives **2 claims** (`local_contrastive`
-    +0.2533, `random_projections` +0.2862), **1 coordinate with a CI**
-    (`energy_minimization` +0.0092, inside the margin) and **2 no-power
-    coordinates** (`thermodynamic_contrast`, `local_goodness`). A claim within
-    1σ of its bar is `marginal`, not met. The fifth CI is S9c/S9d, not a knob
-    sweep; the row's box carries its params first.
+    control-relative, each at its own row's box (params included):
+    **2 claims** (`local_contrastive` +0.2533 [+0.2258, +0.2821],
+    `random_projections` +0.2732 [+0.2163, +0.3209]), **1 coordinate with a
+    CI** (`thermodynamic_contrast` +0.0095 [−0.0090, +0.0245], inside the
+    1 pp margin) and **2 no-power coordinates** (`zeroth_order`, `pc_alm`:
+    their only tuned point is their own default). A claim within 1σ of its bar
+    is `marginal`, not met. The fourth CI is a named capability gap
+    (`pc_alm`'s stability bound, `zeroth_order`'s unread knob), not a knob
+    sweep.
 11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
     and the plan's counts equal the artifacts'.
 
@@ -1114,8 +1065,24 @@ uv run python -m computronium.experiment.sec_claims --run --device cpu
 #     random_projections +0.2862 [+0.2335, +0.3416], energy_minimization
 #     +0.0092 [-0.0052, +0.0209], thermodynamic_contrast/local_goodness
 #     no-power (identical rungs). pc_alm is defective: NaN/Inf at settle step 6.
-#     NEXT: S9c (a row's box carries its params), S9d (pc_alm stability),
-#     S9e (the inert credit.feedback_scale probe).
+
+# 11. S9c/S9d/S9e (DONE 2026-11-20; the artifacts re-derive next)
+#     a) S9c: the box carries its params, so the row is reproducible
+#        sec_loop.box_params is the one reader; a row without them is `stale`
+# uv run python -m computronium.experiment.sec_loop --track P0 --breadth full \
+#   --own-knobs --task mnist --max-primitives 75 --out results/sec --device cpu
+#     b) re-ladder the rows at their own boxes, then re-register, then re-run
+uv run python -m computronium.experiment.sec_ladder \
+  --map results/sec/map.json --tuning --limit 10 --device cpu
+uv run python -m computronium.experiment.sec_claims --register --device cpu
+uv run python -m computronium.experiment.sec_claims --run --device cpu
+#     c) S9d: the gain ceiling refuses pc_alm's x10 step by name
+#        PC_ALM_GAIN_CEILING = 2.0; step_size * (1 + rho) < 2
+#     d) S9e: the probe measured feedback_scale inert (bit-identical norm)
+uv run python scripts/probes/s9e_feedback_scale.py
+#     e) a family map screened before S9c: restore the boxes from the cells'
+#        own records (0 cost; idempotent), then re-run the audit
+uv run python -m computronium.experiment.sec_loop --repair-boxes --out results/sec_lm
 ```
 
 ---

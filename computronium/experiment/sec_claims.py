@@ -39,7 +39,7 @@ from computronium.experiment.sec_deep_dive import (
     claim_verdict,
     load_registration,
 )
-from computronium.experiment.sec_loop import _measure
+from computronium.experiment.sec_loop import _box_summary, _measure, box_params
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
     PairedComparison,
@@ -57,6 +57,7 @@ __all__ = [
     "DEFAULT_REGISTRATIONS",
     "ClaimCandidate",
     "ClaimRecord",
+    "candidate_box",
     "claim_candidates",
     "default_maps",
     "margin_for",
@@ -212,10 +213,25 @@ def registration_path(
     return root / f"sec_{candidate.axis}_{candidate.level}.json"
 
 
+def candidate_box(candidate: ClaimCandidate, schedule: Schedule) -> dict[str, Any]:
+    """The box both arms train at: the candidate's coordinate, its params too.
+
+    One builder: the screen's own ``_box_summary`` reads the coordinate's six
+    axes, its structural params and the schedule, so a registration and a claim
+    compare the same fields (TODO97 S9c).
+    """
+    return _box_summary(candidate.coordinate(candidate.best_value), schedule)
+
+
 def register_claim(
     candidate: ClaimCandidate, schedule: Schedule
 ) -> ThresholdRegistration:
-    """The claim's pre-registered threshold, written before the first seed."""
+    """The claim's pre-registered threshold, written before the first seed.
+
+    The registration carries the coordinate's box, not the schedule alone: a
+    claim re-boxed between the ladder and the run is refused before its first
+    seed, because the committed box names the params it was measured under.
+    """
     margin = margin_for(schedule.task_id)
     return ThresholdRegistration(
         claim=(
@@ -227,7 +243,7 @@ def register_claim(
         alpha=DEFAULT_ALPHA,
         min_seeds=CLAIM_SEEDS,
         created=date.today().isoformat(),
-        box=schedule.to_dict(),
+        box=candidate_box(candidate, schedule),
     )
 
 
@@ -353,7 +369,7 @@ def _decide(
         float(treatment.val_acc or 0.0) - float(control.val_acc or 0.0)
         for treatment, control in zip(treatments, controls, strict=True)
     ]
-    verdict = claim_verdict(paired, registration, schedule)
+    verdict = claim_verdict(paired, registration, candidate_box(candidate, schedule))
     if verdict == "coordinate" and _marginal(diffs, registration.threshold):
         return "marginal", asdict(paired), _margin_reason(paired, registration), False
     return (
@@ -392,7 +408,20 @@ def run_claim(
     by construction, so it is marked no-power without spending the ten cells.
     """
     started = time.perf_counter()
-    mismatch = registration.box_mismatch(schedule)
+    box = candidate_box(candidate, schedule)
+    stale = _stale_box(candidate, registration)
+    if stale is not None:
+        return ClaimRecord(
+            candidate,
+            (),
+            None,
+            registration.to_dict(),
+            "refused",
+            stale,
+            time.perf_counter() - started,
+            False,
+        )
+    mismatch = registration.box_mismatch(box)
     if mismatch is not None:
         return ClaimRecord(
             candidate,
@@ -430,6 +459,29 @@ def run_claim(
         time.perf_counter() - started,
         no_power,
     )
+
+
+def _stale_box(
+    candidate: ClaimCandidate, registration: ThresholdRegistration
+) -> str | None:
+    """Why this pair cannot be priced at its box, or ``None`` when it can.
+
+    A row screened before its params were recorded cannot rebuild its
+    coordinate, so the ladder's box is a guess; a registration written for
+    that guess is stale too (TODO97 S9c). Either refuses the pair before the
+    first seed, and the close is the screen's own repair.
+    """
+    if not box_params(candidate.box):
+        return (
+            "the row's box carries no structural params: re-screen the row "
+            "and re-register the claim before its first seed"
+        )
+    if registration.box is not None and not box_params(registration.box):
+        return (
+            "the registration's box carries no structural params: re-register "
+            "the claim at the candidate's box before its first seed"
+        )
+    return None
 
 
 def _report(records: Iterable[ClaimRecord]) -> dict[str, Any]:
@@ -499,6 +551,12 @@ def main(argv: list[str] | None = None) -> int:
                     f"refused {candidate.primitive}: no base box for {candidate.task}"
                 )
                 continue
+            if not box_params(candidate.box):
+                print(
+                    f"refused {candidate.primitive}: the row's box carries no "
+                    "structural params (re-screen the row)"
+                )
+                continue
             path = registration_path(candidate)
             registration = write_claim(candidate, schedule, path)
             print(
@@ -515,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"refused {candidate.primitive}: no base box for {candidate.task}")
             continue
         path = registration_path(candidate)
-        registration = load_registration(path, schedule)
+        registration = load_registration(path, candidate_box(candidate, schedule))
         if registration is None:
             record = ClaimRecord(
                 candidate,

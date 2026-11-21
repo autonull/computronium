@@ -332,18 +332,23 @@ def preregister(
     return registration
 
 
-def load_registration(path: Path, schedule: Schedule) -> ThresholdRegistration | None:
+def load_registration(
+    path: Path, box: Schedule | Mapping[str, Any]
+) -> ThresholdRegistration | None:
     """The committed registration for this box, or ``None`` when it refuses.
 
-    A session that cannot name its claim before the first cell is a budget
-    leak: the run refuses instead of comparing five unregistered seeds.
+    The box is the coordinate's own (its axes and structural params too), so a
+    registration committed for another coordinate is refused before the first
+    cell (TODO97 S9c). A session that cannot name its claim before its first
+    cell is a budget leak: the run refuses instead of comparing five
+    unregistered seeds.
     """
     if not path.exists():
         return None
     registration = ThresholdRegistration.load(path)
     if registration.metric != "val_acc":
         return None
-    if registration.box_mismatch(schedule) is not None:
+    if registration.box_mismatch(box) is not None:
         return None
     return registration
 
@@ -351,16 +356,18 @@ def load_registration(path: Path, schedule: Schedule) -> ThresholdRegistration |
 def claim_verdict(
     paired: PairedComparison | None,
     registration: ThresholdRegistration,
-    schedule: Schedule,
+    box: Schedule | Mapping[str, Any],
 ) -> str:
     """The claim when the paired CI clears the registered margin, else a row.
 
     ``passes`` refuses a claim at another box and a CI that includes the
-    margin: the pair is then a coordinate about the knob, not a verdict.
+    margin: the pair is then a coordinate about the knob, not a verdict. The box
+    is the coordinate's own (its axes and structural params), not the schedule
+    alone, so the registration and the run compare the same fields (TODO97 S9c).
     """
     if paired is None:
         return "coordinate"
-    return "claim" if paired.passes(registration, schedule=schedule) else "coordinate"
+    return "claim" if paired.passes(registration, box=box) else "coordinate"
 
 
 def main() -> None:

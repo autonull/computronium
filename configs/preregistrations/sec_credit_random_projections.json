@@ -6,6 +6,18 @@
   "min_seeds": 5,
   "created": "2026-11-20",
   "box": {
+    "substrate": "digital",
+    "geometry": "feedforward",
+    "dynamics": "instantaneous",
+    "plasticity": "null",
+    "credit": "random_projections",
+    "update": "euclidean",
+    "update.step_size": 0.01,
+    "geometry.hidden_dim": 128,
+    "geometry.depth": 2,
+    "credit.local_objective": "ff",
+    "credit.orthogonal_init": false,
+    "credit.feedback_scale": 0.1,
     "fidelity": "L0",
     "seed": 0,
     "n_seeds": 1,
@@ -16,7 +28,7 @@
     "budget_id": "base-vision",
     "task_id": "mnist",
     "param_budget": 150000,
-    "device": "auto",
+    "device": "cpu",
     "deterministic": true,
     "num_workers": 0,
     "precision": "fp32",
@@ -27,6 +39,7 @@
     "fsdp_sharding_strategy": "FULL_SHARD",
     "fsdp_min_params": 1000000,
     "fsdp_cpu_offload": false,
-    "fsdp_mixed_precision": true
+    "fsdp_mixed_precision": true,
+    "task": "mnist"
   }
 }

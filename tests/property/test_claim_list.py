@@ -17,6 +17,7 @@ import pytest
 from computronium.experiment.sec_claims import (
     ClaimCandidate,
     _marginal,
+    candidate_box,
     claim_candidates,
     margin_for,
     register_claim,
@@ -72,7 +73,10 @@ def _map(tmp_path: Path, records: dict[str, dict]) -> Path:
                 "status": "measured",
                 "binding": "bound",
                 "axis": "credit_assignment",
-                "box": {"credit": primitive.rsplit(".", 1)[-1]},
+                "box": {
+                    "credit": primitive.rsplit(".", 1)[-1],
+                    "credit.feedback_scale": 0.01,
+                },
             }
             for primitive in records
         },
@@ -193,7 +197,7 @@ def test_the_registration_is_committed_before_the_first_seed(tmp_path: Path) -> 
     assert target.exists()
     assert registration.min_seeds == CLAIM_SEEDS == 5
     assert registration.threshold == pytest.approx(MARGIN)
-    assert load_registration(target, schedule) == registration
+    assert load_registration(target, candidate_box(candidate, schedule)) == registration
     assert json.loads(target.read_text())["created"]
 
 
@@ -208,7 +212,7 @@ def test_a_foreign_box_registration_refuses_the_claim() -> None:
         best_factor=10.0,
         best_value=0.1,
         effect=0.3,
-        box={"credit": "beta"},
+        box={"credit": "beta", "credit.feedback_scale": 0.01},
     )
     schedule = _schedule()
     registration = register_claim(candidate, schedule)
@@ -228,7 +232,7 @@ def test_five_paired_seeds_carry_a_clearing_ci() -> None:
         best_factor=10.0,
         best_value=0.1,
         effect=0.3,
-        box={"credit": "beta"},
+        box={"credit": "beta", "credit.feedback_scale": 0.01},
     )
     schedule = _schedule()
     registration = register_claim(candidate, schedule)
@@ -267,7 +271,7 @@ def test_an_identical_pair_is_marked_no_power() -> None:
         best_factor=10.0,
         best_value=0.1,
         effect=0.3,
-        box={"credit": "beta"},
+        box={"credit": "beta", "credit.feedback_scale": 0.01},
     )
     schedule = _schedule()
     registration = register_claim(candidate, schedule)
@@ -299,7 +303,7 @@ def test_a_best_point_at_the_default_is_marked_without_cells() -> None:
         best_factor=1.0,
         best_value=64.0,
         effect=0.0,
-        box={"geometry": "attention"},
+        box={"geometry": "attention", "geometry.hidden_dim": 64.0},
     )
     schedule = _schedule()
     registration = register_claim(candidate, schedule)
@@ -307,6 +311,70 @@ def test_a_best_point_at_the_default_is_marked_without_cells() -> None:
     assert record.verdict == "coordinate"
     assert record.no_power is True
     assert record.cells == ()
+
+
+def test_a_stale_box_refuses_the_claim_before_its_first_cell() -> None:
+    """A row screened before the box carried its params cannot be priced.
+
+    The candidate's box names the six axes and nothing else, so the two arms
+    would train at a rebuilt coordinate whose params are the screen's defaults
+    (measured 2026-11-20, S9c: three of six sampled rows did not reproduce at
+    their rebuilt box). The pair refuses by name; the close is the screen's own
+    re-run, which writes the params into the box.
+    """
+    candidate = ClaimCandidate(
+        primitive="primitive.credit_assignment.beta",
+        axis="credit",
+        level="beta",
+        task="mnist",
+        knob="credit.feedback_scale",
+        default=0.01,
+        best_factor=10.0,
+        best_value=0.1,
+        effect=0.3,
+        box={"credit": "beta"},
+    )
+    schedule = _schedule()
+    registration = register_claim(candidate, schedule)
+
+    def boom(_coordinate, _run):
+        raise AssertionError("a stale claim trained a cell")
+
+    record = run_claim(candidate, registration, schedule, measure=boom)
+
+    assert record.verdict == "refused"
+    assert record.cells == ()
+    assert "no structural params" in record.stop_reason
+
+
+def test_a_registration_without_params_is_stale() -> None:
+    """A registration written before S9c is refused, never compared.
+
+    The registration carries the coordinate's box, so a claim re-boxed between
+    the ladder and the run is caught before its first seed.
+    """
+    candidate = ClaimCandidate(
+        primitive="primitive.credit_assignment.beta",
+        axis="credit",
+        level="beta",
+        task="mnist",
+        knob="credit.feedback_scale",
+        default=0.01,
+        best_factor=10.0,
+        best_value=0.1,
+        effect=0.3,
+        box={"credit": "beta", "credit.feedback_scale": 0.01},
+    )
+    schedule = _schedule()
+    fresh = register_claim(candidate, schedule)
+    assert fresh.box is not None
+    assert "credit.feedback_scale" in fresh.box
+    stale = replace(fresh, box=schedule.to_dict())
+
+    record = run_claim(candidate, stale, schedule)
+
+    assert record.verdict == "refused"
+    assert "re-register" in record.stop_reason
 
 
 def test_a_point_within_one_standard_error_is_marginal() -> None:
