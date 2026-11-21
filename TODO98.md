@@ -10,10 +10,17 @@ SEC as optimization.
 6 seams and 78 rules (29 task-independent + 1 task-dependent + 48
 availability). The P2 seams found and closed one composer defect: `recurrent`
 never received `sequence` through the geometry builder, so the time axis could
-not unroll from a composed cell. P1 is next and unstarted. It is a batch
-program, not 75 interactive checks: one driver, a per-axis strategy table, a
-calibration gate, and rows that survive a kill. Its design facts and wave
-order are in §4.
+not unroll from a composed cell. Its design facts and wave order are in §4.
+
+**P1 landed 2026-11-21 (instrument + first measurement).**
+`scripts/probes/p1_law_surface.py` ran all 75 laws in one process at 16
+samples, 60 of the ≤200 steps, three learning rates, 12 lanes and a 150 s row
+budget: 354 s, one row per law, exit 1. States: **9 `works`, 7 `test defect`,
+12 `declaration defect`, 21 `defect-or-gap`, 17 `refused`, 7 `unproven
+control`, 2 `defect (invariant)`**. Its pre-registered calibration gate fired
+on that first run and is corrected in §4; P1's close is open on the declared
+200-step box and on a mechanism-removing control for the four axes a companion
+cannot price.
 
 **One sentence:** 75 laws × a positive/negative control pair, 6 protocol
 seams, and the declared composition rules are the whole test surface; a
@@ -227,7 +234,7 @@ and the refusal's failing test. `test_no_test_names_a_family_box` passes
 with only `test_primitive_capability.py` declared. **Not landed:** the
 fingerprint cache; it is the first P1 task, not a P0 row.
 
-### P1 — Run the batch on all 75 (the decisive spend, ≤ 15 min wall) — **next**
+### P1 — Run the batch on all 75 (the decisive spend, ≤ 15 min wall) — **landed (instrument); close open**
 
 The deliverable is one program, `scripts/probes/p1_law_surface.py`, with a
 per-axis strategy table — not 75 interactive checks. It enumerates the
@@ -297,8 +304,60 @@ row and a lock; the driver does not change.
    the composed axis config (`CellConfig` / coordinate params), not the case
    dict; `AxisSpec.accepted_params` is the live knob declaration.
 
-The three fit/control pairs the driver still needs to prove are named in the
-wave table; each is a strategy row plus a lock, not a new harness.
+The three fit/control pairs that shaped the driver are in the wave table; the
+measurement (below) resolved them: only credit and update keep a decisive
+removal, and the four companion axes report `test defect` until a
+mechanism-removing control exists for them.
+
+**Landed 2026-11-21.** `computronium/primitives/fit.py` is the instrument and
+`scripts/probes/p1_law_surface.py` is the batch. The design work the waves
+named resolved into four rules:
+
+- **The cell** is the family's base box with the law's own axis, at the
+  family's declared input shape and parameter budget (`TaskRegistry` shape, no
+  dataset, seeded composition), so the fit prices a law the screen could price.
+- **L-b⁻ is per axis, and only two removals are decisive.** A credit's
+  pseudo-gradient is zeroed and an update's step is identity; a geometry, a
+  settle, a substrate and a plasticity law are replaced by their *declared*
+  neutral companion (feedforward, instantaneous, digital, null). The companion
+  reaches for every one of those four axes — 7 `test defect` rows — so the fit
+  is **decisive for credit and update only**: §4's design fact 2, measured.
+  Zeroing a geometry's parameters in place is not a removal: the pipeline
+  rebuilds the weights at the first step (measured: a zeroed `nca` cell trained
+  to the same loss).
+- **L-c's knob is the composed cell's own active knob** (`axis.name` in
+  `ComposedCell.params`), never a preference list: a declared-but-inactive knob
+  is not L-c's, and the override that varies it is never refused as dead
+  configuration.
+- **A fit is seeded and priced by its row**: `cell()` seeds the composition, so
+  two fits of one declaration start from one weight set, and a row that spends
+  its budget is `refused` (over budget), never `works`.
+
+**What the first measurement found** (box above; `results/p1/surface.md`):
+
+| Finding | Rows | Evidence |
+|---|---|---|
+| the fit cannot test geometry, settle, substrate or plasticity | 7 `test defect` | the neutral companion reaches (`nca` control 0.184, `energy_minimization`, `noisy`, `sparse`, `ternary`, `routing`, `closed_form_ridge`) |
+| declared knobs that move no fit | 12 `declaration defect` | `feedback_lr` (4 credits), `hidden_dim` (2 geometry), `grad_clip` (5 updates), `fisher_damping` |
+| no legal setting fits | 21 `defect-or-gap` | `forward_tangent`, `target_inversion`, `temporal_trace`, `rule_state`, `euclidean` at 60 steps |
+| the declared space refuses the cell | 17 `refused` | 13 void constraints + 3 batch-layout disagreements + `complex` |
+| the law's L-a fails | 2 `defect (invariant)` | `plasticity.null`, `substrate_coupled` — both return an empty plastic state by contract, so this is the *instrument's* L-a, not the law |
+| no declared family base box | 5 `unproven control` | `optical`, `quantum`, and 3 substrates whose cell records no knob |
+
+**The calibration gate fired on its first measurement, and is corrected.**
+`geometry.nca` came out `works` and `geometry.conv` `declaration defect`; the
+screen had priced them `defective` (a cross-config wiring defect: a
+feedforward-shaped grid inside nca's cell) and `refused` (a 60 s cost cap). A
+fit that composes one cell from one coordinate cannot reproduce either: nca's
+law trains when its cell is built correctly, which **locates** the defect in
+the screen's wiring (P3), and conv's cell trains at a cost the wave cannot pay
+(P5). The gate now calibrates on classes a fit *can* price — `substrate.complex`
+→ `refused` (declared void constraint) and `credit_assignment.forward_tangent`
+→ `defect-or-gap` (a ladder `unimplemented` row) — and reproduces both.
+
+**Open (P1 close):** the declared 200-step box (`--resume --steps 200
+--row-budget 400`), and the four mechanism-removing controls. Until those
+exist, 7 rows are `test defect`, which is exit 1 by the plan's own table.
 
 ### P2 — The 6 seams (one E1 cell each, ≤ 10 min) — **done 2026-11-21**
 
@@ -360,7 +419,12 @@ claim is "works here and elsewhere" until this runs.
    --surface`, `test_surface_lock.py`).
 2. **All 75 laws are in exactly one state** from §3's table, each with the
    control that proves it. 0 defects, 0 unexplained fits, 0 inert knobs
-   presented as tuning, 0 `unproven control`. **Open, P1 (batch).**
+   presented as tuning, 0 `unproven control`. **Partial, P1 (batch landed):**
+   all 75 are measured at 60 steps (§4); 7 `test defect` rows name the axes a
+   companion cannot price, 12 `declaration defect` rows name declared knobs
+   that move no fit, and the two `defect (invariant)` rows are the instrument's
+   L-a on no-op plasticity. The 200-step box and the four controls are the
+   close.
 3. **6/6 seams pass** their declared exchange. **Done 2026-11-21**
    (`test_protocol_seams.py`).
 4. **Every refusal carries a test that fails without it**; every refusal
@@ -424,9 +488,9 @@ E1; a width search is not a mechanism fix.
 | `test_the_batch_is_restartable` | a finished row re-runs, or a killed row reads as `works` |
 | `test_the_batch_marks_unproven_axes` | a law on an unproven axis is `works` instead of `unproven control` |
 
-**Landed 2026-11-21:** family-box, surface-row, refusal, and both seam locks.
-**Open:** the three fit/knob locks and the four batch locks, which arrive
-with the P1 driver.
+**Landed 2026-11-21:** family-box, surface-row, refusal, both seam locks, the
+three fit/knob locks and the four batch locks (`test_surface_fit.py`). A fit or
+batch rule lands with its lock; nothing on this table is open.
 
 ---
 
@@ -437,16 +501,16 @@ with the P1 driver.
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P1: the batch, cheapest axis pair first                        [NEXT]
-uv run python scripts/probes/p1_law_surface.py --axes credit,geometry \
-  --lr-grid 0.1,1,10 --samples 16 --steps 200 --lanes 12 --out results/p1
-# wave 2, then wave 3 reuse the rows already written
-uv run python scripts/probes/p1_law_surface.py --axes dynamics,update \
-  --resume --out results/p1
-uv run python scripts/probes/p1_law_surface.py --axes plasticity,substrate \
-  --resume --out results/p1
+# 2. P1: the batch, all 75 laws, waves in axis order                 [LANDED]
+uv run python scripts/probes/p1_law_surface.py --lanes 12 --steps 60 \
+  --row-budget 150 --out results/p1      # 75 rows, 354 s, exit 1
+# the declared 200-step box and the four controls the batch named
+uv run python scripts/probes/p1_law_surface.py --resume --steps 200 \
+  --row-budget 400 --out results/p1      # exit 0 requires every control
 # exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial wave.
 # Do not re-run interactively to "check" a nonzero exit.
+# A wave is a selection (--axes), not a second program: --resume never re-runs
+# a finished row, and a later wave never erases an earlier one's verdicts.
 
 # 3. P2: the six seams                                            [DONE]
 uv run python -m pytest tests/property/test_protocol_seams.py -q
@@ -474,3 +538,10 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
   prompt is not a row, and a hand-run fit is not a result.
 - **Reading a green table as a verdict** without the calibration gate. The
   gate is the reason the batch can be left alone.
+- **Zeroing a law's parameters to remove its mechanism.** The pipeline rebuilds
+  them at the first step; the removal is a declared companion, and a companion
+  that still fits says the *fit* cannot test that axis — a test defect, never
+  `works`.
+- **Calibrating a fit on a row the screen priced.** A cross-config wiring
+  defect and a cost cap are the screen's classes; a fit reproduces neither, and
+  a gate made of them can only trip.
