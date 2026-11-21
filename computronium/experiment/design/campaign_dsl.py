@@ -317,28 +317,6 @@ class CampaignDSL(BaseModel):
             return [fixed.value]
         return []
 
-    @staticmethod
-    def _geometry_compatible(geom: str, dyn: str, cred: str) -> bool:
-        """Instantaneous dynamics cannot train a recurrent geometry by gradient."""
-        return not (
-            dyn == "instantaneous"
-            and geom in {"recurrent"}
-            and cred in {"gradient", "backprop"}
-        )
-
-    def _valid_geometries(
-        self, geometries: list[str], dynamics: list[str], credits: list[str]
-    ) -> list[str]:
-        return [
-            geom
-            for geom in geometries
-            if all(
-                self._geometry_compatible(geom, dyn, cred)
-                for dyn in dynamics
-                for cred in credits
-            )
-        ]
-
     def _budget_seconds(self, block: BlockSpec) -> float | None:
         if block.budget_seconds:
             return block.budget_seconds
@@ -348,15 +326,11 @@ class CampaignDSL(BaseModel):
             )
         return None
 
-    def _block_overrides(
-        self, block: BlockSpec, valid_geometries: list[str]
-    ) -> dict[str, Any]:
+    def _block_overrides(self, block: BlockSpec) -> dict[str, Any]:
         axis_selections = [
             {
                 "axis": name,
-                "primitives": valid_geometries
-                if name == "geometry"
-                else self._factor_values(name),
+                "primitives": self._factor_values(name),
             }
             for name in self._AXIS_ORDER
         ]
@@ -374,15 +348,10 @@ class CampaignDSL(BaseModel):
     def _build_runs(self) -> list[dict[str, Any]]:
         runs: list[dict[str, Any]] = []
         for i, block in enumerate(self.design.blocks):
-            valid = self._valid_geometries(
-                self._factor_values("geometry"),
-                self._factor_values("dynamics"),
-                self._factor_values("credit"),
-            )
             runs.append({
                 "name": f"task_{block.task}" if i > 0 else "main",
                 "profile": "production-map",
-                "overrides": self._block_overrides(block, valid),
+                "overrides": self._block_overrides(block),
                 "depends_on": [0] if i > 0 else [],
                 "device": self.resources.device,
                 "store": self.output.db,

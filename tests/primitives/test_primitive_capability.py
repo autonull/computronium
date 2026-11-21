@@ -4,188 +4,165 @@ Every primitive must demonstrate basic learning capability on its declared
 task families. These are the minimum viable tests that should pass before
 any SEC screen runs.
 
-The test uses 1 epoch over ``CAPABILITY_BATCHES`` batches and 1 seed, so the
-rung is a wiring check and a cost cap, not the screen's 375-batch
-measurement. A row that cannot train then fails its bar instead of
-outrunning the budget and reporting no verdict (TODO97 S5i).
+The rung reads the row's screened box from the family maps and refuses a box
+the declared space rejects, so a measured row runs at its priced cell — its
+epochs, batch size, batch limit and seed — and a refused row is named instead
+of trained (TODO97 S5j). A row with no map box falls back to one epoch over
+``CAPABILITY_BATCHES`` batches at the rung's default seed.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
 import pytest
 
+from computronium.domains.base import DomainType
 from computronium.domains.factory import create_task
 from computronium.experiment.kernel.compose import compose_cell_system
-from computronium.experiment.schema.coordinate import Coordinate
+from computronium.experiment.sec_claims import map_rows
+from computronium.experiment.sec_loop import (
+    _base_axes,
+    _coordinate,
+    _is_legal,
+    box_params,
+    screen_coordinate,
+)
+from computronium.experiment.sec_pilot import BASE_BOXES
 from computronium.primitives.registry import list_primitives
+from computronium.utils import seed_everything
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.primitives.registry import PrimitiveSpec
 
 # Base configuration for fast capability testing
 CAPABILITY_EPOCHS = 1
 CAPABILITY_SEED = 42
 CAPABILITY_DEVICE = "cpu"
-#: The rung's step budget. A declared ladder holds one epoch at the full
-#: ``batch_limit``; this check must also bound the ``get_batch`` lane, which
-#: otherwise raises for an RL row and hangs a slow credit past the timeout
-#: (measured 2026-11-20: four credit rows timed out at 120s with no verdict).
+#: The fallback budget for a row the maps do not carry: one epoch over this
+#: many loader batches. A measured row runs at its own priced cell instead.
 CAPABILITY_BATCHES = 64
 
 
-def _base_coordinate(primitive_id: str, task=None) -> Coordinate:
-    """Get the base coordinate for a primitive (all companions at default).
+@dataclass(frozen=True, slots=True)
+class Rung:
+    """The box a capability cell runs at, or the rule that refuses it."""
 
-    Adjusts geometry based on task input shape if provided.
-    """
-    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
+    task_id: str
+    coordinate: Coordinate | None = None
+    reason: str | None = None
+    batch_size: int = 64
+    epochs: int = CAPABILITY_EPOCHS
+    batch_limit: int | None = None
+    seed: int = CAPABILITY_SEED
 
-    axis = primitive_id.split(".")[1]  # e.g., "credit_assignment"
-    name = primitive_id.split(".")[-1]  # e.g., "target_inversion"
-    axes = dict(_AXIS_DEFAULTS)
-    axes[axis] = name
 
-    # Adjust geometry for spatial tasks
-    if task is not None:
-        input_dim = task.input_dim
-        if isinstance(input_dim, tuple) and len(input_dim) == 3:
-            # Spatial input (C, H, W) - use conv geometry
-            axes["geometry"] = "conv"
-            # Add required conv params
+def _row_reason(row: Mapping[str, object]) -> str:
+    """Why a non-measured row cannot be trained, with its declaration."""
+    status = row.get("status")
+    detail = row.get("trigger") or row.get("defect")
+    return f"the row is {status}" + (f": {detail}" if detail else "")
 
-            extra_params = {
-                "geometry.in_channels": input_dim[0],
-                "geometry.input_hw": (input_dim[1], input_dim[2]),
-                "geometry.conv_channels": (8, 16),
-                "geometry.kernel_size": 3,
-                "geometry.pool_hw": (4, 4),
-            }
-            coord = _coordinate(axes)
-            coord.params.update(extra_params)
-            return coord
 
+def _fallback_coordinate(spec: PrimitiveSpec, task_id: str) -> Coordinate:
+    """The family's base axes with only this primitive's axis varied."""
+    axes = _base_axes(task_id)
+    axes[spec.axis] = spec.id.rsplit(".", 1)[-1]
     return _coordinate(axes)
 
 
-def _task_for_family(family: str) -> str:
-    """Map task family to a concrete task ID (smallest/fastest first)."""
-    mapping = {
-        "vision": "mnist",  # 70000 samples, 784 features, 10 classes (flat)
-        "tabular": "iris",  # 150 samples, 4 features, 3 classes
-        "graph": "cora",  # 2708 nodes, 1433 features, 7 classes
-        "sequence": "char_ngram",  # small character n-gram task
-        "continual": "copy_task",  # synthetic, tiny
-        "rl": "cartpole",  # 4 obs, 2 actions
-        "scientific": "lorenz_state",  # 3D chaotic system
-        "neuromorphic": "spiking_mnist",
-        "lm": "tiny_shakespeare",  # small text
-        "quantum": "lorenz_state",
-        "analog": "lorenz_state",
-        "photonic": "lorenz_state",
-    }
-    return mapping.get(family, "mnist")
+def _int_param(value: object, default: int) -> int:
+    """An integer box field, or ``default`` when the row does not carry one."""
+    return int(value) if isinstance(value, (int, float, str)) else default
 
 
-def _declared_reason(primitive_id: str, family: str) -> str | None:
-    """The row's own declaration: why this combo fails today, and its close.
+def _epochs(box: Mapping[str, object]) -> int:
+    """The row's priced epoch count, or the fallback rung."""
+    return _int_param(box.get("epochs"), CAPABILITY_EPOCHS)
 
-    A reason names the state (unimplemented / defective / cost) and the
-    mechanism that closes it. The skip message carries ``declared:`` so the
-    audit can tell a declared row from a silent capability skip (TODO97 S6d).
+
+def _batch_limit(box: Mapping[str, object]) -> int | None:
+    """The row's priced batch limit, or ``None`` for a full epoch."""
+    return _int_param(box.get("batch_limit"), 0) or None
+
+
+def _rung_for(
+    spec: PrimitiveSpec,
+    family: str,
+    rows: Mapping[tuple[str, str], Mapping[str, object]],
+) -> Rung:
+    """The row's screened box, or the name its refusal carries.
+
+    A measured row is rebuilt by the screen's own builder
+    (:func:`~computronium.experiment.sec_loop.screen_coordinate`), so the
+    capability lane runs the coordinate the map measured rather than a compose
+    default. A row without a box, and a measured row the declared space now
+    refuses, are declared refusals (TODO97 S5j).
     """
-    declared = {
-        "credit.random_projections": {
-            "vision": "unimplemented: width/params (close: wider net)",
-            "sequence": "unimplemented: width/params (close: wider net)",
-            "tabular": "unimplemented: width/params (close: wider net)",
-        },
-        "credit.forward_tangent": {
-            "vision": "unimplemented: memory vs accuracy (close: JVP primitive)",
-            "sequence": "unimplemented: memory vs accuracy (close: JVP primitive)",
-        },
-        "credit.zeroth_order": {
-            "vision": "unimplemented: sample efficiency (close: perturbation budget)",
-            "sequence": "unimplemented: sample efficiency (close: perturbation budget)",
-            "tabular": "unimplemented: sample efficiency (close: perturbation budget)",
-        },
-        "credit.local_contrastive": {
-            "vision": "unimplemented: label channel (close: contrastive head)",
-        },
-        "credit.local_goodness": {
-            "vision": "unimplemented: width (close: wider net)",
-            "sequence": "unimplemented: width (close: wider net)",
-            "tabular": "unimplemented: width (close: wider net)",
-        },
-        "credit.pc_alm": {
-            "vision": "unimplemented: gamma ladder (close: tuning record)",
-        },
-        "credit.surrogate": {
-            "vision": "unimplemented box: 300k params (declared ceiling 150k)",
-            "sequence": "unimplemented box: 300k params (declared ceiling 150k)",
-            "tabular": "unimplemented box: 300k params (declared ceiling 150k)",
-        },
-        "geometry.attention": {
-            "sequence": "unimplemented box: 600k params (declared ceiling 150k)",
-            "vision": "unimplemented box: 600k params (declared ceiling 150k)",
-            "rl": "unimplemented box: 600k params (declared ceiling 150k)",
-        },
-        "geometry.causal_transformer": {
-            "sequence": "unimplemented box: 600k params (declared ceiling 150k)",
-            "rl": "unimplemented box: 600k params (declared ceiling 150k)",
-        },
-        "geometry.routing": {
-            "vision": "unimplemented box: 300k params (declared ceiling 150k)",
-            "sequence": "unimplemented box: 300k params (declared ceiling 150k)",
-            "tabular": "unimplemented box: 300k params (declared ceiling 150k)",
-        },
-        "geometry.tile": {
-            "vision": "unimplemented box: 1M params (declared ceiling 150k)",
-            "sequence": "unimplemented box: 1M params (declared ceiling 150k)",
-            "tabular": "unimplemented box: 1M params (declared ceiling 150k)",
-        },
-        "dynamics.diffusion": {
-            "vision": "cost model: settle steps 30 -> 10 (S6 cost row)",
-            "sequence": "cost model: settle steps 30 -> 10 (S6 cost row)",
-        },
-        "plasticity.closed_form_ridge": {
-            "vision": "unimplemented: no closed-form ridge primitive",
-            "sequence": "unimplemented: no closed-form ridge primitive",
-            "tabular": "unimplemented: no closed-form ridge primitive",
-        },
-        "plasticity.rule_state": {
-            "continual": "defective: no modulate() (close: implement modulate)",
-            "sequence": "defective: no modulate() (close: implement modulate)",
-            "rl": "defective: no modulate() (close: implement modulate)",
-        },
-        "plasticity.substrate_coupled": {
-            "neuromorphic": "defective: no joint substrate transition",
-            "analog": "defective: no joint substrate transition",
-        },
-        "update.natural_gradient": {
-            "vision": "cost model: diagonal Fisher (S6 cost row)",
-            "sequence": "cost model: diagonal Fisher (S6 cost row)",
-            "tabular": "cost model: diagonal Fisher (S6 cost row)",
-            "continual": "cost model: diagonal Fisher (S6 cost row)",
-        },
-        "update.cascade_synapse": {
-            "sequence": "unimplemented: no cascade-synapse primitive",
-            "rl": "unimplemented: no cascade-synapse primitive",
-            "continual": "unimplemented: no cascade-synapse primitive",
-        },
-        "update.bayesian_online": {
-            "sequence": "unimplemented: no online-Bayes primitive",
-            "rl": "unimplemented: no online-Bayes primitive",
-        },
-        "update.synaptic_intelligence": {
-            "continual": "unimplemented: no synaptic-intelligence primitive",
-        },
-    }
-
-    if primitive_id in declared and family in declared[primitive_id]:
-        return declared[primitive_id][family]
-    return None
+    base = BASE_BOXES.get(family)
+    if base is None:
+        return Rung(task_id="", reason=f"no declared base box for {family}")
+    task_id = base.task_id
+    row = rows.get((spec.id, task_id))
+    if row is not None and row.get("status") != "measured":
+        return Rung(task_id, reason=_row_reason(row))
+    seed = CAPABILITY_SEED
+    if row is None:
+        coordinate = _fallback_coordinate(spec, task_id)
+        batch_size = base.batch_size
+        epochs = CAPABILITY_EPOCHS
+        batch_limit = CAPABILITY_BATCHES
+    else:
+        box_value = row.get("box")
+        screened: dict[str, object] = (
+            {str(key): value for key, value in box_value.items()}
+            if isinstance(box_value, dict)
+            else {}
+        )
+        if not box_params(screened):
+            return Rung(
+                task_id,
+                reason="the row's box carries no structural params (re-screen it)",
+            )
+        seed = _int_param(screened.get("seed"), CAPABILITY_SEED)
+        level = screened.get(spec.axis) or spec.id.rsplit(".", 1)[-1]
+        coordinate = screen_coordinate(screened, spec.axis, str(level))
+        batch_size = _int_param(screened.get("batch_size"), 64)
+        epochs = _epochs(screened)
+        batch_limit = _batch_limit(screened)
+    legal, refusal = _is_legal(coordinate, task_id)
+    if not legal:
+        return Rung(
+            task_id,
+            reason=f"refused by name: {refusal}",
+            batch_size=batch_size,
+            epochs=epochs,
+            batch_limit=batch_limit,
+            seed=seed,
+        )
+    return Rung(
+        task_id,
+        coordinate=coordinate,
+        batch_size=batch_size,
+        epochs=epochs,
+        batch_limit=batch_limit,
+        seed=seed,
+    )
 
 
 @pytest.fixture(scope="session")
 def primitive_specs():
     return list_primitives()
+
+
+@pytest.fixture(scope="session")
+def screened_rows() -> dict[tuple[str, str], dict[str, object]]:
+    """Every family map row, read once for the whole rung."""
+    return map_rows()
 
 
 def test_all_primitives_have_capability_test(primitive_specs):
@@ -194,37 +171,102 @@ def test_all_primitives_have_capability_test(primitive_specs):
         assert spec.task_families, f"{spec.id}: empty task_families"
 
 
+def _run_cell(
+    spec: PrimitiveSpec,
+    family: str,
+    task,
+    cell,
+    rung: Rung,
+) -> None:
+    """Train the rung and assert its capability criterion."""
+    from computronium.core.system_trainer.config import SystemTrainerConfig
+    from computronium.core.system_trainer.spec import error_blind_credit
+    from computronium.core.system_trainer.train_task import train_on_task
+
+    config = SystemTrainerConfig(
+        max_epochs=rung.epochs,
+        batch_size=rung.batch_size,
+        device=CAPABILITY_DEVICE,
+        track_energy=False,
+        track_flops=False,
+        track_memory=False,
+        log_every_n_epochs=1,
+        seed=rung.seed,
+    )
+
+    if getattr(task, "domain_type", None) == DomainType.GRAPH:
+        from computronium.core.system_trainer import GraphSystemTrainer
+
+        GraphSystemTrainer(cell.system, config, task, val_data=task).fit()
+    else:
+        # A loader lane has an epoch length, so ``None`` runs the full epoch.
+        # A ``get_batch`` lane has none, so the fallback cap is its length.
+        batches = rung.batch_limit
+        if batches is None and task.get_dataloader("train") is None:
+            batches = CAPABILITY_BATCHES
+        train_on_task(
+            lambda *_, **__: cell.system,
+            task,
+            config,
+            batches_per_epoch=batches,
+        )
+    metrics = task.evaluate(cell.system)
+
+    if spec.axis == "credit" and error_blind_credit(spec.id.rsplit(".", 1)[-1]):
+        # Error-blind credits: a non-zero update is their contract.
+        assert metrics.loss is not None
+        return
+
+    # Error-aware rows: the row's priced cell is the rung's budget, so above
+    # chance is its bar, not the screen's calibrated one.
+    if task.domain_type in {DomainType.LM, DomainType.LANGUAGE}:
+        assert metrics.perplexity is not None
+        assert metrics.perplexity < task.output_dim, (
+            f"{spec.id} on {family} ({rung.task_id}): "
+            f"perplexity {metrics.perplexity:.2f} >= chance {task.output_dim}"
+        )
+        return
+    chance = 1.0 / task.output_dim if task.output_dim > 1 else 0.5
+    assert metrics.accuracy > chance, (
+        f"{spec.id} on {family} ({rung.task_id}): "
+        f"accuracy {metrics.accuracy:.4f} <= chance {chance:.4f}"
+    )
+
+
 @pytest.mark.parametrize("spec", list_primitives(), ids=lambda s: s.id)
-def test_primitive_on_declared_families(spec):
+@pytest.mark.timeout(300)
+def test_primitive_on_declared_families(spec, screened_rows):
     """Test each primitive on its declared task families.
 
-    Runs 1 epoch, 1 seed. A declared unimplemented or defective row is skipped
-    with its named mechanism and close condition; any other failure is a defect.
+    Runs the row's screened box at the capability budget. A row the map did
+    not measure, or a measured box the declared space refuses, is skipped
+    with its named rule; any other failure is a defect.
     """
-    # Test at most 1 family per primitive to keep CI fast
-    # (full family matrix runs in SEC)
     for family in spec.task_families:
-        reason = _declared_reason(spec.id, family)
-        if reason:
-            pytest.skip(f"declared: {spec.id} on {family}: {reason}")
+        rung = _rung_for(spec, family, screened_rows)
+        if rung.reason:
+            pytest.skip(f"declared: {spec.id} on {family}: {rung.reason}")
 
-        task_id = _task_for_family(family)
+        seed_everything(rung.seed)
         try:
-            task = create_task(task_id)
+            task = create_task(
+                rung.task_id,
+                quick_mode=True,
+                batch_size=rung.batch_size,
+            )
             task.setup()
         except Exception as e:
-            pytest.skip(f"no dataset: task {task_id} not available: {e}")
+            pytest.skip(f"no dataset: task {rung.task_id} not available: {e}")
 
         try:
-            coord = _base_coordinate(spec.id, task)
-            # Use task's input_shape if available, else flatten to (batch, features)
             input_shape = (
-                task.input_shape
-                if hasattr(task, "input_shape")
-                else (1, task.input_dim)
+                tuple(task.input_dim)
+                if isinstance(task.input_dim, (tuple, list))
+                else (1, int(task.input_dim))
             )
+            assert rung.coordinate is not None
             cell = compose_cell_system(
-                coordinate=coord,
+                coordinate=rung.coordinate,
                 geometry={},
                 input_shape=input_shape,
                 output_dim=task.output_dim,
@@ -233,76 +275,12 @@ def test_primitive_on_declared_families(spec):
         except ValueError as e:
             pytest.xfail(f"defective: {spec.id} on {family}: compose failed - {e}")
 
-        # Run 1 epoch capability check
         try:
-            from computronium.core.system_trainer.config import SystemTrainerConfig
-            from computronium.core.system_trainer.train_task import train_on_task
-
-            config = SystemTrainerConfig(
-                max_epochs=CAPABILITY_EPOCHS,
-                device=CAPABILITY_DEVICE,
-                track_energy=False,
-                track_flops=False,
-                track_memory=False,
-                log_every_n_epochs=1,
-            )
-
-            train_on_task(
-                lambda *_, **__: cell.system,
-                task,
-                config,
-                batches_per_epoch=CAPABILITY_BATCHES,
-            )
-            metrics = task.evaluate(cell.system)
-
-            # Error-blind credits: check non-zero update, not accuracy
-            from computronium.core.system_trainer.spec import error_blind_credit
-
-            if spec.axis == "credit" and error_blind_credit(spec.name):
-                # Just verify training ran without error
-                assert metrics.loss is not None
-                return
-
-            # Error-aware credits: must clear the bar
-            from computronium.experiment.kernel.evaluate import (
-                _primary_domain_metric_key,
-                clears_task_bar,
-                task_pass_bar,
-            )
-
-            bar = task_pass_bar(task_id)
-            if bar is not None:
-                # The bar names the task's primary metric key ("val_ppl" for an
-                # LM task), so the value is read through the same mapping the
-                # evaluator uses — comparing val_acc to a perplexity bar is how
-                # this test misread every non-vision task.
-                values = metrics.to_dict()
-                values.setdefault(
-                    bar.metric_key,
-                    values.get(
-                        _primary_domain_metric_key(task.domain_type),
-                        metrics.accuracy,
-                    ),
-                )
-                assert clears_task_bar(bar, values), (
-                    f"{spec.id} on {family} ({task_id}): "
-                    f"{bar.metric_key} {values[bar.metric_key]:.4f} misses "
-                    f"{bar.value:.4f}"
-                )
-            else:
-                # No bar defined - just check above chance
-                chance = 1.0 / task.output_dim if task.output_dim > 1 else 0.5
-                assert metrics.accuracy > chance, (
-                    f"{spec.id} on {family} ({task_id}): "
-                    f"accuracy {metrics.accuracy:.4f} <= chance {chance:.4f}"
-                )
-
-            return  # First family passed, done
-
+            _run_cell(spec, family, task, cell, rung)
         except Exception as e:
-            if "compose failed" in str(e):
-                raise
-            pytest.fail(f"{spec.id} on {family} ({task_id}): {e}")
+            pytest.fail(f"{spec.id} on {family} ({rung.task_id}): {e}")
+
+        return  # First family passed, done
 
     # If we got here, all families were skipped (all gaps)
     # This is OK - the gaps are documented

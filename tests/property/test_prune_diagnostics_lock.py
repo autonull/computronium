@@ -56,8 +56,8 @@ def _spec(
 
 
 def test_a_void_declaration_names_its_constraint() -> None:
-    """Gradient credit cannot compute recurrent weight grads (declared void)."""
-    spec = _spec()
+    """Diffusion dynamics cannot form a gradient from its settled state (declared void)."""
+    spec = _spec(dynamics="diffusion")
     space = search_space_from_spec(spec, tasks=("mnist",))
     rejections: Counter[str] = Counter()
     cells = list(
@@ -72,12 +72,12 @@ def test_a_void_declaration_names_its_constraint() -> None:
     )
 
     assert cells == []
-    assert "void constraint: recurrent_instantaneous_gradient_credit" in rejections
+    assert "void constraint: diffusion_dynamics_credit" in rejections
 
 
 def test_the_planner_summary_carries_the_cause() -> None:
     """The planner a run actually uses reads the same sink."""
-    spec = _spec(plasticity=("null", "routing"))
+    spec = _spec(dynamics="diffusion", plasticity=("null", "routing"))
     space = search_space_from_spec(spec, tasks=("mnist",))
 
     for planner in (
@@ -94,7 +94,7 @@ def test_the_planner_summary_carries_the_cause() -> None:
         ),
     ):
         assert planner.propose(4, seen=set()) == []
-        assert "void constraint: recurrent_instantaneous_gradient_credit" in (
+        assert "void constraint: diffusion_dynamics_credit" in (
             planner.rejection_summary()
         )
 

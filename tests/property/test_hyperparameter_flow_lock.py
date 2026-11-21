@@ -38,8 +38,8 @@ _SLIM_AXES = (
     ),
     AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=("instantaneous",)),
     AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),
-    # A local credit: recurrent + instantaneous + gradient is void, so gradient
-    # would hide the recurrent topology from the walk.
+    # A local credit: the walk must not depend on a gradient cell, so the
+    # recurrent topology stays visible whichever dynamics the box names.
     AxisSelection(axis=StructuralAxis.CREDIT, primitives=("target_inversion",)),
     AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
 )
@@ -60,7 +60,14 @@ def _spec(**overrides: object) -> RunSpec:
 
 
 def test_a_swept_geometry_width_reaches_every_cell_it_can_size() -> None:
-    """Every cell of a budgeted run carries the width it is composed at."""
+    """Every cell of a budgeted run carries the width it is composed at.
+
+    A swept width is a ceiling: the composer shrinks it to fit the parameter
+    budget (the recurrent 133 request builds at 34 under a 10k budget), but it
+    never ignores the request. The composed width must therefore never exceed
+    the swept width, must vary with the sweep, and must reach the request
+    wherever the budget admits it.
+    """
     spec = _spec()
     assert "geometry.hidden_dim" in spec.hyperparameters  # the auto-narrow added it
     cells = generate_candidates(
@@ -68,6 +75,7 @@ def test_a_swept_geometry_width_reaches_every_cell_it_can_size() -> None:
     )
     assert cells
     shape = task_shape("digits")
+    composed_widths: dict[str, list[tuple[int, int]]] = {}
     for coordinate, schedule in cells:
         assert "geometry.hidden_dim" in coordinate.params, (
             f"a swept width is missing for {coordinate.geometry}: {coordinate.params}"
@@ -80,8 +88,21 @@ def test_a_swept_geometry_width_reaches_every_cell_it_can_size() -> None:
             param_budget=schedule.param_budget,
         )
         width = int(float(coordinate.params["geometry.hidden_dim"]))
-        assert cell.config.geometry.hidden_dims[0] == width, (
-            "composition ignored the swept width"
+        composed = cell.config.geometry.hidden_dims[0]
+        assert composed <= width, (
+            f"composition exceeded the swept width for {coordinate.geometry}: "
+            f"{composed} > {width}"
+        )
+        composed_widths.setdefault(coordinate.geometry, []).append((width, composed))
+
+    assert any(
+        composed == width
+        for pairs in composed_widths.values()
+        for width, composed in pairs
+    ), "no cell built at its swept width; the sweep never reached composition"
+    for geometry, pairs in composed_widths.items():
+        assert len({composed for _, composed in pairs}) > 1, (
+            f"{geometry}: every swept width composed to one width; the sweep was ignored"
         )
 
 

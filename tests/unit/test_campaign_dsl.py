@@ -1,8 +1,8 @@
 """Unit tests for the campaign design DSL (``CampaignDSL``).
 
-Locks the behaviour refactored out of ``to_campaign_yaml``: the recurrent
-geometry filter, the axis-selection order, enum serialization, and the
-adaptive-budget plan derived from design blocks. No store, no training.
+Locks the behaviour refactored out of ``to_campaign_yaml``: the axis-selection
+order, enum serialization, and the adaptive-budget plan derived from design
+blocks. No store, no training.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _geometry_primitives(spec: CampaignDSL) -> list[str]:
     return next(a["primitives"] for a in axes if a["axis"] == "geometry")
 
 
-def test_recurrent_geometry_dropped_for_instantaneous_gradient() -> None:
+def test_recurrent_geometry_survives_instantaneous_gradient() -> None:
     spec = _spec(
         factors={
             "geometry": {
@@ -49,7 +49,7 @@ def test_recurrent_geometry_dropped_for_instantaneous_gradient() -> None:
             "credit": {"name": "credit", "values": ["gradient"]},
         }
     )
-    assert _geometry_primitives(spec) == ["mlp"]
+    assert _geometry_primitives(spec) == ["recurrent", "mlp"]
 
 
 def test_recurrent_geometry_survives_temporal_dynamics() -> None:

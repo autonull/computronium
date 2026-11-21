@@ -9,6 +9,11 @@ instrument at it.
 **S9g — the two remaining inert credits.** The probe measured the knob each law declares it reads: `beta` binds for `thermodynamic_contrast` (19.44 / 1.94 / 0.19), `feedback_scale` binds for `target_inversion` (norm ×10; the ACC ruler ties at chance, a plateau on an unimplemented row, not an inert knob), and `fd_step` binds for `zeroth_order` (76.82 / 79.42 / 115.89). `TargetInversionCredit.reads` is `{feedback_scale}`, `ZerothOrderCredit.reads` is `{estimator_samples, fd_step, credit_norm}`, and `LADDER_KNOBS["credit"]` gains `fd_step`, so the ladder sweeps `credit.fd_step` for `zeroth_order`. Re-laddered at the rows' boxes: `target_inversion` **unimplemented** (0.1032, band 0.200, 245 s); `zeroth_order` **tuned** (0.1331 / 0.1444 / 0.0998, confirm 0.2004) — its best point is its own default, so the claim is a no-power coordinate at the new knob. `sec_credit_zeroth_order.json` is re-registered (`credit.fd_step`); the four other claim boxes did not move. Lock: `test_the_ladder_withdraws_a_knob_the_law_declares_unread` (26 passed / 4 xfailed in the ladder lock).
 **S5i — the capability suite's verdict.** The mechanism was a cost cap, not a missing verdict: four credit rows trained through the loader lane past the 120 s timeout at one epoch. `TaskBatches` now caps the loader lane with `batches_per_epoch` (the budget bounded only `get_batch`), and the rung passes `CAPABILITY_BATCHES = 64`: the suite reports **7 failed / 67 passed / 2 xfailed in one run** (14m11s). Lock: `test_batches_per_epoch_caps_the_loader_lane`. The seven failures are filed as one class (S5j): the rung builds its own `_base_coordinate`, so four rows train a box the declared space refuses and three cost rows exceed the rung's budget.
 
+**Progress:** [2026-11-21] ✅ **S5k CLOSED (the recurrent geometry trains under instantaneous gradient)** — the declared space voided `recurrent × instantaneous × gradient` because "the recurrent weights are not in the feedforward loss graph". The mechanism was an off-by-one, not a law: `RecurrentGeometry.forward` and `forward_with_intermediates` applied the recurrent connection with `i < len(self._layers) - 2`, so the **last hidden layer never touched it**. A one-hidden-layer geometry was fully disconnected, and `GradientCredit`'s no-zero-fill contract raised; two hidden layers accidentally reached the weight through the first hidden, which hid the defect from the map. The condition is now `- 1` (after every hidden layer, before the readout), so depth 1 and depth 2 both carry the weight. The void constraint `recurrent_instantaneous_gradient_credit` and the duplicate `SystemConfig` validator are deleted; `campaign_dsl._geometry_compatible`/`_valid_geometries` — a second copy of the same rule — are deleted with them. Re-screened at the sequence base: `geometry.recurrent` now runs `instantaneous`, **ppl 4.03 / val_acc 0.445 / 11.2 s** (was ppl 578.9 at `energy_minimization`); `test_primitive_on_declared_families[primitive.geometry.recurrent]` passes. The other maps holding a recurrent cell were re-screened on their axis: rl 47.1 reward and continual 0.399 acc (`geometry.recurrent`, now `instantaneous`); neuromorphic `quantized_adam` stays measured. One cost row moved: the corrected recurrence makes vision `state_dynamics.diffusion` exceed its 60 s L0 cell cap, so that row is now `refused: cost cap` (a cost row, not a defect; the map is 47 measured / 27 refused / 1 defective). The suite also exposed a seed defect in the S5j rung: it read the row's epochs, batch size and limit but seeded the trainer with 42, so `quantized_adam` on `spiking_mnist` measured 0.0911 against the map row's 0.110 at seed 0. `Rung.seed` now travels from the box and `seed_everything(rung.seed)` runs before compose; the row passes. Locks: `test_recurrent_geometry_lock.py` (declared legal; the recurrent weight moves at depth 1 and 2), `test_a_measured_row_runs_at_its_box_not_the_compose_default` also asserts the seed, plus the updated search-space, prune-diagnostics and campaign-DSL locks (**122 passed / 4 skipped / 3 xfailed**).
+**Suite at the priced cell: 62 passed / 14 skipped / 0 failed** — the 4-worker run's 7 failures were 300 s timeouts under CPU contention (one cell logged 261 s/epoch); the same seven rows pass serially (`7 passed, 69 deselected in 3m51s`). A timeout is a cost row, not a capability verdict.
+
+**Progress:** [2026-11-21] ✅ **S5j CLOSED (the capability rung reads the row's screened box)** — the rung built its coordinate from `_AXIS_DEFAULTS` and `primitive_id.split(".")[1]`, so `parameter_update` rows never varied the update axis, graph rows crashed in the standard trainer, and a box the declared space refuses still trained. `tests/primitives/test_primitive_capability.py` now reads the family map's row (`sec_claims.map_rows`), rebuilds it with `screen_coordinate`, asks `_is_legal` before training, and runs a measured row at its box's `epochs`, `batch_size`, `batch_limit` and `seed`; a non-measured row is refused by name. The graph lane uses `GraphSystemTrainer`; the compose shape is the task's real `input_dim` (not `(1, (C,H,W))`); error-blind credits read the primitive key (not the display name); and LM rows compare `perplexity` to the vocabulary (not accuracy). Locks: `test_capability_rung_lock.py` (7: row identity, refused row, params-less row, illegal measured box, priced epochs, fallback, `map_rows` key). The suite result is the S5k paragraph above.
+
 **Progress:** [2026-11-20] ✅ **S9c/S9d/S9e CLOSED (the box carries its params; the settle declares its bound; the inert knob is withdrawn)** — three record defects closed in dependency order, each with a lock. Code and locks are landed; the artifacts re-derive from them (item 0 below: the re-screen, then the ladders, the registrations and the five-seed run):
 **Result at the row's box (2026-11-21, five paired seeds each): 2 claims + 1
 coordinate with a CI + 2 no-power coordinates** — `local_contrastive`
@@ -63,7 +68,7 @@ first, calibrates the nine task families, screens at boxes that can answer the
 question, and turns ten primitives into kernel rungs behind a kill test and
 parity; all nine families are accounted, the docs regenerate from the registry,
 every claim and ladder rebuilds the row's box, and the remaining work is four
-algorithm rungs (S7b) and the capability rung's own box (S5j).
+algorithm rungs (S7b).
 
 ---
 
@@ -101,7 +106,8 @@ algorithm rungs (S7b) and the capability rung's own box (S5j).
 | S9f | Deep dive's pair + registration rebuild the row's box | ✅ DONE — re-registered `sec_deep_dive.json`; 3 locks |
 | S9g | The remaining `feedback_scale` ladders declare `reads(config)` | ✅ DONE — `zeroth_order` ladders `credit.fd_step`; re-registered |
 | S5i | Capability suite reports pass / skip / fail in one run | ✅ DONE — 7 failed / 67 passed / 2 xfailed (14m11s); loader bounded |
-| S5j | Capability rung builds its own base coordinate | ❌ FILED — 4 rows train a refused box, 3 cost rows time out |
+| S5j | Capability rung reads the row's screened box | ✅ DONE — `map_rows` + `screen_coordinate` + `_is_legal`; refused rows named, measured rows at their box (seed included); suite 62/14/0 after serial re-run |
+| S5k | Recurrent geometry trains under instantaneous gradient | ✅ DONE — recurrent weight applied after every hidden layer; void constraint + duplicate DSL filter deleted; seq row ppl 4.03; 2 locks |
 
 **Session 2026-11-20 (S9).** The claim list is one runner. `sec_claims` reads
 every `tuned` ladder record across the nine maps, ranks it by the confirm
@@ -219,6 +225,10 @@ including the defective row (lock and close stamped).
 
 ### Remaining work (dependency order, 2026-11-20)
 
+**Open (2026-11-21):** **S7b** (four algorithm factories, item 4) and the
+**diffusion cost row** (item 3c). Every other entry below is closed; it stays
+for its lock and its close condition.
+
 0. **S9c artifacts — DONE (re-screen, re-ladder, re-register, re-run).** The
    vision map was re-screened at the own-knob box (`--breadth full --own-knobs
    --max-primitives 75`, ≈30 min): **48 measured / 26 refused / 1 defective**,
@@ -256,22 +266,44 @@ including the defective row (lock and close stamped).
    passes `CAPABILITY_BATCHES = 64`: 7 failed / 67 passed / 2 xfailed in one
    run (14m11s). The seven failures are filed as **S5j** (below), not fixed:
    a session cannot close a defect it discovers.
-3. **S5j — the capability rung's own box** (filed 2026-11-21, not closed).
-   `tests/primitives/test_primitive_capability.py::_base_coordinate` builds a
-   box from `_AXIS_DEFAULTS` instead of the primitive's declared box, so the
-   rung trains rows the declared space refuses and pays for a heavier cell
-   than the screen's: `geometry.graph` on cora (`'NoneType' object has no
-   attribute 'to'`), `geometry.causal_transformer` on char_ngram (`shape
-   '[32,1,0,4,0,4]' for 96 tokens`), `plasticity.conflict_adaptive` on
-   copy_task (`GradientCredit: no gradient reached target indices [2]`),
-   `plasticity.fast_weights` on char_ngram (val_ppl 42.6 misses 27.0 — the
-   map refuses that row at the base box), and `riemannian_orthogonal` /
-   `schedule_free` / `closed_form_ridge` time out at 120 s over 64 batches
-   against 4.7–8.9 s at their screened boxes. Failing test: the seven
-   `test_primitive_on_declared_families[...]` rows. Close: the rung reads
-   `_is_legal` and the row's screened box (the map's box, or a screen run
-   that writes one locally), so a refused row is refused by name and a
-   measured row runs at its priced cell.
+3. ✅ **S5j CLOSED (2026-11-21) — the capability rung's own box.**
+   `tests/primitives/test_primitive_capability.py` no longer builds a box from
+   `_AXIS_DEFAULTS` or parses the axis with `primitive_id.split(".")[1]`. It
+   reads the family map's row (`sec_claims.map_rows`), rebuilds it with
+   `screen_coordinate`, and asks `_is_legal` before training: a non-measured
+   row is refused by name; a measured row runs at its box's `epochs`,
+   `batch_size`, `batch_limit` and `seed` (the loader lane has an epoch
+   length; a `get_batch` lane keeps the 64-batch cap). The graph lane uses
+   `GraphSystemTrainer`; the compose shape is the task's real `input_dim`;
+   error-blind credits read the primitive key; LM rows compare perplexity to
+   the vocabulary. The seven S5j rows are accounted: `geometry.graph` passes
+   at its box, `geometry.causal_transformer` / `plasticity.conflict_adaptive`
+   / `plasticity.fast_weights` are refused by name, and the three update rows
+   pass at their own boxes. Locks: `test_capability_rung_lock.py` (7).
+   **Suite at the priced cell: 62 passed / 14 skipped / 0 failed** (the 4-worker
+   timeouts pass serially; the S5k paragraph above has the runs).
+3b. ✅ **S5k CLOSED (2026-11-21) — `geometry.recurrent` on `char_ngram`.**
+   The filed claim was "ppl 17,078 against chance 27; the recurrent geometry
+   cannot language-model the task". The defect was in the geometry's forward
+   pass: the recurrent connection was applied with
+   `i < len(self._layers) - 2`, which skips the **last** hidden layer, so a
+   single-hidden-layer geometry never touched its recurrent weight and
+   `GradientCredit`'s no-zero-fill contract raised. The declared space then
+   voided the whole `recurrent × instantaneous × gradient` box and forced the
+   row into `energy_minimization`, whose overconfident settle was the visible
+   failure (ppl 578.9 on the map, 1,391 / 6,238 on sampled seeds). The
+   condition is now `- 1` (apply after every hidden layer, before the readout);
+   the void constraint and its duplicate `SystemConfig` validator are deleted,
+   and the campaign DSL's second copy of the rule is deleted with them. At the
+   re-screened box the row is `instantaneous` and measures **ppl 4.03 /
+   val_acc 0.445 / 11.2 s**; `test_primitive_on_declared_families[
+   primitive.geometry.recurrent]` passes. Locks: `test_recurrent_geometry_
+   lock.py` (2: declared legal, the recurrent weight moves at depth 1 and 2),
+   plus the updated search-space / prune-diagnostics / campaign-DSL locks.
+3c. **Follow-up (cost, not a defect):** the corrected recurrence makes vision
+   `state_dynamics.diffusion` exceed the screen's 60 s L0 cell cap, so its row
+   is `refused: cost cap`. A budget-aware settle or a declared larger cap
+   re-opens it. The other recurrent rows are re-screened on their axis.
 4. **S7b (filed):** four algorithm factories still `xfail` in
    `tests/acceleration/test_backend_reach.py` — `ff` (`_attachable` refuses its
    preset, which cannot take a backend), `fast_weight` (no fast-weight kernel),
@@ -1126,6 +1158,21 @@ uv run python -m pytest tests/unit/core/test_train_task.py -q
 uv run python scripts/audit.py && uv run python scripts/audit.py --static
 uv run python -m computronium.experiment.documentation.sec_map \
   --map results/sec/map.json --out docs/sec/map.md
+# 13. S5j/S5k (DONE 2026-11-21)
+uv run python -m pytest tests/property/test_capability_rung_lock.py -q
+uv run python -m pytest tests/primitives/test_primitive_capability.py \
+  -q --tb=line -rf
+uv run python scripts/probes/s5j_capability_price.py
+# 14. S5k (DONE 2026-11-21): the recurrent weight is in the graph at every depth
+uv run python -m pytest tests/property/test_recurrent_geometry_lock.py -q
+uv run python -m computronium.experiment.sec_loop --track P0 --breadth full \
+  --axis geometry --task char_ngram --max-primitives 75 \
+  --out results/sec_sequence --device cpu
+uv run python -m pytest \
+  "tests/primitives/test_primitive_capability.py::test_primitive_on_declared_families[primitive.geometry.recurrent]" \
+  -q -n 0
+#     the four other maps holding a recurrent cell: re-screen their axis
+#     (vision dynamics, rl/continual geometry, neuromorphic update)
 ```
 
 ---

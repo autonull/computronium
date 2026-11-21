@@ -60,6 +60,7 @@ __all__ = [
     "candidate_box",
     "claim_candidates",
     "default_maps",
+    "map_rows",
     "margin_for",
     "register_claim",
     "registration_path",
@@ -78,6 +79,28 @@ DEFAULT_REGISTRATIONS: Final[Path] = Path("configs/preregistrations")
 def default_maps() -> tuple[Path, ...]:
     """Every family map, one per base task, in a stable order."""
     return tuple(sorted(Path("results").glob("sec*/map.json")))
+
+
+def map_rows(
+    maps: Iterable[Path] | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    """Every map row, keyed by its primitive and the task it names.
+
+    One primitive is screened in every family map; the row a capability rung
+    reads is the one measured on its family's base task. The row is the box,
+    so a measured row the declared space now refuses is refused by name before
+    it trains, and a row without its structural params cannot rebuild its
+    cell (TODO97 S5j).
+    """
+    rows: dict[tuple[str, str], dict[str, Any]] = {}
+    for path in default_maps() if maps is None else maps:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for primitive, row in (document.get("primitives") or {}).items():
+            box = row.get("box") or {}
+            task = str(box.get("task") or row.get("task") or "")
+            if task:
+                rows[primitive, task] = row
+    return rows
 
 
 def margin_for(task_id: str) -> float:

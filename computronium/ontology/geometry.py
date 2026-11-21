@@ -1979,7 +1979,7 @@ class RecurrentGeometry(nn.Module):
             else:
                 h = layer(h)
             # Apply recurrent connection after each hidden layer (except output)
-            if self._recurrent_weight is not None and i < len(self._layers) - 2:
+            if self._recurrent_weight is not None and i < len(self._layers) - 1:
                 # Out-of-place: in-place adds break autograd
                 h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
         return h
@@ -2081,7 +2081,7 @@ class RecurrentGeometry(nn.Module):
                 acts.append(h)
             # Apply recurrent connection after each hidden layer (except output)
             # Out-of-place: in-place adds pin the downstream settle graph
-            if self._recurrent_weight is not None and i < len(self._layers) - 2:
+            if self._recurrent_weight is not None and i < len(self._layers) - 1:
                 h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
         # Add final output if last layer was Linear (no trailing activation)
         if isinstance(self._layers[-1], nn.Linear):

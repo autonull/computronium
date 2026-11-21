@@ -192,9 +192,6 @@ def test_two_axes_are_not_locked_to_each_other() -> None:
     together, so a run declaring two dynamics x two geometries measures two
     cells and calls them four. The combinations are the property; the order
     they arrive in is not.
-
-    Note: (instantaneous, recurrent) is void with gradient credit due to
-    recurrent_instantaneous_gradient_credit constraint.
     """
     spec = _narrowed_spec(
         dynamics=("energy_minimization", "instantaneous"),
@@ -204,11 +201,11 @@ def test_two_axes_are_not_locked_to_each_other() -> None:
     cells = generate_candidates(spec, search_space_from_spec(spec), limit=64)
     pairs = {(c.dynamics, c.geometry) for c, _ in cells}
 
-    # (instantaneous, recurrent) is void with gradient credit
     assert pairs == {
         ("energy_minimization", "feedforward"),
         ("energy_minimization", "recurrent"),
         ("instantaneous", "feedforward"),
+        ("instantaneous", "recurrent"),
     }
 
 
