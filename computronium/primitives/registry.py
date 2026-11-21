@@ -209,7 +209,7 @@ _TASK_FAMILIES = {
         "neuromorphic",
     ),
     "primitive.credit_assignment.local_contrastive": ("vision",),
-    "primitive.credit_assignment.hybrid": ("vision",),
+    "primitive.credit_assignment.hybrid": ("vision", "sequence"),
     "primitive.credit_assignment.forward_tangent": ("vision", "sequence"),
     "primitive.credit_assignment.score_function": ("vision", "sequence", "tabular"),
     "primitive.credit_assignment.zeroth_order": ("vision", "sequence", "tabular"),

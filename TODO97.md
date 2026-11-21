@@ -114,6 +114,33 @@ training arm, and no repair or measurement row is open.
 | S5k | Recurrent geometry trains under instantaneous gradient | ✅ DONE — recurrent weight applied after every hidden layer; void constraint + duplicate DSL filter deleted; seq row ppl 4.03; 2 locks |
 | S7b | Every algorithm factory has a training arm | ✅ DONE — four xfails closed; `ff` preset composes the axes; 3 bound arm classes; 16 backend-reach tests |
 | 3c | Re-open the diffusion row at a declared cost | ✅ DONE — 180 s declared cap (2× measured 76.9 s cell); re-screened measured at chance; 48/26/1 |
+| S10 | Breadth exit: a second family for every credit that composes one, else a named gap | ✅ DONE — 14/17 PASS, 3 GAP (time-major), 0 unaccounted; 13 five-seed rows; hybrid's declaration widened; 5 gap locks |
+
+**Session 2026-11-21 (S10).** The breadth exit read zero qualifying records
+for nine credits because every P0 screen writes the map at L0/1 seed; the gate
+counts L2/n>=5 records only. Thirteen five-seed rows were run at each row's own
+box (`screen_coordinate`) and each family's base schedule, written to
+`experiments/breadth_*.duckdb` (13 stores). Six credits gained a second
+family: `hybrid` vision+language (0.6606–0.728 on mnist, ppl 4.28–10.20 on
+char_ngram), `forward_tangent` vision+language (0.1302–0.2293, ppl 22.36–23.95),
+`local_supervision` vision+memory (0.7716–0.7891, 0.1555–0.1715 on copy_task),
+`score_function` vision+tabular (0.6519–0.7582, 0.6667–0.8333 on iris),
+`surrogate` vision+tabular (0.8947–0.9067, 0.9667–1.0), and `zeroth_order`
+vision+language (0.1444–0.2354, ppl 22.34–23.57). `zeroth_order` on copy_task
+is **marginal**: 3/5 seeds clear the 0.125 bar (0.112–0.132), so its memory
+family is not a second family; the language cell carries the row.
+**Declaration defect fixed:** `hybrid` declared vision only although the
+credit composes on a layered sequence task; its sequence map row is measured
+(val_ppl 8.26, bound), and the declaration now names `("vision", "sequence")`.
+**The check's own gap:** `eligibility_prop`, `rtrl_reference` and
+`unbiased_rtrl` declare sequence+rl; every declared task loads a flat batch
+(`batch_layout=flat`), so the time-major sequence half has no legal cell, and
+`rl_credit_must_be_error_blind` refuses the rl half because the credits read
+error. `BREADTH_GAPS` parks them with a trigger (a declared time-major task)
+and a price (185 s per five-seed row at char_ngram's 10-epoch base); the gate
+prints GAP, keeps the exit red, and `unaccounted` is empty. Gate: **14/17
+PASS, 3 GAP, 0 unaccounted, exit 1**. Locks: `test_breadth_gap_lock.py` (5)
+plus the 8 existing breadth locks; `scripts/audit.py`: 0 findings.
 
 **Session 2026-11-20 (S9).** The claim list is one runner. `sec_claims` reads
 every `tuned` ladder record across the nine maps, ranks it by the confirm
@@ -231,11 +258,11 @@ including the defective row (lock and close stamped).
 
 ### Remaining work (dependency order, 2026-11-20)
 
-**Open (2026-11-21):** **none.** Every repair and measurement row is closed;
-the entries below stay for their locks and close conditions. What remains is
-science, not repair: the claim pool's fifth binding CI (a capability: `pc_alm`
-at a stable step, or a `zeroth_order` knob that binds) and the breadth check's
-≥2 task families. Both are named in the rows that own them, not session work.
+**Open (2026-11-21):** the breadth check's own gap and the claim pool's fifth
+binding CI — both capabilities, not repair. The nine breadth rows are
+accounted: six hold two families, three are parked by `BREADTH_GAPS` until a
+time-major task exists (their close condition is declared, not open-ended).
+The entries below stay for their locks and close conditions.
 
 0. **S9c artifacts — DONE (re-screen, re-ladder, re-register, re-run).** The
    vision map was re-screened at the own-knob box (`--breadth full --own-knobs
@@ -428,9 +455,15 @@ verdict, or a capability that works — never on "tests consolidated".
    claims are re-run at the corrected box: **2 claims + 1 CI coordinate + 2
    no-power coordinates** (S9b above). The five-CI gate is **open**: the rows
    that could add a CI are blocked by two defects, not by an algorithm.
-   **NEXT: S9c** (a row's box carries its params — re-screen, then re-ladder
-   and re-register), **S9d** (`pc_alm`'s stability capability), **S9e** (the
-   inert `credit.feedback_scale` probe) — in that order.
+   S9c (the row's box), S9d (`pc_alm`'s stability), S9e (the inert probe) and
+   S9g (the other inert credits) are ✅ closed — see items 0, 5 and the S10
+   paragraph.
+8. ✅ **S10 — breadth exit** (2026-11-21). Thirteen five-seed rows closed six of
+   the nine credits: 14/17 PASS, 3 named GAPs (time-major), 0 unaccounted;
+   `hybrid`'s declaration widened with a measured sequence row. Locks:
+   `test_breadth_gap_lock.py`; gate exits 1 on the three gaps by design.
+   **NEXT capability:** a declared time-major sequence task (the one row that
+   closes all three gaps), then the fifth claim CI (`pc_alm` at a stable step).
 
 ---
 
@@ -1028,6 +1061,9 @@ ladder runs before its family has a control; no row is closed as "gap".
     sweep.
 11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
     and the plan's counts equal the artifacts'.
+12. **Breadth exit accounted**: 14/17 error-aware credits hold ≥2 task
+    families; the 3 that cannot name a gap (a time-major task) with its
+    price; 0 unaccounted. The exit stays red until that task exists.
 
 ---
 
