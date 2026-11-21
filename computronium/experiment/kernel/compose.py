@@ -678,8 +678,11 @@ def _compose_configs_cached(
     if ccfg.requires_sequence:
         # The credit reads x (time, batch, input), so the geometry owns the
         # time axis; validate refuses a topology that cannot unroll it
-        # (TODO93 §19, the temporal axis).
-        gcfg = replace(gcfg, sequence=True)
+        # (TODO93 §19, the temporal axis). The unroll contract is one hidden
+        # Linear plus a readout plus the recurrent weight, so the depth is a
+        # consequence of the credit's declaration, not a second case table:
+        # a deeper geometry would compose and then refuse at the first step.
+        gcfg = replace(gcfg, sequence=True, hidden_dims=gcfg.hidden_dims[:1])
 
     dcfg = _build_dynamics_config(active, dynamics_name, coordinate)
     ucfg = _build_update_config(active, coordinate)

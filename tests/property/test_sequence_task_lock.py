@@ -160,3 +160,41 @@ def test_the_settle_jacobian_refuses_a_time_major_state() -> None:
         torch.randn(12, 8, 10),
     ]
     assert settle_step_operator_at_state(system, acts) is None
+
+
+def test_the_composer_gives_a_time_major_credit_one_hidden_layer() -> None:
+    """The unroll contract is the composer's rule, not the test harness's.
+
+    ``Geometry.sequence_states`` unrolls exactly two Linears and a recurrent
+    weight; a sequence cell composed at the flat default depth would compose
+    and then refuse at the first step (measured: 7 Linears). The rule reads
+    the credit's declaration: a flat credit keeps the depth the budget derived.
+    """
+    from computronium.experiment.kernel.compose import compose_configs
+    from computronium.experiment.schema.coordinate import Coordinate
+
+    def _compose(credit: str):
+        coordinate = Coordinate(
+            substrate="digital",
+            geometry="recurrent",
+            dynamics="instantaneous",
+            plasticity="null",
+            credit=credit,
+            update="adam",
+            params={},
+        )
+        return compose_configs(
+            coordinate=coordinate,
+            geometry={},
+            input_shape=(10,),
+            output_dim=10,
+            param_budget=150_000,
+        )
+
+    sequence = _compose(_TREATMENT)
+    assert sequence.geometry.sequence is True
+    assert len(sequence.geometry.hidden_dims) == 1
+
+    flat = _compose("gradient")
+    assert flat.geometry.sequence is False
+    assert len(flat.geometry.hidden_dims) > 1

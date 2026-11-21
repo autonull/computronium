@@ -103,8 +103,8 @@ def cell_config(spec: PrimitiveSpec, task_id: str = "mnist") -> SystemConfig:
     axis availability predicates).
 
     A credit that declares ``requires_sequence`` reads a time-major batch, so
-    the geometry is composed one hidden layer deep — the depth its unroll
-    contract states.
+    the composer gives the geometry the single hidden layer its unroll contract
+    states (``compose_configs``).
 
     Raises:
         PrimitiveImpossibleError: The declared space refuses the primitive's own axis
@@ -137,51 +137,18 @@ def cell_config(spec: PrimitiveSpec, task_id: str = "mnist") -> SystemConfig:
     refusal = _declared_legal(axes, task)
     config = compose(axes)
     if config is not None:
-        return _sequence_shaped(config)
+        return config
 
     companions = [axis for axis in AXES if axis != spec.axis]
     values = {axis: _axis_values(axis) for axis in companions}
     for size in (1, 2):
         config = _repair(axes, companions, values, size, compose)
         if config is not None:
-            return _sequence_shaped(config)
+            return config
     if refusal is not None:
         raise PrimitiveImpossibleError(spec.id, refusal)
     msg = f"{spec.id}: no companion combination composes a micro-cell"
     raise RuntimeError(msg)
-
-
-def _sequence_shaped(config: SystemConfig) -> SystemConfig:
-    """Give a time-major credit the single hidden layer its unroll contract states.
-
-    ``Geometry.sequence_states`` unrolls exactly two Linears and a recurrent
-    weight, so a geometry composed with more hidden layers than that refuses at
-    the first step. The depth is a consequence of the credit's declaration, not
-    a second case table.
-
-    Args:
-        config: The composed cell.
-
-    Returns:
-        The cell, one hidden layer deep when its credit reads a time axis.
-    """
-    from dataclasses import replace
-
-    from computronium.ontology.system import SystemConfig as _SystemConfig
-
-    geometry = config.geometry
-    if not config.credit.requires_sequence or len(geometry.hidden_dims) <= 1:
-        return config
-    adjusted = _SystemConfig(
-        substrate=config.substrate,
-        geometry=replace(geometry, hidden_dims=geometry.hidden_dims[:1]),
-        dynamics=config.dynamics,
-        credit=config.credit,
-        update=config.update,
-        plasticity=config.plasticity,
-    )
-    adjusted.validate()
-    return adjusted
 
 
 def _repair(

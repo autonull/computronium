@@ -53,12 +53,17 @@ def _record(
     )
 
 
-def _family(task: str) -> str:
-    return {"mnist": "vision", "cora": "graph", "copy_task": "memory"}[task]
+def _families(task: str) -> tuple[str, ...]:
+    return {
+        "mnist": ("vision",),
+        "cora": ("graph",),
+        "copy_task": ("memory",),
+        "delayed_cue": ("sequence", "continual"),
+    }[task]
 
 
 def _run(records, refusal=None):
-    return breadth_gate(records, _family, lambda _task: BAR, refusal=refusal)
+    return breadth_gate(records, _families, lambda _task: BAR, refusal=refusal)
 
 
 def test_two_families_pass_and_one_family_fails() -> None:
@@ -72,6 +77,14 @@ def test_two_families_pass_and_one_family_fails() -> None:
     assert rows["gradient"].families == (("graph", 1), ("vision", 1))
     assert rows["local_goodness"].green is False
     assert gate.green is False
+
+
+def test_a_task_that_declares_two_families_counts_for_both() -> None:
+    """One cell on a two-family task is a cell on each declared family."""
+    gate = _run([_record("local_goodness", "delayed_cue")])
+    row = next(row for row in gate.credits if row.credit == "local_goodness")
+    assert row.families == (("continual", 1), ("sequence", 1))
+    assert row.green is True
 
 
 def test_duplicate_measurement_key_counts_once() -> None:

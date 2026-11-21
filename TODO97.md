@@ -4,6 +4,11 @@
 The primitives do not. This plan repairs the primitive layer, then points the
 instrument at it.
 
+**Progress:** [2026-11-21] ✅ **S11 CLOSED (the breadth exit is green: 17/17 credits hold two families)** — the S10 gap named a row the repository already declared. `delayed_cue` is a time-major task (`batch_layout=time_major`, loader `(time, batch, features)`), and the three temporal credits compose on it. Two defects kept that row invisible:
+**a. The composer refused the cell it had just built.** `compose_configs` set `sequence=True` and kept the flat default depth, so `Geometry.sequence_states` raised at the first step ("expected two Linears and a recurrent weight, got 7 Linear(s)"). The one-hidden-layer rule lived only in the test harness (`primitives/cases._sequence_shaped`): no evaluator had ever trained a time-major cell. The composer now gives a `requires_sequence` credit the single hidden layer its unroll contract states, and the harness copy is deleted. Lock: `test_the_composer_gives_a_time_major_credit_one_hidden_layer` (one layer on a sequence credit; the derived depth on a flat one).
+**b. The gate read a second family vocabulary.** `breadth_gate` keyed families by the task's registered *domain*, while the declaration is `TaskSpecEnriched.task_families` — the one `refusal_for` composes on. The gap table already named `family="sequence"`, which is not a domain, so the table and the gate disagreed. The gate now counts every declared family: a task that declares two counts for both, and two tasks in one family still count once. Lock: `test_a_task_that_declares_two_families_counts_for_both`.
+**Rows** (`scripts/probes/s11_time_major_rows.py`, five seeds at the sequence base box 32/0): `eligibility_prop` 0.215 / 0.219 / 0.217 / 0.206 / 0.220 (1.4 s/seed), `unbiased_rtrl` 0.175 / 0.177 / 0.164 / 0.178 / 0.173 (1.0 s/seed), `rtrl_reference` 0.171 / 0.176 / 0.164 / 0.161 / 0.163 (89 s/seed; its exact Jacobian is O(time²·batch), so the row runs the 2-epoch box). All clear the 0.10 chance bar; three stores. **`comp gate breadth`: 17/17 PASS, exit 0** (was 14/17, exit 1). `BREADTH_GAPS` and `test_breadth_gap_lock.py` are deleted: with no row to park the table was a dead second declaration. `scripts/audit.py --static`: 0 findings.
+
 **Progress:** [2026-11-21] ✅ **S9f/S9g CLOSED (the deep dive's pair rebuilds the row's box; the two remaining `feedback_scale` ladders declare what they read); S5i reports a verdict** — three items in dependency order:
 **S9f — the deep dive's box (S9c follow-up).** `sec_loop._deep_dive_coordinate` now rebuilds the arm from the row's screened box (`screen_coordinate(candidate.box, ...)`), `sec_deep_dive.DeepDiveCandidate` carries that box, and `candidate_box(candidate, factor, schedule)` is the one builder: `claim_registration` commits `_box_summary(_deep_dive_coordinate(candidate, 1.0))`, `_deep_dive_setup` loads with the candidate's box (a params-less row is refused by name with the close "re-screen the row"), and `_pair_verdict` compares against the same box. `configs/preregistrations/sec_deep_dive.json` is re-registered: the map's candidate is now `state_dynamics.diffusion` at `dynamics.step_size` (the old file named `target_inversion` and the schedule alone, so it decided a run at another box). Locks: `test_the_deep_dive_pair_runs_at_the_rows_box`, `test_a_row_without_box_params_has_no_dive`, and `test_paired_ci.py`'s registration/claim assertions (11 passed).
 **S9g — the two remaining inert credits.** The probe measured the knob each law declares it reads: `beta` binds for `thermodynamic_contrast` (19.44 / 1.94 / 0.19), `feedback_scale` binds for `target_inversion` (norm ×10; the ACC ruler ties at chance, a plateau on an unimplemented row, not an inert knob), and `fd_step` binds for `zeroth_order` (76.82 / 79.42 / 115.89). `TargetInversionCredit.reads` is `{feedback_scale}`, `ZerothOrderCredit.reads` is `{estimator_samples, fd_step, credit_norm}`, and `LADDER_KNOBS["credit"]` gains `fd_step`, so the ladder sweeps `credit.fd_step` for `zeroth_order`. Re-laddered at the rows' boxes: `target_inversion` **unimplemented** (0.1032, band 0.200, 245 s); `zeroth_order` **tuned** (0.1331 / 0.1444 / 0.0998, confirm 0.2004) — its best point is its own default, so the claim is a no-power coordinate at the new knob. `sec_credit_zeroth_order.json` is re-registered (`credit.fd_step`); the four other claim boxes did not move. Lock: `test_the_ladder_withdraws_a_knob_the_law_declares_unread` (26 passed / 4 xfailed in the ladder lock).
@@ -115,6 +120,7 @@ training arm, and no repair or measurement row is open.
 | S7b | Every algorithm factory has a training arm | ✅ DONE — four xfails closed; `ff` preset composes the axes; 3 bound arm classes; 16 backend-reach tests |
 | 3c | Re-open the diffusion row at a declared cost | ✅ DONE — 180 s declared cap (2× measured 76.9 s cell); re-screened measured at chance; 48/26/1 |
 | S10 | Breadth exit: a second family for every credit that composes one, else a named gap | ✅ DONE — 14/17 PASS, 3 GAP (time-major), 0 unaccounted; 13 five-seed rows; hybrid's declaration widened; 5 gap locks |
+| S11 | The breadth exit is green: a time-major cell composes and counts its declared families | ✅ DONE — composer's sequence depth + the gate's family source; 15 seeds measured; 17/17 PASS, exit 0; gap table deleted |
 
 **Session 2026-11-21 (S10).** The breadth exit read zero qualifying records
 for nine credits because every P0 screen writes the map at L0/1 seed; the gate
@@ -258,10 +264,16 @@ including the defective row (lock and close stamped).
 
 ### Remaining work (dependency order, 2026-11-20)
 
-**Open (2026-11-21):** the breadth check's own gap and the claim pool's fifth
-binding CI — both capabilities, not repair. The nine breadth rows are
-accounted: six hold two families, three are parked by `BREADTH_GAPS` until a
-time-major task exists (their close condition is declared, not open-ended).
+**Open (2026-11-21):** the claim pool's fifth binding CI — a capability, not
+repair. The breadth exit closed (S11): all 17 error-aware credits hold two
+family rows and `comp gate breadth` exits 0. The claim pool holds 2 claims +
+1 CI coordinate + 2 no-power coordinates. The fifth CI needs a `tuned` ladder
+record whose knob binds and whose paired five seeds clear the 1 pp margin:
+`pc_alm` is the named row, its `tuned` point is its own default (no power),
+and its ×10 step is refused by the gain ceiling (S9d), so the ladder must
+find a binding rung inside `step_size * (1 + rho) < 2` (0.2 at rho 1.0) — a
+×2 rung. Trigger: a `--tuning` ladder over that rung; price: the mnist box
+per seed, then a registration committed before the first seed.
 The entries below stay for their locks and close conditions.
 
 0. **S9c artifacts — DONE (re-screen, re-ladder, re-register, re-run).** The
@@ -459,11 +471,15 @@ verdict, or a capability that works — never on "tests consolidated".
    S9g (the other inert credits) are ✅ closed — see items 0, 5 and the S10
    paragraph.
 8. ✅ **S10 — breadth exit** (2026-11-21). Thirteen five-seed rows closed six of
-   the nine credits: 14/17 PASS, 3 named GAPs (time-major), 0 unaccounted;
-   `hybrid`'s declaration widened with a measured sequence row. Locks:
-   `test_breadth_gap_lock.py`; gate exits 1 on the three gaps by design.
-   **NEXT capability:** a declared time-major sequence task (the one row that
-   closes all three gaps), then the fifth claim CI (`pc_alm` at a stable step).
+   the nine credits: 14/17 PASS, 3 named gaps (time-major), 0 unaccounted;
+   `hybrid`'s declaration widened with a measured sequence row.
+   ✅ **S11 — the breadth exit is green** (2026-11-21). The time-major task was
+   already declared (`delayed_cue`); the composer refused its cell (the
+   sequence depth lived in the test harness) and the gate read domains
+   instead of declared families. Both fixed, 15 seeds measured across the
+   three temporal credits, **17/17 PASS, exit 0**; the gap table deleted.
+   **NEXT capability:** the fifth claim CI (`pc_alm` at a binding rung inside
+   the gain ceiling), then its five paired seeds.
 
 ---
 
@@ -1061,9 +1077,8 @@ ladder runs before its family has a control; no row is closed as "gap".
     sweep.
 11. **Map and docs regenerate from one source**; `scripts/audit.py` exits 0,
     and the plan's counts equal the artifacts'.
-12. **Breadth exit accounted**: 14/17 error-aware credits hold ≥2 task
-    families; the 3 that cannot name a gap (a time-major task) with its
-    price; 0 unaccounted. The exit stays red until that task exists.
+12. **Breadth exit green**: 17/17 error-aware credits hold ≥2 declared task
+    families; 0 unaccounted, 0 parked. `comp gate breadth` exits 0.
 
 ---
 
@@ -1219,6 +1234,17 @@ uv run python -m pytest \
   -q -n 0
 #     the four other maps holding a recurrent cell: re-screen their axis
 #     (vision dynamics, rl/continual geometry, neuromorphic update)
+
+# 16. S11 (DONE 2026-11-21): the breadth exit is green
+uv run python scripts/probes/s11_time_major_rows.py \
+  --credit eligibility_prop --seeds 5 --write
+uv run python scripts/probes/s11_time_major_rows.py \
+  --credit unbiased_rtrl --seeds 5 --write
+uv run python scripts/probes/s11_time_major_rows.py \
+  --credit rtrl_reference --seeds 5 --write          # 2-epoch box, 89 s/seed
+uv run comp gate breadth                              # 17/17 PASS, exit 0
+uv run python -m pytest tests/property/test_sequence_task_lock.py -q  # 8 passed
+uv run python -m pytest tests/unit/experiment/test_breadth_gate.py -q # 9 passed
 
 # 15. S7b + 3c (DONE 2026-11-21)
 uv run python -m pytest tests/acceleration/test_backend_reach.py -q   # 16 passed
