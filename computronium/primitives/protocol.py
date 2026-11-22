@@ -82,6 +82,7 @@ class PrimitiveSpec:
     kernel_technology: (
         Literal["torch", "triton", "cuda", "torch_compile", "cupy", "numpy"] | None
     ) = None
+    kernel_status_reason: str = ""
     supported_backends: tuple[Literal["reference", "kernel"], ...] = ("reference",)
     available: bool = True
     capability_card: str = ""

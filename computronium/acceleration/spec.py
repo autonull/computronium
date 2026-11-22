@@ -158,3 +158,4 @@ class ImplementationSpec:
     task_families: tuple[str, ...] = ()
     available: bool = True
     capability_card: str = ""
+    kernel_status_reason: str = ""

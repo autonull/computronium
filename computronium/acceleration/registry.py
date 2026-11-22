@@ -172,6 +172,7 @@ def _discover() -> None:
                 task_families=spec.task_families,
                 available=spec.available,
                 capability_card=spec.capability_card,
+                kernel_status_reason=spec.kernel_status_reason,
             )
             register(impl_spec)
     except ImportError:

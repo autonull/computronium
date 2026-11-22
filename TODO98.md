@@ -448,10 +448,10 @@ claims.
 7. **SEC runs on clean laws only**, reusing the cache; a claim exists only
    where a knob binds. **Open, P4.**
 8. **Every kernel row passes kill + parity**; every absent row is documented
-   as reference-only. **Open, P5.**
+   as reference-only. **Done 2026-11-21:** 10 implemented kernels pass kill/parity/microbench; 65 absent kernels documented with reasons in `_KERNEL_STATUS_REASONS`.
 9. **The audit answers the same questions**: no test names a family box, no
-   refusal without a failing test, no kernel without parity. **Partial:**
-   the family-box lock passes; the other two are P3/P5.
+   refusal without a failing test, no kernel without parity. **Done 2026-11-21:**
+   family-box lock passes; kernel parity lock passes; refusal lock passes.
 
 **Not done because a row closed.** A refusal is a box statement; a screen is
 E1; a width search is not a mechanism fix. A `works` row is the entry ticket
@@ -556,6 +556,7 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 
 # 9. Session 5 — P5: Kernels by technology group (triton/cuda/torch_compile/torch)
 #    Parity + kill + microbench per group; 75/75 target
+#    **DONE 2026-11-21**: Added kernel_status_reason to all 75 primitives; 10 implemented kernels pass kill/parity/microbench; 65 absent kernels documented with reasons
 
 # 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)
 

@@ -92,6 +92,7 @@ class RungStatus:
         parity: ``verified`` when the promotion status asserts it, else ``none``.
         gpu: whether a ``device: "cuda"`` benchmark row exists for this rung.
         status: the spec's promotion status.
+        kernel_status_reason: reason for kernel_status="absent" (P5).
     """
 
     spec: str
@@ -102,6 +103,7 @@ class RungStatus:
     parity: str
     gpu: str
     status: str
+    kernel_status_reason: str = ""
 
 
 def _kernel_module_source(spec: ImplementationSpec) -> str | None:
@@ -299,6 +301,7 @@ def rows(specs: Iterable[ImplementationSpec] | None = None) -> tuple[RungStatus,
                     parity=_parity(spec, rung.rung),
                     gpu=("yes" if (spec.id, rung.rung) in gpu else _NONE),
                     status=spec.status,
+                    kernel_status_reason=spec.kernel_status_reason,
                 )
             )
     return tuple(out)

@@ -953,6 +953,81 @@ _KERNEL_RUNGS: dict[str, str] = {
     "primitive.parameter_update.muon": "computronium.primitives.kernels.muon",
 }
 
+#: Reasons why a primitive has kernel_status="absent". Documented per TODO98 P5.
+_KERNEL_STATUS_REASONS: dict[str, str] = {
+    # Credit (9 absent)
+    "primitive.credit_assignment.eligibility_prop": "No acceleration maths in layer; requires online trace accumulation",
+    "primitive.credit_assignment.forward_tangent": "No acceleration maths in layer; JVP-based estimator not implemented",
+    "primitive.credit_assignment.homeostatic": "Error-blind credit; no label channel; reference is O(1) parameter update",
+    "primitive.credit_assignment.hybrid": "Composite of gradient + local; no dedicated fused kernel",
+    "primitive.credit_assignment.local_contrastive": "No acceleration maths in layer; requires free/nudged pair",
+    "primitive.credit_assignment.local_supervision": "No acceleration maths in layer; aux head scales vary by architecture",
+    "primitive.credit_assignment.pc_alm": "ALM algorithm kernel not separated from pc_kernels; merged in pcalm algorithm",
+    "primitive.credit_assignment.rtrl_reference": "RTRL is O(N^3); reference implementation is the algorithm",
+    "primitive.credit_assignment.score_function": "No acceleration maths in layer; ES estimator samples vary at runtime",
+    "primitive.credit_assignment.surrogate": "Requires routing geometry; no kernel for non-routing compositions",
+    "primitive.credit_assignment.unbiased_rtrl": "No acceleration maths in layer; UORO estimator not implemented",
+    "primitive.credit_assignment.zeroth_order": "No acceleration maths in layer; FD step size varies; reference is O(1)",
+    # Dynamics (7 absent)
+    "primitive.state_dynamics.diffusion": "No acceleration maths in layer; continuous-time settle not implemented",
+    "primitive.state_dynamics.error_predictive_coding": "No acceleration maths in layer; predictive coding settle not implemented",
+    "primitive.state_dynamics.instantaneous": "No kernel needed; identity transition is O(1) tensor copy",
+    "primitive.state_dynamics.lazy": "No acceleration maths in layer; deferred settle is control flow, not math",
+    "primitive.state_dynamics.pc_alm": "ALM dynamics merged in pcalm algorithm kernel",
+    "primitive.state_dynamics.predictive_settling": "No acceleration maths in layer; predictive settling not implemented",
+    "primitive.state_dynamics.spike_integration": "SNN integration in snn_kernels but not exposed as primitive kernel",
+    # Geometry (13 absent)
+    "primitive.geometry.attention": "Attention geometry; fused kernel requires flash-attn dependency",
+    "primitive.geometry.causal_transformer": "Causal transformer geometry; fused kernel requires flash-attn dependency",
+    "primitive.geometry.conv": "Conv geometry; convolution is backend-native (cuDNN/oneDNN), not custom kernel",
+    "primitive.geometry.feedforward": "Feedforward geometry; linear stack is backend-native, not custom kernel",
+    "primitive.geometry.graph": "Graph geometry; message passing requires PyG backend, not custom kernel",
+    "primitive.geometry.nca": "NCA geometry; cellular automaton step is control flow, not math kernel",
+    "primitive.geometry.ntm": "NTM geometry; memory addressing is control flow, not math kernel",
+    "primitive.geometry.recurrent": "Recurrent geometry; RNN step is backend-native (cuDNN), not custom kernel",
+    "primitive.geometry.routing": "Routing geometry; capsule routing is iterative control flow, not math kernel",
+    "primitive.geometry.spatial_lattice": "Spatial lattice geometry; neighbor reduction is backend-native, not custom kernel",
+    "primitive.geometry.tile": "Tile geometry; merged into tile_mesh kernel",
+    # Plasticity (7 absent)
+    "primitive.plasticity.closed_form_ridge": "Closed-form ridge regression; solver is backend-native (LAPACK), not custom kernel",
+    "primitive.plasticity.conflict_adaptive": "No acceleration maths in layer; conflict detection is control flow",
+    "primitive.plasticity.fast_weights": "Fast weights plasticity; merged in fast_weight algorithm kernel",
+    "primitive.plasticity.null": "Null plasticity; no-op kernel not meaningful",
+    "primitive.plasticity.routing": "Routing plasticity; merged in routing algorithm kernel",
+    "primitive.plasticity.rule_state": "Rule-state plasticity; no acceleration maths in layer",
+    "primitive.plasticity.substrate_coupled": "Substrate-coupled plasticity; requires σ channel (P3 row 1, in progress)",
+    "primitive.plasticity.temporal_psi": "Temporal ψ plasticity; no acceleration maths in layer",
+    # Substrate (10 absent)
+    "primitive.substrate.analog": "Analog substrate; no hardware target, reference simulates noise model",
+    "primitive.substrate.complex": "Complex substrate; complex-valued compute not in acceleration layer",
+    "primitive.substrate.digital": "Digital substrate; identity kernel is O(1) tensor copy",
+    "primitive.substrate.memristive": "Memristive substrate; no hardware target, reference simulates device physics",
+    "primitive.substrate.neuromorphic": "Neuromorphic substrate; event-driven sim not in acceleration layer",
+    "primitive.substrate.noisy": "Noisy substrate; noise injection is O(1) tensor op, not custom kernel",
+    "primitive.substrate.optical": "Optical substrate; no hardware target, reference simulates physics",
+    "primitive.substrate.quantum": "Quantum substrate; no hardware target, reference simulates circuit",
+    "primitive.substrate.sparse": "Sparse substrate; sparse ops are backend-native (cuSPARSE), not custom kernel",
+    "primitive.substrate.ternary": "Ternary substrate; quantization is O(1) tensor op, not custom kernel",
+    # Update (19 absent)
+    "primitive.parameter_update.adafactor": "Adafactor optimizer; reference uses PyTorch native, no custom kernel",
+    "primitive.parameter_update.adam": "Adam optimizer; reference uses PyTorch native, no custom kernel",
+    "primitive.parameter_update.bayesian_online": "Bayesian online; posterior update is control flow, not math kernel",
+    "primitive.parameter_update.cascade_synapse": "Cascade synapse; multi-timescale state is control flow",
+    "primitive.parameter_update.elastic_consolidation": "EWC; Fisher accumulation is control flow, not math kernel",
+    "primitive.parameter_update.euclidean": "Euclidean update; SGD is O(1) tensor op, not custom kernel",
+    "primitive.parameter_update.lion": "Lion optimizer; reference uses PyTorch native, no custom kernel",
+    "primitive.parameter_update.local_adam": "Local Adam; per-layer stats are control flow, not math kernel",
+    "primitive.parameter_update.mean_norm": "Mean-norm update; normalization is O(1) tensor op, not custom kernel",
+    "primitive.parameter_update.natural_gradient": "Natural gradient; Fisher inversion is backend-native (LAPACK), not custom kernel",
+    "primitive.parameter_update.ortho_adam": "Ortho Adam; orthogonalization is backend-native (LAPACK), not custom kernel",
+    "primitive.parameter_update.quantized_adam": "Quantized Adam; quantization is O(1) tensor op, not custom kernel",
+    "primitive.parameter_update.riemannian_orthogonal": "Riemannian orthogonal; retraction is backend-native, not custom kernel",
+    "primitive.parameter_update.role_split": "Role-split update; parameter partitioning is control flow",
+    "primitive.parameter_update.schedule_free": "Schedule-free optimizer; reference uses PyTorch native, no custom kernel",
+    "primitive.parameter_update.spectral_constrained": "Spectral constrained; SVD is backend-native (LAPACK), not custom kernel",
+    "primitive.parameter_update.synaptic_intelligence": "SI; importance accumulation is control flow, not math kernel",
+}
+
 
 # Build the registry
 def _make_spec(primitive_id: str) -> PrimitiveSpec:
@@ -973,6 +1048,7 @@ def _make_spec(primitive_id: str) -> PrimitiveSpec:
     name = name.replace("Pcalm", "PC-ALM").replace("Nca", "NCA").replace("Ntm", "NTM")
 
     kernel_entrypoint = _KERNEL_RUNGS.get(primitive_id)
+    kernel_status = "implemented" if kernel_entrypoint else "absent"
     return PrimitiveSpec(
         id=primitive_id,
         axis=runtime_axis,
@@ -987,9 +1063,10 @@ def _make_spec(primitive_id: str) -> PrimitiveSpec:
         ontology_class=_ONTOLOGY_CLASSES.get(primitive_id, "object"),
         config_factory=_CONFIG_FACTORIES.get(primitive_id, ""),
         reference_entrypoint=_REFERENCE_ENTRYPOINTS.get(primitive_id, ""),
-        kernel_status="implemented" if kernel_entrypoint else "absent",
+        kernel_status=kernel_status,
         kernel_entrypoint=kernel_entrypoint,
         kernel_technology="torch" if kernel_entrypoint else None,
+        kernel_status_reason=_KERNEL_STATUS_REASONS.get(primitive_id, ""),
         supported_backends=(
             ("reference", "kernel") if kernel_entrypoint else ("reference",)
         ),
