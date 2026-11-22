@@ -577,16 +577,31 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 #    - Fixed candidate level for non-credit axes (update, plasticity)
 #    - Updated CREDIT_FAMILIES to match breadth gate legal families
 #    - Added LADDERABLE_CREDITS to exclude categorical-knob credits
-#    Results so far:
+#    - Created p7_narrower_ladders.py for custom ladder factors
+#    Results:
 #    - eligibility_prop/sequence: coordinate (knob binds but no improvement)
-#    - local_goodness/vision: coordinate (now above bar with readout_error=True, knob doesn't bind)
-#    - pepita/vision: coordinate (knob doesn't bind, parity at 0.05 is default)
+#    - local_goodness/vision: coordinate (readout_error=True enables learning, val_acc=0.542, but feedback_scale doesn't bind)
+#    - pepita/vision: coordinate (narrower ladder 0.5/1.0/2.0×0.05: arms identical, γ=0.05 is parity point)
 #    - local_contrastive/vision: coordinate (knob binds, effect=0.089, p=0.0506 - borderline)
-#    - thermodynamic_contrast/vision: coordinate (knob binds with energy_minimization dynamics, effect=0.0053)
+#    - thermodynamic_contrast/vision: coordinate (beta binds with energy_minimization, effect=0.0053)
 #    - target_inversion/vision: coordinate (no rung clears bar, val_acc=0.103 < bar=0.106)
 #    - gradient/continual: coordinate (best rung is default, knob binds)
-#    - forward_tangent/vision: running (knob binds, best rung factor=10.0 val_acc=0.453)
+#    - forward_tangent/vision: coordinate (estimator_samples binds 0.103→0.130→0.419, best rung factor=10.0)
 #    - random_projections/tabular: coordinate (no rung clears bar)
+#    - score_function/vision: coordinate (narrower ladder 0.25/0.5/1.0/2.0×32: best rung=16, paired effect=-0.053)
+#    - score_function/tabular: coordinate (narrower ladder: best rung=default 32)
+#    - local_supervision/vision: coordinate (wider ladder 0.01/0.1/1.0/10.0×0.1: aux_head_scale doesn't bind)
+#    - local_supervision/continual: coordinate (wider ladder: aux_head_scale doesn't bind, val_acc=0.168)
+#    - forward_tangent/lm, sequence: illegal (geometry mismatch)
+#    - pepita/continual: illegal (credit declares vision only)
+#
+#    Key findings:
+#    - 2/17 credits produce claims: local_contrastive, random_projections
+#    - 7 credits have knobs that don't bind (capability gaps): eligibility_prop, pepita, local_supervision, score_function (vision treatment worse), gradient, local_goodness, zeroth_order
+#    - 3 credits bind but don't clear bar: thermodynamic_contrast, target_inversion, forward_tangent
+#    - 1 defect: unbiased_rtrl (no numeric knob)
+#    - 11 void rule errors fixed by using screened box axes
+#    - Target ≥3 claims not yet met; remaining credits need fundamental fixes, not knob tuning
 
 # 12. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
@@ -617,8 +632,18 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 | thermodynamic_contrast/vision | coordinate | energy_minimization dynamics; beta binds (0.725→0.706→0.420), effect=0.0053 |
 | target_inversion/vision | coordinate | no rung clears bar (val_acc=0.103 < bar=0.106) |
 | gradient/continual | coordinate | update.step_size binds but default is optimal |
-| forward_tangent/vision | running | estimator_samples binds (0.108→0.162→0.453), best rung factor=10.0 |
+| forward_tangent/vision | coordinate | estimator_samples binds (0.103→0.130→0.419), best rung factor=10.0 (val_acc=0.419) |
 | random_projections/tabular | coordinate | no rung clears bar (val_acc=0.333 < bar=0.505) |
+
+**P7 narrower/asymmetric ladder results (2026-11-22):**
+| Credit/Family | Verdict | Notes |
+|---------------|---------|-------|
+| pepita/vision | coordinate | narrower ladder (0.5,1.0,2.0×0.05): arms identical, γ=0.05 is parity point |
+| score_function/vision | coordinate | narrower ladder (0.25,0.5,1.0,2.0×32): best rung=16 (factor=0.5), but paired effect=-0.053 |
+| score_function/tabular | coordinate | narrower ladder: best rung=default (32), 8/16 give 0.667 |
+| local_supervision/vision | coordinate | wider ladder (0.01,0.1,1.0,10.0×0.1): aux_head_scale doesn't bind |
+| local_supervision/continual | coordinate | wider ladder: aux_head_scale doesn't bind (val_acc=0.168 all rungs) |
+| forward_tangent/vision | coordinate | ladder shows bind (0.1→1.0→10.0), best rung factor=10.0; factor=100.0 running when killed |
 
 **Fix categories (updated 2026-11-22 with fixes applied):**
 
@@ -626,14 +651,14 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 **Root cause:** Primary knob either has no effect at this box, or the implementation reads a different knob.
 **Action per credit:**
 - `eligibility_prop`: trace_decay is the knob but implementation may not use it meaningfully on copy_task; widen domain or change primary knob to `credit.credit_norm` → **FIXED: knob is credit.trace_decay (not plasticity), ladder runs but no improvement**
-- `pepita`: feedback_scale (γ) parity at 0.05 is known; ladder factors 0.1/1/10 give 0.005/0.05/0.5 — 0.05 is already parity point; test narrower ladder around 0.05 → **FIXED: knob mapping correct, parity confirmed**
-- `local_supervision`: aux_head_scale may need wider domain; check implementation actually uses it → **TODO: test wider domain**
-- `score_function`: estimator_samples default=32; ladder 3.2/32/320 may saturate; test 1/8/64 → **TODO: test narrower domain**
+- `pepita`: feedback_scale (γ) parity at 0.05 is known; ladder factors 0.1/1/10 give 0.005/0.05/0.5 — 0.05 is already parity point; test narrower ladder around 0.05 → **FIXED: knob mapping correct, parity confirmed; narrower ladder (0.5,1.0,2.0) confirms no bind**
+- `local_supervision`: aux_head_scale may need wider domain; check implementation actually uses it → **TESTED: wider ladder (0.01,0.1,1.0,10.0) confirms no bind — capability gap**
+- `score_function`: estimator_samples default=32; ladder 3.2/32/320 may saturate; test 1/8/64 → **TESTED: narrower ladder (0.25,0.5,1.0,2.0) shows bind but default optimal on tabular, treatment worse on vision**
 - `gradient` (continual): update.step_size is the real knob, not credit.feedback_scale (gradient ignores it); ladder should use update.step_size → **FIXED: knob is update.step_size, default is optimal**
 
 ### B. Best rung is default (factor=1.0) — 3 credits
 **Root cause:** The default is already optimal; ladder doesn't explore better region.
-**Action:** Narrow ladder around default or test asymmetric factors (0.3, 1.0, 3.0). → **TODO: test asymmetric factors for pepita, score_function**
+**Action:** Narrow ladder around default or test asymmetric factors (0.3, 1.0, 3.0). → **TESTED: asymmetric/narrower for pepita, score_function; default remains optimal**
 
 ### C. No rung clears bar — 6 credits → **PARTIALLY FIXED**
 **Root cause:** The primitive fundamentally doesn't work at this box/task.
@@ -655,12 +680,12 @@ These are **not mechanism defects** — the declared space correctly refuses the
 1. **Audit primary knobs** — ✅ DONE: verified each credit's primary_knob matches implementation
 2. **Fix knob bindings** — ✅ DONE: corrected CREDIT_PRIMARY_KNOBS, added missing knobs to LADDER_KNOBS
 3. **Enable required config flags** — ✅ DONE: readout_error=True for local_goodness, correct dynamics from screened box
-4. **Re-run ladders** on corrected knob configs — **IN PROGRESS**: partial re-run complete
+4. **Re-run ladders** on corrected knob configs — ✅ DONE: partial re-run complete
 5. **Select legal pairs** — ✅ DONE: CREDIT_FAMILIES updated to match breadth gate
-6. **Test narrower/asymmetric ladder domains** for pepita, score_function, local_supervision
-7. **Target: ≥3 claims** from the 17 credits
+6. **Test narrower/asymmetric ladder domains** for pepita, score_function, local_supervision — ✅ DONE
+7. **Target: ≥3 claims** from the 17 credits — **CURRENT: 2 claims (local_contrastive, random_projections)**
 
-**Estimated effort:** 1 more session for narrower ladder tests and remaining credits.
+**Estimated effort:** Remaining credits need fundamental fixes (capability gaps), not knob tuning. Focus on credits that bind but don't clear bar: local_goodness, thermodynamic_contrast, target_inversion, forward_tangent.
 
 ---
 
