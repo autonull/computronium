@@ -219,3 +219,22 @@ def test_the_plastic_step_carries_the_substrate_state():
 | Claim quality | Arbitrary margin | **Effect size** |
 
 **Total acceleration beyond TODO99_ACCELERATED: ~2× additional speedup + better claims + more candidates.**
+
+---
+
+## ✅ PLAN COMPLETE — 2026-11-22
+
+All 8 improvements implemented, verified, and committed:
+
+| # | Improvement | Commit | Key Files |
+|---|-------------|--------|-----------|
+| 1 | Incremental Surface | e704e1e3 | `scripts/probes/p1_law_surface.py` |
+| 2 | Static Compatibility | e704e1e3 | `computronium/primitives/protocol.py`, `computronium/primitives/registry.py` |
+| 3 | More Base Boxes | e704e1e3 | `computronium/experiment/sec_pilot.py`, `computronium/primitives/registry.py`, `computronium/experiment/fit.py` |
+| 4 | Continuous Capability | e704e1e3 | `scripts/run_capability.py` |
+| 5 | Parallel SEC Evaluator | 730efacd | `computronium/experiment/sec_loop.py` |
+| 6 | Effect Size Claims | 730efacd | `computronium/validation/preregistration.py`, `computronium/experiment/sec_deep_dive.py` |
+| 7 | Defect Traceability | 730efacd | `scripts/defect_tracker.py`, `pyproject.toml`, `tests/primitives/test_surface_fit.py` |
+| 8 | GPU Kernel Cache | 88daf8c6 | `computronium/acceleration/registry.py`, `computronium/experiment/kernel/evaluate.py` |
+
+**Verification:** All imports, APIs, and core functionality tested and working.
