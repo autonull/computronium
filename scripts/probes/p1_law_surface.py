@@ -48,6 +48,78 @@ DEFAULT_OUT = ROOT / "results" / "p1"
 #: instead of keeping verdicts the current instrument did not produce.
 INSTRUMENT: Final[int] = 6
 
+#: File dependencies per primitive axis. A law is invalidated when any
+#: of its axis's core files change.
+AXIS_FILE_DEPS: Final[dict[str, tuple[str, ...]]] = {
+    "credit": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+    "dynamics": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+    "geometry": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+    "plasticity": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+    "substrate": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+    "update": (
+        "computronium/primitives/registry.py",
+        "computronium/primitives/cases.py",
+        "computronium/primitives/fit.py",
+        "computronium/experiment/schema/axis_specs.py",
+        "computronium/acceleration/kernels.py",
+    ),
+}
+
+
+def _file_hash(path: Path) -> str:
+    """Compute SHA256 hash of a file, or empty string if missing."""
+    if not path.exists():
+        return ""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
+def _axis_deps_hash(axis: str) -> str:
+    """Combined hash of all file dependencies for an axis."""
+    deps = AXIS_FILE_DEPS.get(axis, ())
+    hashes = [_file_hash(ROOT / dep) for dep in deps]
+    combined = "".join(sorted(hashes))
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
+
+
+def _previous_deps(out: Path) -> dict[str, str]:
+    """Load the previous run's axis dependency hashes."""
+    path = Path(out) / "surface.json"
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text())
+    return payload.get("deps", {})
+
+
 #: The calibration gate: a row the repository already declares non-pass must
 #: not come out ``works``, and one that does is the instrument's defect — the
 #: program then writes no law table. The rows are the ones this instrument
@@ -74,6 +146,7 @@ class Options:
     seed: int = 0
     out: Path = DEFAULT_OUT
     resume: bool = False
+    incremental: bool = False
     limit: int = 0
     row_budget: float = 180.0
 
@@ -400,23 +473,38 @@ def _run(options: Options) -> Report:
         return report
     selected = _select(options)
 
-    previous = (
-        {row["key"]: row for row in _previous(options.out)} if options.resume else {}
+    # Load previous rows and dependency hashes
+    previous_rows = (
+        {row["key"]: row for row in _previous(options.out)} if options.resume or options.incremental else {}
     )
+    previous_deps = _previous_deps(options.out) if options.incremental else {}
+
+    # Compute current dependency hashes per axis
+    current_deps = {axis: _axis_deps_hash(axis) for axis in AXIS_FILE_DEPS}
 
     started = time.monotonic()
     pending: list[Law] = []
     for law in selected:
         spec = _spec(law)
+        axis = spec.axis
         known = {
             "id": spec.id,
             "declaration": declaration(spec),
             "fingerprint": fingerprint(spec, BASE_BOXES[fit.family(spec)].task_id),
         }
+
+        # Check if axis dependencies changed (incremental mode)
+        deps_changed = False
+        if options.incremental:
+            prev_hash = previous_deps.get(axis, "")
+            curr_hash = current_deps.get(axis, "")
+            if prev_hash != curr_hash:
+                deps_changed = True
+
         cached = next(
             (
                 row
-                for row in previous.values()
+                for row in previous_rows.values()
                 if row["id"] == known["id"]
                 and row["declaration"] == known["declaration"]
                 and row.get("fingerprint", "") == known["fingerprint"]
@@ -428,9 +516,11 @@ def _run(options: Options) -> Report:
             ),
             None,
         )
-        if cached is not None:
+        if cached is not None and not deps_changed:
             report.rows[cached["key"]] = cached
         else:
+            if deps_changed:
+                print(f"  {law.id}: axis {axis} deps changed, re-running", file=sys.stderr)
             pending.append(law)
 
     with ProcessPoolExecutor(
@@ -453,7 +543,12 @@ def _run(options: Options) -> Report:
         entry["state"] == "works" for entry in report.calibration.values()
     ):
         report.exit_code = 1
-    _write(report)
+
+    # Save current dependency hashes
+    if options.incremental:
+        _write(report, current_deps)
+    else:
+        _write(report)
     print(
         f"{len(report.rows)} rows, {len(report.calibration)} calibration, "
         f"{time.monotonic() - started:.0f}s, exit {report.exit_code}",
@@ -532,7 +627,7 @@ def _calibrate(report: Report) -> dict[str, dict[str, Any]]:
     }
 
 
-def _write(report: Report) -> None:
+def _write(report: Report, deps: dict[str, str] | None = None) -> None:
     """Write the rows and the table: a table only when the gate reproduced.
 
     The rows are the caller's: ``_run`` merged the earlier waves in before
@@ -558,6 +653,8 @@ def _write(report: Report) -> None:
         "exit_code": report.exit_code,
         "rows": sorted(report.rows.values(), key=lambda row: (row["axis"], row["id"])),
     }
+    if deps is not None:
+        payload["deps"] = deps
     (out / "surface.json").write_text(json.dumps(payload, indent=2, default=str))
     if not calibrated:
         (out / "calibration.md").write_text(
@@ -624,6 +721,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--incremental", action="store_true", help="Only re-run laws whose axis dependencies changed")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--row-budget", type=float, default=180.0)
     options = parser.parse_args(argv)
@@ -637,6 +735,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=options.seed,
         out=options.out,
         resume=options.resume,
+        incremental=options.incremental,
         limit=options.limit,
         row_budget=options.row_budget,
     )

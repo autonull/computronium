@@ -193,6 +193,43 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
             "update": "euclidean",
         },
     ),
+    # Energy-minimization variants for credits requiring settle (TODO99 #3)
+    "graph_energy_min": BaseBox(
+        "graph",
+        "cora",
+        1,
+        1,
+        200,
+        param_budget=200_000,
+        base_coordinate={
+            "geometry": "graph",
+            "dynamics": "energy_minimization",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    ),
+    "sequence_energy_min": BaseBox(
+        "sequence",
+        "delayed_cue",
+        32,
+        0,
+        10,
+        base_coordinate={
+            "geometry": "recurrent",
+            "dynamics": "energy_minimization",
+        },
+    ),
+    "continual_energy_min": BaseBox(
+        "continual",
+        "copy_task",
+        16,
+        0,
+        5,
+        base_coordinate={
+            "plasticity": "null",
+            "dynamics": "energy_minimization",
+        },
+    ),
 })
 
 

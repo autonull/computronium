@@ -165,11 +165,13 @@ def coordinate(spec: PrimitiveSpec, lr: float | None = None) -> Coordinate:
     Returns:
         The coordinate the cell composes at.
     """
-    from computronium.experiment.sec_loop import _base_axes, _coordinate
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _coordinate
     from computronium.experiment.sec_pilot import BASE_BOXES
 
     box = BASE_BOXES[family(spec)]
-    axes = _base_axes(box.task_id)
+    axes = dict(_AXIS_DEFAULTS)
+    if box.base_coordinate:
+        axes.update(box.base_coordinate)
     axes[spec.axis] = spec.id.rsplit(".", 1)[-1]
     declared = _coordinate(axes)
     if lr is None:

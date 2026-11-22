@@ -89,6 +89,10 @@ class PrimitiveSpec:
     summary: str = ""
     invariants_notes: str = ""
     tags: tuple[str, ...] = ()
+    # Static compatibility (TODO99 #2): replaces runtime map.json lookup
+    compatible_geometries: tuple[str, ...] = ()
+    compatible_dynamics: tuple[str, ...] = ()
+    requires_readout_error: bool = False
 
 
 @runtime_checkable
