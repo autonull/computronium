@@ -1,194 +1,180 @@
-# TODO99 — Fix the Mechanisms, Then Test Them
+# TODO99 Improvements — Beyond Acceleration
 
-**Status:** 2026-11-22. Supersedes TODO98. The previous plan ran SEC on broken mechanisms. This plan fixes mechanisms first, validates capability, then claims.
-
----
-
-## The Problem (from TODO98 retrospective)
-
-| What we did | Why it didn't work |
-|-------------|-------------------|
-| P4/P7: 34 SEC ladder cells on 17 credits | Only 2 credits produced claims; 7 are capability gaps (no `modulate()`, wrong architecture) |
-| Narrower/wider ladders on same 7 credits | Knob tuning cannot fix a missing mechanism |
-| 10 primitives unmeasured, 14 capability tests skipped | Rung-1 viability never established before rung-3 claims |
-
-**The rule we ignored:** "A measurement that ends in a negative is not a deliverable; a **defect** is, because fixing it widens the system." (SEC §10) We measured negatives and called them coordinates.
+**Status:** 2026-11-22. Additional high-impact improvements that compound with the accelerated plan.
 
 ---
 
-## The Corrected Order
+## 1. Infrastructure: Single-Session Surface Re-measure
 
-```
-P3 (mechanism fixes) → Capability 75/75 (viability) → SEC (claims on working laws)
+**Problem:** Each P3 session runs `p1_law_surface.py --resume` (5 min cached) + `comp test --surface` (10 min). The surface recomputes 75 laws × 2 instruments = 150 cells.
+
+**Fix:** Add `--incremental` flag to surface CLI — only re-measure laws whose code changed.
+
+```python
+# computronium/experiment/surface/_cli/_commands.py
+# Track file hashes per law; on --incremental, only re-run laws with changed deps
 ```
 
-Not:
-```
-SEC → more SEC → maybe P3
-```
+**Saves:** 10 min/session × 4 sessions = **40 min wall-clock**. Compounds across all future sessions.
 
 ---
 
-## 1. P3: Mechanism Fixes (5 rows, 1 session each)
+## 2. Architecture: Remove the "Screened Box" Indirection
 
-| Row | Defect | Fix | Test that must pass |
-|-----|--------|-----|---------------------|
-| 1 | `plasticity.substrate_coupled`: no σ channel | Build `θ` (substrate state) in `_step_psi`; carry through `modulate()` | `test_the_plastic_step_carries_the_substrate_state` xpasses |
-| 2 | `plasticity.rule_state` (9): no `modulate()` hook | Implement `modulate(ψ, θ, state)` for each rule | Digest differs from `null` plasticity |
-| 3 | `update.*` (EWC/SI/cascade/VON): wrong step semantics | `gradient_relative` table; VON lr = `step_size`; widen domain to 1.0 | Ladder reaches 0.1 ceiling, EWC/SI reach 0.3 (0.096×) |
-| 4 | 10 credits: pseudo-gradient mismatch | Fix `pseudo_gradient_def` vs `compute_pseudo_gradient` in `ontology/credit/` | `test_primitive_contract` on pseudo-gradient count/shape |
-| 5 | 10 primitives unmeasured: no base box | Add `BASE_BOXES` for quantum, photonic, nca, conv, etc. | `test_all_75_primitives_have_measured_row` passes |
+**Problem:** `_build_box_for_family()` reads `results/sec/map.json` to get the "screened box" for compatibility. This is a runtime lookup of a static property.
 
-**Deliverable:** All 75 laws in `works` or `refused` (with failing test), zero `defect-or-gap`.
+**Fix:** Move compatibility into the primitive's identity card — declare `compatible_geometries`, `compatible_dynamics`, `requires_readout_error` as static fields. The search space filters at harvest time, not at run time.
+
+```python
+# computronium/primitives/registry.py
+class PrimitiveSpec:
+    compatible_geometries: tuple[str, ...] = ()
+    compatible_dynamics: tuple[str, ...] = ()
+    requires_readout_error: bool = False
+    # ...
+```
+
+**Eliminates:** `_build_box_for_family()`, `screen_coordinate()` lookup, map.json dependency for SEC. Makes legality a static property.
 
 ---
 
-## 2. Capability Suite: 75/75 at Rung-1 (1 session)
+## 3. Scope: Add Missing Task Families to Breadth
 
-**Gate:** `uv run python -m pytest tests/primitives/test_primitive_capability.py -q`
+**Current breadth gate:** 17 credits × 2 families = 34 cells. But some credits only have 1 legal family (e.g., `pc_alm` only tabular/vision).
 
-| Current | Target |
-|---------|--------|
-| 62 passed / 14 skipped | 75 passed |
+**Add:** 
+- `pc_alm` → graph classification (needs graph geometry + energy_minimization)
+- `thermodynamic_contrast` → sequence (needs recurrent + energy_minimization)
+- `target_inversion` → continual (needs compatible dynamics)
 
-**What "passed" means:** 1 epoch / 1 seed on minimum viable task:
-- Vision (digits/mnist): `val_acc > 0.10` (above chance 0.10)
-- Tabular (iris): `val_acc > 0.33` (above chance 0.33)
-- Graph (cora): `val_acc > 0.14` (above chance 0.14)
-- Sequence (delayed_cue): non-zero update, finite loss
-- Error-blind credits (`homeostatic`, `temporal_trace`): non-zero parameter update
+**How:** Add geometry/dynamics combos to BASE_BOXES in Session C. No new code — just composition table entries.
 
-**No SEC until this is green.** A primitive without rung-1 viability has no business in rung-3.
+**Gains:** More viable (credit, family) pairs → more claim candidates → higher chance of ≥3 claims.
 
 ---
 
-## 3. SEC: Claims on Working Laws Only (1-2 sessions)
+## 4. Process: Capability Suite as Continuous Gate
 
-**Scope:** Only credits that pass capability suite on ≥2 families (breadth gate).
+**Problem:** Capability suite runs once at Session 6. If a P3 fix breaks a previously-working primitive, we don't know until Session 6.
 
-**Current candidates (from breadth gate + P3 fixes):**
-| Credit | Families passing | Status |
-|--------|------------------|--------|
-| `local_contrastive` | vision, tabular | ✅ Claim exists |
-| `random_projections` | graph, tabular | ✅ Claim exists |
-| `forward_tangent` | lm, sequence, vision | ⚠️ Needs P3 row 4 |
-| `thermodynamic_contrast` | tabular, vision | ⚠️ Needs P3 row 5 (base box) |
-| `target_inversion` | tabular, vision | ⚠️ Needs P3 row 1 (pc_alm dynamics) |
-| `local_goodness` | tabular, vision | ⚠️ Needs P3 row 4 (lemma mode) |
-| `pc_alm` | tabular, vision | ⚠️ Needs P3 row 5 (base box) |
-| `gradient` | continual, graph, sequence, tabular, vision | ⚠️ Needs P3 row 3 (step semantics) |
-
-**Target:** ≥3 claims from credits that *train*, not from knob coordinates.
-
----
-
-## Session Plan
-
-### Session 1 — P3 Row 1: σ Channel for `substrate_coupled`
-```sh
-# Edit: computronium/experiment/sec_loop.py _step_psi
-#       computronium/ontology/plasticity/substrate_coupled.py modulate()
-uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_step_carries_the_substrate_state -v
-uv run python scripts/probes/p1_law_surface.py --only signal --resume --steps 200 --out results/p1
-uv run comp test --surface
-```
-**Exit criterion:** σ channel test xpasses; surface exits 0.
-
-### Session 2 — P3 Row 2: `rule_state` + `substrate_coupled` `modulate()`
-```sh
-# Edit: computronium/ontology/plasticity/rule_state.py (9 rules)
-#       computronium/ontology/plasticity/substrate_coupled.py modulate()
-uv run python -m pytest tests/property/test_protocol_seams.py::test_a_plastic_laws_modulation_reaches_the_digest -v
-uv run comp test --surface
-```
-**Exit criterion:** 10 plasticity laws have `modulate()`; digest differs from `null`.
-
-### Session 3 — P3 Row 3: Update step semantics + domain
-```sh
-# Edit: computronium/ontology/update/ (EWC, SI, cascade, VON)
-#       axis rows: step_size domain → 1.0
-uv run python scripts/probes/p1_law_surface.py --only signal --resume --steps 200 --out results/p1
-uv run comp test --surface
-```
-**Exit criterion:** EWC/SI reach 0.3 ceiling; VON has single lr.
-
-### Session 4 — P3 Row 4: Pseudo-gradient audit (10 credits)
-```sh
-# Edit: computronium/ontology/credit/ (fix pseudo_gradient_def)
-uv run python scripts/probes/p1_law_surface.py --only signal --resume --steps 200 --out results/p1
-uv run comp test --surface
-```
-**Exit criterion:** All 10 credits pass `test_primitive_contract` pseudo-gradient check.
-
-### Session 5 — P3 Row 5: Base boxes for 10 unmeasured primitives
-```sh
-# Edit: computronium/experiment/sec_pilot.py BASE_BOXES
-# Add: quantum, photonic, nca, conv, complex, optical, rtrl_reference, rule_state, substrate_coupled, unbiased_rtrl
-uv run python -m pytest tests/primitives/test_surface_lock.py::test_all_75_primitives_have_measured_row -v
-uv run comp test --surface
-```
-**Exit criterion:** All 75 primitives have ≥1 measured row.
-
-### Session 6 — Capability Suite 75/75
-```sh
-uv run python -m pytest tests/primitives/test_primitive_capability.py -q
-# Fix any skipped: 1 epoch / 1 seed on minimum task
-```
-**Exit criterion:** 75 passed, 0 skipped.
-
-### Session 7 — SEC on Working Laws
-```sh
-# Only credits with ≥2 viable families
-uv run python scripts/probes/p4_sec_ladders.py --out results/p4
-uv run python -m computronium.experiment.sec_claims --register --device auto
-uv run python -m computronium.experiment.sec_claims --run --device auto
-```
-**Exit criterion:** ≥3 claims from working laws.
-
----
-
-## Gates That Must Stay Green
+**Fix:** Run capability on *changed primitives only* after each P3 session.
 
 ```sh
-uv run comp gate breadth              # 17/17
-uv run python scripts/audit.py --static   # 0 findings
-uv run python -m pytest tests/primitives/test_surface_lock.py -q
-uv run python -m pytest tests/property/test_protocol_seams.py -q
-uv run python -m pytest tests/primitives/test_primitive_capability.py -q  # after Session 6
+# After Session A (plasticity fixes):
+uv run python -m pytest tests/primitives/test_primitive_capability.py -k "substrate_coupled or rule_state" -q
+
+# After Session B (update + credits):
+uv run python -m pytest tests/primitives/test_primitive_capability.py -k "bayesian_online or elastic_consolidation or local_goodness or ..." -q
 ```
 
----
-
-## What We Stop Doing (Reaffirmed)
-
-- Running SEC on primitives without rung-1 viability
-- Calling a ladder coordinate a "result" when the mechanism is a capability gap
-- Tuning knobs on credits that don't implement `modulate()` or have wrong step semantics
-- Treating "0 unaccounted rows" as progress — the 10 unmeasured primitives are the blocker
+**Gains:** Immediate feedback; no regression surprises at Session 6.
 
 ---
 
-## Definition of Done (Revised from TODO98 §5)
+## 5. Architecture: Parallel SEC Evaluator
 
-1. **Surface declared** — 75 laws, 6 seams, rule tables. ✅
-2. **All 75 laws in `works` or `refused` (with failing test)** — zero `defect-or-gap`. ❌
-3. **6/6 seams pass** — ✅
-4. **Every `defect-or-gap` closed by a fix** — P3 rows 1-5. ❌
-5. **All 75 primitives have ≥1 measured row** — 10 currently unmeasured. ❌
-6. **Capability suite 75/75 at rung-1** — 62/14 now. ❌
-7. **SEC claims on working laws only** — ≥3 claims from viable credits. ❌
-8. **75/75 kernels kill+parity** — 10 implemented, 65 documented. ✅
-9. **Audit consistency** — no per-family tests, no refusal without failing test. ✅
+**Problem:** SEC runs 5 seeds × 2 arms = 10 cells sequentially per (credit, family). At ~5 min/cell = 50 min per ladder.
+
+**Fix:** `evaluate_cell` is pure (no shared state). Use `asyncio.TaskGroup` with semaphore for GPU memory.
+
+```python
+# computronium/experiment/sec_loop.py _paired_cells
+async def _paired_cells_async(candidate, schedule, treatment, semaphore):
+    async with semaphore:
+        return await asyncio.to_thread(_measure, ...)
+```
+
+**Saves:** 50 min → **10-15 min** per ladder (4-5× speedup). Compounds across all SEC runs.
 
 ---
 
-## Estimated Effort
+## 6. Scope: Claim on "Effect Size" Not Just Margin
 
-| Phase | Sessions | Weeks |
-|-------|----------|-------|
-| P3 rows 1-5 (mechanism fixes) | 5 | 2-3 |
-| Capability 75/75 | 1 | 1 |
-| SEC on working laws | 1-2 | 1 |
-| **Total** | **7-8** | **4-5** |
+**Current:** Margin = 0.01 (1% absolute accuracy). This is arbitrary and doesn't scale.
 
-Each session = one landing (edit → gates → measurement → commit). No session runs SEC until capability gate is green.
+**Fix:** Use Cohen's d with pre-registered minimum effect size per task family:
+
+| Task Family | Min d | Rationale |
+|-------------|-------|-----------|
+| Vision (mnist) | 0.8 | Large effect detectable |
+| Tabular (iris) | 0.5 | Medium effect, small N |
+| Graph (cora) | 0.5 | Medium effect |
+| Sequence | 0.8 | High variance |
+
+**Gains:** Claims reflect practical significance, not just statistical. Avoids "claim" on 0.001 improvement with huge N.
+
+---
+
+## 7. Process: Defect-to-Fix Traceability
+
+**Problem:** Defects found in P1/P3/P4 are tracked in TODO files, not in code. No automatic link from failing test → fix → verification.
+
+**Fix:** Add `@pytest.mark.fixes("GAP-XXX")` and `@pytest.mark.verifies("GAP-XXX")` markers. CI gate: every GAP must have a verifying test that fails without the fix.
+
+```python
+# tests/primitives/test_surface_fit.py
+@pytest.mark.fixes("GAP-001")  # σ channel
+def test_the_plastic_step_carries_the_substrate_state():
+    ...
+
+# In fix commit:
+# computronium/experiment/sec_loop.py
+# FIXES GAP-001: added θ to _step_psi
+```
+
+**Gains:** Audit trail; prevents regressions; TODO becomes queryable.
+
+---
+
+## 8. Architecture: GPU Kernel Cache for SEC
+
+**Problem:** SEC runs on CPU (device="auto" → cpu). Some primitives (forward_tangent at estimator_samples=800) take 90s/cell on CPU but 5s on GPU.
+
+**Fix:** Pre-compile Triton/CUDA kernels for the 10 implemented primitives. Use them in SEC automatically.
+
+```python
+# computronium/acceleration/kernels.py
+# kernel_status="implemented" → auto-use in evaluate_cell when device=cuda
+```
+
+**Gains:** forward_tangent, local_contrastive, random_projections run 10× faster on GPU. SEC wall-clock drops from hours to minutes.
+
+---
+
+## Priority Matrix
+
+| Improvement | Effort | Impact | Dependencies | When |
+|-------------|--------|--------|--------------|------|
+| 1. Incremental surface | Low | Medium (40 min) | None | Before Session A |
+| 2. Static compatibility | Medium | High (removes indirection) | None | Session A (plasticity files) |
+| 3. More base boxes | Low | High (more claim candidates) | Session C | Session C |
+| 4. Continuous capability | Low | High (early regression) | Capability tests exist | After each session |
+| 5. Parallel evaluator | Medium | High (4-5× SEC speed) | None | Before Session D |
+| 6. Effect size claims | Low | Medium (better claims) | Preregistration format | Session D |
+| 7. Defect traceability | Medium | Medium (process) | Test markers | Ongoing |
+| 8. GPU kernels in SEC | Medium | High (10× speed) | Kernels exist | Before Session D |
+
+---
+
+## Recommended Order
+
+1. **Before Session A:** #1 (incremental surface) + #4 (continuous capability) — immediate ROI
+2. **During Session A:** #2 (static compatibility) — touches plasticity files anyway
+3. **During Session C:** #3 (more base boxes) — mechanical, high leverage
+4. **Before Session D:** #5 (parallel evaluator) + #8 (GPU kernels) — SEC speed multipliers
+5. **During Session D:** #6 (effect size claims) — preregistration format change
+6. **Ongoing:** #7 (defect traceability) — process hygiene
+
+---
+
+## Compounded Impact
+
+| Metric | Current | With All Improvements |
+|--------|---------|----------------------|
+| Session wall-clock | 2-4 hours | **30-60 min** |
+| SEC per ladder | 50 min | **10 min** |
+| Regression detection | Session 6 | **Immediate** |
+| Claim candidates | ~8 credits | **12+ credits** |
+| Claim quality | Arbitrary margin | **Effect size** |
+
+**Total acceleration beyond TODO99_ACCELERATED: ~2× additional speedup + better claims + more candidates.**
