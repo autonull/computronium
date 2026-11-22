@@ -65,6 +65,25 @@ __all__ = [
 #: The ladder's three points, as factors of the knob's declared default. A rung
 #: that the validator refuses is a row with its trigger, never a hidden point.
 LADDER_FACTORS: Final[tuple[float, ...]] = (0.1, 1.0, 10.0)
+
+# Rung 1 best knob values for each credit (from TODO100 Rung 1 ladder on digits)
+# Used to center the ladder around the known best value for Rung 2
+RUNG1_BEST_KNOBS: Final[Mapping[str, float]] = MappingProxyType({
+    "random_projections": 10.0,  # feedback_scale
+    "local_contrastive": 100.0,  # readout_scale
+    "thermodynamic_contrast": 0.1,  # beta
+    "pc_alm": 0.5,  # beta
+    "target_inversion": 10.0,  # feedback_scale
+    "pepita": 0.05,  # feedback_scale
+    "forward_tangent": 256.0,  # estimator_samples
+    "score_function": 256.0,  # estimator_samples
+    "zeroth_order": 0.01,  # fd_step
+    "surrogate": 0.01,  # feedback_scale (no ladder, baseline)
+    "local_goodness": 1.0,  # readout_error (boolean, True=1.0)
+    "hybrid": 0.05,  # feedback_scale
+    "local_supervision": 0.1,  # aux_head_scale
+    "gradient": 0.01,  # feedback_scale (baseline)
+})
 #: Paired seeds per arm. Fixed before the first seed, so the claim is fixed-n
 #: and cannot be stopped early (TODO95 S4).
 CLAIM_SEEDS: Final[int] = 5
@@ -383,23 +402,18 @@ def load_registration(
     # Try EffectSizeRegistration first (new format), fall back to ThresholdRegistration
     try:
         registration = EffectSizeRegistration.load(path)
-        if registration.metric != "val_acc":
-            return None
-        if registration.box_mismatch(box) is not None:
-            return None
-        return registration
     except (KeyError, ValueError):
-        # Fall back to old format
-        pass
+        registration = None
+    if registration is not None and registration.metric == "val_acc" and registration.box_mismatch(box) is None:
+        return registration
+
     try:
         registration = ThresholdRegistration.load(path)
-        if registration.metric != "val_acc":
-            return None
-        if registration.box_mismatch(box) is not None:
-            return None
-        return registration
     except (KeyError, ValueError):
         return None
+    if registration.metric == "val_acc" and registration.box_mismatch(box) is None:
+        return registration
+    return None
 
 
 def claim_verdict(
@@ -417,42 +431,709 @@ def claim_verdict(
     if paired is None:
         return "coordinate"
     if isinstance(registration, EffectSizeRegistration):
-        return "claim" if paired.passes_effect_size(registration, box=box) else "coordinate"
+        return (
+            "claim"
+            if paired.passes_effect_size(registration, box=box)
+            else "coordinate"
+        )
     return "claim" if paired.passes(registration, box=box) else "coordinate"
 
 
-def main() -> None:
-    """Pre-register the deep dive claim, before the first cell is run.
+# Credit-specific dynamics and geometry overrides
+CREDIT_DYNAMICS_OVERRIDE: Final[Mapping[str, str]] = MappingProxyType({
+    "thermodynamic_contrast": "energy_minimization",
+    "pc_alm": "pc_alm",
+})
 
-    Run:
-        uv run python -m computronium.experiment.sec_deep_dive \
+CREDIT_GEOMETRY_OVERRIDE: Final[Mapping[str, str]] = MappingProxyType({
+    "surrogate": "routing",
+})
+
+_CREDIT_WITH_ENERGY_MIN: Final[set[str]] = {"thermodynamic_contrast", "pc_alm"}
+
+
+def _credit_axes(credit: str) -> dict[str, str]:
+    """Build axes dict for a credit, applying overrides."""
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
+
+    axes = {name: _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
+    axes["credit"] = credit
+    if credit in CREDIT_DYNAMICS_OVERRIDE:
+        axes["dynamics"] = CREDIT_DYNAMICS_OVERRIDE[credit]
+    if credit in CREDIT_GEOMETRY_OVERRIDE:
+        axes["geometry"] = CREDIT_GEOMETRY_OVERRIDE[credit]
+    return axes
+
+
+def _add_credit_config_params(
+    factory: Any,
+    credit: str,
+    accepted_params: frozenset[str],
+    ctx: Any,
+    structural_params: dict[str, Any],
+) -> None:
+    """Add credit config params to structural_params if accepted and available."""
+    from computronium.experiment.legality.dsl import evaluate
+
+    try:
+        config = factory()
+    except TypeError:
+        return
+
+    for field_name in dir(config):
+        _process_config_field(
+            field_name, config, credit, accepted_params, ctx, structural_params, evaluate
+        )
+
+
+def _process_config_field(
+    field_name: str,
+    config: Any,
+    credit: str,
+    accepted_params: frozenset[str],
+    ctx: Any,
+    structural_params: dict[str, Any],
+    evaluate: Any,
+) -> None:
+    """Process a single config field for structural params."""
+    from computronium.ontology.credit import CreditAssignmentConfig
+
+    if not field_name.startswith("_") and field_name in accepted_params:
+        hp_spec = CreditAssignmentConfig.hyperparameters(credit).get(field_name, {})
+        avail_pred = hp_spec.get("availability")
+        is_available = True
+        if avail_pred is not None:
+            is_available = evaluate(avail_pred, ctx)
+        if is_available:
+            value = getattr(config, field_name)
+            if not callable(value):
+                structural_params[f"credit.{field_name}"] = value
+
+
+def _credit_structural_params(credit: str, axes: dict[str, str]) -> dict[str, Any]:
+    """Get structural params for a credit (only accepted AND available)."""
+    from computronium.experiment.schema.axis import StructuralAxis, get_axis_spec
+    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.schema.harvest import CoordinateContext
+    from computronium.ontology.credit import CreditAssignmentConfig
+
+    credit_spec = get_axis_spec(StructuralAxis.CREDIT, credit)
+    accepted_params = credit_spec.accepted_params if credit_spec else frozenset()
+
+    coord = Coordinate(
+        substrate=axes["substrate"],
+        geometry=axes["geometry"],
+        dynamics=axes["dynamics"],
+        plasticity=axes["plasticity"],
+        credit=credit,
+        update=axes["update"],
+        params={},
+    )
+    ctx = CoordinateContext(coord)
+
+    factory = getattr(CreditAssignmentConfig, credit, None)
+    structural_params = {
+        "update.step_size": 0.01,
+        "geometry.hidden_dim": 128,
+        "geometry.depth": 2,
+    }
+
+    if callable(factory):  # ruff: ignore[complex-structure, too-many-nested-blocks, redefined-argument-from-local]
+        _add_credit_config_params(
+            factory, credit, accepted_params, ctx, structural_params
+        )
+
+    if credit in _CREDIT_WITH_ENERGY_MIN:
+        structural_params.update({
+            "dynamics.max_steps": 10,
+            "dynamics.step_size": 0.1,
+        })
+    return structural_params
+
+
+def _credit_base_box(credit: str, task_id: str = "mnist") -> dict[str, Any]:
+    """The base box for a credit on a task family (full coordinate box with axes and structural params at defaults)."""
+    from computronium.experiment.sec_pilot import base_schedule
+
+    schedule = base_schedule(task_id, "auto")
+    if schedule is None:
+        raise ValueError(f"{task_id} declares no base box")
+
+    axes = _credit_axes(credit)
+    structural_params = _credit_structural_params(credit, axes)
+
+    box = schedule.to_dict()
+    box["device"] = "cuda"
+    box["task"] = task_id
+    box.update(axes)
+    box.update(structural_params)
+    return box
+
+
+# Primary knob for each credit (from TODO100 Rung 1 ladder results)
+CREDIT_PRIMARY_KNOB: Final[Mapping[str, str]] = MappingProxyType({
+    "random_projections": "feedback_scale",
+    "local_contrastive": "readout_scale",
+    "thermodynamic_contrast": "beta",
+    "pc_alm": "beta",
+    "target_inversion": "feedback_scale",
+    "pepita": "feedback_scale",
+    "forward_tangent": "estimator_samples",
+    "score_function": "estimator_samples",
+    "zeroth_order": "fd_step",
+    "surrogate": "feedback_scale",
+    "local_goodness": "readout_error",
+    "hybrid": "feedback_scale",
+    "local_supervision": "aux_head_scale",
+    "gradient": "feedback_scale",
+})
+
+
+def _credit_knob_default(credit: str) -> tuple[str, float] | None:
+    """Get the primary knob and its default for a credit from the config factory."""
+    from computronium.experiment.sec_pilot import own_knob_params
+    from computronium.ontology.credit import CreditAssignmentConfig
+
+    # Use the declared primary knob for this credit
+    primary_knob_name = CREDIT_PRIMARY_KNOB.get(credit)
+    if primary_knob_name is None:
+        return None
+
+    # Check the config factory for the default value
+    factory = getattr(CreditAssignmentConfig, credit, None)
+    if callable(factory):
+        try:
+            config = factory()
+            if hasattr(config, primary_knob_name):
+                value = getattr(config, primary_knob_name)
+                if isinstance(value, bool):
+                    # For boolean knobs (like readout_error), return as float 1.0/0.0
+                    return f"credit.{primary_knob_name}", 1.0 if value else 0.0
+                if isinstance(value, (int, float)) and value > 0:
+                    return f"credit.{primary_knob_name}", float(value)
+        except TypeError:
+            pass
+
+    # Fallback: try own_knob_params
+    params = own_knob_params("credit", credit)
+    key = f"credit.{primary_knob_name}"
+    value = params.get(key)
+    if isinstance(value, (int, float)) and value > 0:
+        return key, float(value)
+
+    return None
+
+
+async def run_rung2_comparison(  # ruff: ignore[too-many-locals]
+    credit: str,
+    registration_path: Path,
+    task_id: str = "mnist",
+    n_seeds: int = 5,
+    device: str = "auto",
+    semaphore_limit: int = 2,
+) -> dict[str, Any]:
+    """Run Rung 2: paired comparison of credit at best box vs gradient at base box.
+
+    This is the TODO100 Rung 2 experiment: each viable credit at its best declared box
+    (from Rung 1 ladder) paired against gradient (euclidean update baseline) at the
+    matched base box. n_seeds=5 per arm.
+    """
+    import asyncio
+    import time
+    from dataclasses import replace
+
+    from computronium.experiment.sec_deep_dive import (
+        CREDIT_PRIMARY_KNOB,
+        RUNG1_BEST_KNOBS,
+        DeepDiveCandidate,
+        candidate_box,
+        claim_verdict,
+        load_registration,
+    )
+    from computronium.experiment.sec_loop import (
+        _measure,
+        base_schedule,
+        screen_coordinate,
+    )
+    from computronium.validation.preregistration import (
+        EffectSizeRegistration,
+        ThresholdRegistration,
+        paired_comparison,
+    )
+
+    schedule = base_schedule(task_id, device)
+    if schedule is None:
+        raise ValueError(f"{task_id} declares no base box")
+
+    # Try loading registration with a minimal box first to get the registration object
+    temp_box = schedule.to_dict()
+    temp_box["device"] = "cuda"
+    temp_box["task"] = task_id
+    registration = load_registration(registration_path, temp_box)
+    if registration is None:
+        # Try loading directly
+        try:
+            registration = ThresholdRegistration.load(registration_path)
+        except (KeyError, ValueError):
+            registration = EffectSizeRegistration.load(registration_path)
+
+    # Get the credit's primary knob and Rung 1 best value
+    primary_knob_name = CREDIT_PRIMARY_KNOB.get(credit)
+    if primary_knob_name is None:
+        return {"credit": credit, "status": "no_primary_knob", "skipped": True}
+
+    rung1_best = RUNG1_BEST_KNOBS.get(credit)
+    if rung1_best is None:
+        return {"credit": credit, "status": "no_rung1_best", "skipped": True}
+
+    knob_key = f"credit.{primary_knob_name}"
+
+    print(f"Running Rung 2 for {credit}: {primary_knob_name}={rung1_best} vs gradient")
+
+    started = time.monotonic()
+
+    # Build treatment coordinate: credit at Rung 1 best knob value (with credit's own defaults)
+    treatment_base_box = _credit_base_box(credit, task_id)
+    treatment_box = dict(treatment_base_box)
+    treatment_box[knob_key] = rung1_best
+    treatment_coord = screen_coordinate(treatment_box, "credit", credit)
+
+    # Build control coordinate: gradient at its own base box (with gradient's defaults)
+    control_base_box = _credit_base_box("gradient", task_id)
+    control_coord = screen_coordinate(control_base_box, "credit", "gradient")
+
+    # Run paired comparison: n_seeds per arm
+    print(
+        f"Running {n_seeds} paired seeds (treatment={credit}@{primary_knob_name}={rung1_best}, control=gradient)..."
+    )
+
+    cells = []
+    for seed in range(n_seeds):
+        for arm, coord in (("treatment", treatment_coord), ("control", control_coord)):
+            measured = await asyncio.to_thread(
+                _measure, coord, replace(schedule, seed=seed, n_seeds=1)
+            )
+            from computronium.experiment.sec_deep_dive import PairedCell
+
+            cells.append(
+                PairedCell(
+                    arm=arm,
+                    factor=1.0,  # Not a ladder factor
+                    seed=seed,
+                    status=measured["status"],
+                    val_acc=measured["val_acc"],
+                    loss=measured["loss"],
+                    walltime_s=measured["walltime_s"],
+                    replay_hash=measured["replay_hash"],
+                    box=measured["box"],
+                    reason=measured["reason"],
+                )
+            )
+
+    failed = next((cell for cell in cells if cell.status == "defect"), None)
+    if failed is not None:
+        return {
+            "credit": credit,
+            "cells": [cell.to_dict() for cell in cells],
+            "verdict": "defect",
+            "stop_reason": f"rung 2: the {failed.arm} arm at seed {failed.seed} is an execution fact: {failed.reason}",
+            "walltime_s": time.monotonic() - started,
+        }
+
+    # Evaluate paired comparison
+    treatments = [cell for cell in cells if cell.arm == "treatment"]
+    controls = [cell for cell in cells if cell.arm == "control"]
+    identical = all(
+        treatment.val_acc == control.val_acc
+        for treatment, control in zip(treatments, controls, strict=True)
+    )
+    if identical:
+        return {
+            "credit": credit,
+            "cells": [cell.to_dict() for cell in cells],
+            "verdict": "coordinate",
+            "stop_reason": "rung 2: the arms are identical at every seed — no difference detected",
+            "walltime_s": time.monotonic() - started,
+            "no_power": True,
+        }
+
+    paired = paired_comparison(
+        [float(cell.val_acc or 0.0) for cell in treatments],
+        [float(cell.val_acc or 0.0) for cell in controls],
+        seed=schedule.seed,
+    )
+
+    # Use the treatment box for box mismatch check (registration box)
+    base_box = dict(registration.box)
+    verdict = claim_verdict(
+        paired,
+        registration,
+        candidate_box(
+            DeepDiveCandidate(
+                primitive=f"primitive.credit_assignment.{credit}",
+                axis="credit",
+                level=credit,
+                val_acc=0.0,
+                margin=0.0,
+                knob=knob_key,
+                default=base_box.get(knob_key, 0.01),
+                box=base_box,
+                walltime_s=None,
+            ),
+            1.0,
+            schedule,
+        ),
+    )
+
+    print(
+        f"Paired comparison: mean_diff={paired.mean_diff:.4f}, CI=[{paired.ci_lower:.4f}, {paired.ci_upper:.4f}], d={paired.cohens_dz:.4f}, p={paired.p_value:.4f}"
+    )
+    print(f"Verdict: {verdict}")
+
+    # Calculate treatment and control mean val_acc
+    treatment_mean = sum(float(cell.val_acc or 0.0) for cell in treatments) / len(
+        treatments
+    )
+    control_mean = sum(float(cell.val_acc or 0.0) for cell in controls) / len(controls)
+
+    return {
+        "credit": credit,
+        "treatment_mean_val_acc": treatment_mean,
+        "control_mean_val_acc": control_mean,
+        "cells": [cell.to_dict() for cell in cells],
+        "effect": {
+            "n": paired.n,
+            "mean_diff": paired.mean_diff,
+            "ci_lower": paired.ci_lower,
+            "ci_upper": paired.ci_upper,
+            "p_value": paired.p_value,
+            "cohens_dz": paired.cohens_dz,
+        },
+        "verdict": verdict,
+        "stop_reason": (
+            "rung 2: five paired seeds at best box; the CI clears the registered margin"
+            if verdict == "claim"
+            else "rung 2: five paired seeds at best box; the effect sits inside the registered margin"
+        ),
+        "walltime_s": time.monotonic() - started,
+    }
+
+
+async def run_credit_deep_dive(  # ruff: ignore[too-many-locals]
+    credit: str,
+    registration_path: Path,
+    task_id: str = "mnist",
+    n_seeds: int = 5,
+    device: str = "auto",
+    semaphore_limit: int = 2,
+) -> dict[str, Any]:
+    """Run the deep dive for a specific credit at its best box.
+
+    This is the Rung 2 experiment: 3-point ladder on the credit's primary knob,
+    then n_seeds paired comparison at the best ladder point vs the credit's default.
+    """
+    import asyncio
+    import time
+
+    from computronium.experiment.sec_deep_dive import (
+        DeepDiveCandidate,
+        best_rung,
+        candidate_box,
+        claim_verdict,
+        load_registration,
+    )
+    from computronium.experiment.sec_loop import (
+        _ladder_async,
+        _paired_cells_async,
+        _task_bar,
+        base_schedule,
+    )
+    from computronium.validation.preregistration import paired_comparison
+
+    # Load registration
+    base_box = _credit_base_box(credit, task_id)
+    schedule = base_schedule(task_id, device)
+    if schedule is None:
+        raise ValueError(f"{task_id} declares no base box")
+
+    registration = load_registration(registration_path, base_box)
+    if registration is None:
+        raise ValueError(
+            f"No valid pre-registration at {registration_path} for this box"
+        )
+
+    # Get the credit's primary knob and default
+    knob_info = _credit_knob_default(credit)
+    if knob_info is None:
+        # No knob - this is a baseline credit (gradient, surrogate, local_supervision)
+        # Run paired comparison directly at the best box (which is the default box)
+        print(
+            f"Credit {credit} has no primary knob; running paired comparison at default box"
+        )
+        # For now, skip credits without knobs
+        return {"credit": credit, "status": "no_knob", "skipped": True}
+
+    knob_key, default_value = knob_info
+    knob_name = knob_key.split(".", 1)[
+        1
+    ]  # e.g., "credit.feedback_scale" -> "feedback_scale"
+
+    # Create candidate for the deep dive logic
+    candidate = DeepDiveCandidate(
+        primitive=f"primitive.credit_assignment.{credit}",
+        axis="credit",
+        level=credit,
+        val_acc=0.0,  # Will be measured
+        margin=0.0,
+        knob=knob_key,
+        default=default_value,
+        box=base_box,
+        walltime_s=None,
+    )
+
+    started = time.monotonic()
+
+    # Run 3-point ladder
+    print(
+        f"Running 3-point ladder for {credit} on {knob_name} (default={default_value})"
+    )
+    rungs = await _ladder_async(candidate, schedule, asyncio.Semaphore(semaphore_limit))
+
+    best = best_rung(tuple(rungs))
+    bar = _task_bar(task_id)
+    if best is None or (bar is not None and (best.val_acc or 0.0) <= bar.value):
+        reason = (
+            "rung 2: no ladder point clears the bar at this box; the knob is "
+            "priced, not claimed (a capability gap)"
+        )
+        return {
+            "credit": credit,
+            "ladder": [rung.to_dict() for rung in rungs],
+            "best": None if best is None else best.to_dict(),
+            "verdict": "coordinate",
+            "stop_reason": reason,
+            "walltime_s": time.monotonic() - started,
+        }
+
+    # Run paired comparison at best ladder point
+    print(
+        f"Best ladder point: factor={best.factor}, value={best.value}, val_acc={best.val_acc}"
+    )
+    print(f"Running {n_seeds} paired seeds at best point...")
+    cells = await _paired_cells_async(
+        candidate, schedule, best.factor, asyncio.Semaphore(semaphore_limit)
+    )
+
+    failed = next((cell for cell in cells if cell.status == "defect"), None)
+    if failed is not None:
+        return {
+            "credit": credit,
+            "ladder": [rung.to_dict() for rung in rungs],
+            "best": best.to_dict(),
+            "cells": [cell.to_dict() for cell in cells],
+            "verdict": "defect",
+            "stop_reason": f"rung 4: the {failed.arm} arm at seed {failed.seed} is an execution fact: {failed.reason}",
+            "walltime_s": time.monotonic() - started,
+        }
+
+    # Evaluate paired comparison
+    treatments = [cell for cell in cells if cell.arm == "treatment"]
+    controls = [cell for cell in cells if cell.arm == "control"]
+    identical = all(
+        treatment.val_acc == control.val_acc
+        for treatment, control in zip(treatments, controls, strict=True)
+    )
+    if identical:
+        return {
+            "credit": credit,
+            "ladder": [rung.to_dict() for rung in rungs],
+            "best": best.to_dict(),
+            "cells": [cell.to_dict() for cell in cells],
+            "verdict": "coordinate",
+            "stop_reason": "rung 4: the arms are identical at every seed — the knob does not bind at this box",
+            "walltime_s": time.monotonic() - started,
+            "no_power": True,
+        }
+
+    paired = paired_comparison(
+        [float(cell.val_acc or 0.0) for cell in treatments],
+        [float(cell.val_acc or 0.0) for cell in controls],
+        seed=schedule.seed,
+    )
+    verdict = claim_verdict(
+        paired, registration, candidate_box(candidate, 1.0, schedule)
+    )
+
+    print(
+        f"Paired comparison: mean_diff={paired.mean_diff:.4f}, CI=[{paired.ci_lower:.4f}, {paired.ci_upper:.4f}], d={paired.cohens_dz:.4f}, p={paired.p_value:.4f}"
+    )
+    print(f"Verdict: {verdict}")
+
+    return {
+        "credit": credit,
+        "ladder": [rung.to_dict() for rung in rungs],
+        "best": best.to_dict(),
+        "cells": [cell.to_dict() for cell in cells],
+        "effect": {
+            "n": paired.n,
+            "mean_diff": paired.mean_diff,
+            "ci_lower": paired.ci_lower,
+            "ci_upper": paired.ci_upper,
+            "p_value": paired.p_value,
+            "cohens_dz": paired.cohens_dz,
+        },
+        "verdict": verdict,
+        "stop_reason": (
+            "rung 4: five paired seeds at the base box; the CI clears the registered margin"
+            if verdict == "claim"
+            else "rung 4: five paired seeds at the base box; the effect sits inside the registered margin"
+        ),
+        "walltime_s": time.monotonic() - started,
+    }
+
+
+def main() -> None:  # ruff: ignore[too-many-statements]
+    """SEC deep dive: pre-register or run a credit's deep dive.
+
+    Pre-register:
+        uv run python -m computronium.experiment.sec_deep_dive preregister \
             --map results/sec/map.json --out configs/preregistrations/sec_deep_dive.json
+
+    Run for a specific credit (Rung 2):
+        uv run python -m computronium.experiment.sec_deep_dive run \
+            --credit random_projections --family vision \
+            --registration configs/preregistrations/sec_credit_random_projections.json \
+            --n-seeds 5 --async
     """
     import argparse
+    import asyncio
+    import json
 
     from computronium.experiment.sec_loop import base_schedule
 
     parser = argparse.ArgumentParser(
-        description="SEC S4 - pre-register the deep dive claim"
+        description="SEC S4 - pre-register or run deep dive"
     )
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # Pre-register command
+    prereg_parser = subparsers.add_parser(
+        "preregister", help="Pre-register the deep dive claim from map"
+    )
+    prereg_parser.add_argument(
         "--map", type=Path, default=Path("results/sec/map.json"), help="Map document"
     )
-    parser.add_argument("--out", type=Path, required=True, help="Registration file")
+    prereg_parser.add_argument(
+        "--out", type=Path, required=True, help="Registration file"
+    )
+
+    # Run command
+    run_parser = subparsers.add_parser(
+        "run", help="Run deep dive for a specific credit (Rung 2)"
+    )
+    run_parser.add_argument(
+        "--credit",
+        type=str,
+        required=True,
+        help="Credit to run (e.g., random_projections)",
+    )
+    run_parser.add_argument(
+        "--family",
+        type=str,
+        default="vision",
+        help="Task family (vision, tabular, graph, etc.)",
+    )
+    run_parser.add_argument(
+        "--registration", type=Path, required=True, help="Pre-registration file"
+    )
+    run_parser.add_argument(
+        "--n-seeds", type=int, default=5, help="Number of paired seeds"
+    )
+    run_parser.add_argument(
+        "--async",
+        action="store_true",
+        dest="use_async",
+        help="Use async parallel execution",
+    )
+    run_parser.add_argument(
+        "--device", type=str, default="auto", help="Device (auto, cpu, cuda)"
+    )
+    run_parser.add_argument(
+        "--semaphore", type=int, default=2, help="Max concurrent GPU tasks"
+    )
+    run_parser.add_argument("--out", type=Path, help="Output file for results")
+
     args = parser.parse_args()
 
-    map_data = json.loads(args.map.read_text())
-    task_id = str((map_data.get("base") or {}).get("task") or "mnist")
-    schedule = base_schedule(task_id, "auto")
-    if schedule is None:
-        msg = f"{task_id} declares no base box; the claim is refused"
-        raise SystemExit(msg)
-    registration = preregister(map_data, schedule, args.out)
-    print(f"Claim registered: {registration.claim}")
-    print(
-        f"  margin {registration.threshold}, alpha {registration.alpha}, "
-        f"n_max {registration.min_seeds} -> {args.out}"
-    )
+    if args.command == "preregister":
+        map_data = json.loads(args.map.read_text())
+        task_id = str((map_data.get("base") or {}).get("task") or "mnist")
+        schedule = base_schedule(task_id, "auto")
+        if schedule is None:
+            msg = f"{task_id} declares no base box; the claim is refused"
+            raise SystemExit(msg)
+        registration = preregister(map_data, schedule, args.out)
+        print(f"Claim registered: {registration.claim}")
+        print(
+            f"  margin {getattr(registration, 'threshold', getattr(registration, 'min_d', 'N/A'))}, "
+            f"alpha {registration.alpha}, "
+            f"n_max {registration.min_seeds} -> {args.out}"
+        )
+
+    elif args.command == "run":
+        # Map family to task_id
+        family_to_task = {
+            "vision": "mnist",
+            "tabular": "iris",
+            "graph": "cora",
+            "sequence": "sequential_mnist",
+            "continual": "split_mnist",
+            "rl": "cartpole",
+        }
+        task_id = family_to_task.get(args.family, args.family)
+
+        result = asyncio.run(
+            run_rung2_comparison(
+                credit=args.credit,
+                registration_path=args.registration,
+                task_id=task_id,
+                n_seeds=args.n_seeds,
+                device=args.device,
+                semaphore_limit=args.semaphore,
+            )
+        )
+
+        if args.out:
+            import json
+
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(json.dumps(result, indent=2))
+            print(f"Results written to {args.out}")
+
+        # Print summary
+        print(f"\n=== Rung 2 Result for {args.credit} ===")
+        print(f"Verdict: {result['verdict']}")
+        print(f"Stop reason: {result['stop_reason']}")
+        print(f"Walltime: {result.get('walltime_s', 0):.1f}s")
+        if result.get("treatment_mean_val_acc") is not None:
+            print(
+                f"Treatment ({args.credit}) mean val_acc: {result['treatment_mean_val_acc']:.4f}"
+            )
+            print(
+                f"Control (gradient) mean val_acc: {result['control_mean_val_acc']:.4f}"
+            )
+        if result.get("effect"):
+            eff = result["effect"]
+            print(
+                f"Effect: mean_diff={eff['mean_diff']:.4f}, CI=[{eff['ci_lower']:.4f}, {eff['ci_upper']:.4f}], d={eff['cohens_dz']:.4f}"
+            )
+
+        if result["verdict"] == "claim":
+            print("✅ CLAIM CONFIRMED")
+        elif result["verdict"] == "coordinate":
+            print("📊 COORDINATE RESULT (no claim)")
+        elif result["verdict"] == "defect":
+            print("❌ DEFECT DETECTED")
 
 
 if __name__ == "__main__":

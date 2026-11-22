@@ -1791,6 +1791,10 @@ def _measure(coord: Coordinate, run: Schedule) -> dict[str, Any]:
     record is written from the evaluation, so the replay hash is the run's
     provenance — one source read by the interaction slice and the deep dive.
     """
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+
     box = _box_summary(coord, run)
     legal, reason = _is_legal(coord, run.task_id)
     if not legal:
@@ -2176,6 +2180,7 @@ def run_p4_track(
     started = time.monotonic()
     # Use async parallel version for ladder (TODO99 #5)
     import asyncio
+
     rungs = asyncio.run(_ladder_async(candidate, schedule))
     best = best_rung(tuple(rungs))
     bar = _task_bar(schedule.task_id)
@@ -2198,6 +2203,7 @@ def run_p4_track(
 
     # Use async parallel version for 4-5x speedup (TODO99 #5)
     import asyncio
+
     cells = asyncio.run(_paired_cells_async(candidate, schedule, best.factor))
     failed = next((cell for cell in cells if cell.status == "defect"), None)
     if failed is not None:
@@ -2253,6 +2259,7 @@ async def _ladder_async(
     Runs 3 ladder points concurrently (up to semaphore limit).
     """
     import asyncio
+
     from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
 
     if semaphore is None:
@@ -2323,6 +2330,7 @@ async def _paired_cells_async(
     Runs 5 seeds × 2 arms = 10 cells concurrently (up to semaphore limit).
     """
     import asyncio
+
     from computronium.experiment.sec_deep_dive import CLAIM_SEEDS, PairedCell
 
     if semaphore is None:

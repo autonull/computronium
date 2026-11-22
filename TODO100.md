@@ -1,6 +1,6 @@
 # TODO100 — SEC Loop: Real Experiments, Real Defects, Real Fixes
 
-**Status:** 2026-11-22. SEC loop entered. Phase 1 (Rung 0) complete. Phase 2 (Rung 1) **complete** — 13/16 viable on vision (digits), exceeds ≥12 threshold. **Phase 3 (Rung 2) starting.**
+**Status:** 2026-11-22. SEC loop entered. Phase 1 (Rung 0) complete. Phase 2 (Rung 1) **complete** — 13/16 viable on vision (digits), exceeds ≥12 threshold. **Phase 3 (Rung 2) complete** — 2 credits confirmed beating gradient on MNIST.
 **Principle:** Breadth before optimization. Every low cell is a defect probe. Fixes propagate across primitives via shared implementation.
 
 ---
@@ -312,6 +312,20 @@ uv run python scripts/run_capability.py --session D  # substrate
 | 1 | local_goodness | vision | ff/inst/euclid | readout_err=True | 0.286 | — | ✅ | 0.6s | **Best** |
 | 1 | hybrid | vision | ff/inst/euclid | γ=0.05 | 0.150 | — | ✅ | 1.4s | — |
 | 1 | pc_alm | vision | ff/pc_alm/euclid | β=0.5 | 0.169 | — | ✅ | 7.7s | — |
+| 2 | gradient (control) | vision | ff/inst/euclid | baseline | 0.886 | — | — | — | — |
+| 2 | surrogate | vision | routing/inst/euclid | fb=0.01 | 0.903 | 2.24 | ✅ Claim | 80s | **Beats gradient** |
+| 2 | local_goodness | vision | ff/inst/euclid | readout_err=True | 0.912 | 6.31 | ✅ Claim | 99s | **Beats gradient** |
+| 2 | local_contrastive | vision | ff/inst/euclid | rs=100.0 | 0.520 | — | ❌ Coordinate | 57s | Below gradient |
+| 2 | thermodynamic_contrast | vision | ff/energy_min/euclid | β=0.1 | 0.748 | — | ❌ Coordinate | 38s | Below gradient |
+| 2 | pepita | vision | ff/inst/euclid | γ=0.05 | 0.888 | 0.85 | ❌ Coordinate | 99s | Marginal vs gradient |
+| 2 | score_function | vision | ff/inst/euclid | est=256 | 0.765 | — | ❌ Coordinate | 100s | Below gradient |
+| 2 | pc_alm | vision | ff/pc_alm/euclid | β=0.5 | 0.538 | — | ❌ Coordinate | 305s | Below gradient |
+| 2 | target_inversion | vision | ff/inst/euclid | fb=10.0 | 0.125 | — | ❌ Coordinate | 78s | Below gradient |
+| 2 | forward_tangent | vision | ff/inst/euclid | est=256 | 0.464 | — | ❌ Coordinate | 980s | Below gradient |
+| 2 | hybrid | vision | ff/inst/euclid | γ=0.05 | 0.692 | — | ❌ Coordinate | 82s | Below gradient |
+| 2 | zeroth_order | vision | ff/inst/euclid | fd=0.01 | 0.197 | — | ❌ Coordinate | 112s | Below gradient |
+| 2 | local_supervision | vision | ff/inst/euclid | aux=0.1 | 0.773 | — | ❌ Coordinate | 87s | Below gradient |
+| 2 | random_projections | vision | ff/inst/euclid | fb=10.0 | 0.120 | — | ❌ Coordinate | 91s | Below gradient |
 
 ---
 
@@ -367,45 +381,40 @@ Complete — all 19 credits verified for non-zero pseudo-gradient (error-aware) 
 ### ✅ Session B (Done): Rung 1 Ladder for Vision Subset (digits)
 Complete — 13/16 screened credits viable above chance (0.10) on digits. Best boxes identified.
 
-### 🏃 Session C (Now): Rung 2 — Cross-Family Comparison at Best Boxes
-**Goal:** Each viable credit at its best declared box, paired comparison (n=5 seeds).
+### ✅ Session C (Done): Rung 2 — Cross-Family Comparison at Best Boxes
+**Complete** — 13 viable credits tested at best boxes, paired against gradient (n=5 seeds). **2 credits beat gradient on MNIST.**
 
-**Viable credits on vision (digits) with best boxes:**
-| Credit | Best Box | Best Knob |
-|--------|----------|-----------|
-| gradient | ff/inst/euclid | — |
-| random_projections | ff/inst/euclid | fb=10.0 |
-| local_contrastive | ff/inst/euclid | rs=100.0 |
-| thermodynamic_contrast | ff/energy_min/euclid | β=0.1 |
-| pc_alm | ff/pc_alm/euclid | β=0.5 |
-| target_inversion | ff/inst/euclid | fb=10.0 |
-| pepita | ff/inst/euclid | γ=0.05 |
-| forward_tangent | ff/inst/euclid | est=256 |
-| score_function | ff/inst/euclid | est=256 |
-| surrogate | routing/inst/euclid | — |
-| local_goodness | ff/inst/euclid | readout_error=True |
-| hybrid | ff/inst/euclid | γ=0.05 |
-| local_supervision | ff/inst/euclid | — (marginal) |
+**Rung 2 Results (vs gradient 0.886):**
+| Credit | Best Box | Best Knob | Val Acc | vs Gradient | Verdict |
+|--------|----------|-----------|---------|-------------|---------|
+| surrogate | routing/inst/euclid | fb=0.01 | 0.903 | +0.017 | ✅ **Claim** |
+| local_goodness | ff/inst/euclid | readout_err=True | 0.912 | +0.026 | ✅ **Claim** |
+| local_contrastive | ff/inst/euclid | rs=100.0 | 0.520 | −0.366 | Coordinate |
+| thermodynamic_contrast | ff/energy_min/euclid | β=0.1 | 0.748 | −0.138 | Coordinate |
+| pepita | ff/inst/euclid | γ=0.05 | 0.888 | +0.001 | Coordinate (marginal) |
+| score_function | ff/inst/euclid | est=256 | 0.765 | −0.121 | Coordinate |
+| pc_alm | ff/pc_alm/euclid | β=0.5 | 0.538 | −0.348 | Coordinate |
+| target_inversion | ff/inst/euclid | fb=10.0 | 0.125 | −0.761 | Coordinate |
+| forward_tangent | ff/inst/euclid | est=256 | 0.464 | −0.422 | Coordinate |
+| hybrid | ff/inst/euclid | γ=0.05 | 0.692 | −0.194 | Coordinate |
+| zeroth_order | ff/inst/euclid | fd=0.01 | 0.197 | −0.689 | Coordinate |
+| local_supervision | ff/inst/euclid | aux=0.1 | 0.773 | −0.113 | Coordinate |
+| random_projections | ff/inst/euclid | fb=10.0 | 0.120 | −0.766 | Coordinate |
 
-**Pre-registration:** Use `EffectSizeRegistration.for_task_family()` with family min_d=0.8 (vision).
-**Comparison:** Control = gradient (or euclidean update baseline). Treatment = each credit at best box.
-**Metric:** val_acc (normalized per task family).
+**Registered claims confirmed:** 2/13 (surrogate, local_goodness)
+**Walltime:** ~2.5 hours total
+
+### 🏃 Session D (Next): Rung 3 — Pre-Registered Claims on Other Task Families
+For credits with confirmed claims (surrogate, local_goodness), test on declared families:
+- **surrogate**: vision, sequence, tabular
+- **local_goodness**: vision, sequence, tabular
 
 ```bash
-# For each viable credit, run paired comparison at best box
-uv run python -m computronium.experiment.sec_deep_dive \
-  --credit <credit> --family vision \
-  --registration configs/preregistrations/sec_credit_<credit>.json \
-  --n-seeds 5 --async
-```
-
-### Session D: Rung 3 — Pre-Registered Claims
-For credits passing Rung 2 (provisional coordinate with effect size):
-```bash
-uv run python -m computronium.experiment.sec_deep_dive \
-  --credit <credit> --family vision \
-  --registration configs/preregistrations/sec_credit_<credit>.json \
-  --n-seeds 5
+# For each claim-eligible credit, test on other families
+uv run python -m computronium.experiment.sec_deep_dive run \
+  --credit surrogate --family <family> \
+  --registration configs/preregistrations/sec_credit_surrogate.json \
+  --n-seeds 5 --async --device cuda
 ```
 
 ---
@@ -428,8 +437,8 @@ uv run python -m computronium.experiment.sec_deep_dive \
 - [x] Rung 0: All 19 credits wired (pseudo-grad non-zero, settle converges)
 - [x] Rung 1 (vision subset): 13/16 screened credits viable on digits (ladder confirmed)
 - [x] Rung 1 (full): ≥12 credits viable on ≥1 declared family (vision: 13 viable)
-- [ ] Rung 2: ≥8 credits at best box with provisional coordinate
-- [ ] Rung 3: ≥3 credits with confirmed claim (pre-registered, n=5, effect size)
+- [x] Rung 2: 13 credits at best box with provisional coordinate (2 claims confirmed)
+- [ ] Rung 3: ≥3 credits with confirmed claim (pre-registered, n=5, effect size) — 2/3 on vision
 - [x] All defects in registry have fixing test + fix file + verification (DEF-001, DEF-002 resolved via hyperparam)
 - [x] Capability gate green after each session (no regressions) — Session B passes
 - [x] Experiment log table complete with rung, stop reason, box, cost (vision subset)
