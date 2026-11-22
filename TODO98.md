@@ -345,11 +345,10 @@ knobs**, not one borrowed lr.
 |---|---|---|
 | 1 | `plasticity.substrate_coupled` | **Build the σ channel.** ψ ≡ σ needs a substrate state in the P-axis: `pipeline._step_psi` (`computronium/core/pipeline.py:282`) builds `CompositeState(..., substrate={})`; the joint transition carries no σ. Land σ as a registered substrate-owned state (lifecycle: registered, consolidated through `substrate.get_weight_update_operator`), then the law's `step` returns `{name: σ}` and the join is real. The failing test is already filed: `test_the_plastic_step_carries_the_substrate_state` (strict xfail → it must xpass, and the marker is deleted). Closes `gaps.GAPS["primitive.plasticity.substrate_coupled"]`. |
 | 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | **Land in P3a.** The semantics table and VON's duplicate lr are fixed (`test_penalty_and_posterior_rules_are_gradient_relative`). The ladder prices their own knobs; EWC/SI's passing point (0.3) is outside `update.step_size`'s declared domain `[1e-5, 0.1]` → **widen the domain row** (or scale the value range per step semantics) rather than report a ceiling. Target: a legal point that reaches 0.1×. |
-| 3 | `substrate.optical`, `substrate.quantum`, `substrate.complex` | **Build the base box, not a gap.** No `photonic`/`quantum`/`complex` family exists in `BASE_BOXES` (`computronium/experiment/sec_pilot.py`), so these primitives have no declared cell. Add one family row per substrate with a task whose declared shape the forward operator consumes (optical interference, quantum circuit, complex-valued). If the forward operator is a stub, that is the primitive and it ships with its parity lock. |
-| 4 | `credit.forward_tangent`, `local_goodness`, `local_contrastive`, `random_projections`, `target_inversion`, `zeroth_order`, `temporal_trace` | **Land in P3a first**, then fix the mechanism its reading names. Their accepted knobs are live: `forward_tangent` (`estimator_samples`), `zeroth_order` (`fd_step`, `estimator_samples`), `temporal_trace` (`tau_pre/tau_post`), `local_goodness`/`local_contrastive` (`feedback_lr`, `readout_error`, `beta`), `random_projections`/`target_inversion` (`feedback_scale`, `beta`). A credit that moves but cannot reach a tenth gets the pseudo-gradient path audited against its identity card (`pseudo_gradient_def`), then the path is fixed in `computronium/ontology/credit/`; only a genuinely absent estimator (JVP / target-propagation / ES) becomes one shared component, not seven gaps. |
-| 5 | `credit.eligibility_prop`, `credit.rtrl_reference`, `credit.unbiased_rtrl`, `geometry.conv`, `geometry.nca`, `plasticity.rule_state` | **Base box or refusal with failing test.** These 6 primitives appear in "no measured row anywhere" (10 total, 4 overlap with above). For each: if a base box exists but is refused by void constraint, the refusal must name the constraint *and* have a failing test that proves the mechanism cannot run on that task family. If no base box exists, add one (like P3 row 3). `rule_state` has `modulate()` missing (GAPS entry) — implement or retire with failing test. |
+| 3 | **Add 10 missing base boxes** (one PR) | **All 10 unmeasured primitives** lack a base box in `BASE_BOXES` (`sec_pilot.py`): substrates `optical`/`quantum`/`complex`, credits `eligibility_prop`/`rtrl_reference`/`unbiased_rtrl`, geometries `conv`/`nca`, plasticity `rule_state`. Add one family row per primitive with a task whose declared shape the forward operator consumes. If the forward operator is a stub, that is the primitive and it ships with its parity lock. `rule_state` also needs `modulate()` (GAPS entry) — implement or retire with failing test. |
+| 4 | **Pseudo-gradient audit: 10 credits** | The 7 defect-or-gap credits **plus** the 3 refused-by-batch-layout credits (`eligibility_prop`, `rtrl_reference`, `unbiased_rtrl`) = 10 credits. Audit each `pseudo_gradient_def` in identity card vs. actual `compute_pseudo_gradient` implementation. Fix paths in `computronium/ontology/credit/`; only genuinely absent estimators (JVP / target-propagation / ES) become shared components, not 10 gaps. |
 
-**P4 does not wait for P3.** The loop starts on the 41 clean laws now; P3's
+**P4 does not wait for P3.** The loop starts on the clean laws; P3's
 rows land in parallel.
 
 **Close:** every row is a **law that trains at a legal point**, or a named
@@ -358,24 +357,29 @@ it. A refusal is allowed only with a test that fails without it. "Coordinate
 result" is a row that trains but not to the bar: widen its declared box and
 re-measure; it is not a close.
 
-### P4 — SEC optimization (in parallel with P3, reusing the cache)
+### P4 — SEC optimization (only 17 error-aware credits × 2 families)
 
 The loop optimizes hyperparameters; it is worthless on a defective law.
+**Carrier laws (24) are validated by P1 digest + P2 seams — no SEC needed.**
 
+- Scope: **17 error-aware credits** × **≥2 task families each** (breadth gate).
 - The 675-row survey is the loop's cache: reuse a row, never re-buy it.
 - `comp gate breadth` (17/17, exit 0) stays as the cross-family evidence.
-- A claim (E3) is bought only where a knob binds and the loop will act: 5
-  rows today, not 255.
-- **First ladder:** `update.adam` on `mnist` at `update.beta2` — 3 points
-  plus 1 confirmation seed, recorded as a coordinate range.
-- **First claim:** that coordinate at a pre-registered `n_max = 5`
-  (`configs/preregistrations/` committed before the first seed).
+- A claim (E3) is bought only where a knob binds and the loop will act.
+- **First ladder:** each credit's primary knob on its cheapest family
+  (digits for vision, iris for tabular, cora for graph, pendulum for RL).
+  3 points + 1 confirmation seed, recorded as coordinate range.
+- **First claim:** that coordinate at pre-registered `n_max = 5`
+  (`configs/preregistrations/` committed before first seed).
+- **Budget:** ~60% of original (41 laws → 34 credit×family cells).
 
-### P5 — Kernels, priced per module, only for clean laws
+### P5 — Kernels, batched by technology group
 
 10 of 75 have a compiled kernel. Port a module only after its law passes P1;
-a kernel for a defective law accelerates a wrong answer. Price the first
-module's parity + kill + microbench, then price the rest from it.
+a kernel for a defective law accelerates a wrong answer.
+**Batch by technology:** `triton` group, `cuda` group, `torch.compile` group,
+`torch` reference group. Price first module's parity+kill+microbench per group,
+then replicate.
 **Target: 75/75 kernels with kill+parity locks.** Absent kernels documented
 as reference-only with `kernel_status="absent"` and reason.
 
@@ -505,31 +509,25 @@ uv run python scripts/probes/p1_law_surface.py --only all --steps 200 \
 uv run python -m pytest tests/primitives/test_surface_fit.py \
   tests/primitives/test_surface_lock.py -q
 
-# 5. P3 row 1 — NEXT SESSION: build σ channel for substrate_coupled
-#    The failing test is strict xfail; it must xpass.
+# 5. Session 1 — P3 row 1: build σ channel for substrate_coupled
 uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_step_carries_the_substrate_state -v
 
-# 6. P3 row 2: widen EWC/SI domain to 0.3 (step_size ceiling)
-#    Edit axis row for update.bayesian_online, cascade_synapse,
-#    elastic_consolidation, synaptic_intelligence
+# 6. Session 2 — P3 rows 2+3 merged: widen EWC/SI domain + add 10 base boxes
+#    Edit axis rows for bayesian_online, cascade_synapse, elastic_consolidation, synaptic_intelligence
+#    Edit BASE_BOXES in sec_pilot.py: 10 rows (optical, quantum, complex, eligibility_prop, rtrl_reference, unbiased_rtrl, conv, nca, rule_state)
 
-# 7. P3 row 3: add photonic/quantum/complex base boxes to BASE_BOXES
-#    Add task rows in sec_pilot.py with shapes matching forward operators
+# 7. Session 3 — P3 row 4: pseudo-gradient audit (10 credits)
+#    Run instrument 6 on all 10; compare pseudo_gradient_def vs. compute_pseudo_gradient; fix in ontology/credit/
 
-# 8. P3 row 4: fix credit pseudo-gradient paths (7 primitives)
-#    Audit against pseudo_gradient_def in identity cards; fix in ontology/credit/
+# 8. Session 4 — P4: SEC ladders on 17 credits × 2 families (34 cells)
+#    Pre-register n_max=5 per credit/family; run ladders; first claims
 
-# 9. P3 row 5: base boxes or refusal+test for 6 unmeasured primitives
-#    eligibility_prop, rtrl_reference, unbiased_rtrl, conv, nca, rule_state
+# 9. Session 5 — P5: Kernels by technology group (triton/cuda/torch_compile/torch)
+#    Parity + kill + microbench per group; 75/75 target
 
-# 10. P4: SEC optimization on clean laws (ladder + claim)
-#     First: update.adam on mnist at beta2, n_max=5 pre-registered
+# 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)
 
-# 11. P5: Kernels for all 75 (parity + kill + microbench per module)
-
-# 12. P6: Reproduction (E4) — control + claim on second device/profile
-
-# 13. The gates that must stay green while the work lands
+# 11. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
 uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 ```
