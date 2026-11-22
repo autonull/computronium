@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 __all__ = [
     "DEFAULT_ALPHA",
     "MIN_SEEDS",
+    "EffectSizeRegistration",
     "EquivalenceRegistration",
     "PairedComparison",
     "ThresholdRegistration",
@@ -181,6 +182,90 @@ class EquivalenceRegistration:
             return cls.from_dict(json.load(f))
 
 
+# TODO99 #6: Effect size claims (Cohen's d) per task family
+# Minimum effect sizes for practical significance (not just statistical)
+MIN_EFFECT_SIZE_BY_FAMILY: dict[str, float] = {
+    "vision": 0.8,      # Large effect detectable (MNIST)
+    "tabular": 0.5,     # Medium effect, small N (Iris)
+    "graph": 0.5,       # Medium effect (Cora)
+    "sequence": 0.8,    # High variance
+    "continual": 0.8,   # High variance
+    "rl": 0.8,          # High variance
+    "scientific": 0.5,  # Medium effect
+    "lm": 0.5,          # Medium effect
+    "neuromorphic": 0.8,
+    "quantum": 0.8,
+    "photonic": 0.8,
+}
+
+
+def _family_from_task(task_id: str) -> str:
+    """Map task_id to its family for effect size lookup."""
+    from computronium.experiment.sec_pilot import task_families
+
+    families = task_families(task_id)
+    return families[0] if families else "vision"
+
+
+@dataclass(frozen=True, slots=True)
+class EffectSizeRegistration:
+    """A pre-registered minimum effect size (Cohen's d) for one empirical claim.
+
+    Unlike ThresholdRegistration which uses absolute metric units (e.g., 1% accuracy),
+    this uses standardized effect size (Cohen's d) which is comparable across tasks
+    and sample sizes. The threshold is per task family (TODO99 #6).
+
+    Attributes:
+        claim: Statement under test (e.g. "EqProp improves MNIST by d>=0.8").
+        metric: Metric name the effect size applies to (e.g., "val_acc").
+        min_d: Minimum Cohen's d for practical significance.
+        alpha: Family-wise error rate for the confirmation test.
+        min_seeds: Minimum per-arm seed count.
+        created: ISO date the registration was committed to the repo.
+        box: The declared run box, kept because a threshold written for one box
+             does not decide a claim measured at another.
+    """
+
+    claim: str
+    metric: str
+    min_d: float
+    alpha: float = DEFAULT_ALPHA
+    min_seeds: int = MIN_SEEDS
+    created: str = ""
+    box: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for JSON registration files."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> EffectSizeRegistration:
+        """Deserialize from a registration file."""
+        box = data.get("box") or data.get("schedule")
+        return cls(
+            claim=str(data["claim"]),
+            metric=str(data["metric"]),
+            min_d=float(data["min_d"]),  # type: ignore[arg-type]
+            alpha=float(data.get("alpha", DEFAULT_ALPHA)),  # type: ignore[arg-type]
+            min_seeds=int(data.get("min_seeds", MIN_SEEDS)),  # type: ignore[arg-type]
+            created=str(data.get("created", "")),
+            box=dict(box) if isinstance(box, dict) else None,  # type: ignore[arg-type]
+        )
+
+    @classmethod
+    def load(cls, path: Path) -> EffectSizeRegistration:
+        """Load a registration from a JSON file in the repo."""
+        with path.open(encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
+
+    @classmethod
+    def for_task_family(cls, claim: str, metric: str, task_id: str, **kwargs) -> EffectSizeRegistration:
+        """Create registration with family-appropriate minimum effect size."""
+        family = _family_from_task(task_id)
+        min_d = MIN_EFFECT_SIZE_BY_FAMILY.get(family, 0.5)
+        return cls(claim=claim, metric=metric, min_d=min_d, **kwargs)
+
+
 @dataclass(frozen=True, slots=True)
 class PairedComparison:
     """Paired-difference result between matched treatment/control seeds."""
@@ -232,6 +317,30 @@ class PairedComparison:
         ):
             return False
         return self.ci_lower >= -margin and self.ci_upper <= margin
+
+    def passes_effect_size(
+        self,
+        registration: EffectSizeRegistration,
+        *,
+        box: Schedule | Mapping[str, Any] | None = None,
+    ) -> bool:
+        """Confirm against an effect size registration: CI on Cohen's d excludes min_d.
+
+        Uses the paired Cohen's dz and its bootstrap CI (converted from mean_diff CI).
+        A registration that declares a box decides only a run at that box.
+        """
+        if registration.box and (box is None or registration.box_mismatch(box)):
+            return False
+        # For paired design, Cohen's dz CI can be derived from mean_diff CI / SD_diff
+        # But we have cohens_dz point estimate; need CI on it.
+        # Approximation: dz CI = mean_diff CI / SD_diff
+        # SD_diff = mean_diff / dz (when dz != 0)
+        if self.cohens_dz == 0:
+            return False
+        sd_diff = self.mean_diff / self.cohens_dz
+        d_ci_lower = self.ci_lower / sd_diff if sd_diff != 0 else -float("inf")
+        d_ci_upper = self.ci_upper / sd_diff if sd_diff != 0 else float("inf")
+        return d_ci_lower > registration.min_d and self.p_value < registration.alpha
 
 
 def paired_comparison(

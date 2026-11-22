@@ -2174,7 +2174,9 @@ def run_p4_track(
         return None
     candidate, registration, schedule = setup
     started = time.monotonic()
-    rungs = _ladder(candidate, schedule)
+    # Use async parallel version for ladder (TODO99 #5)
+    import asyncio
+    rungs = asyncio.run(_ladder_async(candidate, schedule))
     best = best_rung(tuple(rungs))
     bar = _task_bar(schedule.task_id)
     if best is None or (bar is not None and (best.val_acc or 0.0) <= bar.value):
@@ -2194,7 +2196,9 @@ def run_p4_track(
             started=started,
         )
 
-    cells = _paired_cells(candidate, schedule, best.factor)
+    # Use async parallel version for 4-5x speedup (TODO99 #5)
+    import asyncio
+    cells = asyncio.run(_paired_cells_async(candidate, schedule, best.factor))
     failed = next((cell for cell in cells if cell.status == "defect"), None)
     if failed is not None:
         return _deep_dive_result(
@@ -2215,7 +2219,7 @@ def run_p4_track(
 
 
 def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
-    """The three-point ladder at one seed: the knob's declared neighbours."""
+    """The three-point ladder at one seed: the knob's declared neighbours (synchronous)."""
     from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
 
     rungs: list[LadderRung] = []
@@ -2239,8 +2243,48 @@ def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
     return rungs
 
 
+async def _ladder_async(
+    candidate: Any,
+    schedule: Schedule,
+    semaphore: Any = None,
+) -> list[Any]:
+    """The three-point ladder at one seed (async, parallel).
+
+    Runs 3 ladder points concurrently (up to semaphore limit).
+    """
+    import asyncio
+    from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
+
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(2)
+
+    async def _measure_async(coord: Coordinate, run: Schedule) -> dict[str, Any]:
+        return await asyncio.to_thread(_measure, coord, run)
+
+    async def _run_one(factor: float, value: float) -> LadderRung:
+        async with semaphore:
+            measured = await _measure_async(
+                _deep_dive_coordinate(candidate, factor),
+                replace(schedule, seed=0, n_seeds=1),
+            )
+        return LadderRung(
+            factor=factor,
+            value=value,
+            status=measured["status"],
+            val_acc=measured["val_acc"],
+            walltime_s=measured["walltime_s"],
+            replay_hash=measured["replay_hash"],
+            box=measured["box"],
+            reason=measured["reason"],
+        )
+
+    tasks = [_run_one(factor, value) for factor, value in ladder_points(candidate)]
+    results = await asyncio.gather(*tasks)
+    return list(results)
+
+
 def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[Any]:
-    """Five index-matched seeds per arm at the matched base box."""
+    """Five index-matched seeds per arm at the matched base box (synchronous)."""
     from computronium.experiment.sec_deep_dive import CLAIM_SEEDS, PairedCell
 
     cells: list[PairedCell] = []
@@ -2265,6 +2309,56 @@ def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[
                 )
             )
     return cells
+
+
+async def _paired_cells_async(
+    candidate: Any,
+    schedule: Schedule,
+    treatment: float,
+    semaphore: Any = None,
+) -> list[Any]:
+    """Five index-matched seeds per arm at the matched base box (async, parallel).
+
+    Uses asyncio.TaskGroup with optional semaphore for GPU memory control.
+    Runs 5 seeds × 2 arms = 10 cells concurrently (up to semaphore limit).
+    """
+    import asyncio
+    from computronium.experiment.sec_deep_dive import CLAIM_SEEDS, PairedCell
+
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(2)  # Default: 2 concurrent GPU tasks
+
+    async def _measure_async(coord: Coordinate, run: Schedule) -> dict[str, Any]:
+        """Run _measure in a thread pool (it's CPU/GPU bound, not async)."""
+        return await asyncio.to_thread(_measure, coord, run)
+
+    async def _run_one(seed: int, arm: str, factor: float) -> PairedCell:
+        async with semaphore:
+            measured = await _measure_async(
+                _deep_dive_coordinate(candidate, factor),
+                replace(schedule, seed=seed, n_seeds=1),
+            )
+        return PairedCell(
+            arm=arm,
+            factor=factor,
+            seed=seed,
+            status=measured["status"],
+            val_acc=measured["val_acc"],
+            loss=measured["loss"],
+            walltime_s=measured["walltime_s"],
+            replay_hash=measured["replay_hash"],
+            box=measured["box"],
+            reason=measured["reason"],
+        )
+
+    tasks = [
+        _run_one(seed, arm, factor)
+        for seed in range(CLAIM_SEEDS)
+        for arm, factor in (("control", 1.0), ("treatment", treatment))
+    ]
+
+    results = await asyncio.gather(*tasks)
+    return list(results)
 
 
 def _pair_verdict(  # ruff: ignore[too-many-arguments]

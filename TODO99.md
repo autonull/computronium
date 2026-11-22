@@ -83,7 +83,7 @@ uv run python scripts/run_capability.py --session B
 
 ---
 
-## 5. Architecture: Parallel SEC Evaluator 🔄 TODO
+## 5. Architecture: Parallel SEC Evaluator ✅ DONE
 
 **Problem:** SEC runs 5 seeds × 2 arms = 10 cells sequentially per (credit, family). At ~5 min/cell = 50 min per ladder.
 
@@ -98,9 +98,11 @@ async def _paired_cells_async(candidate, schedule, treatment, semaphore):
 
 **Saves:** 50 min → **10-15 min** per ladder (4-5× speedup). Compounds across all SEC runs.
 
+**Implementation:** Added `_paired_cells_async` and `_ladder_async` to `sec_loop.py` using `asyncio.gather` with semaphore for GPU memory control. P4 track now uses async versions by default.
+
 ---
 
-## 6. Scope: Claim on "Effect Size" Not Just Margin 🔄 TODO
+## 6. Scope: Claim on "Effect Size" Not Just Margin ✅ DONE
 
 **Current:** Margin = 0.01 (1% absolute accuracy). This is arbitrary and doesn't scale.
 
@@ -112,12 +114,25 @@ async def _paired_cells_async(candidate, schedule, treatment, semaphore):
 | Tabular (iris) | 0.5 | Medium effect, small N |
 | Graph (cora) | 0.5 | Medium effect |
 | Sequence | 0.8 | High variance |
+| Continual | 0.8 | High variance |
+| RL | 0.8 | High variance |
+| Scientific | 0.5 | Medium effect |
+| LM | 0.5 | Medium effect |
+| Neuromorphic | 0.8 | High variance |
+| Quantum | 0.8 | High variance |
+| Photonic | 0.8 | High variance |
 
 **Gains:** Claims reflect practical significance, not just statistical. Avoids "claim" on 0.001 improvement with huge N.
 
+**Implementation:** 
+- Added `EffectSizeRegistration` class in `validation/preregistration.py` with family-specific minimum Cohen's d
+- Added `passes_effect_size()` method to `PairedComparison` using Cohen's dz CI
+- Updated `sec_deep_dive.py` to use `EffectSizeRegistration.for_task_family()` for new registrations
+- Backward compatible: `load_registration()` tries new format first, falls back to old `ThresholdRegistration`
+
 ---
 
-## 7. Process: Defect-to-Fix Traceability 🔄 TODO (Ongoing)
+## 7. Process: Defect-to-Fix Traceability ✅ DONE (Ongoing)
 
 **Problem:** Defects found in P1/P3/P4 are tracked in TODO files, not in code. No automatic link from failing test → fix → verification.
 
@@ -135,6 +150,12 @@ def test_the_plastic_step_carries_the_substrate_state():
 ```
 
 **Gains:** Audit trail; prevents regressions; TODO becomes queryable.
+
+**Implementation:** 
+- Added `fixes` and `verifies` markers to `pyproject.toml`
+- Created `scripts/defect_tracker.py` to scan codebase for markers and generate traceability reports
+- Added example markers to `tests/primitives/test_surface_fit.py` for GAP-001 (σ channel)
+- Usage: `uv run python scripts/defect_tracker.py --report` or `--scan` or `--check-gaps`
 
 ---
 
@@ -161,9 +182,9 @@ def test_the_plastic_step_carries_the_substrate_state():
 | 2. Static compatibility | Medium | High (removes indirection) | None | Session A | ✅ DONE |
 | 3. More base boxes | Low | High (more claim candidates) | Session C | Session C | ✅ DONE |
 | 4. Continuous capability | Low | High (early regression) | Capability tests exist | After each session | ✅ DONE |
-| 5. Parallel evaluator | Medium | High (4-5× SEC speed) | None | Before Session D | 🔄 TODO |
-| 6. Effect size claims | Low | Medium (better claims) | Preregistration format | Session D | 🔄 TODO |
-| 7. Defect traceability | Medium | Medium (process) | Test markers | Ongoing | 🔄 TODO |
+| 5. Parallel evaluator | Medium | High (4-5× SEC speed) | None | Before Session D | ✅ DONE |
+| 6. Effect size claims | Low | Medium (better claims) | Preregistration format | Session D | ✅ DONE |
+| 7. Defect traceability | Medium | Medium (process) | Test markers | Ongoing | ✅ DONE |
 | 8. GPU kernels in SEC | Medium | High (10× speed) | Kernels exist | Before Session D | 🔄 TODO |
 
 ---
@@ -173,9 +194,9 @@ def test_the_plastic_step_carries_the_substrate_state():
 1. **Before Session A:** #1 (incremental surface) + #4 (continuous capability) — immediate ROI ✅
 2. **During Session A:** #2 (static compatibility) — touches plasticity files anyway ✅
 3. **During Session C:** #3 (more base boxes) — mechanical, high leverage ✅
-4. **Before Session D:** #5 (parallel evaluator) + #8 (GPU kernels) — SEC speed multipliers
-5. **During Session D:** #6 (effect size claims) — preregistration format change
-6. **Ongoing:** #7 (defect traceability) — process hygiene
+4. **Before Session D:** #5 (parallel evaluator) + #8 (GPU kernels) — SEC speed multipliers ✅ #5
+5. **During Session D:** #6 (effect size claims) — preregistration format change ✅
+6. **Ongoing:** #7 (defect traceability) — process hygiene ✅
 
 ---
 

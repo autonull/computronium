@@ -101,6 +101,7 @@ def test_a_signal_law_is_tested_by_its_fit() -> None:
     assert state == "test defect"
 
 
+@pytest.mark.verifies("GAP-001")  # verifies σ channel fix
 def test_a_plastic_laws_modulation_reaches_the_digest() -> None:
     """The primitive step runs step then modulate, as the trainer does: a law
     whose declared channel is the modulation is measured, not only its ψ."""
@@ -110,6 +111,7 @@ def test_a_plastic_laws_modulation_reaches_the_digest() -> None:
     assert result.activations
 
 
+@pytest.mark.fixes("GAP-001")  # σ channel not carried through plastic step
 def test_the_plastic_step_carries_the_substrate_state() -> None:
     """The gap's trigger: the standard step must give ψ ≡ σ a substrate state."""
     from types import SimpleNamespace

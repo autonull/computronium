@@ -32,6 +32,7 @@ from computronium.acceleration.spec import axis_segment
 from computronium.experiment.sec_pilot import own_knob_params
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
+    EffectSizeRegistration,
     PairedComparison,
     ThresholdRegistration,
 )
@@ -321,21 +322,22 @@ def candidate_box(
 
 def claim_registration(
     candidate: DeepDiveCandidate, schedule: Schedule
-) -> ThresholdRegistration:
-    """The pre-registered threshold, written before the first paired seed.
+) -> EffectSizeRegistration:
+    """The pre-registered effect size threshold, written before the first paired seed.
 
+    Uses Cohen's d (effect size) with per-task-family minimums (TODO99 #6).
     The box is the row's own coordinate, not the base schedule alone: a
     registration that declares a box decides only a run at that box, and a
     claim re-boxed between the ladder and the pair is refused by name
     (TODO95 D2, TODO97 S9c).
     """
-    return ThresholdRegistration(
+    return EffectSizeRegistration.for_task_family(
         claim=(
-            f"tuning {candidate.knob} on {candidate.primitive} moves val_acc "
-            f"by at least {MARGIN:.2f} at the {schedule.task_id} base"
+            f"tuning {candidate.knob} on {candidate.primitive} improves val_acc "
+            f"with Cohen's d >= family minimum at the {schedule.task_id} base"
         ),
         metric="val_acc",
-        threshold=MARGIN,
+        task_id=schedule.task_id,
         alpha=DEFAULT_ALPHA,
         min_seeds=CLAIM_SEEDS,
         created=date.today().isoformat(),
@@ -365,7 +367,7 @@ def preregister(
 
 def load_registration(
     path: Path, box: Schedule | Mapping[str, Any]
-) -> ThresholdRegistration | None:
+) -> ThresholdRegistration | EffectSizeRegistration | None:
     """The committed registration for this box, or ``None`` when it refuses.
 
     The box is the coordinate's own (its axes and structural params too), so a
@@ -373,23 +375,39 @@ def load_registration(
     cell (TODO97 S9c). A session that cannot name its claim before its first
     cell is a budget leak: the run refuses instead of comparing five
     unregistered seeds.
+
+    Supports both ThresholdRegistration (absolute margin) and EffectSizeRegistration (Cohen's d).
     """
     if not path.exists():
         return None
-    registration = ThresholdRegistration.load(path)
-    if registration.metric != "val_acc":
+    # Try EffectSizeRegistration first (new format), fall back to ThresholdRegistration
+    try:
+        registration = EffectSizeRegistration.load(path)
+        if registration.metric != "val_acc":
+            return None
+        if registration.box_mismatch(box) is not None:
+            return None
+        return registration
+    except (KeyError, ValueError):
+        # Fall back to old format
+        pass
+    try:
+        registration = ThresholdRegistration.load(path)
+        if registration.metric != "val_acc":
+            return None
+        if registration.box_mismatch(box) is not None:
+            return None
+        return registration
+    except (KeyError, ValueError):
         return None
-    if registration.box_mismatch(box) is not None:
-        return None
-    return registration
 
 
 def claim_verdict(
     paired: PairedComparison | None,
-    registration: ThresholdRegistration,
+    registration: ThresholdRegistration | EffectSizeRegistration,
     box: Schedule | Mapping[str, Any],
 ) -> str:
-    """The claim when the paired CI clears the registered margin, else a row.
+    """The claim when the paired CI clears the registered margin/effect size, else a row.
 
     ``passes`` refuses a claim at another box and a CI that includes the
     margin: the pair is then a coordinate about the knob, not a verdict. The box
@@ -398,6 +416,8 @@ def claim_verdict(
     """
     if paired is None:
         return "coordinate"
+    if isinstance(registration, EffectSizeRegistration):
+        return "claim" if paired.passes_effect_size(registration, box=box) else "coordinate"
     return "claim" if paired.passes(registration, box=box) else "coordinate"
 
 
