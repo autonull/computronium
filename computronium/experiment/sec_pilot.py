@@ -164,6 +164,34 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         param_budget=600_000,
         base_coordinate={"geometry": "causal_transformer"},
     ),
+    "quantum": BaseBox(
+        "quantum",
+        "mnist",
+        32,
+        375,
+        1,
+        base_coordinate={
+            "substrate": "quantum",
+            "geometry": "feedforward",
+            "dynamics": "instantaneous",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    ),
+    "photonic": BaseBox(
+        "photonic",
+        "mnist",
+        32,
+        375,
+        1,
+        base_coordinate={
+            "substrate": "photonic",
+            "geometry": "feedforward",
+            "dynamics": "instantaneous",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    ),
 })
 
 

@@ -110,11 +110,6 @@ def test_a_plastic_laws_modulation_reaches_the_digest() -> None:
     assert result.activations
 
 
-@pytest.mark.xfail(
-    reason="gaps.GAPS['primitive.plasticity.substrate_coupled']: the P-axis "
-    "carries no σ, so ψ ≡ σ has nothing to evolve",
-    strict=True,
-)
 def test_the_plastic_step_carries_the_substrate_state() -> None:
     """The gap's trigger: the standard step must give ψ ≡ σ a substrate state."""
     from types import SimpleNamespace
@@ -143,6 +138,9 @@ def test_the_plastic_step_carries_the_substrate_state() -> None:
     settled = SystemState(x=x, y=y)
     settled.activations = [x, torch.randn(4, 16), torch.randn(4, 4)]
     reader = _Reader()
+    # Provide a minimal context with theta (persistent parameters) like a real SystemContext
+    class _Ctx:
+        theta: dict[str, torch.Tensor] = {"weight": torch.randn(16, 8)}
     _step_psi(
         reader,
         {},
@@ -151,9 +149,10 @@ def test_the_plastic_step_carries_the_substrate_state() -> None:
         y,
         Phase.FREE,
         cast("CreditAssignment", SimpleNamespace(phases=(Phase.FREE,))),
-        object(),
+        _Ctx(),
     )
     assert reader.sigma
+    assert "weight" in reader.sigma
 
 
 def test_the_batch_calibration_gate_exits_nonzero(tmp_path: Path) -> None:

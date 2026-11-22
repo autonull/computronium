@@ -283,11 +283,13 @@ def _step_psi(
     # that declare ψ ≡ σ can read it. The substrate state is the
     # persistent parameters θ (geometry weights) for digital substrates;
     # other substrates may override via their own state representation.
-    from computronium.state.context import SystemContext
+    # Accept any context with a `theta` mapping (SystemContext or minimal).
+    from collections.abc import Mapping
 
     substrate_state: dict[str, Tensor] = {}
-    if isinstance(context, SystemContext):
-        substrate_state = dict(context.theta)
+    theta = getattr(context, "theta", None)
+    if isinstance(theta, Mapping):
+        substrate_state = dict(theta)
     z = CompositeState(activity=activity, plastic=psi, substrate=substrate_state)
     new_psi = plasticity.step(psi, z, context)
     # Writeback: the caller's psi dict must observe the stepped state
