@@ -345,8 +345,9 @@ knobs**, not one borrowed lr.
 |---|---|---|
 | 1 | `plasticity.substrate_coupled` | **Build the σ channel.** ψ ≡ σ needs a substrate state in the P-axis: `pipeline._step_psi` (`computronium/core/pipeline.py:282`) builds `CompositeState(..., substrate={})`; the joint transition carries no σ. Land σ as a registered substrate-owned state (lifecycle: registered, consolidated through `substrate.get_weight_update_operator`), then the law's `step` returns `{name: σ}` and the join is real. The failing test is already filed: `test_the_plastic_step_carries_the_substrate_state` (strict xfail → it must xpass, and the marker is deleted). Closes `gaps.GAPS["primitive.plasticity.substrate_coupled"]`. |
 | 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | **Land in P3a.** The semantics table and VON's duplicate lr are fixed (`test_penalty_and_posterior_rules_are_gradient_relative`). The ladder prices their own knobs; EWC/SI's passing point (0.3) is outside `update.step_size`'s declared domain `[1e-5, 0.1]` → **widen the domain row** (or scale the value range per step semantics) rather than report a ceiling. Target: a legal point that reaches 0.1×. |
-| 3 | `substrate.optical`, `substrate.quantum` | **Build the base box, not a gap.** No `photonic`/`quantum` family exists in `BASE_BOXES` (`computronium/experiment/sec_pilot.py`), so the primitive has no declared cell. Add one family row with a task whose declared shape the substrate's forward operator consumes (optical interference, quantum), then the ordinary carrier digest prices it. If the forward operator is itself a stub, that is the primitive and it ships with its parity lock. |
+| 3 | `substrate.optical`, `substrate.quantum`, `substrate.complex` | **Build the base box, not a gap.** No `photonic`/`quantum`/`complex` family exists in `BASE_BOXES` (`computronium/experiment/sec_pilot.py`), so these primitives have no declared cell. Add one family row per substrate with a task whose declared shape the forward operator consumes (optical interference, quantum circuit, complex-valued). If the forward operator is a stub, that is the primitive and it ships with its parity lock. |
 | 4 | `credit.forward_tangent`, `local_goodness`, `local_contrastive`, `random_projections`, `target_inversion`, `zeroth_order`, `temporal_trace` | **Land in P3a first**, then fix the mechanism its reading names. Their accepted knobs are live: `forward_tangent` (`estimator_samples`), `zeroth_order` (`fd_step`, `estimator_samples`), `temporal_trace` (`tau_pre/tau_post`), `local_goodness`/`local_contrastive` (`feedback_lr`, `readout_error`, `beta`), `random_projections`/`target_inversion` (`feedback_scale`, `beta`). A credit that moves but cannot reach a tenth gets the pseudo-gradient path audited against its identity card (`pseudo_gradient_def`), then the path is fixed in `computronium/ontology/credit/`; only a genuinely absent estimator (JVP / target-propagation / ES) becomes one shared component, not seven gaps. |
+| 5 | `credit.eligibility_prop`, `credit.rtrl_reference`, `credit.unbiased_rtrl`, `geometry.conv`, `geometry.nca`, `plasticity.rule_state` | **Base box or refusal with failing test.** These 6 primitives appear in "no measured row anywhere" (10 total, 4 overlap with above). For each: if a base box exists but is refused by void constraint, the refusal must name the constraint *and* have a failing test that proves the mechanism cannot run on that task family. If no base box exists, add one (like P3 row 3). `rule_state` has `modulate()` missing (GAPS entry) — implement or retire with failing test. |
 
 **P4 does not wait for P3.** The loop starts on the 41 clean laws now; P3's
 rows land in parallel.
@@ -375,11 +376,15 @@ The loop optimizes hyperparameters; it is worthless on a defective law.
 10 of 75 have a compiled kernel. Port a module only after its law passes P1;
 a kernel for a defective law accelerates a wrong answer. Price the first
 module's parity + kill + microbench, then price the rest from it.
+**Target: 75/75 kernels with kill+parity locks.** Absent kernels documented
+as reference-only with `kernel_status="absent"` and reason.
 
 ### P6 — Reproduction (E4), last
 
 One control and one earned claim on a second process and device profile. No
 claim is "works here and elsewhere" until this runs.
+**Target: every E3 claim reproduced on second device/profile; no claim
+without reproduction.**
 
 ---
 
@@ -401,14 +406,18 @@ claims.
 3. **6/6 seams pass** their declared exchange. **Done**
    (`test_protocol_seams.py`).
 4. **Every `defect-or-gap` is closed by a fix**, and every `refused` names
-   the rule or box that refuses it. **Open:** P3 rows 1–4 have a named fix
-   (σ channel, knob ladder, base boxes, credit paths) and the ladder is the
-   first action; a gap entry is a ledger, never a close.
-5. **SEC runs on clean laws only**, reusing the cache; a claim exists only
+   the rule or box that refuses it. **Open:** P3 rows 1–5 have a named fix
+   (σ channel, knob ladder, base boxes, credit paths, missing base boxes) and
+   the ladder is the first action; a gap entry is a ledger, never a close.
+5. **All 75 primitives have ≥1 measured row** (no "no measured row anywhere").
+   **Open:** 10 primitives currently unmeasured; P3 rows 3 and 5 address this.
+6. **Capability suite: 75/75 pass** at one priced cell (rung-1 gate).
+   **Open:** 62 passed / 14 skipped; P3 fixes feed this.
+7. **SEC runs on clean laws only**, reusing the cache; a claim exists only
    where a knob binds. **Open, P4.**
-6. **Every kernel row passes kill + parity**; every absent row is documented
+8. **Every kernel row passes kill + parity**; every absent row is documented
    as reference-only. **Open, P5.**
-7. **The audit answers the same questions**: no test names a family box, no
+9. **The audit answers the same questions**: no test names a family box, no
    refusal without a failing test, no kernel without parity. **Partial:**
    the family-box lock passes; the other two are P3/P5.
 
@@ -464,6 +473,9 @@ to SEC, not a claim.
 | `test_the_grid_sweeps_the_laws_own_knob` | `_grid` varies a name the law does not read (the L-c defect, one layer up) |
 | `test_a_row_passes_at_a_legal_point_or_names_its_mechanism` | a `defect-or-gap` row has no priced legal point in its own declared box |
 | `test_resume_keys_on_the_case_fingerprint` | a changed case reuses the cached verdict |
+| `test_all_75_primitives_have_measured_row` | any primitive has zero measured rows in the surface |
+| `test_capability_suite_75_pass` | capability suite has any skipped/failed at priced cell |
+| `test_kernel_parity_all_75` | any primitive with kernel_status != "absent" fails kill/parity |
 
 ---
 
@@ -497,7 +509,27 @@ uv run python -m pytest tests/primitives/test_surface_fit.py \
 #    The failing test is strict xfail; it must xpass.
 uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_step_carries_the_substrate_state -v
 
-# 6. The gates that must stay green while the work lands
+# 6. P3 row 2: widen EWC/SI domain to 0.3 (step_size ceiling)
+#    Edit axis row for update.bayesian_online, cascade_synapse,
+#    elastic_consolidation, synaptic_intelligence
+
+# 7. P3 row 3: add photonic/quantum/complex base boxes to BASE_BOXES
+#    Add task rows in sec_pilot.py with shapes matching forward operators
+
+# 8. P3 row 4: fix credit pseudo-gradient paths (7 primitives)
+#    Audit against pseudo_gradient_def in identity cards; fix in ontology/credit/
+
+# 9. P3 row 5: base boxes or refusal+test for 6 unmeasured primitives
+#    eligibility_prop, rtrl_reference, unbiased_rtrl, conv, nca, rule_state
+
+# 10. P4: SEC optimization on clean laws (ladder + claim)
+#     First: update.adam on mnist at beta2, n_max=5 pre-registered
+
+# 11. P5: Kernels for all 75 (parity + kill + microbench per module)
+
+# 12. P6: Reproduction (E4) — control + claim on second device/profile
+
+# 13. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
 uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 ```
