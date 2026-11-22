@@ -279,7 +279,16 @@ def _step_psi(
         activity["h"] = act_list[-2]
     if phase is Phase.NUDGED:
         activity["target"] = y
-    z = CompositeState(activity=activity, plastic=psi, substrate={})
+    # Carry substrate state (σ) in the joint state so plasticity laws
+    # that declare ψ ≡ σ can read it. The substrate state is the
+    # persistent parameters θ (geometry weights) for digital substrates;
+    # other substrates may override via their own state representation.
+    from computronium.state.context import SystemContext
+
+    substrate_state: dict[str, Tensor] = {}
+    if isinstance(context, SystemContext):
+        substrate_state = dict(context.theta)
+    z = CompositeState(activity=activity, plastic=psi, substrate=substrate_state)
     new_psi = plasticity.step(psi, z, context)
     # Writeback: the caller's psi dict must observe the stepped state
     # across episodes (plasticity.step may return a fresh dict — without

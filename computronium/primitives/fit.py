@@ -56,6 +56,7 @@ __all__ = [
     "decide",
     "family",
     "kind",
+    "ladder",
     "measure",
     "problem",
 ]
@@ -174,6 +175,71 @@ def coordinate(spec: PrimitiveSpec, lr: float | None = None) -> Coordinate:
     if lr is None:
         return declared
     return replace(declared, params={**declared.params, "update.step_size": lr})
+
+
+def ladder(spec: PrimitiveSpec) -> list[tuple[str, tuple[float, float, str]]]:
+    """The law's own declared knob grid: (knob, (min, max, scale)).
+
+    Returns the intersection of:
+    - The law's identity card ``approximation_parameters`` (what the law reads)
+    - The axis spec's ``accepted_params`` (what composition may pass)
+    - The harvested hyperparameter domain (what the search space declares)
+
+    Each entry is a 3-tuple: (knob_name, (min_value, max_value, scale)).
+    The scale is "log" or "linear" as declared in the hyperparameter domain.
+    """
+    from importlib import import_module
+    from computronium.core.identity_card import AlgorithmIdentityCard
+    from computronium.experiment.schema import AXES_REGISTRIES
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.harvest import harvest_schema
+
+    # 1. Law's declared approximation parameters (from identity card)
+    ontology_class_path = getattr(spec, "ontology_class", None)
+    card: AlgorithmIdentityCard | None = None
+    if ontology_class_path and isinstance(ontology_class_path, str):
+        try:
+            module_path, _, class_name = ontology_class_path.rpartition(".")
+            module = import_module(module_path)
+            ontology_class = getattr(module, class_name, None)
+            if ontology_class is not None:
+                card = getattr(ontology_class, "IDENTITY_CARD", None)
+        except Exception:
+            pass
+    elif ontology_class_path is not None:
+        # Already a class object
+        card = getattr(ontology_class_path, "IDENTITY_CARD", None)
+    law_params = set(card.approximation_parameters) if card else set()
+
+    # 2. Axis's accepted parameters (what composition may pass)
+    axis_spec = AXES_REGISTRIES[StructuralAxis(spec.axis)].get(
+        spec.id.rsplit(".", 1)[-1]
+    )
+    accepted = set(axis_spec.accepted_params) if axis_spec else set()
+
+    # 3. Harvested hyperparameter domain (what the search space declares)
+    schema = harvest_schema()
+    domain: dict[str, tuple[float, float, str]] = {}
+    for hp in schema.hyperparameters:
+        if hp.domain is not None:
+            # Domain format: Domain(members=...) for categorical, or Domain(lo=..., hi=..., scale=...) for continuous
+            if hp.domain.members is not None:
+                # Categorical: use the members as discrete points
+                # For simplicity, use the first and last as min/max with linear scale
+                members = list(hp.domain.members)
+                if len(members) >= 2:
+                    try:
+                        domain[hp.name] = (float(members[0]), float(members[-1]), "linear")
+                    except (ValueError, TypeError):
+                        pass
+            elif hp.domain.lo is not None and hp.domain.hi is not None:
+                # Continuous domain
+                scale = "log" if hp.domain.scale and hp.domain.scale.value == "log" else "linear"
+                domain[hp.name] = (float(hp.domain.lo), float(hp.domain.hi), scale)
+
+    # Intersection: law reads ∩ axis accepts ∩ domain declares
+    knobs = law_params & accepted & set(domain.keys())
+    return [(knob, domain[knob]) for knob in sorted(knobs)]
 
 
 def _compose(

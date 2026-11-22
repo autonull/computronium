@@ -1,11 +1,12 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-21. P0, P1 and P2 landed; P3 is open with its next action
-fixed. P1 asks each law one question: a carrier's step against its declared
-neutral companion (µs), or a signal's fit against its cut channel (~1–10 s).
-`results/p1/surface.json` (instrument 5) holds all 75 states and exits 0. No
-family box is a test. The first fixed law: `update.quantized_adam` went NaN →
-`works` (1.83 → 0.102).
+**Status:** 2026-11-21. P0, P1, P2, and P3a landed; P3 rows 1–4 open. P1 asks
+each law one question: a carrier's step against its declared neutral companion
+(µs), or a signal's fit against its cut channel (~1–10 s).
+`results/p1/surface.json` (instrument 5) holds all 75 states and exits 0.
+Instrument 6 adds the law's own knob ladder (`fit.ladder`), the fingerprint-keyed
+resume, and the σ channel in `_step_psi`. No family box is a test.
+The first fixed law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
 
 **Directive (binding, 2026-11-21): make the laws work and test them all.** A
 row closes when the law **trains at a legal point**, not when a gap is
@@ -15,10 +16,19 @@ failing test pins the exact missing component. The order is: the instrument
 sweeps each law's **own declared knob** (P3a), then the law's mechanism is
 fixed; every hand-measured verdict goes into the plan with its number.
 
-**Next session starts at P3a** (§4): `fit.ladder` + `_grid` sweeping the
-law's declared knobs, the resume key fixed to the case fingerprint, instrument
-6, then the 75-row batch. Expected: several of the 11 signal rows flip to
-`works` at a legal point; the rest name a mechanism.
+**P3a — done 2026-11-21.** `fit.ladder` returns the law's declared knobs
+(identity card `approximation_parameters` ∩ axis `accepted_params` ∩ harvested
+domain). `_grid` in `p1_law_surface.py` sweeps those knobs (3 points in-domain,
+box default included, cap 3 knobs/row). Resume key now matches on the case
+fingerprint (`row["fingerprint"]`). `_step_psi` carries `context.theta` as the
+substrate state σ so `plasticity.substrate_coupled` can read it. Instrument
+version bumped to 6. All surface locks and seams pass; breadth gate 17/17,
+audit 0 findings.
+
+**Next session starts at P3 row 1** (§4): build the σ channel as a registered,
+consolidated substrate-owned state so `test_the_plastic_step_carries_the_substrate_state`
+xpasses. Then P3 rows 2–4: widen EWC/SI domain, add photonic/quantum base boxes,
+fix credit pseudo-gradient paths.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -464,36 +474,30 @@ to SEC, not a claim.
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
 
-# 2. P3a — the next session starts here: the law's own knob ladder
-#    (price one row first; then the batch at 2x that price)
+# 2. P1: the two class batches (instrument 5)                     [DONE]
+uv run python scripts/probes/p1_law_surface.py --only carrier \
+  --lanes 12 --row-budget 150 --out results/p1
+uv run python scripts/probes/p1_law_surface.py --only signal --resume \
+  --steps 200 --row-budget 120 --out results/p1
+uv run python scripts/probes/p1_law_surface.py --only all --resume \
+  --steps 200 --out results/p1
+
+# 3. P2: the six seams                                            [DONE]
+uv run python -m pytest tests/property/test_protocol_seams.py -q
+
+# 4. P3a: law's own knob ladder + σ channel (instrument 6)      [DONE]
 uv run python scripts/probes/p1_law_surface.py --only signal \
   --out results/p1 --limit 1 --steps 200          # price one row
 uv run python scripts/probes/p1_law_surface.py --only all --steps 200 \
   --out results/p1                                # instrument 6, all 75
 uv run python -m pytest tests/primitives/test_surface_fit.py \
   tests/primitives/test_surface_lock.py -q
-# exit 0 flips the rows that train; every other row names its mechanism.
-# Do not re-run a finished class to "check" a nonzero exit.
 
-# 2. P1: the two class batches (prices measured; instrument 5)     [DONE]
-uv run python scripts/probes/p1_law_surface.py --only carrier \
-  --lanes 12 --row-budget 150 --out results/p1
-uv run python scripts/probes/p1_law_surface.py --only signal --resume \
-  --steps 200 --row-budget 120 --out results/p1
-# recompute the table from cache, with both gates:
-uv run python scripts/probes/p1_law_surface.py --only all --resume \
-  --steps 200 --out results/p1
-# exit 0 is a verdict; exit 1 is a test defect; exit 3 is a partial run.
-# Do not re-run a finished class to "check" a nonzero exit.
-# Instrument 5: ψ then modulate, and the four penalty/posterior update
-# rows re-measured after the step-semantics fix (75 rows, 488 s, exit 0).
-# A re-measure of selected rows must delete them from surface.json first:
-# the resume match keys on the declaration, not on the case fingerprint.
+# 5. P3 row 1 — NEXT SESSION: build σ channel for substrate_coupled
+#    The failing test is strict xfail; it must xpass.
+uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_step_carries_the_substrate_state -v
 
-# 3. P2: the six seams                                            [DONE]
-uv run python -m pytest tests/property/test_protocol_seams.py -q
-
-# 4. The gates that must stay green while the work lands
+# 6. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
 uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 ```

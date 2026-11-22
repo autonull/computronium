@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any, Final
 from computronium.primitives import cases, fit
 from computronium.primitives.registry import get_primitive_spec
 from computronium.primitives.surface import laws, surface, validate
+from computronium.experiment.sec_pilot import BASE_BOXES
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate
@@ -45,7 +46,7 @@ DEFAULT_OUT = ROOT / "results" / "p1"
 #: The instrument's version. A change to what a row measures invalidates
 #: the rows written before it: a version bump starts the merge from zero
 #: instead of keeping verdicts the current instrument did not produce.
-INSTRUMENT: Final[int] = 5
+INSTRUMENT: Final[int] = 6
 
 #: The calibration gate: a row the repository already declares non-pass must
 #: not come out ``works``, and one that does is the instrument's defect — the
@@ -170,26 +171,59 @@ def _grid(
     options: Options,
     watchdog: float,
 ) -> tuple[fit.Fit | None, list[str]]:
-    """The learning-rate grid: the best legal fit, and what was dropped."""
-    default_lr = float(base.params.get("update.step_size", 0.01))
+    """The law's own knob grid: the best legal fit, and what was dropped.
+
+    Sweeps each law's declared knobs (from fit.ladder) at 3 log-spaced points
+    in-domain, including the box default. Caps at the first 3 knobs (≤9 fits).
+    Points outside the declared domain are dropped and reported.
+    """
+    from computronium.primitives import fit
+
+    knob_grid = fit.ladder(spec)
     fits: list[fit.Fit] = []
     dropped: list[str] = []
-    for factor in fit.GRID:
-        trial = replace(
-            base, params={**base.params, "update.step_size": default_lr * factor}
-        )
-        try:
-            measured = _fit_at(
-                spec, trial, steps=options.steps, seconds=watchdog, seed=options.seed
-            )
-        except (ValueError, fit.FitError) as exc:
-            dropped.append(f"lr x{factor}: {type(exc).__name__}: {exc}")
-            row["error"] = row["error"] or f"{type(exc).__name__}: {exc}"
-            continue
-        if measured.killed:
-            dropped.append(f"lr x{factor}: over budget ({measured.seconds:.1f}s)")
-            continue
-        fits.append(measured)
+
+    # Cap at first 3 knobs, ≤9 fits per row
+    for knob, (knob_min, knob_max, knob_scale) in knob_grid[:3]:
+        # Generate 3 points: min, mid, max (log-spaced if scale is "log")
+        if knob_scale == "log":
+            import math
+
+            log_min = math.log(knob_min)
+            log_max = math.log(knob_max)
+            points = [
+                knob_min,
+                math.exp((log_min + log_max) / 2),
+                knob_max,
+            ]
+        else:
+            points = [knob_min, (knob_min + knob_max) / 2, knob_max]
+
+        # Include the box default if it's within bounds
+        box_default = base.params.get(knob)
+        if box_default is not None:
+            box_val = float(box_default)
+            if knob_min <= box_val <= knob_max and box_val not in points:
+                points.append(box_val)
+
+        for value in points:
+            # Drop points outside declared domain
+            if not (knob_min <= value <= knob_max):
+                dropped.append(f"{knob}={value:.6f}: outside declared domain [{knob_min}, {knob_max}]")
+                continue
+            trial = replace(base, params={**base.params, knob: value})
+            try:
+                measured = _fit_at(
+                    spec, trial, steps=options.steps, seconds=watchdog, seed=options.seed
+                )
+            except (ValueError, fit.FitError) as exc:
+                dropped.append(f"{knob}={value:.6f}: {type(exc).__name__}: {exc}")
+                row["error"] = row["error"] or f"{type(exc).__name__}: {exc}"
+                continue
+            if measured.killed:
+                dropped.append(f"{knob}={value:.6f}: over budget ({measured.seconds:.1f}s)")
+                continue
+            fits.append(measured)
     return (min(fits, key=lambda measured: measured.final) if fits else None), dropped
 
 
@@ -377,6 +411,7 @@ def _run(options: Options) -> Report:
         known = {
             "id": spec.id,
             "declaration": declaration(spec),
+            "fingerprint": fingerprint(spec, BASE_BOXES[fit.family(spec)].task_id),
         }
         cached = next(
             (
@@ -384,6 +419,7 @@ def _run(options: Options) -> Report:
                 for row in previous.values()
                 if row["id"] == known["id"]
                 and row["declaration"] == known["declaration"]
+                and row.get("fingerprint", "") == known["fingerprint"]
                 and row.get("state") != "incomplete"
                 and (
                     law.kind == "carrier"
