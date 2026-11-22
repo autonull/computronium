@@ -185,10 +185,22 @@ def _get_primitives_for_axis(axis: str) -> list[str]:
     return list(AXES_REGISTRIES[axis_enum].keys())
 
 
+# Axis name mapping from StructuralAxis to registry key prefix
+_AXIS_REGISTRY_PREFIX: Final[Mapping[str, str]] = MappingProxyType({
+    "substrate": "substrate",
+    "geometry": "geometry",
+    "dynamics": "state_dynamics",
+    "plasticity": "plasticity",
+    "credit": "credit_assignment",
+    "update": "parameter_update",
+})
+
+
 def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     """Get declared task families for a primitive."""
     from computronium.primitives.registry import _TASK_FAMILIES
-    key = f"primitive.{axis}.{primitive}"
+    prefix = _AXIS_REGISTRY_PREFIX.get(axis, axis)
+    key = f"primitive.{prefix}.{primitive}"
     families = _TASK_FAMILIES.get(key, [])
     return list(families) if families else []
 
@@ -319,18 +331,26 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     composition system handle structural params at compose time.
     Only includes hyperparams that are available for the given primitive.
     """
-    schedule = base_schedule(task_id, "auto")
-    if schedule is None:
-        raise ValueError(f"{task_id} declares no base box")
-
-    # Get family base coordinate for structural axes
+    # Find the task's family and use that family's base box task_id for the schedule
     family = base_family(task_id)
-    base_coord = BASE_BOXES.get(family).base_coordinate if family and BASE_BOXES.get(family) else None
+    if not family:
+        raise ValueError(f"{task_id} declares no task family")
+    
+    base_box = BASE_BOXES.get(family)
+    if not base_box:
+        raise ValueError(f"Family {family} has no base box")
+    
+    base_coord = base_box.base_coordinate
+    schedule_task_id = base_box.task_id
+
+    schedule = base_schedule(schedule_task_id, "auto")
+    if schedule is None:
+        raise ValueError(f"Base task {schedule_task_id} for family {family} declares no base box")
 
     # Start with base schedule
     box = schedule.to_dict()
     box["device"] = "cuda"
-    box["task"] = task_id
+    box["task"] = task_id  # Keep original task_id for the run
 
     # Structural axes that come from base_coordinate (not hyperparameters)
     structural_axes = {"substrate", "geometry", "dynamics", "plasticity"}
@@ -582,10 +602,10 @@ async def run_rung2_comparison(
     # Check claim
     verdict = "coordinate"
     if isinstance(registration, EffectSizeRegistration):
-        if paired.passes_effect_size(registration, box=control_box):
+        if paired.passes_effect_size(registration, box=treatment_box):
             verdict = "claim"
     elif isinstance(registration, ThresholdRegistration):
-        if paired.passes(registration, box=control_box):
+        if paired.passes(registration, box=treatment_box):
             verdict = "claim"
 
     effect_dict = {

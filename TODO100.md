@@ -12,7 +12,7 @@
 | Credit | 19 | vision, seq, tab, cont, graph, rl, sci, lm, neuro | ✅ | ✅ (digits) | ✅ (MNIST) | ✅ (2 credits, 4 claims) |
 | Dynamics | 8 | vision, seq, tab, cont, neuromorphic | ✅ | ⚠️ (partial) | ⬜ | ⬜ |
 | Geometry | 12 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ❌ (structural knobs need task shape) | ⬜ | ⬜ |
-| Update | 18 | vision, seq, tab, cont, graph, rl, neuromorphic | ✅ | ✅ (MNIST) | ⬜ | ⬜ |
+| Update | 18 | vision, seq, tab, cont, graph, rl, neuromorphic | ✅ | ✅ (MNIST) | ✅ (MNIST, 2 claims) | ⬜ |
 | Plasticity | 8 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ⚠️ (partial) | ⬜ | ⬜ |
 | Substrate | 10 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic, photonic, quantum, analog | ✅ | ✅ (MNIST) | ⬜ | ⬜ |
 
@@ -20,6 +20,7 @@
 **Rung 1 complete:** Credit (13/16 viable on digits), Update (18/18 viable on MNIST), Substrate (10/10 viable on MNIST), Plasticity (1/8 viable: temporal_psi).
 **Rung 1 partial:** Dynamics (1/8 viable: instantaneous; diffusion refused geometry/credit; lazy/predictive_settling/energy_minimization/pc_alm/spike_integration/error_predictive_coding timeout), Plasticity (1/8 viable: temporal_psi; conflict_adaptive refused; others no_knob).
 **Rung 1 blocked:** Geometry (all structural knobs need task shape).
+**Rung 2 complete:** Credit (2 claims on MNIST), Update (2 claims on MNIST: lion, muon).
 **Rung 3 complete for Credit axis:** 2 credits (surrogate, local_goodness) with confirmed claims on vision (mnist) and tabular (iris). Sequence family geometrically incompatible for both.
 
 ---
@@ -298,10 +299,25 @@ All 12 geometry primitives have **structural knobs** (hidden_dim, num_layers, de
 **Walltime:** ~2.5 hours total.
 
 ### Next: Rung 2 for Other Axes (Planned)
-- **Update Axis:** Test adam (0.899), lion (0.898) vs euclidean (0.883) baseline
 - **Substrate Axis:** Test digital (0.495) vs analog (0.488) — both below gradient
 - **Plasticity Axis:** Test temporal_psi (0.838) vs null baseline
 - **Dynamics Axis:** Test energy_minimization (0.748) vs instantaneous (0.495) with matched geometries
+
+### ✅ Update Axis Rung 2 Complete (2026-11-22)
+Paired comparison (n=5 seeds) vs euclidean baseline (momentum=0.9, step_size=0.01, val_acc=0.894):
+
+| Primitive | Best Ladder | Treatment Val Acc | Δ vs Euclidean | Cohen's d | Verdict |
+|-----------|-------------|-------------------|----------------|-----------|---------|
+| **lion** | step_size=0.001 | **0.912** | **+0.018** | **3.97** | ✅ **Claim** |
+| **muon** | step_size=0.001 | **0.941** | **+0.047** | **10.63** | ✅ **Claim** |
+| adam | step_size=0.001 | 0.883 | −0.009 | −2.13 | Coordinate |
+| adafactor | step_size=0.001 | 0.902 | +0.008 | 0.00 | Coordinate |
+| local_adam | step_size=0.001 | 0.852 | −0.042 | 0.00 | Coordinate |
+| schedule_free | step_size=0.001 | 0.797 | −0.097 | — | Defect |
+
+**Registered claims confirmed:** 2/18 (lion, muon)
+**Walltime:** ~5 min total (1 epoch L0)
+**Note:** Control (euclidean) uses momentum=0.9, grad_clip=1.0, lr=0.01 — a strong baseline. Lion and muon beat this baseline; adam at step_size=0.001 does not.
 
 ## 🏃 Phase 3: Rung 2 — Cross-Family Comparison at Best Box
 
