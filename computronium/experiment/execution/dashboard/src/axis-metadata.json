@@ -48,6 +48,11 @@
           "name": "ternary",
           "summary": "Ternary substrate: weights in {-alpha, 0, +alpha}",
           "available": true
+        },
+        {
+          "name": "noisy",
+          "summary": "Digital substrate with additive state noise",
+          "available": true
         }
       ]
     },
@@ -193,6 +198,11 @@
           "available": false
         },
         {
+          "name": "closed_form_ridge",
+          "summary": "Closed-form ridge plasticity: psi solved, never trained",
+          "available": true
+        },
+        {
           "name": "temporal_psi",
           "summary": "Trace-decayed supervised psi",
           "available": true
@@ -282,6 +292,26 @@
           "name": "surrogate",
           "summary": "Straight-through surrogate for hard top-k routing",
           "available": true
+        },
+        {
+          "name": "local_supervision",
+          "summary": "Deep local supervision: one auxiliary head per hidden layer",
+          "available": true
+        },
+        {
+          "name": "eligibility_prop",
+          "summary": "e-prop: a decaying eligibility trace",
+          "available": true
+        },
+        {
+          "name": "unbiased_rtrl",
+          "summary": "UORO: an unbiased rank-1 factored Jacobian",
+          "available": true
+        },
+        {
+          "name": "rtrl_reference",
+          "summary": "Exact RTRL (temporal parity reference)",
+          "available": true
         }
       ]
     },
@@ -347,6 +377,36 @@
         {
           "name": "role_split",
           "summary": "Role-split update",
+          "available": true
+        },
+        {
+          "name": "synaptic_intelligence",
+          "summary": "Synaptic Intelligence: the penalty lifted into a rule",
+          "available": true
+        },
+        {
+          "name": "cascade_synapse",
+          "summary": "Benna-Fusi cascade: a metaplastic multi-level state",
+          "available": true
+        },
+        {
+          "name": "bayesian_online",
+          "summary": "VON: an online diagonal Gaussian posterior",
+          "available": true
+        },
+        {
+          "name": "adafactor",
+          "summary": "Adafactor: a factored row x column second moment",
+          "available": true
+        },
+        {
+          "name": "quantized_adam",
+          "summary": "8-bit Adam: blockwise-quantized moments",
+          "available": true
+        },
+        {
+          "name": "schedule_free",
+          "summary": "Schedule-free AdamW: the averaged sequence iterate",
           "available": true
         }
       ]

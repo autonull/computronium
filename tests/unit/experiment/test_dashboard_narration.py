@@ -283,10 +283,11 @@ class TestARunThatHasNotMeasuredYet:
         from computronium.experiment.schema.run_spec import RunSpec
 
         path = tmp_path / "empty.duckdb"
+        # Use param_count objective which has no pre-registration, so mode is EXPLORATORY
         spec = RunSpec(
             profile="demo",
             task="digits",
-            objectives=("validation_accuracy",),
+            objectives=("param_count",),
             fidelity="L1",
             n_seeds=2,
             epochs=1,

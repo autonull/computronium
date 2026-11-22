@@ -40,14 +40,15 @@ def _spec(*objectives: str) -> RunSpec:
 
 def test_an_unregistered_metric_is_exploratory() -> None:
     """The demo's claim metric has no pre-registered threshold."""
-    status = run_status(_spec("validation_accuracy"), "run-1", ("val_acc",))
+    # Use param_count which has no pre-registration
+    status = run_status(_spec("param_count"), "run-1", ("param_count",))
 
     assert status["mode"] == "EXPLORATORY"
     assert status["profile"] == "demo"
     assert status["tasks"] == ["digits"]
     assert status["fidelity"] == "L1"
-    assert status["objectives"] == ["validation_accuracy"]
-    assert status["claim_metrics"] == ["val_acc"]
+    assert status["objectives"] == ["param_count"]
+    assert status["claim_metrics"] == ["param_count"]
 
 
 def test_a_preregistered_claim_is_confirmatory(
@@ -98,7 +99,8 @@ def test_the_metrics_carry_the_run(tmp_path: Path) -> None:
     )
 
     path = tmp_path / "run.duckdb"
-    spec = _spec("validation_accuracy")
+    # Use param_count which has no pre-registration, so mode is EXPLORATORY
+    spec = _spec("param_count")
 
     with RecordStore(StoreConfig(path=path)) as store:
         run_id = store.create_run(spec=spec)
@@ -145,9 +147,8 @@ def test_the_metrics_carry_the_run(tmp_path: Path) -> None:
                     ceec_link=None,
                 ),
                 payload={
-                    "val_acc": 0.42,
-                    "walltime_s": 1.5,
                     "param_count": 1024,
+                    "walltime_s": 1.5,
                 },
             )
         )

@@ -214,14 +214,14 @@ def _constraint_count() -> str:
 def _axis_primitives(axis: str) -> tuple[int, list[str]]:
     """A runtime axis's available primitives, projected from the registry.
 
-    ``AXES_REGISTRIES`` is the search schema's view, a second table over the
-    same rows; the README counts read the ``PrimitiveSpec`` registry instead.
+    ``AXES_REGISTRIES`` is the single source of truth for available primitives.
     """
-    from computronium.primitives.registry import REGISTRY
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+    from computronium.experiment.schema.seed_registries import seed_all_registries
 
-    names = [
-        spec.name for spec in REGISTRY.values() if spec.axis == axis and spec.available
-    ]
+    seed_all_registries()
+    axis_enum = StructuralAxis(axis)
+    names = [spec.name for spec in AXES_REGISTRIES[axis_enum].values() if spec.available]
     return len(names), names
 
 
@@ -256,9 +256,18 @@ def _update_count() -> str:
 
 
 def _primitive_total() -> str:
-    from computronium.primitives.registry import REGISTRY
+    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+    from computronium.experiment.schema.seed_registries import seed_all_registries
 
-    return str(sum(1 for spec in REGISTRY.values() if spec.available))
+    seed_all_registries()
+    return str(
+        sum(
+            1
+            for axis in StructuralAxis
+            for spec in AXES_REGISTRIES[axis].values()
+            if spec.available
+        )
+    )
 
 
 def _substrate_list() -> str:
