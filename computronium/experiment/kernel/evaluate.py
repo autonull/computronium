@@ -354,7 +354,7 @@ def _evaluate_cell(
     cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
 
     # GPU Kernel Cache for SEC (TODO99 #8): Attach algorithm kernel backend when on CUDA
-    if resolved_device.type == "cuda":
+    if resolved_device == "cuda":
         try:
             _attach_algorithm_kernel_backend(cell.system, coordinate)
         except Exception:

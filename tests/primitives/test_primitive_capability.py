@@ -265,8 +265,23 @@ def test_primitive_on_declared_families(spec, screened_rows):
                 else (1, int(task.input_dim))
             )
             assert rung.coordinate is not None
+            # Add geometry.sequence for time-major tasks with recurrent geometry
+            coord = rung.coordinate
+            if getattr(task, "batch_layout", None) == "time_major" and coord.geometry == "recurrent":
+                params = dict(coord.params)
+                params["geometry.sequence"] = True
+                from computronium.experiment.schema.coordinate import Coordinate
+                coord = Coordinate(
+                    substrate=coord.substrate,
+                    geometry=coord.geometry,
+                    dynamics=coord.dynamics,
+                    plasticity=coord.plasticity,
+                    credit=coord.credit,
+                    update=coord.update,
+                    params=params,
+                )
             cell = compose_cell_system(
-                coordinate=rung.coordinate,
+                coordinate=coord,
                 geometry={},
                 input_shape=input_shape,
                 output_dim=task.output_dim,

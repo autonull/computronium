@@ -135,6 +135,10 @@ class TaskBatches:
 
     def __iter__(self) -> Iterator[tuple[Tensor, Tensor] | tuple[Any, Tensor]]:
         lane = self._resolve()
+        # Time-major tasks (sequence, RL with temporal credits) yield
+        # (time, batch, features) which must not be flattened
+        is_time_major = getattr(self.task, "batch_layout", None) == "time_major"
+
         if lane == "loader":
             loader = self.task.get_dataloader(self.split)  # type: ignore[arg-type]
             for index, batch in enumerate(loader):  # type: ignore[union-attr]
@@ -145,7 +149,10 @@ class TaskBatches:
                     yield batch, batch.y
                 elif _is_pair(batch):
                     inputs, targets = batch
-                    yield _flatten(inputs, self.task.name), targets
+                    if is_time_major:
+                        yield inputs, targets
+                    else:
+                        yield _flatten(inputs, self.task.name), targets
                 else:
                     raise ValueError(
                         f"Unexpected batch format from {self.task.name!r} loader: {type(batch)}"
@@ -157,7 +164,10 @@ class TaskBatches:
                 if _is_graph_data(inputs):
                     yield inputs, targets
                 else:
-                    yield _flatten(inputs, self.task.name), targets
+                    if is_time_major:
+                        yield inputs, targets
+                    else:
+                        yield _flatten(inputs, self.task.name), targets
             return
         raise ValueError(f"Unknown lane: {lane}")
 
