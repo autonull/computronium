@@ -1,10 +1,24 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-21. P0, P1 and P2 landed. P1 asks each law one question:
-a carrier's step against its declared neutral companion (µs), or a signal's
-fit against its cut channel (~1–10 s). `results/p1/surface.json` (instrument
-5) holds all 75 states and exits 0. No family box is a test. The first fixed
-law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
+**Status:** 2026-11-21. P0, P1 and P2 landed; P3 is open with its next action
+fixed. P1 asks each law one question: a carrier's step against its declared
+neutral companion (µs), or a signal's fit against its cut channel (~1–10 s).
+`results/p1/surface.json` (instrument 5) holds all 75 states and exits 0. No
+family box is a test. The first fixed law: `update.quantized_adam` went NaN →
+`works` (1.83 → 0.102).
+
+**Directive (binding, 2026-11-21): make the laws work and test them all.** A
+row closes when the law **trains at a legal point**, not when a gap is
+declared. `schema.gaps.GAPS` is a ledger of what is still broken; it is never
+the deliverable. A gap entry survives only where a fix was attempted and a
+failing test pins the exact missing component. The order is: the instrument
+sweeps each law's **own declared knob** (P3a), then the law's mechanism is
+fixed; every hand-measured verdict goes into the plan with its number.
+
+**Next session starts at P3a** (§4): `fit.ladder` + `_grid` sweeping the
+law's declared knobs, the resume key fixed to the case fingerprint, instrument
+6, then the 75-row batch. Expected: several of the 11 signal rows flip to
+`works` at a legal point; the rest name a mechanism.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -17,16 +31,14 @@ only ψ, so a law whose declared channel is the modulation was measured by
 half its mechanism. The full surface was re-bought under instrument 5 (75
 states, both calibration rows reproduced, exit 0, 488 s); no state moved.
 
-**P3 row 1 — `plasticity.substrate_coupled` is a recorded capability gap,
-not a fixable law.** Its identity card declares ψ ≡ σ and a no-op at the
-plasticity protocol; the joint transition carries no σ (`_step_psi` builds
-`substrate={}`), so the law has nothing to evolve. `schema.gaps.GAPS`
-already declares the gap with its trigger ("a substrate carries a separate
-state through the joint transition and the standard step reads it"). The
-obligation the plan owed it was a test that fails today; that test is now
-`test_the_plastic_step_carries_the_substrate_state` (`strict=True` xfail).
-Closing the gap is the σ channel — a joint-transition primitive, not a
-one-session instrument fix.
+**P3 row 1 — `plasticity.substrate_coupled` is still broken; the fix is the
+σ channel.** Its identity card declares ψ ≡ σ; the joint transition carries
+no σ (`_step_psi` builds `substrate={}`), so the law has nothing to evolve.
+`schema.gaps.GAPS` records it as a ledger entry with its trigger, not as a
+verdict. The failing test is filed:
+`test_the_plastic_step_carries_the_substrate_state` (`strict=True` xfail →
+it must xpass and the marker is deleted). Building σ as a registered,
+consolidated substrate-owned state is the P3 row-1 fix.
 
 **P3 row 2 — the four stalled update rows are triaged (measured).** Their
 real defect was a **step-semantics mislabel**: `_STEP_SEMANTICS` declared
@@ -40,8 +52,8 @@ The table now says `gradient_relative` for those four, and VON's lr is
 `bayesian_online` 0.999× → 0.719×, `elastic_consolidation` and
 `synaptic_intelligence` 0.717×, `cascade_synapse` 0.633× at the declared
 `update.step_size` ceiling (0.1). EWC/SI reach a tenth at 0.3 (0.096×),
-outside the declared domain, so all four are **coordinate results at the
-ceiling**, not missing mechanisms: each law moves, and none is frozen.
+outside the declared domain — so the **domain row is the next defect to fix**;
+the laws move, none is frozen.
 
 **Progress 2026-11-21.** The surface and the seams landed first. P1 then
 found and fixed three instrument defects before it could ask its question:
@@ -275,32 +287,65 @@ fix that flips it):**
 | a signal control skipped when `best.reached` was false (error-blind laws) | the control runs on the fit's own criterion |
 | `quantized_adam` reached NaN at step 3 (`1.34 → 3.2e10`) | an int8 block packs a small second-moment element to zero, so the step divides by `eps`; dequantize the second moment with one LSB as its floor (`max(v, block scale)`), and a two-step bound lock (`test_the_quantized_state_step_is_bounded`) |
 
-### P3 — Close the 14 `defect-or-gap` rows (the capability queue, by cost)
+### P3 — Close the 14 `defect-or-gap` rows: fix the laws, do not park them
 
-Each row names its mechanism and the fix that would flip it; a fix lands with
-a failing test. The order is cost: the one-session fixes first, the base
-boxes next, the credit implementations last (**the long pole**: seven pseudo-
-gradient paths, not plumbing).
+**Directive 2026-11-21 (binding for the next session):** a row closes when the
+law **trains**, not when a gap is declared. `gaps.GAPS` is a ledger of what is
+still broken, never the deliverable. The default action is the fix; a gap entry
+stays only where a fix has been attempted and a failing test pins the exact
+missing primitive.
 
-**Fixed 2026-11-21:** `update.quantized_adam` — the int8 second-moment block
-packed small elements to zero, so the step divided by `eps` (1.34 → 3.2e10 →
-NaN at step 3). The dequantized moment now has a one-LSB floor; the fit
-reaches 0.102 and the row is `works`. Lock:
-`test_the_quantized_state_step_is_bounded` (|ΔW| ≤ 2·lr).
+**The instrument's blind spot (first action, P3a).** `fit.coordinate`
+(`computronium/primitives/fit.py:174`) and `_grid`
+(`scripts/probes/p1_law_surface.py:166`) sweep one knob by name:
+`update.step_size` × {0.1, 1, 10}. Eleven of the 14 rows are law-specific
+mechanisms whose live knob is **not** `update.step_size` — `forward_tangent`
+reads `estimator_samples`, `local_goodness` reads `feedback_lr`, `zeroth_order`
+reads `fd_step`, `temporal_trace` reads `tau_pre/tau_post`, and so on. A grid
+that cannot move a law's own knob cannot decide whether the law works. So the
+"big for loop" needs its second dimension: **iterate each law's own declared
+knobs**, not one borrowed lr.
 
-| Order | Rows | Named mechanism / closing primitive |
+- **P3a — the law's own knob grid.** Add `fit.ladder(spec, base)` → the
+  candidates `(knob, value)`: the law's identity-card
+  `approximation_parameters` ∩ `AxisSpec.accepted_params` ∩ the harvested
+  `Domain` (log-spaced 3 points in-domain, the box default included);
+  `fit.coordinate` takes `knob`/`value` and writes `f"{axis}.{knob}"` into the
+  coordinate params. `_grid` iterates the candidates (cap: the law's first
+  three numeric knobs, ≤ 9 fits/row) and keeps the best. A point outside the
+  declared domain is dropped and reported, never silently accepted. If a law
+  passes only outside its domain, the **domain row is the defect** (a bound is
+  a claim): widen that law's declared domain in its axis row, with the measured
+  point in the comment.
+- **Acceptance for P3a:** re-run all 75 at instrument 6 (what a row measures
+  changed, so the version bumps). Expected: several of the 11 flip to `works`
+  at a legal point; every non-flip names a mechanism. The 41 `works` rows must
+  not change state.
+- **Cost:** price one row at the ladder (first measurement, ≤ 60 s cap), then
+  the batch watchdog is 2× that × rows / 12 lanes. Do not start the batch on
+  the old price.
+- **Fix the resume key first:** `_previous`/`cached`
+  (`scripts/probes/p1_law_surface.py:370`) matches `id + declaration` and
+  ignores the fingerprint, so a changed case can reuse a stale verdict. Match
+  `row["key"]` (which carries the fingerprint) before the batch runs.
+
+**Then, per row (fix first, gap only with a failing test):**
+
+| Order | Rows | The fix that makes it work |
 |---|---|---|
-| 1 | `plasticity.substrate_coupled` | **Closed as a named gap 2026-11-21.** ψ ≡ σ, and the joint transition carries no σ (`substrate={}`); `gaps.GAPS` declares the trigger. The failing test is `test_the_plastic_step_carries_the_substrate_state`. The closing primitive is the σ channel through the joint transition, not a plasticity-law fix. |
-| 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | **Triaged 2026-11-21 (defect fixed, then coordinate at the ceiling).** The defect was the step-semantics table: four rules were declared `per_element_displacement` while their algebra is gradient-relative, and VON's lr was a duplicate `von_alpha` the space cannot sweep. Fixed (table + VON `step_size`, lock `test_penalty_and_posterior_rules_are_gradient_relative`). Re-measured best legal fit: 0.719× / 0.633× / 0.717× / 0.717× at `step_size` 0.1; EWC/SI reach 0.096× at 0.3, outside the declared domain `[1e-5, 0.1]` — the **lr domain is the limit**, not the law. |
-| 3 | `substrate.optical`, `substrate.quantum` | no declared family base box: add one for the `photonic` / `quantum` families (and their priced cell). |
-| 4 | `credit.forward_tangent`, `credit.local_goodness`, `credit.local_contrastive`, `credit.random_projections`, `credit.target_inversion`, `credit.zeroth_order`, `credit.temporal_trace` | the known ladder-`unimplemented` credits: the pseudo-gradient path is wrong or incomplete; fix or declare the primitive it needs. |
+| 1 | `plasticity.substrate_coupled` | **Build the σ channel.** ψ ≡ σ needs a substrate state in the P-axis: `pipeline._step_psi` (`computronium/core/pipeline.py:282`) builds `CompositeState(..., substrate={})`; the joint transition carries no σ. Land σ as a registered substrate-owned state (lifecycle: registered, consolidated through `substrate.get_weight_update_operator`), then the law's `step` returns `{name: σ}` and the join is real. The failing test is already filed: `test_the_plastic_step_carries_the_substrate_state` (strict xfail → it must xpass, and the marker is deleted). Closes `gaps.GAPS["primitive.plasticity.substrate_coupled"]`. |
+| 2 | `update.bayesian_online`, `update.cascade_synapse`, `update.elastic_consolidation`, `update.synaptic_intelligence` | **Land in P3a.** The semantics table and VON's duplicate lr are fixed (`test_penalty_and_posterior_rules_are_gradient_relative`). The ladder prices their own knobs; EWC/SI's passing point (0.3) is outside `update.step_size`'s declared domain `[1e-5, 0.1]` → **widen the domain row** (or scale the value range per step semantics) rather than report a ceiling. Target: a legal point that reaches 0.1×. |
+| 3 | `substrate.optical`, `substrate.quantum` | **Build the base box, not a gap.** No `photonic`/`quantum` family exists in `BASE_BOXES` (`computronium/experiment/sec_pilot.py`), so the primitive has no declared cell. Add one family row with a task whose declared shape the substrate's forward operator consumes (optical interference, quantum), then the ordinary carrier digest prices it. If the forward operator is itself a stub, that is the primitive and it ships with its parity lock. |
+| 4 | `credit.forward_tangent`, `local_goodness`, `local_contrastive`, `random_projections`, `target_inversion`, `zeroth_order`, `temporal_trace` | **Land in P3a first**, then fix the mechanism its reading names. Their accepted knobs are live: `forward_tangent` (`estimator_samples`), `zeroth_order` (`fd_step`, `estimator_samples`), `temporal_trace` (`tau_pre/tau_post`), `local_goodness`/`local_contrastive` (`feedback_lr`, `readout_error`, `beta`), `random_projections`/`target_inversion` (`feedback_scale`, `beta`). A credit that moves but cannot reach a tenth gets the pseudo-gradient path audited against its identity card (`pseudo_gradient_def`), then the path is fixed in `computronium/ontology/credit/`; only a genuinely absent estimator (JVP / target-propagation / ES) becomes one shared component, not seven gaps. |
 
 **P4 does not wait for P3.** The loop starts on the 41 clean laws now; P3's
-rows are the capability queue and land in parallel.
+rows land in parallel.
 
-**Close:** every row is a fixed law, or a capability gap with the primitive
-that closes it and the family it unlocks. A refusal is allowed only with a
-test that fails without it.
+**Close:** every row is a **law that trains at a legal point**, or a named
+missing component with a failing test and its measured attempt written beside
+it. A refusal is allowed only with a test that fails without it. "Coordinate
+result" is a row that trains but not to the bar: widen its declared box and
+re-measure; it is not a close.
 
 ### P4 — SEC optimization (in parallel with P3, reusing the cache)
 
@@ -345,11 +390,10 @@ claims.
    `refused`, 4 `inert`, 14 `defect-or-gap`; exit 0; both gates reproduced.
 3. **6/6 seams pass** their declared exchange. **Done**
    (`test_protocol_seams.py`).
-4. **Every `defect-or-gap` names the mechanism or box that closes it**, and
-   every `refused` names the rule or box that refuses it. **Partial:** the 14
-   rows are named in §4 P3. Row 1 is a declared gap with its failing test;
-   row 2's four rows are triaged (defect fixed, coordinate at the lr ceiling);
-   rows 3–4 still owe their failing tests.
+4. **Every `defect-or-gap` is closed by a fix**, and every `refused` names
+   the rule or box that refuses it. **Open:** P3 rows 1–4 have a named fix
+   (σ channel, knob ladder, base boxes, credit paths) and the ladder is the
+   first action; a gap entry is a ledger, never a close.
 5. **SEC runs on clean laws only**, reusing the cache; a claim exists only
    where a knob binds. **Open, P4.**
 6. **Every kernel row passes kill + parity**; every absent row is documented
@@ -407,6 +451,9 @@ to SEC, not a claim.
 | `test_a_plastic_laws_modulation_reaches_the_digest` | the primitive step skips `modulate`, or a law's modulation is dropped from the digest |
 | `test_the_plastic_step_carries_the_substrate_state` | the σ channel lands (strict xfail): the P-axis step still passes `substrate={}` |
 | `test_penalty_and_posterior_rules_are_gradient_relative` | a penalty/posterior rule is re-declared `per_element_displacement`, or VON regains a second lr |
+| `test_the_grid_sweeps_the_laws_own_knob` | `_grid` varies a name the law does not read (the L-c defect, one layer up) |
+| `test_a_row_passes_at_a_legal_point_or_names_its_mechanism` | a `defect-or-gap` row has no priced legal point in its own declared box |
+| `test_resume_keys_on_the_case_fingerprint` | a changed case reuses the cached verdict |
 
 ---
 
@@ -416,6 +463,17 @@ to SEC, not a claim.
 # 1. P0: the surface, then prove it is the registry's own list   [DONE]
 uv run python -m pytest tests/primitives/test_surface_lock.py -q
 uv run comp test --surface            # 75 laws + 6 seams + 78 rules, exit 0
+
+# 2. P3a — the next session starts here: the law's own knob ladder
+#    (price one row first; then the batch at 2x that price)
+uv run python scripts/probes/p1_law_surface.py --only signal \
+  --out results/p1 --limit 1 --steps 200          # price one row
+uv run python scripts/probes/p1_law_surface.py --only all --steps 200 \
+  --out results/p1                                # instrument 6, all 75
+uv run python -m pytest tests/primitives/test_surface_fit.py \
+  tests/primitives/test_surface_lock.py -q
+# exit 0 flips the rows that train; every other row names its mechanism.
+# Do not re-run a finished class to "check" a nonzero exit.
 
 # 2. P1: the two class batches (prices measured; instrument 5)     [DONE]
 uv run python scripts/probes/p1_law_surface.py --only carrier \
