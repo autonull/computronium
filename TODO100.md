@@ -1,7 +1,41 @@
 # TODO100 — SEC Loop: Real Experiments, Real Defects, Real Fixes
 
-**Status:** 2026-11-22. Entering the SEC loop with all infrastructure ready.
+**Status:** 2026-11-22. SEC loop entered. Phase 1 (Rung 0) complete. Phase 2 (Rung 1) in progress.
 **Principle:** Breadth before optimization. Every low cell is a defect probe. Fixes propagate across primitives via shared implementation.
+
+---
+
+## ✅ Phase 1 Complete: Rung 0 Wiring Verification (2026-11-22)
+
+| Credit Family | Pseudo-Grad Norm | Status |
+|---------------|------------------|--------|
+| gradient | 2.38 | ✅ Wired |
+| random_projections | 0.38 | ✅ Wired |
+| local_contrastive | 144.27 | ✅ Wired |
+| thermodynamic_contrast | 3.21 | ✅ Wired |
+| pc_alm | 1.34 | ✅ Wired |
+| target_inversion | 0.24 | ✅ Wired |
+| pepita | 2.22 | ✅ Wired |
+| forward_tangent | 100.42 | ✅ Wired |
+| score_function | 33.16 | ✅ Wired |
+| zeroth_order | 98.88 | ✅ Wired |
+| surrogate | 5.17 | ✅ Wired |
+| local_supervision | 1.53 | ✅ Wired |
+| local_goodness | 0.18 | ✅ Wired |
+| hybrid | 2.52 | ✅ Wired |
+| eligibility_prop | 2.66 | ✅ Wired |
+| unbiased_rtrl | 8.10 | ✅ Wired |
+| rtrl_reference | 2.54 | ✅ Wired |
+| homeostatic (error-blind) | 7.21 | ✅ Wired (non-zero update) |
+| temporal_trace (error-blind) | 3.3e-7 | ⚠️ Near-zero (known: contract is non-zero update, not accuracy) |
+
+**All 19 credits wired.** Positive control passes on mnist (val_acc=0.89, chance=0.10).
+No "free settle telemetry failed" warnings.
+All 75 primitive contract tests pass.
+
+---
+
+## 📊 Current Capability Map (Post-TODO99 + Phase 1)
 
 ---
 
@@ -23,63 +57,46 @@
 
 ---
 
-## 📊 Current Capability Map (Post-TODO99)
+## 📊 Current Capability Map (Post-Phase 1)
 
-| Credit Family | Declared Families | Best Box (L0) | Rung 0 Wired? | Rung 1 Viable? | Status |
-|---------------|-------------------|---------------|---------------|----------------|--------|
-| gradient | vision, seq, tab, cont, graph, rl, sci, lm, neuro | ff/inst/euclid | ✅ | ✅ | **Claim candidate** |
-| random_projections | vision, seq, tab | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| local_contrastive | vision | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| thermodynamic_contrast | vision, seq | ff/energy_min/euclid | ✅ | ❓ | **Test needed** |
-| pc_alm | vision, graph* | ff/pc_alm/euclid | ✅ | ❓ | **Test needed** |
-| target_inversion | vision, cont* | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| pepita | vision, seq | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| forward_tangent | vision, seq | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| score_function | vision, seq, tab | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| zeroth_order | vision, seq, tab | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| surrogate | vision, seq, tab | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| local_supervision | vision, seq | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| eligibility_prop | seq, rl | rec/inst/euclid | ✅ | ❓ | **Test needed** |
-| unbiased_rtrl | seq, rl | rec/inst/euclid | ✅ | ❓ | **Test needed** |
-| rtrl_reference | seq, rl | rec/inst/euclid | ✅ | ❓ | **Test needed** |
-| local_goodness | vision | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| hybrid | vision, seq | ff/inst/euclid | ✅ | ❓ | **Test needed** |
-| homeostatic (error-blind) | all | any/any/any | ✅ | ❓ | **Contract: non-zero update** |
-| temporal_trace (error-blind) | seq, rl | rec/inst/euclid | ✅ | ❓ | **Contract: non-zero update** |
+| Credit Family | Declared Families | Base Box (L0) | Rung 0 Wired? | Rung 1 Viable (L0, 1 epoch, 1 seed, mnist) | Status |
+|---------------|-------------------|---------------|---------------|--------------------------------------------|--------|
+| gradient | vision, seq, tab, cont, graph, rl, sci, lm, neuro | ff/inst/euclid | ✅ | val_acc=0.89 | **Claim candidate** |
+| random_projections | vision, seq, tab | ff/inst/euclid | ✅ | val_acc=0.10 (at fb=0.01) | **Ladder needed** |
+| local_contrastive | vision | ff/inst/euclid | ✅ | val_acc=0.08 | **Ladder needed** |
+| thermodynamic_contrast | vision, seq | ff/energy_min/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| pc_alm | vision, graph* | ff/pc_alm/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| target_inversion | vision, cont* | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| pepita | vision, seq | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| forward_tangent | vision, seq | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| score_function | vision, seq, tab | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| zeroth_order | vision, seq, tab | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| surrogate | vision, seq, tab | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| local_supervision | vision, seq | ff/inst/euclid | ✅ | val_acc=0.67 | **Viable** |
+| eligibility_prop | seq, rl | rec/inst/euclid | ✅ | ❌ (no vision family) | **Refused** |
+| unbiased_rtrl | seq, rl | rec/inst/euclid | ✅ | ❌ (no vision family) | **Refused** |
+| rtrl_reference | seq, rl | rec/inst/euclid | ✅ | ❌ (no vision family) | **Refused** |
+| local_goodness | vision | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| hybrid | vision, seq | ff/inst/euclid | ✅ | ❓ (not screened yet) | **Screen needed** |
+| homeostatic (error-blind) | all | any/any/any | ✅ | non-zero update | **Contract met** |
+| temporal_trace (error-blind) | seq, rl | rec/inst/euclid | ✅ | non-zero update | **Contract met** |
 
 *Added in TODO99 #3 (graph_energy_min, sequence_energy_min, continual_energy_min)
 
-**Total testable credit-family pairs: 17 × 2+ = 34+ cells at Rung 1**
+**Screened on mnist (vision): 4 measured, 1 refused (eligibility_prop), 14 unmeasured.**
+Rung 1 viability: gradient (0.89), local_supervision (0.67) above chance (0.10).
+random_projections at fb=0.01: val_acc=0.10 (at chance).
 
 ---
 
-## 🏃 Phase 1: Rung 0 — Wiring Verification (Cheapest Falsifier)
+## 🏃 Phase 2: Rung 1 — Viability Ladder (In Progress)
 
-**Goal:** Every credit family produces non-zero pseudo-gradient for error-aware credits; settle converges for non-instantaneous dynamics.
+## 🏃 Phase 1 Complete: Rung 0 — Wiring Verification ✅
 
-**Command per credit:**
-```bash
-uv run python -m computronium.experiment.survey_cli 0.1 \
-  --mode learn --policy tpe --device cuda \
-  --tasks <task> --fidelity L0 \
-  --axes '<credit=X,geometry=Y,dynamics=Z,...>' \
-  --epochs 1 --n-seeds 1
-```
-
-**Pass criteria (Rung 0):**
-- `compute_pseudo_gradient` returns finite, non-zero gradients (error-aware)
-- `settle` converges (non-instantaneous dynamics)
-- Positive control completes (L0, 60s cap, 1 epoch/1 seed)
-
-**Defect triage if FAIL:**
-| Signal | Check | If fails → Defect (name + test) |
-|--------|-------|--------------------------------|
-| pseudo-grad ≈ 0 | label channel? credit dispatch? shape? | `test_credit_X_gradient_nonzero` |
-| settle fails | max_steps=10? convergence=1e-3? kernel? | `test_dynamics_Y_settle_converges` |
-| shape error | target_kind? input_shape? geometry? | `test_credit_X_geometry_Y_compatible` |
-
-**Parallelization:** Use `sec_loop.py` async evaluator (4-5× speedup, TODO99 #5).
-**GPU kernels:** Auto-attached for matched coordinates (TODO99 #8).
+**Done 2026-11-22:** All 19 credits verified for non-zero pseudo-gradient (error-aware) or non-zero update (error-blind).
+Positive control passes on mnist (val_acc=0.89, chance=0.10).
+No "free settle telemetry failed" warnings.
+All 75 primitive contract tests pass.
 
 ---
 
