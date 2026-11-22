@@ -29,7 +29,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.acceleration.spec import axis_segment
-from computronium.experiment.sec_pilot import own_knob_params
+from computronium.experiment.sec_pilot import own_knob_params, BASE_BOXES, base_family
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
     EffectSizeRegistration,
@@ -552,14 +552,25 @@ def _credit_structural_params(credit: str, axes: dict[str, str]) -> dict[str, An
 
 
 def _credit_base_box(credit: str, task_id: str = "mnist") -> dict[str, Any]:
-    """The base box for a credit on a task family (full coordinate box with axes and structural params at defaults)."""
+    """The base box for a credit on a task family (full coordinate box with axes and defaults)."""
     from computronium.experiment.sec_pilot import base_schedule
 
     schedule = base_schedule(task_id, "auto")
     if schedule is None:
         raise ValueError(f"{task_id} declares no base box")
 
+    # Get family base coordinate for structural axes
+    family = base_family(task_id)
+    base_coord = BASE_BOXES.get(family).base_coordinate if family and BASE_BOXES.get(family) else None
+
+    # Start with credit-specific axes, then override structural axes from base_coordinate
     axes = _credit_axes(credit)
+    if base_coord:
+        structural_axes = {"substrate", "geometry", "dynamics", "plasticity"}
+        for ax_name in structural_axes:
+            if ax_name in base_coord:
+                axes[ax_name] = base_coord[ax_name]
+
     structural_params = _credit_structural_params(credit, axes)
 
     box = schedule.to_dict()

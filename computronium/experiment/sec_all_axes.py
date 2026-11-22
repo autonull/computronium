@@ -23,7 +23,7 @@ from computronium.experiment.sec_loop import (
     base_schedule,
     screen_coordinate,
 )
-from computronium.experiment.sec_pilot import own_knob_params
+from computronium.experiment.sec_pilot import own_knob_params, BASE_BOXES, base_family
 from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.schema.axis import AXES_REGISTRIES
 from computronium.validation.preregistration import (
@@ -323,14 +323,26 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     if schedule is None:
         raise ValueError(f"{task_id} declares no base box")
 
+    # Get family base coordinate for structural axes
+    family = base_family(task_id)
+    base_coord = BASE_BOXES.get(family).base_coordinate if family and BASE_BOXES.get(family) else None
+
     # Start with base schedule
     box = schedule.to_dict()
     box["device"] = "cuda"
     box["task"] = task_id
 
-    # Set ALL axes with defaults, then override the target axis
+    # Structural axes that come from base_coordinate (not hyperparameters)
+    structural_axes = {"substrate", "geometry", "dynamics", "plasticity"}
+
+    # Set axes: use base_coordinate for structural axes, _DEFAULT_AXES for others
     for ax_name, default in _DEFAULT_AXES.items():
-        box[ax_name] = default
+        if base_coord and ax_name in base_coord:
+            box[ax_name] = base_coord[ax_name]
+        else:
+            box[ax_name] = default
+
+    # Override the target axis (unless it's structural and we're testing a different primitive)
     if axis == "credit":
         box["credit"] = primitive
     elif axis == "dynamics":
