@@ -185,14 +185,14 @@ class EquivalenceRegistration:
 # TODO99 #6: Effect size claims (Cohen's d) per task family
 # Minimum effect sizes for practical significance (not just statistical)
 MIN_EFFECT_SIZE_BY_FAMILY: dict[str, float] = {
-    "vision": 0.8,      # Large effect detectable (MNIST)
-    "tabular": 0.5,     # Medium effect, small N (Iris)
-    "graph": 0.5,       # Medium effect (Cora)
-    "sequence": 0.8,    # High variance
-    "continual": 0.8,   # High variance
-    "rl": 0.8,          # High variance
+    "vision": 0.8,  # Large effect detectable (MNIST)
+    "tabular": 0.5,  # Medium effect, small N (Iris)
+    "graph": 0.5,  # Medium effect (Cora)
+    "sequence": 0.8,  # High variance
+    "continual": 0.8,  # High variance
+    "rl": 0.8,  # High variance
     "scientific": 0.5,  # Medium effect
-    "lm": 0.5,          # Medium effect
+    "lm": 0.5,  # Medium effect
     "neuromorphic": 0.8,
     "quantum": 0.8,
     "photonic": 0.8,
@@ -258,8 +258,25 @@ class EffectSizeRegistration:
         with path.open(encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 
+    def box_mismatch(self, box: Schedule | Mapping[str, Any]) -> str | None:
+        """The first declared box field that the run's box disagrees with.
+
+        The run's box is the schedule alone or the coordinate's whole box (its
+        axes and structural params too, TODO97 S9c); either is read by its own
+        mapping, so a registration and a measurement compare field for field.
+        """
+        if not self.box:
+            return None
+        actual = box if isinstance(box, Mapping) else box.to_dict()
+        for key, declared in self.box.items():
+            if actual.get(key) != declared:
+                return f"{key}: registered {declared!r}, run {actual.get(key)!r}"
+        return None
+
     @classmethod
-    def for_task_family(cls, claim: str, metric: str, task_id: str, **kwargs) -> EffectSizeRegistration:
+    def for_task_family(
+        cls, claim: str, metric: str, task_id: str, **kwargs
+    ) -> EffectSizeRegistration:
         """Create registration with family-appropriate minimum effect size."""
         family = _family_from_task(task_id)
         min_d = MIN_EFFECT_SIZE_BY_FAMILY.get(family, 0.5)
