@@ -116,10 +116,11 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
     ),
     "sequence": BaseBox(
         "sequence",
-        "char_ngram",
+        "delayed_cue",
         32,
         0,
         10,
+        base_coordinate={"geometry": "recurrent"},
     ),
     "continual": BaseBox(
         "continual",

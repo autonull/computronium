@@ -1476,7 +1476,7 @@ class LocalGoodnessCredit(LearnedFeedbackMixin):
             "feedback_scale), closed form, no autograd through the settle",
         ),
         objective_function="ff: Σ_l (G_l^free − G_l^nudged) [+ readout CE]; lemma: none (closed-form modulation)",
-        pseudo_gradient_def="ff: autograd of Σ (G_free − G_nudged) per layer; lemma: ΔW_l ∝ −(e₁ @ Bᵀ)ᵀ a_pre, e₁ = nudged_out − free_out",
+        pseudo_gradient_def="ff: autograd of Σ (G_free − G_nudged) per layer; lemma: ΔW_l ∝ −(e₁ @ Bᵀ)ᵀ a_pre, e₁ = one_hot(y) − softmax(out) (PEPITA probability-space error)",
         symmetry_requirements=("lemma: fixed random B with orthogonal rows",),
         approximation_parameters=(
             "beta (inert for both modes)",

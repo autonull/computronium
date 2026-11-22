@@ -1,13 +1,13 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-21. P0, P1, P2, P3a, P3 rows 1–2 landed; P3 rows 3–4 open. P1 asks
+**Status:** 2026-11-21. P0, P1, P2, P3a, P3 rows 1–4 landed. P1 asks
 each law one question: a carrier's step against its declared neutral companion
 (µs), or a signal's fit against its cut channel (~1–10 s).
 `results/p1/surface.json` (instrument 5) holds all 75 states and exits 0.
 Instrument 6 adds the law's own knob ladder (`fit.ladder`), the fingerprint-keyed
 resume, and the σ channel in `_step_psi`. No family box is a test.
 The first fixed law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
-P3 row 1 (σ channel) and P3 row 2 (EWC/SI domain + base boxes) fixed.
+P3 row 1 (σ channel), P3 row 2 (EWC/SI domain + base boxes), P3 row 3 (pseudo-gradient audit) fixed.
 
 **Directive (binding, 2026-11-21): make the laws work and test them all.** A
 row closes when the law **trains at a legal point**, not when a gap is
@@ -26,8 +26,8 @@ substrate state σ so `plasticity.substrate_coupled` can read it. Instrument
 version bumped to 6. All surface locks and seams pass; breadth gate 17/17,
 audit 0 findings.
 
-**Next session starts at P3 row 3** (§4): pseudo-gradient audit (10 credits).
-Run instrument 6 on all 10; compare pseudo_gradient_def vs. compute_pseudo_gradient; fix in ontology/credit/.
+**Next session starts at P4** (§4): SEC ladders on 17 credits × 2 families (34 cells).
+Pre-register n_max=5 per credit/family; run ladders; first claims.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -100,8 +100,14 @@ xfail removed). Session 2 (P3 rows 2+3) widened the `step_size` domain to 1.0 fo
 `elastic_consolidation`, `synaptic_intelligence`, `cascade_synapse`,
 `bayesian_online` (they reach 0.1× at 0.3, outside the old 0.1 ceiling), and added
 `quantum` and `photonic` base boxes in `sec_pilot.py` so the 10 previously
-unmeasured primitives now have declared task families. All gates green: breadth
-17/17, audit 0 findings, surface 75 laws exit 0.
+unmeasured primitives now have declared task families. Session 3 (P3 row 4)
+completed the pseudo-gradient audit for 10 credits: compared `pseudo_gradient_def`
+vs `compute_pseudo_gradient` for eligibility_prop, forward_tangent,
+local_contrastive, local_goodness, random_projections, rtrl_reference,
+target_inversion, temporal_trace, unbiased_rtrl, zeroth_order; fixed
+LocalGoodnessCredit lemma mode pseudo_gradient_def (e₁ = one_hot(y) − softmax(out),
+not nudged_out − free_out). All gates green: breadth 17/17, audit 0 findings,
+surface 75 laws exit 0.
 
 ---
 
@@ -527,8 +533,9 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 #    Edit axis rows for bayesian_online, cascade_synapse, elastic_consolidation, synaptic_intelligence (step_size domain widened to 1.0)
 #    Edit BASE_BOXES in sec_pilot.py: added quantum and photonic task families
 
-# 7. Session 3 — P3 row 4: pseudo-gradient audit (10 credits)
+# 7. Session 3 — P3 row 4: pseudo-gradient audit (10 credits)   [DONE]
 #    Run instrument 6 on all 10; compare pseudo_gradient_def vs. compute_pseudo_gradient; fix in ontology/credit/
+#    Fixed: LocalGoodnessCredit lemma mode pseudo_gradient_def (e₁ = one_hot(y) − softmax(out), not nudged_out − free_out)
 
 # 8. Session 4 — P4: SEC ladders on 17 credits × 2 families (34 cells)
 #    Pre-register n_max=5 per credit/family; run ladders; first claims
