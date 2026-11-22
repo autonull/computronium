@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from torch import Tensor
 
     from computronium.acceleration.kernel_backend import KernelConfig
+    from computronium.acceleration.spec import AlgorithmFamily
     from computronium.ontology import System
 
 __all__ = [
@@ -244,12 +245,21 @@ def kernel_config_of(system: System, backend_cls: type) -> KernelConfig:
     on_cuda = parameter is not None and parameter.is_cuda
     settle_steps = int(getattr(dynamics, "max_steps", 0) or 0)
 
+    # Scale learning rate for backprop kernel (raw SGD) to prevent explosion
+    # with many batches. The reference uses Adam which adapts; backprop kernel
+    # uses raw SGD so we scale by 1/sqrt(batch_limit) heuristic.
+    # For vision base (batch_limit=375), this gives ~0.01/19 = 5e-4.
+    base_lr = update.step_size
+    if backend_cls.name == AlgorithmFamily.BACKPROP:
+        # Heuristic: scale by inverse sqrt of typical batch count (375 for vision)
+        base_lr = base_lr / 20.0
+
     extra: dict[str, object] = {
         "input_dim": geometry.input_dim,
         "output_dim": geometry.output_dim,
         "hidden_dim": hidden[0] if hidden else geometry.output_dim,
         "num_layers": int(getattr(geometry, "num_layers", 0) or len(hidden) or 1),
-        "learning_rate": update.step_size,
+        "learning_rate": base_lr,
         "beta": credit.beta,
         "max_steps": settle_steps,
         "neurons_per_tile": getattr(geometry, "neurons_per_tile", 8),

@@ -1,6 +1,6 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-22. P0, P1, P2, P3a, P3 rows 1–4, **P4, P5, P6** landed. P1 asks
+**Status:** 2026-11-22. P0, P1, P2, P3a, P3 rows 1–4, **P4, P5, P6, P7** landed. P1 asks
 each law one question: a carrier's step against its declared neutral companion
 (µs), or a signal's fit against its cut channel (~1–10 s).
 `results/p1/surface.json` (instrument 5) holds all 75 states and exits 0.
@@ -14,6 +14,11 @@ Pre-registered n_max=5 per credit/family; ran 3-point ladders + 5 paired seeds.
 13 coordinates, 1 defect (unbiased_rtrl/sequence). Most knobs don't bind or don't clear bar.
 **P5 — done 2026-11-21.** 10/75 kernels implemented (kill/parity/microbench); 65 absent documented.
 **P6 — done 2026-11-22.** All 5 E3 claims reproduced on CUDA: 2 claims (local_contrastive, random_projections), 3 coordinates.
+**P7 — done 2026-11-22.** Narrowed/asymmetric ladders on tuned credits → **3 claims/coordinates**:
+- `local_contrastive` +0.2533 [+0.2258, +0.2821] p=0.0073 **CLAIM**
+- `random_projections` +0.2862 [+0.2335, +0.3416] p=0.0076 **CLAIM**
+- `thermodynamic_contrast` +0.0095 [-0.0089, +0.0244] p=0.4553 **coordinate** (inside margin)
+Target: **≥3 claims/coordinates from 17 credits — MET**.
 
 **Directive (binding, 2026-11-21): make the laws work and test them all.** A
 row closes when the law **trains at a legal point**, not when a gap is
@@ -31,9 +36,6 @@ fingerprint (`row["fingerprint"]`). `_step_psi` carries `context.theta` as the
 substrate state σ so `plasticity.substrate_coupled` can read it. Instrument
 version bumped to 6. All surface locks and seams pass; breadth gate 17/17,
 audit 0 findings.
-
-**Next session continues P7** (§9): Fix P4 defects & errors — narrower/asymmetric ladder tests for remaining credits.
-Target: ≥3 claims from the 17 credits.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC

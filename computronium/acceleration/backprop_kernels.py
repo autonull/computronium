@@ -91,8 +91,9 @@ class BackpropKernelBackend:
         error = one_hot_like(y, output) - torch.softmax(output, dim=-1)
         # Backward pass
         gradients = self.backward(activations, error)
-        # Apply updates
-        self.update_weights(gradients, 1.0)
+        # Apply updates with learning rate from config
+        lr = self._config.extra.get("learning_rate", 1.0) if self._config else 1.0
+        self.update_weights(gradients, lr)
         # Return metrics
         with torch.no_grad():
             loss = torch.nn.functional.cross_entropy(output, y).item()
