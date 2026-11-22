@@ -221,3 +221,46 @@ def list_by_axis() -> dict[str, list[str]]:
         axis = spec.axis or "algorithm"
         by_axis[axis].append(spec.id)
     return dict(by_axis)
+
+
+def find_algorithm_for_coordinate(
+    coordinate: "Coordinate",
+) -> "ImplementationSpec | None":
+    """Find an algorithm implementation that matches the coordinate's primitives.
+
+    Returns the algorithm spec if the coordinate's primitive combination contains
+    all the algorithm's `uses_primitives` and the algorithm has a kernel.
+    This enables GPU kernel dispatch for SEC evaluations.
+
+    Args:
+        coordinate: The coordinate with its six axis selections.
+
+    Returns:
+        The matching algorithm ImplementationSpec, or None if no match.
+    """
+    from computronium.acceleration.registry import algorithms
+
+    # Map coordinate axis to primitive axis prefix
+    axis_prefix = {
+        "substrate": "primitive.substrate",
+        "geometry": "primitive.geometry",
+        "dynamics": "primitive.state_dynamics",
+        "plasticity": "primitive.plasticity",
+        "credit": "primitive.credit_assignment",
+        "update": "primitive.parameter_update",
+    }
+
+    # Build the coordinate's full primitive IDs
+    coord_primitives = {
+        f"{axis_prefix[axis]}.{getattr(coordinate, axis)}"
+        for axis in axis_prefix
+    }
+
+    # Find algorithms whose uses_primitives are a subset of the coordinate's primitives
+    for spec in algorithms():
+        if spec.kernel_entrypoint and spec.uses_primitives:
+            alg_primitives = set(spec.uses_primitives)
+            if alg_primitives.issubset(coord_primitives):
+                return spec
+
+    return None

@@ -159,18 +159,26 @@ def test_the_plastic_step_carries_the_substrate_state():
 
 ---
 
-## 8. Architecture: GPU Kernel Cache for SEC 🔄 TODO
+## 8. Architecture: GPU Kernel Cache for SEC ✅ DONE
 
 **Problem:** SEC runs on CPU (device="auto" → cpu). Some primitives (forward_tangent at estimator_samples=800) take 90s/cell on CPU but 5s on GPU.
 
-**Fix:** Pre-compile Triton/CUDA kernels for the 10 implemented primitives. Use them in SEC automatically.
+**Fix:** Pre-compile Triton/CUDA kernels for the 21 algorithm implementations. Auto-attach kernel backends in SEC when device=cuda.
 
 ```python
-# computronium/acceleration/kernels.py
-# kernel_status="implemented" → auto-use in evaluate_cell when device=cuda
+# computronium/experiment/kernel/evaluate.py
+# _attach_algorithm_kernel_backend() called after cell composition when device=cuda
+# computronium/acceleration/registry.py
+# find_algorithm_for_coordinate() maps coordinate to algorithm spec with kernel
 ```
 
-**Gains:** forward_tangent, local_contrastive, random_projections run 10× faster on GPU. SEC wall-clock drops from hours to minutes.
+**Gains:** Algorithm kernels (FA, EqProp, PC, PEPITA, TP, Backprop, Hebbian, FF, DFA, SNN, Tile, MEP, etc.) run on GPU when coordinate matches. SEC wall-clock drops significantly for matched cells.
+
+**Implementation:**
+- Added `find_algorithm_for_coordinate()` in `acceleration/registry.py` that maps primitive combinations to algorithm specs with kernels
+- Added `_attach_algorithm_kernel_backend()` in `kernel/evaluate.py` called after cell composition when `resolved_device.type == "cuda"`
+- Uses dispatch system's `finish_with_backend()` to attach kernel backend (Triton/CUDA/torch_compile)
+- 21 algorithm implementations with kernels: FA, EqProp, PC, PEPITA, TP, Backprop, Hebbian, FF, DFA, SNN, Tile, MEP, etc.
 
 ---
 
@@ -185,7 +193,7 @@ def test_the_plastic_step_carries_the_substrate_state():
 | 5. Parallel evaluator | Medium | High (4-5× SEC speed) | None | Before Session D | ✅ DONE |
 | 6. Effect size claims | Low | Medium (better claims) | Preregistration format | Session D | ✅ DONE |
 | 7. Defect traceability | Medium | Medium (process) | Test markers | Ongoing | ✅ DONE |
-| 8. GPU kernels in SEC | Medium | High (10× speed) | Kernels exist | Before Session D | 🔄 TODO |
+| 8. GPU kernels in SEC | Medium | High (10× speed) | Kernels exist | Before Session D | ✅ DONE |
 
 ---
 
@@ -194,7 +202,7 @@ def test_the_plastic_step_carries_the_substrate_state():
 1. **Before Session A:** #1 (incremental surface) + #4 (continuous capability) — immediate ROI ✅
 2. **During Session A:** #2 (static compatibility) — touches plasticity files anyway ✅
 3. **During Session C:** #3 (more base boxes) — mechanical, high leverage ✅
-4. **Before Session D:** #5 (parallel evaluator) + #8 (GPU kernels) — SEC speed multipliers ✅ #5
+4. **Before Session D:** #5 (parallel evaluator) + #8 (GPU kernels) — SEC speed multipliers ✅
 5. **During Session D:** #6 (effect size claims) — preregistration format change ✅
 6. **Ongoing:** #7 (defect traceability) — process hygiene ✅
 

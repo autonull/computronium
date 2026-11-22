@@ -70,6 +70,36 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.schema.record import Record, Status
 
+
+def _attach_algorithm_kernel_backend(system: Any, coordinate: Any) -> None:
+    """Attach an algorithm kernel backend to the system if a match exists.
+
+    This enables GPU acceleration for SEC evaluations by using the algorithm-level
+    Triton/CUDA kernels when the coordinate's primitive combination matches a
+    known algorithm implementation with a kernel.
+
+    Args:
+        system: The composed system to potentially attach a kernel backend to.
+        coordinate: The coordinate with its six axis selections.
+    """
+    from computronium.acceleration.dispatch import finish_with_backend
+    from computronium.acceleration.registry import find_algorithm_for_coordinate
+    from computronium.acceleration.spec import ImplementationSpec
+
+    # Find matching algorithm spec for this coordinate
+    alg_spec = find_algorithm_for_coordinate(coordinate)
+    if alg_spec is None:
+        return
+
+    # Only attach if the algorithm has a verified/promoted kernel
+    if alg_spec.status not in {"kernel_verified", "microbenched", "campaign_ready"}:
+        return
+
+    # Use the dispatch system to attach the kernel backend
+    # "auto" will select the highest promoted rung (kernel if available)
+    finish_with_backend(system, alg_spec, "auto")
+
+
 __all__ = [
     "CellEvaluation",
     "TaskScheduler",
@@ -322,6 +352,15 @@ def _evaluate_cell(
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
     cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
+
+    # GPU Kernel Cache for SEC (TODO99 #8): Attach algorithm kernel backend when on CUDA
+    if resolved_device.type == "cuda":
+        try:
+            _attach_algorithm_kernel_backend(cell.system, coordinate)
+        except Exception:
+            # Kernel attachment failed; fall back to reference implementation
+            pass
+
     config = _create_trainer_config(schedule, resolved_device, params)
     trainer_class = _choose_trainer_class(schedule, task)
 
