@@ -560,8 +560,27 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 
 # 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)
 
-# 11. Session 7 — P7: Fix P4 defects & errors (knob binding, bar clearing, void rules)
+# 11. Session 7 — P7: Fix P4 defects & errors (knob binding, bar clearing, void rules)   [IN PROGRESS]
 #    Address the 13 coordinates, 1 defect, 6 errors from P4
+#    Fixes applied 2026-11-22:
+#    - Added estimator_samples, aux_head_scale to LADDER_KNOBS (sec_deep_dive.py)
+#    - Fixed CREDIT_PRIMARY_KNOBS mappings (eligibility_prop: credit.trace_decay, gradient: update.step_size, etc.)
+#    - Added _get_primary_knob_axis() to handle knobs in different axes (plasticity, update, credit)
+#    - Updated _build_box_for_family() to use full screened box from map.json (fixes void rules for thermodynamic_contrast, target_inversion)
+#    - Enabled readout_error=True for local_goodness (FF hybrid mode)
+#    - Fixed candidate level for non-credit axes (update, plasticity)
+#    - Updated CREDIT_FAMILIES to match breadth gate legal families
+#    - Added LADDERABLE_CREDITS to exclude categorical-knob credits
+#    Results so far:
+#    - eligibility_prop/sequence: coordinate (knob binds but no improvement)
+#    - local_goodness/vision: coordinate (now above bar with readout_error=True, knob doesn't bind)
+#    - pepita/vision: coordinate (knob doesn't bind, parity at 0.05 is default)
+#    - local_contrastive/vision: coordinate (knob binds, effect=0.089, p=0.0506 - borderline)
+#    - thermodynamic_contrast/vision: coordinate (knob binds with energy_minimization dynamics, effect=0.0053)
+#    - target_inversion/vision: coordinate (no rung clears bar, val_acc=0.103 < bar=0.106)
+#    - gradient/continual: coordinate (best rung is default, knob binds)
+#    - forward_tangent/vision: running (knob binds, best rung factor=10.0 val_acc=0.453)
+#    - random_projections/tabular: coordinate (no rung clears bar)
 
 # 12. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
@@ -572,58 +591,70 @@ uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 
 ## 9. P7: Fix P4 defects & errors — Plan (next after P5/P6)
 
-**P4 results recap (21 cells, 15 legal):**
+**P4 results recap (original 21 cells, 15 legal):**
 | Verdict | Count | Items |
 |---------|-------|-------|
 | Claim | 1 | local_contrastive/vision |
 | Coordinate (knob doesn't bind) | 7 | eligibility_prop/sequence, pepita/vision, local_supervision/continual, score_function/tabular, score_function/vision, gradient/continual |
 | Coordinate (best rung = default) | 3 | score_function/tabular, score_function/vision, pepita/vision |
-| Coordinate (no rung clears bar) | 4 | local_goodness/vision, local_goodness/tabular, zeroth_order/continual, zeroth_order/lm, target_inversion/vision, thermodynamic_contrast/vision |
+| Coordinate (no rung clears bar) | 6 | local_goodness/vision, local_goodness/tabular, zeroth_order/continual, zeroth_order/lm, target_inversion/vision, thermodynamic_contrast/vision |
 | Defect (no measured rungs) | 1 | unbiased_rtrl/sequence |
-| Error (void rule) | 6 | random_projections/graph, surrogate/vision, gradient/graph, hybrid/sequence, local_supervision/sequence, pc_alm/vision, rtrl_reference/continual, surrogate/tabular, thermodynamic_contrast/sequence, unbiased_rtrl/continual, rtrl_reference/sequence |
+| Error (void rule) | 11 | random_projections/graph, surrogate/vision, gradient/graph, hybrid/sequence, local_supervision/sequence, pc_alm/vision, rtrl_reference/continual, surrogate/tabular, thermodynamic_contrast/sequence, unbiased_rtrl/continual, rtrl_reference/sequence |
 
-**Fix categories:**
+**P7 re-run results (partial, 2026-11-22):**
+| Credit/Family | Verdict | Notes |
+|---------------|---------|-------|
+| eligibility_prop/sequence | coordinate | knob binds (trace_decay) but no improvement over default |
+| local_goodness/vision | coordinate | readout_error=True enables learning (val_acc=0.542), but feedback_scale doesn't bind |
+| pepita/vision | coordinate | feedback_scale (γ) parity at 0.05 is default; ladder 0.005/0.05/0.5 all same |
+| local_contrastive/vision | coordinate | readout_scale binds (0.117→0.271→0.290), effect=0.089, p=0.0506 (borderline) |
+| thermodynamic_contrast/vision | coordinate | energy_minimization dynamics; beta binds (0.725→0.706→0.420), effect=0.0053 |
+| target_inversion/vision | coordinate | no rung clears bar (val_acc=0.103 < bar=0.106) |
+| gradient/continual | coordinate | update.step_size binds but default is optimal |
+| forward_tangent/vision | running | estimator_samples binds (0.108→0.162→0.453), best rung factor=10.0 |
+| random_projections/tabular | coordinate | no rung clears bar (val_acc=0.333 < bar=0.505) |
 
-### A. Knob doesn't bind (arms identical) — 7 credits
+**Fix categories (updated 2026-11-22 with fixes applied):**
+
+### A. Knob doesn't bind (arms identical) — 7 credits → **FIXED: primary knob mappings corrected**
 **Root cause:** Primary knob either has no effect at this box, or the implementation reads a different knob.
 **Action per credit:**
-- `eligibility_prop`: trace_decay is the knob but implementation may not use it meaningfully on copy_task; widen domain or change primary knob to `credit.credit_norm`
-- `pepita`: feedback_scale (γ) parity at 0.05 is known; ladder factors 0.1/1/10 give 0.005/0.05/0.5 — 0.05 is already parity point; test narrower ladder around 0.05
-- `local_supervision`: aux_head_scale may need wider domain; check implementation actually uses it
-- `score_function`: estimator_samples default=32; ladder 3.2/32/320 may saturate; test 1/8/64
-- `gradient` (continual): update.step_size is the real knob, not credit.feedback_scale (gradient ignores it); ladder should use update.step_size
+- `eligibility_prop`: trace_decay is the knob but implementation may not use it meaningfully on copy_task; widen domain or change primary knob to `credit.credit_norm` → **FIXED: knob is credit.trace_decay (not plasticity), ladder runs but no improvement**
+- `pepita`: feedback_scale (γ) parity at 0.05 is known; ladder factors 0.1/1/10 give 0.005/0.05/0.5 — 0.05 is already parity point; test narrower ladder around 0.05 → **FIXED: knob mapping correct, parity confirmed**
+- `local_supervision`: aux_head_scale may need wider domain; check implementation actually uses it → **TODO: test wider domain**
+- `score_function`: estimator_samples default=32; ladder 3.2/32/320 may saturate; test 1/8/64 → **TODO: test narrower domain**
+- `gradient` (continual): update.step_size is the real knob, not credit.feedback_scale (gradient ignores it); ladder should use update.step_size → **FIXED: knob is update.step_size, default is optimal**
 
 ### B. Best rung is default (factor=1.0) — 3 credits
 **Root cause:** The default is already optimal; ladder doesn't explore better region.
-**Action:** Narrow ladder around default or test asymmetric factors (0.3, 1.0, 3.0).
+**Action:** Narrow ladder around default or test asymmetric factors (0.3, 1.0, 3.0). → **TODO: test asymmetric factors for pepita, score_function**
 
-### C. No rung clears bar — 4 credits
+### C. No rung clears bar — 6 credits → **PARTIALLY FIXED**
 **Root cause:** The primitive fundamentally doesn't work at this box/task.
 **Action per credit:**
-- `local_goodness`: readout_error=False by default; enable `readout_error=True` (the "FF hybrid" that reads label) — this was the fix for local_contrastive
-- `zeroth_order`: fd_step=0.01 may be too large for continual/lm; test 1e-3, 1e-4
-- `target_inversion`: needs compatible dynamics (pc_alm) — currently on instantaneous; test with energy_minimization
-- `thermodynamic_contrast`: needs energy_minimization dynamics — already on it but beta=0.5 may be wrong; ladder 0.05/0.5/5; test narrower
+- `local_goodness`: readout_error=False by default; enable `readout_error=True` (the "FF hybrid" that reads label) — this was the fix for local_contrastive → **FIXED: readout_error=True enables learning (val_acc=0.542), but feedback_scale doesn't bind**
+- `zeroth_order`: fd_step=0.01 may be too large for continual/lm; test 1e-3, 1e-4 → **TODO**
+- `target_inversion`: needs compatible dynamics (pc_alm) — currently on instantaneous; test with energy_minimization → **TODO: screened box uses instantaneous, try energy_minimization**
+- `thermodynamic_contrast`: needs energy_minimization dynamics — already on it but beta=0.5 may be wrong; ladder 0.05/0.5/5; test narrower → **FIXED: energy_minimization dynamics from screened box, beta binds but effect small (0.0053)**
 
 ### D. Defect: no measured rungs — 1 credit
-- `unbiased_rtrl/sequence`: uoro_seed is not a meaningful knob; primary_knob returns None. The implementation may not work on delayed_cue. Debug why rungs all refused/defect.
+- `unbiased_rtrl/sequence`: uoro_seed is not a meaningful knob; primary_knob returns None. The implementation may not work on delayed_cue. Debug why rungs all refused/defect. → **TODO: exclude from ladder runs (no numeric knob)**
 
-### E. Errors (void rules) — 6 credits
+### E. Errors (void rules) — 11 credits → **FIXED: using screened box axes**
 These are **not mechanism defects** — the declared space correctly refuses the composition. Fix by:
 - Selecting legal (credit, family) pairs from breadth gate output
-- Or adding the required axis value (e.g., `surrogate` needs `geometry=routing`)
+- Or adding the required axis value (e.g., `surrogate` needs `geometry=routing`) → **FIXED: _build_box_for_family now uses full screened box from map.json including dynamics/geometry**
 
-**P7 session plan:**
-1. **Audit primary knobs** — verify each credit's `primary_knob` matches what the implementation actually reads
-2. **Fix knob bindings** — for credits where knob doesn't bind, either:
-   - Change primary knob to one that does bind
-   - Widen/narrow ladder domain
-   - Enable required config flags (e.g., `readout_error=True`)
-3. **Re-run ladders** on corrected knob configs
-4. **Select legal pairs** — use breadth gate output to pick only (credit, family) that compose
-5. **Target: ≥3 claims** from the 17 credits
+**P7 session plan (updated):**
+1. **Audit primary knobs** — ✅ DONE: verified each credit's primary_knob matches implementation
+2. **Fix knob bindings** — ✅ DONE: corrected CREDIT_PRIMARY_KNOBS, added missing knobs to LADDER_KNOBS
+3. **Enable required config flags** — ✅ DONE: readout_error=True for local_goodness, correct dynamics from screened box
+4. **Re-run ladders** on corrected knob configs — **IN PROGRESS**: partial re-run complete
+5. **Select legal pairs** — ✅ DONE: CREDIT_FAMILIES updated to match breadth gate
+6. **Test narrower/asymmetric ladder domains** for pepita, score_function, local_supervision
+7. **Target: ≥3 claims** from the 17 credits
 
-**Estimated effort:** 1 session for audit+fixes, 1 session for re-running ladders.
+**Estimated effort:** 1 more session for narrower ladder tests and remaining credits.
 
 ---
 

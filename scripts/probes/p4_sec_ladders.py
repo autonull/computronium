@@ -31,6 +31,7 @@ from computronium.experiment.sec_deep_dive import (
     ladder_points,
 )
 from computronium.experiment.sec_loop import (
+    _AXIS_DEFAULTS,
     _deep_dive_coordinate,
     _is_legal,
     _measure,
@@ -49,50 +50,70 @@ logger = logging.getLogger(__name__)
 MARGIN = 0.01
 
 # Primary knobs for each credit (knob_name, default_value)
-# Based on map.json ladders and credit implementations
+# Based on credit implementations and their actual effective knobs
 CREDIT_PRIMARY_KNOBS = {
-    "eligibility_prop": ("credit.trace_decay", 0.9),
+    "eligibility_prop": ("credit.trace_decay", 0.9),  # credit axis parameter
     "forward_tangent": ("credit.estimator_samples", 8),
     "gradient": (
         "update.step_size",
         0.01,
     ),  # gradient uses update step_size, not credit knob
-    "hybrid": ("credit.feedback_scale", 0.05),
+    "hybrid": ("credit.feedback_scale", 0.05),  # gamma
     "local_contrastive": ("credit.readout_scale", 1.0),
-    "local_goodness": ("credit.feedback_scale", 0.01),
+    "local_goodness": ("credit.feedback_scale", 0.01),  # needs readout_error=True
     "local_supervision": ("credit.aux_head_scale", 0.1),
-    "pc_alm": ("credit.beta", 0.5),
-    "pepita": ("credit.feedback_scale", 0.05),
+    "pc_alm": ("credit.beta", 0.5),  # dual learning rate (beta_dual)
+    "pepita": ("credit.feedback_scale", 0.05),  # gamma
     "random_projections": ("credit.feedback_scale", 0.01),
-    "rtrl_reference": ("credit.credit_norm", "none"),  # no numeric knob
+    "rtrl_reference": ("credit.credit_norm", "none"),  # categorical, no numeric knob
     "score_function": ("credit.estimator_samples", 32),
-    "surrogate": ("credit.credit_norm", "none"),  # no numeric knob
+    "surrogate": ("credit.credit_norm", "none"),  # categorical, no numeric knob
     "target_inversion": ("credit.feedback_scale", 0.01),
     "thermodynamic_contrast": ("credit.beta", 0.5),
-    "unbiased_rtrl": ("credit.uoro_seed", 0),  # no meaningful numeric knob
+    "unbiased_rtrl": ("credit.uoro_seed", 0),  # integer seed, not continuous
     "zeroth_order": ("credit.fd_step", 0.01),
 }
 
+# Credits with meaningful numeric primary knobs for ladder runs
+LADDERABLE_CREDITS = (
+    "eligibility_prop",
+    "forward_tangent",
+    "gradient",
+    "hybrid",
+    "local_contrastive",
+    "local_goodness",
+    "local_supervision",
+    "pc_alm",
+    "pepita",
+    "random_projections",
+    "score_function",
+    "target_inversion",
+    "thermodynamic_contrast",
+    "zeroth_order",
+)
+
+# All error-aware credits (including those without numeric knobs)
 ERROR_AWARE_CREDITS = tuple(CREDIT_PRIMARY_KNOBS.keys())
 
+# Legal families from breadth gate (comp gate breadth)
 CREDIT_FAMILIES = {
     "eligibility_prop": ["continual", "sequence"],
-    "forward_tangent": ["lm", "sequence"],
-    "gradient": ["continual", "graph"],
-    "hybrid": ["lm", "sequence"],
-    "local_contrastive": ["vision"],  # only 1 legal family
+    "forward_tangent": ["lm", "sequence", "vision"],
+    "gradient": ["continual", "graph", "sequence", "tabular", "vision"],
+    "hybrid": ["lm", "sequence", "vision"],
+    "local_contrastive": ["tabular", "vision"],
     "local_goodness": ["tabular", "vision"],
-    "local_supervision": ["continual", "sequence"],
-    "pc_alm": ["vision"],  # only 1 legal family
-    "pepita": ["vision"],  # only 1 legal family
+    "local_supervision": ["continual", "sequence", "vision"],
+    "pc_alm": ["tabular", "vision"],
+    "pepita": ["continual", "sequence", "tabular", "vision"],
     "random_projections": ["graph", "tabular"],
     "rtrl_reference": ["continual", "sequence"],
     "score_function": ["tabular", "vision"],
     "surrogate": ["tabular", "vision"],
-    "target_inversion": ["vision"],  # only 1 legal family
-    "thermodynamic_contrast": ["vision", "sequence"],
+    "target_inversion": ["tabular", "vision"],
+    "thermodynamic_contrast": ["tabular", "vision"],
     "unbiased_rtrl": ["continual", "sequence"],
-    "zeroth_order": ["continual", "lm"],
+    "zeroth_order": ["continual", "lm", "sequence", "vision"],
 }
 
 
@@ -108,10 +129,19 @@ def _get_primary_knob(credit: str) -> tuple[str, float] | None:
     return knob_name, float(default_value)
 
 
+def _get_primary_knob_axis(credit: str) -> str | None:
+    """Get the axis for the primary knob (credit, plasticity, update, etc.)."""
+    knob_info = CREDIT_PRIMARY_KNOBS.get(credit)
+    if knob_info is None:
+        return None
+    knob_name, _ = knob_info
+    return knob_name.split(".")[0] if "." in knob_name else "credit"
+
+
 def _build_box_for_family(
     credit: str, family: str, schedule: Schedule
 ) -> dict[str, Any]:
-    """Build a box for the given credit and family using base box + credit params."""
+    """Build a box for the given credit and family using screened box from map.json."""
     base_box = BASE_BOXES[family]
     base_coord = base_box.base_coordinate or {}
 
@@ -127,22 +157,27 @@ def _build_box_for_family(
     # Override with family's base coordinate
     box.update(base_coord)
 
-    # Get credit-specific params from map.json (screened on vision)
+    # Get full screened box from map.json (screened on vision)
     map_path = Path("results/sec/map.json")
-    credit_params = {}
     if map_path.exists():
         map_data = json.loads(map_path.read_text(encoding="utf-8"))
         primitive_key = f"primitive.credit_assignment.{credit}"
         prim_data = map_data.get("primitives", {}).get(primitive_key)
         if prim_data and "box" in prim_data:
             screened_box = prim_data["box"]
-            # Extract credit-specific params (those starting with "credit.")
-            credit_params = {
-                k: v for k, v in screened_box.items() if k.startswith("credit.")
-            }
+            # Use the full screened box (axes + params) for compatibility
+            # This ensures credits get their required dynamics, geometry, etc.
+            box.update(screened_box)
+            # But keep the current family's task_id and schedule
+            box["task_id"] = base_box.task_id
 
-    # Add credit params
-    box.update(credit_params)
+    # Credit-specific fixes
+    if credit == "local_goodness":
+        # local_goodness needs readout_error=True to read the label (FF hybrid mode)
+        box["credit.readout_error"] = True
+    if credit == "eligibility_prop":
+        # eligibility_prop's trace_decay is a credit parameter (credit.trace_decay)
+        box["credit.trace_decay"] = 0.9
 
     # Add schedule params
     box.update({
@@ -203,11 +238,19 @@ def run_credit_ladder(  # ruff: ignore[complex-structure] - probe script, comple
         raise ValueError(f"{credit} has no primary knob for ladder")
     knob_name, knob_default = knob_info
 
+    # Get the axis for the primary knob (credit, plasticity, update, etc.)
+    knob_axis = _get_primary_knob_axis(credit)
+    if knob_axis is None:
+        knob_axis = "credit"
+
+    # The level for screen_coordinate should be the current axis value in the box
+    axis_level = box.get(knob_axis, _AXIS_DEFAULTS.get(knob_axis, credit))
+
     # Create candidate
     candidate = DeepDiveCandidate(
         primitive=f"primitive.credit_assignment.{credit}",
-        axis="credit",
-        level=credit,
+        axis=knob_axis,
+        level=axis_level,
         val_acc=0.0,  # placeholder
         margin=0.0,
         knob=knob_name,
@@ -402,7 +445,7 @@ def main() -> None:  # ruff: ignore[complex-structure] - probe script, complexit
     out_dir = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    credits_to_run = [args.credit] if args.credit else list(ERROR_AWARE_CREDITS)
+    credits_to_run = [args.credit] if args.credit else list(LADDERABLE_CREDITS)
     all_results = []
 
     for credit in credits_to_run:

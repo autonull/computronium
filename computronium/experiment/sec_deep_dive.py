@@ -74,7 +74,15 @@ MARGIN: Final[float] = 0.01
 #: declared numeric knob of the primitive's own config is the one laddered. The
 #: declaration names the knob; the default value stays the config classmethod's.
 LADDER_KNOBS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType({
-    "credit": ("feedback_scale", "beta", "readout_scale", "fd_step", "lr"),
+    "credit": (
+        "feedback_scale",
+        "beta",
+        "readout_scale",
+        "fd_step",
+        "estimator_samples",
+        "aux_head_scale",
+        "lr",
+    ),
     "dynamics": ("step_size", "max_steps"),
     "geometry": ("hidden_dim", "depth", "width"),
     "update": ("step_size", "momentum"),
