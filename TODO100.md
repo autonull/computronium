@@ -1,6 +1,6 @@
 # TODO100 — SEC Loop: Real Experiments, Real Defects, Real Fixes
 
-**Status:** 2026-11-22. SEC loop entered. Phase 1 (Rung 0) complete. Phase 2 (Rung 1) **complete for vision subset (digits)** — 13/16 viable.
+**Status:** 2026-11-22. SEC loop entered. Phase 1 (Rung 0) complete. Phase 2 (Rung 1) **complete** — 13/16 viable on vision (digits), exceeds ≥12 threshold. **Phase 3 (Rung 2) starting.**
 **Principle:** Breadth before optimization. Every low cell is a defect probe. Fixes propagate across primitives via shared implementation.
 
 ---
@@ -361,51 +361,50 @@ uv run python scripts/run_capability.py --session D  # substrate
 
 ## 🚀 Immediate Next Actions
 
-### Session A (Today): Rung 0 Wiring for All 17 Credits
-```bash
-# Parallel wiring check on digits (vision subset)
-for credit in random_projections local_contrastive thermodynamic_contrast \
-              pc_alm target_inversion pepita forward_tangent score_function \
-              zeroth_order surrogate local_supervision local_goodness hybrid \
-              eligibility_prop unbiased_rtrl rtrl_reference; do
-  uv run python -m computronium.experiment.survey_cli 0.1 \
-    --mode learn --policy tpe --device cuda \
-    --tasks digits --fidelity L0 \
-    --axes "credit=$credit,geometry=feedforward,dynamics=instantaneous,update=euclidean" \
-    --epochs 1 --n-seeds 1 &
-done
-wait
-```
+### ✅ Session A (Done): Rung 0 Wiring for All 19 Credits
+Complete — all 19 credits verified for non-zero pseudo-gradient (error-aware) or non-zero update (error-blind).
 
-### Session B: Rung 1 Ladder for Wired Credits
-```bash
-# 3-point ladder per credit on best geometry/dynamics
-for credit in <wired_credits>; do
-  for knob_val in <ladder_points>; do
-    uv run python -m computronium.experiment.survey_cli 0.1 \
-      --mode learn --policy tpe --device cuda \
-      --tasks digits --fidelity L0 \
-      --axes "credit=$credit,geometry=feedforward,dynamics=instantaneous,update=euclidean,credit.<knob>=$knob_val" \
-      --epochs 1 --n-seeds 1 &
-  done
-done
-wait
-```
+### ✅ Session B (Done): Rung 1 Ladder for Vision Subset (digits)
+Complete — 13/16 screened credits viable above chance (0.10) on digits. Best boxes identified.
 
-### Session C: Rung 2 Async SEC at Best Boxes
+### 🏃 Session C (Now): Rung 2 — Cross-Family Comparison at Best Boxes
+**Goal:** Each viable credit at its best declared box, paired comparison (n=5 seeds).
+
+**Viable credits on vision (digits) with best boxes:**
+| Credit | Best Box | Best Knob |
+|--------|----------|-----------|
+| gradient | ff/inst/euclid | — |
+| random_projections | ff/inst/euclid | fb=10.0 |
+| local_contrastive | ff/inst/euclid | rs=100.0 |
+| thermodynamic_contrast | ff/energy_min/euclid | β=0.1 |
+| pc_alm | ff/pc_alm/euclid | β=0.5 |
+| target_inversion | ff/inst/euclid | fb=10.0 |
+| pepita | ff/inst/euclid | γ=0.05 |
+| forward_tangent | ff/inst/euclid | est=256 |
+| score_function | ff/inst/euclid | est=256 |
+| surrogate | routing/inst/euclid | — |
+| local_goodness | ff/inst/euclid | readout_error=True |
+| hybrid | ff/inst/euclid | γ=0.05 |
+| local_supervision | ff/inst/euclid | — (marginal) |
+
+**Pre-registration:** Use `EffectSizeRegistration.for_task_family()` with family min_d=0.8 (vision).
+**Comparison:** Control = gradient (or euclidean update baseline). Treatment = each credit at best box.
+**Metric:** val_acc (normalized per task family).
+
 ```bash
-# Parallel SEC for each credit at its best ladder point
+# For each viable credit, run paired comparison at best box
 uv run python -m computronium.experiment.sec_deep_dive \
-  --credit random_projections --family vision --n-seeds 5 --async
-# ... repeat for each viable credit
+  --credit <credit> --family vision \
+  --registration configs/preregistrations/sec_credit_<credit>.json \
+  --n-seeds 5 --async
 ```
 
-### Session D: Rung 3 Pre-Registered Claims
+### Session D: Rung 3 — Pre-Registered Claims
+For credits passing Rung 2 (provisional coordinate with effect size):
 ```bash
-# For credits passing Rung 2
 uv run python -m computronium.experiment.sec_deep_dive \
-  --credit random_projections --family vision \
-  --registration configs/preregistrations/sec_credit_random_projections.json \
+  --credit <credit> --family vision \
+  --registration configs/preregistrations/sec_credit_<credit>.json \
   --n-seeds 5
 ```
 
@@ -428,11 +427,11 @@ uv run python -m computronium.experiment.sec_deep_dive \
 
 - [x] Rung 0: All 19 credits wired (pseudo-grad non-zero, settle converges)
 - [x] Rung 1 (vision subset): 13/16 screened credits viable on digits (ladder confirmed)
-- [ ] Rung 1 (full): ≥12 credits viable on ≥1 declared family (ladder confirmed)
+- [x] Rung 1 (full): ≥12 credits viable on ≥1 declared family (vision: 13 viable)
 - [ ] Rung 2: ≥8 credits at best box with provisional coordinate
 - [ ] Rung 3: ≥3 credits with confirmed claim (pre-registered, n=5, effect size)
 - [x] All defects in registry have fixing test + fix file + verification (DEF-001, DEF-002 resolved via hyperparam)
-- [ ] Capability gate green after each session (no regressions)
+- [x] Capability gate green after each session (no regressions) — Session B passes
 - [x] Experiment log table complete with rung, stop reason, box, cost (vision subset)
 
 **This is not a measurement campaign. This is a capability campaign. The deliverable is the system's ability to do something it could not do before.**
