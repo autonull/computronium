@@ -559,14 +559,74 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 
 # 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)
 
-# 11. The gates that must stay green while the work lands
+# 11. Session 7 — P7: Fix P4 defects & errors (knob binding, bar clearing, void rules)
+#    Address the 13 coordinates, 1 defect, 6 errors from P4
+
+# 12. The gates that must stay green while the work lands
 uv run comp gate breadth              # 17/17, exit 0        [GREEN 2026-11-21]
 uv run python scripts/audit.py --static   # 0 findings        [GREEN 2026-11-21]
 ```
 
 ---
 
-## 9. What we stop doing
+## 9. P7: Fix P4 defects & errors — Plan (next after P5/P6)
+
+**P4 results recap (21 cells, 15 legal):**
+| Verdict | Count | Items |
+|---------|-------|-------|
+| Claim | 1 | local_contrastive/vision |
+| Coordinate (knob doesn't bind) | 7 | eligibility_prop/sequence, pepita/vision, local_supervision/continual, score_function/tabular, score_function/vision, gradient/continual |
+| Coordinate (best rung = default) | 3 | score_function/tabular, score_function/vision, pepita/vision |
+| Coordinate (no rung clears bar) | 4 | local_goodness/vision, local_goodness/tabular, zeroth_order/continual, zeroth_order/lm, target_inversion/vision, thermodynamic_contrast/vision |
+| Defect (no measured rungs) | 1 | unbiased_rtrl/sequence |
+| Error (void rule) | 6 | random_projections/graph, surrogate/vision, gradient/graph, hybrid/sequence, local_supervision/sequence, pc_alm/vision, rtrl_reference/continual, surrogate/tabular, thermodynamic_contrast/sequence, unbiased_rtrl/continual, rtrl_reference/sequence |
+
+**Fix categories:**
+
+### A. Knob doesn't bind (arms identical) — 7 credits
+**Root cause:** Primary knob either has no effect at this box, or the implementation reads a different knob.
+**Action per credit:**
+- `eligibility_prop`: trace_decay is the knob but implementation may not use it meaningfully on copy_task; widen domain or change primary knob to `credit.credit_norm`
+- `pepita`: feedback_scale (γ) parity at 0.05 is known; ladder factors 0.1/1/10 give 0.005/0.05/0.5 — 0.05 is already parity point; test narrower ladder around 0.05
+- `local_supervision`: aux_head_scale may need wider domain; check implementation actually uses it
+- `score_function`: estimator_samples default=32; ladder 3.2/32/320 may saturate; test 1/8/64
+- `gradient` (continual): update.step_size is the real knob, not credit.feedback_scale (gradient ignores it); ladder should use update.step_size
+
+### B. Best rung is default (factor=1.0) — 3 credits
+**Root cause:** The default is already optimal; ladder doesn't explore better region.
+**Action:** Narrow ladder around default or test asymmetric factors (0.3, 1.0, 3.0).
+
+### C. No rung clears bar — 4 credits
+**Root cause:** The primitive fundamentally doesn't work at this box/task.
+**Action per credit:**
+- `local_goodness`: readout_error=False by default; enable `readout_error=True` (the "FF hybrid" that reads label) — this was the fix for local_contrastive
+- `zeroth_order`: fd_step=0.01 may be too large for continual/lm; test 1e-3, 1e-4
+- `target_inversion`: needs compatible dynamics (pc_alm) — currently on instantaneous; test with energy_minimization
+- `thermodynamic_contrast`: needs energy_minimization dynamics — already on it but beta=0.5 may be wrong; ladder 0.05/0.5/5; test narrower
+
+### D. Defect: no measured rungs — 1 credit
+- `unbiased_rtrl/sequence`: uoro_seed is not a meaningful knob; primary_knob returns None. The implementation may not work on delayed_cue. Debug why rungs all refused/defect.
+
+### E. Errors (void rules) — 6 credits
+These are **not mechanism defects** — the declared space correctly refuses the composition. Fix by:
+- Selecting legal (credit, family) pairs from breadth gate output
+- Or adding the required axis value (e.g., `surrogate` needs `geometry=routing`)
+
+**P7 session plan:**
+1. **Audit primary knobs** — verify each credit's `primary_knob` matches what the implementation actually reads
+2. **Fix knob bindings** — for credits where knob doesn't bind, either:
+   - Change primary knob to one that does bind
+   - Widen/narrow ladder domain
+   - Enable required config flags (e.g., `readout_error=True`)
+3. **Re-run ladders** on corrected knob configs
+4. **Select legal pairs** — use breadth gate output to pick only (credit, family) that compose
+5. **Target: ≥3 claims** from the 17 credits
+
+**Estimated effort:** 1 session for audit+fixes, 1 session for re-running ladders.
+
+---
+
+## 10. What we stop doing
 
 - **Surveying 675 family boxes** to answer a question about 75 mechanisms.
 - **Buying five seeds before the mechanism is proven**: a CI on a defective
