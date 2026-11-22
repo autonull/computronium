@@ -4,7 +4,7 @@
   "threshold": 0.01,
   "alpha": 0.05,
   "min_seeds": 5,
-  "created": "2026-11-21",
+  "created": "2026-11-22",
   "box": {
     "substrate": "digital",
     "geometry": "feedforward",
@@ -27,7 +27,7 @@
     "budget_id": "base-vision",
     "task_id": "mnist",
     "param_budget": 150000,
-    "device": "cpu",
+    "device": "cuda",
     "deterministic": true,
     "num_workers": 0,
     "precision": "fp32",

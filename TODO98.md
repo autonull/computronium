@@ -1,6 +1,6 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-21. P0, P1, P2, P3a, P3 rows 1–4, **P4** landed. P1 asks
+**Status:** 2026-11-22. P0, P1, P2, P3a, P3 rows 1–4, **P4, P5, P6** landed. P1 asks
 each law one question: a carrier's step against its declared neutral companion
 (µs), or a signal's fit against its cut channel (~1–10 s).
 `results/p1/surface.json` (instrument 5) holds all 75 states and exits 0.
@@ -12,6 +12,8 @@ P3 row 1 (σ channel), P3 row 2 (EWC/SI domain + base boxes), P3 row 3 (pseudo-g
 Pre-registered n_max=5 per credit/family; ran 3-point ladders + 5 paired seeds.
 **First claim:** `local_contrastive` on vision (effect=0.274, p=0.0076, clears 0.01 margin).
 13 coordinates, 1 defect (unbiased_rtrl/sequence). Most knobs don't bind or don't clear bar.
+**P5 — done 2026-11-21.** 10/75 kernels implemented (kill/parity/microbench); 65 absent documented.
+**P6 — done 2026-11-22.** All 5 E3 claims reproduced on CUDA: 2 claims (local_contrastive, random_projections), 3 coordinates.
 
 **Directive (binding, 2026-11-21): make the laws work and test them all.** A
 row closes when the law **trains at a legal point**, not when a gap is
@@ -30,8 +32,8 @@ substrate state σ so `plasticity.substrate_coupled` can read it. Instrument
 version bumped to 6. All surface locks and seams pass; breadth gate 17/17,
 audit 0 findings.
 
-**Next session starts at P5** (§4): Kernels by technology group (triton/cuda/torch_compile/torch).
-Parity + kill + microbench per group; 75/75 target.
+**Next session continues P7** (§9): Fix P4 defects & errors — narrower/asymmetric ladder tests for remaining credits.
+Target: ≥3 claims from the 17 credits.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -558,7 +560,11 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 #    Parity + kill + microbench per group; 75/75 target
 #    **DONE 2026-11-21**: Added kernel_status_reason to all 75 primitives; 10 implemented kernels pass kill/parity/microbench; 65 absent kernels documented with reasons
 
-# 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)
+# 10. Session 6 — P6: Reproduction for all E3 claims (second device/profile)   [DONE 2026-11-22]
+#    Re-registered 5 E3 claims for CUDA device; ran paired comparisons (n=5 seeds each).
+#    Results: 2/5 claims reproduced (local_contrastive, random_projections), 3/5 coordinates reproduced.
+#    Effect sizes match CPU within variance: local_contrastive 0.2533 (identical), random_projections 0.2732→0.2862, thermodynamic_contrast 0.0095 (identical).
+#    Artifacts: results/sec_claims/claims_cuda.json, configs/preregistrations/sec_credit_*.json (updated for CUDA)
 
 # 11. Session 7 — P7: Fix P4 defects & errors (knob binding, bar clearing, void rules)   [IN PROGRESS]
 #    Address the 13 coordinates, 1 defect, 6 errors from P4
