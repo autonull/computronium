@@ -1,6 +1,6 @@
 # TODO98 — Test the Laws, Not the Grid
 
-**Status:** 2026-11-21. P0, P1, P2, P3a, P3 rows 1–4 landed. P1 asks
+**Status:** 2026-11-21. P0, P1, P2, P3a, P3 rows 1–4, **P4** landed. P1 asks
 each law one question: a carrier's step against its declared neutral companion
 (µs), or a signal's fit against its cut channel (~1–10 s).
 `results/p1/surface.json` (instrument 5) holds all 75 states and exits 0.
@@ -8,6 +8,10 @@ Instrument 6 adds the law's own knob ladder (`fit.ladder`), the fingerprint-keye
 resume, and the σ channel in `_step_psi`. No family box is a test.
 The first fixed law: `update.quantized_adam` went NaN → `works` (1.83 → 0.102).
 P3 row 1 (σ channel), P3 row 2 (EWC/SI domain + base boxes), P3 row 3 (pseudo-gradient audit) fixed.
+**P4 — done 2026-11-21.** SEC ladders on 17 error-aware credits × 2 families (21 cells run, 15 legal).
+Pre-registered n_max=5 per credit/family; ran 3-point ladders + 5 paired seeds.
+**First claim:** `local_contrastive` on vision (effect=0.274, p=0.0076, clears 0.01 margin).
+13 coordinates, 1 defect (unbiased_rtrl/sequence). Most knobs don't bind or don't clear bar.
 
 **Directive (binding, 2026-11-21): make the laws work and test them all.** A
 row closes when the law **trains at a legal point**, not when a gap is
@@ -26,8 +30,8 @@ substrate state σ so `plasticity.substrate_coupled` can read it. Instrument
 version bumped to 6. All surface locks and seams pass; breadth gate 17/17,
 audit 0 findings.
 
-**Next session starts at P4** (§4): SEC ladders on 17 credits × 2 families (34 cells).
-Pre-register n_max=5 per credit/family; run ladders; first claims.
+**Next session starts at P5** (§4): Kernels by technology group (triton/cuda/torch_compile/torch).
+Parity + kill + microbench per group; 75/75 target.
 
 **One sentence:** 75 laws × the one question their axis declares, plus 6
 protocol seams, are the whole test surface; a family box is a screen the SEC
@@ -108,6 +112,13 @@ target_inversion, temporal_trace, unbiased_rtrl, zeroth_order; fixed
 LocalGoodnessCredit lemma mode pseudo_gradient_def (e₁ = one_hot(y) − softmax(out),
 not nudged_out − free_out). All gates green: breadth 17/17, audit 0 findings,
 surface 75 laws exit 0.
+
+**Progress 2026-11-21 (fourth landing — Session 4).** P4 SEC ladders completed.
+Ran 21 (credit, family) cells with pre-registered n_max=5; 15 legal compositions.
+**Verdicts:** 1 claim (`local_contrastive`/vision, effect=0.274, p=0.0076), 13 coordinates,
+1 defect (`unbiased_rtrl`/sequence). Most primary knobs either don't bind (arms identical)
+or don't clear the task bar. Artifacts: `results/p4/result_*.json`, `results/p4/summary.json`,
+`results/p4/prereg_*.json`.
 
 ---
 
@@ -537,8 +548,11 @@ uv run python -m pytest tests/primitives/test_surface_fit.py::test_the_plastic_s
 #    Run instrument 6 on all 10; compare pseudo_gradient_def vs. compute_pseudo_gradient; fix in ontology/credit/
 #    Fixed: LocalGoodnessCredit lemma mode pseudo_gradient_def (e₁ = one_hot(y) − softmax(out), not nudged_out − free_out)
 
-# 8. Session 4 — P4: SEC ladders on 17 credits × 2 families (34 cells)
+# 8. Session 4 — P4: SEC ladders on 17 credits × 2 families (34 cells)   [DONE]
 #    Pre-register n_max=5 per credit/family; run ladders; first claims
+#    Results (21 cells run, 15 legal): 1 claim (local_contrastive/vision), 13 coordinates, 1 defect
+#    Key finding: only local_contrastive produced a claim on vision; most knobs don't bind or don't clear bar
+#    Artifacts: results/p4/result_*.json, results/p4/summary.json
 
 # 9. Session 5 — P5: Kernels by technology group (triton/cuda/torch_compile/torch)
 #    Parity + kill + microbench per group; 75/75 target
