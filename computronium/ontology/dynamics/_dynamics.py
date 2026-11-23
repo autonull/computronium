@@ -1037,7 +1037,9 @@ def _compute_interaction_energy(
         if weight_idx < num_ff_weights:
             W = params[weight_names[weight_idx]]
             if W.shape[0] == h.shape[-1] and W.shape[1] == h_prev.shape[-1]:
-                interaction_energy = interaction_energy + (h @ W @ h_prev.T).trace()
+                # Sum over every leading index (batch, or time × batch): the
+                # 2-D trace and the 3-D time-major form are one contraction.
+                interaction_energy = interaction_energy + ((h @ W) * h_prev).sum()
 
     return interaction_energy
 

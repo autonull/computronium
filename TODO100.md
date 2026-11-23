@@ -626,20 +626,46 @@ For credits with confirmed claims (surrogate, local_goodness), tested on compati
 
 **Note:** Exit criteria asks for "≥3 credits with confirmed claim" — only 2 credits (surrogate, local_goodness) beat gradient on vision at Rung 2. Both achieve claims on tabular as well, giving 4 total confirmed claims across 2 credits × 2 families.
 
+### ✅ Session E (Done): Defect pass — all 8 plasticity primitives train
+
+Goal: every primitive is essentially working and ready for optimization.
+Fixed the three blockers that kept plasticity capability tests skipped or crashing:
+
+- **DEF-003**: the capability test aborted its family loop at the first refused family, so later legal families never ran. Fix: `continue` on a refusal; skip only when every family is refused.
+- **DEF-004**: the Hopfield interaction energy assumed 2-D activations; a time-major `[time, batch, feat]` cell raised `12 vs 10`. Fix: one contraction `((h @ W) * h_prev).sum()` covers 2-D and 3-D.
+- **DEF-005**: `fast_weights.modulate` added per-sample weights to a time-major activation on the wrong axis. Fix: place them on the axis matching the sample count.
+- **Stale map rows**: rows measured before a void rule are rebuilt to a legal box by the screen's own builder instead of refused.
+
+**Result:** plasticity capability rung `8 passed` (was `7 passed, 1 skipped`). `fast_weights` now trains on sequence.
+**Next:** re-screen stale map rows (`--breadth full`) and finish Dynamics rung (diffusion/lazy/predictive_settling pass individually; their failures in the all-dynamics run were parallel timeouts, not defects). Geometry needs task shape by design, not a fix.
+
 ---
 
 ## 📋 Defect Registry (Living Document)
 
 | Defect ID | Symptom | Mechanism | Failing Test | Fix File | Primitives Fixed | Verified |
 |-----------|---------|-----------|--------------|----------|------------------|----------|
-| GAP-001 | σ channel missing | θ not in _step_psi | test_plastic_step_carries_substrate_state | sec_loop.py | All plasticity | — |
+| GAP-001 | σ channel missing | θ not in _step_psi | test_the_plastic_step_carries_the_substrate_state | core/pipeline.py | All plasticity | ✅ |
 | DEF-001 | target_inversion below bar | Default feedback_scale=0.01 too small for transpose feedback | Rung 1 ladder (digits) | N/A (hyperparam fix: fb≥0.1) | target_inversion | ✅ |
 | DEF-002 | local_goodness below bar | Default readout_error=False (pure FF is error-blind) | Rung 1 ladder (digits) | N/A (hyperparam fix: readout_error=True) | local_goodness | ✅ |
-| ... | ... | ... | ... | ... | ... | ... |
+| DEF-003 | Later declared families never tried | `pytest.skip` inside the family loop aborted the whole test at the first refused family | test_primitive_on_declared_families (multi-family primitives) | tests/primitives/test_primitive_capability.py | all multi-family primitives | ✅ |
+| DEF-004 | time-major energy crashes | `(h @ W @ h_prev.T).trace()` assumes 2-D; a `[time, batch, feat]` activation doubles batch and trace fails | test_primitive_on_declared_families[fast_weights] (delayed_cue) | ontology/dynamics/_dynamics.py | energy_minimization (all settle) | ✅ |
+| DEF-005 | fast_weights crash on sequence | `modulate` adds `[batch, feat]` fast weights to `[time, batch, feat]` activations on axis 0 | test_primitive_on_declared_families[fast_weights] (delayed_cue) | core/plasticity/fast_weights.py | fast_weights | ✅ |
 
 *Populated as defects are discovered. Each entry requires: named mechanism + failing test + fix file + verification.*
 
+### Capability rung: stale map rows
+
+A map row measured before a void rule was declared carries a box the declared
+space now refuses (e.g. `fast_weights` measured at `instantaneous` dynamics,
+`conflict_adaptive` measured with `gradient` credit). The capability rung now
+rebuilds a legal box with the screen's own builder
+(`_iter_legal_coordinates`) instead of skipping the primitive, so capability
+verification is not hostage to a stale map. Re-screening those rows
+(`--breadth full`) is queued work, not a blocker.
+
 ---
+
 
 ## 🏁 Exit Criteria for TODO100
 

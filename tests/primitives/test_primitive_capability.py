@@ -21,11 +21,13 @@ import pytest
 from computronium.domains.base import DomainType
 from computronium.domains.factory import create_task
 from computronium.experiment.kernel.compose import compose_cell_system
+from computronium.experiment.sec_census import build_census
 from computronium.experiment.sec_claims import map_rows
 from computronium.experiment.sec_loop import (
     _base_axes,
     _coordinate,
     _is_legal,
+    _iter_legal_coordinates,
     box_params,
     screen_coordinate,
 )
@@ -73,6 +75,21 @@ def _fallback_coordinate(spec: PrimitiveSpec, task_id: str) -> Coordinate:
     axes = _base_axes(task_id)
     axes[spec.axis] = spec.id.rsplit(".", 1)[-1]
     return _coordinate(axes)
+
+
+def _legal_rebuild(spec: PrimitiveSpec, task_id: str) -> Coordinate | None:
+    """The first compose-legal box for this primitive on the task, or ``None``.
+
+    A map row measured before a void rule was declared carries a box the
+    declared space now refuses. The capability rung reads the primitive, not the
+    stale row, so it rebuilds a legal box with the screen's own builder
+    (:func:`~computronium.experiment.sec_loop._iter_legal_coordinates`).
+    """
+    entry = next((e for e in build_census() if e.id == spec.id), None)
+    if entry is None:
+        return None
+    coordinates = _iter_legal_coordinates(entry, limit=64, task_id=task_id)
+    return coordinates[0] if coordinates else None
 
 
 def _int_param(value: object, default: int) -> int:
@@ -136,14 +153,17 @@ def _rung_for(
         batch_limit = _batch_limit(screened)
     legal, refusal = _is_legal(coordinate, task_id)
     if not legal:
-        return Rung(
-            task_id,
-            reason=f"refused by name: {refusal}",
-            batch_size=batch_size,
-            epochs=epochs,
-            batch_limit=batch_limit,
-            seed=seed,
-        )
+        rebuilt = _legal_rebuild(spec, task_id)
+        if rebuilt is None:
+            return Rung(
+                task_id,
+                reason=f"refused by name: {refusal}",
+                batch_size=batch_size,
+                epochs=epochs,
+                batch_limit=batch_limit,
+                seed=seed,
+            )
+        coordinate = rebuilt
     return Rung(
         task_id,
         coordinate=coordinate,
@@ -245,7 +265,8 @@ def test_primitive_on_declared_families(spec, screened_rows):
     for family in spec.task_families:
         rung = _rung_for(spec, family, screened_rows)
         if rung.reason:
-            pytest.skip(f"declared: {spec.id} on {family}: {rung.reason}")
+            # Family refused - try next family
+            continue
 
         seed_everything(rung.seed)
         try:
@@ -267,10 +288,14 @@ def test_primitive_on_declared_families(spec, screened_rows):
             assert rung.coordinate is not None
             # Add geometry.sequence for time-major tasks with recurrent geometry
             coord = rung.coordinate
-            if getattr(task, "batch_layout", None) == "time_major" and coord.geometry == "recurrent":
+            if (
+                getattr(task, "batch_layout", None) == "time_major"
+                and coord.geometry == "recurrent"
+            ):
                 params = dict(coord.params)
                 params["geometry.sequence"] = True
                 from computronium.experiment.schema.coordinate import Coordinate
+
                 coord = Coordinate(
                     substrate=coord.substrate,
                     geometry=coord.geometry,
@@ -297,8 +322,8 @@ def test_primitive_on_declared_families(spec, screened_rows):
 
         return  # First family passed, done
 
-    # If we got here, all families were skipped (all gaps)
-    # This is OK - the gaps are documented
+    # If we got here, all families were refused/skipped
+    pytest.skip(f"all families refused for {spec.id}")
 
 
 if __name__ == "__main__":

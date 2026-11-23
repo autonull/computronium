@@ -16,6 +16,56 @@ if TYPE_CHECKING:
     from computronium.state import CompositeState, SystemContext
 
 
+def _fit_features(fw: Tensor, feat_dim: int) -> Tensor:
+    """Truncate or pad the fast weights to a layer's feature width."""
+    if fw.shape[1] == feat_dim:
+        return fw
+    if fw.shape[1] > feat_dim:
+        return fw[:, :feat_dim]
+    pad = torch.zeros(
+        fw.shape[0], feat_dim - fw.shape[1], device=fw.device, dtype=fw.dtype
+    )
+    return torch.cat([fw, pad], dim=-1)
+
+
+def _broadcast_to(weights: Tensor, target: Tensor) -> Tensor:
+    """Place per-sample weights on the leading axis matching the sample count.
+
+    A time-major layer carries ``[time, batch, feat]`` (or ``[batch, time,
+    feat]``); the per-sample weights sit on whichever leading axis matches the
+    sample count and broadcast across the rest.
+    """
+    if target.dim() <= weights.dim():
+        return weights
+    extras = [
+        weights.shape[0] if target.shape[k] == weights.shape[0] else 1
+        for k in range(target.dim() - 1)
+    ]
+    return weights.reshape(*extras, weights.shape[-1])
+
+
+def _tile_for_cell_mode(
+    weights: Tensor,
+    target: Tensor,
+    layout: ActivationLayout | None,
+    index: int,
+) -> Tensor:
+    """Repeat per-sample weights across a cell-mode layer's spatial axis.
+
+    fast_weights has ``batch_size B``, but a cell-mode layer has ``B*H*W`` rows.
+    """
+    if (
+        layout is None
+        or target.shape[0] == weights.shape[0]
+        or index >= len(layout.layers)
+        or layout.layers[index].batch_mode != "cell"
+        or layout.spatial_dims is None
+    ):
+        return weights
+    h, w = layout.spatial_dims
+    return weights.repeat_interleave(h * w, dim=0)
+
+
 @dataclass(frozen=True, slots=True)
 class FastWeightPlasticityConfig:
     """Configuration for fast weight plasticity dynamics.
@@ -258,33 +308,9 @@ class FastWeightPlasticity:
             if expected_feat_dim == 0:
                 expected_feat_dim = a.shape[1] if a.dim() > 1 else a.shape[-1]
 
-            if fw.shape[1] != expected_feat_dim:
-                # Truncate or pad to match feature dim
-                if fw.shape[1] > expected_feat_dim:
-                    fw = fw[:, :expected_feat_dim]
-                else:
-                    pad = torch.zeros(
-                        fw.shape[0],
-                        expected_feat_dim - fw.shape[1],
-                        device=fw.device,
-                        dtype=fw.dtype,
-                    )
-                    fw = torch.cat([fw, pad], dim=-1)
-
-            # Handle batch dimension mismatch (for cell-mode layers)
-            # fast_weights has batch_size B, but cell-mode layers have B*H*W
-            if (
-                a.shape[0] != fw.shape[0]
-                and layout is not None
-                and i < len(layout.layers)
-                and layout.layers[i].batch_mode == "cell"
-            ):
-                # Tile fast_weights across spatial dimension
-                spatial = layout.spatial_dims
-                if spatial is not None:
-                    h, w = spatial
-                    # Repeat each batch element H*W times
-                    fw = fw.repeat_interleave(h * w, dim=0)
+            fw = _fit_features(fw, expected_feat_dim)
+            fw = _broadcast_to(fw, a)
+            fw = _tile_for_cell_mode(fw, a, layout, i)
 
             modulated.append(a + fw)
 
