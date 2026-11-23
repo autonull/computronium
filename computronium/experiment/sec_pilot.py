@@ -193,6 +193,20 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
             "update": "euclidean",
         },
     ),
+    "analog": BaseBox(
+        "analog",
+        "memristor_simulation",
+        32,
+        375,
+        1,
+        base_coordinate={
+            "substrate": "memristive",
+            "geometry": "feedforward",
+            "dynamics": "instantaneous",
+            "credit": "gradient",
+            "update": "euclidean",
+        },
+    ),
     # Energy-minimization variants for credits requiring settle (TODO99 #3)
     "graph_energy_min": BaseBox(
         "graph",
@@ -421,9 +435,7 @@ def own_knob_params(
                     config = factory(
                         channels=32, hidden=32, grid_hw=(16, 16), output_dim=output_dim
                     )
-            elif primitive == "ntm":
-                config = factory(input_dim=input_dim, output_dim=output_dim)
-            elif primitive == "spatial_lattice":
+            elif primitive in {"ntm", "spatial_lattice"}:
                 config = factory(input_dim=input_dim, output_dim=output_dim)
             else:
                 return {}

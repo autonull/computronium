@@ -9,16 +9,16 @@ any structural axis. It runs:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
-from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_loop import (
     _measure,
     base_schedule,
@@ -31,6 +31,9 @@ from computronium.validation.preregistration import (
     ThresholdRegistration,
     paired_comparison,
 )
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.coordinate import Schedule
 
 __all__ = [
     "AXIS_DEFAULTS",
@@ -85,10 +88,10 @@ FAMILY_TO_TASK: Final[MappingProxyType[str, str]] = MappingProxyType({
     "rl": "cartpole",
     "scientific": "pendulum",
     "lm": "char_ngram",
-    "neuromorphic": "mnist",
-    "quantum": "mnist",
-    "photonic": "mnist",
-    "analog": "mnist",
+    "neuromorphic": "spiking_mnist",
+    "quantum": "quantum_circuit_learning",
+    "photonic": "optical_mnist_sim",
+    "analog": "memristor_simulation",
 })
 
 
@@ -207,7 +210,9 @@ def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     return list(families) if families else []
 
 
-def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> tuple[str, float] | None:
+def _get_primary_knob(
+    axis: str, primitive: str, task_id: str | None = None
+) -> tuple[str, float] | None:
     """Get the primary knob and its default for a primitive.
 
     Checks both own_knob_params (hyperparameters) and config class hyperparameters().
@@ -259,7 +264,7 @@ def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> 
             continue
         if value > 0:
             if name in int_params:
-                return key, int(round(value))
+                return key, round(value)
             return key, float(value)
 
     # If own_knob_params returns empty, check config class's hyperparameters() method
@@ -329,14 +334,14 @@ def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> 
                                 return f"{axis}.{name}", math.sqrt(
                                     domain[0] * domain[1]
                                 )
-                            elif domain_type in ("log_int", "int"):
+                            elif domain_type in {"log_int", "int"}:
                                 import math
 
                                 if domain_type == "log_int":
                                     val = math.sqrt(domain[0] * domain[1])
                                 else:
                                     val = (domain[0] + domain[1]) / 2
-                                return f"{axis}.{name}", int(round(val))
+                                return f"{axis}.{name}", round(val)
                             else:
                                 return f"{axis}.{name}", (domain[0] + domain[1]) / 2
                         elif isinstance(domain, list):
@@ -417,7 +422,6 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     box["task"] = task_id  # Keep original task_id for the run
 
     # Structural axes that come from base_coordinate (not hyperparameters)
-    structural_axes = {"substrate", "geometry", "dynamics", "plasticity"}
 
     # Set axes: use base_coordinate for structural axes, _DEFAULT_AXES for others
     for ax_name, default in _DEFAULT_AXES.items():
@@ -500,14 +504,14 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
                             getattr(config, field_name)
                         ):
                             # Only add if this field is available for the current primitive
-                            if field_name in available_fields or field_name in (
+                            if field_name in available_fields or field_name in {
                                 "update_type",
                                 "credit_type",
                                 "dynamics_type",
                                 "substrate_type",
                                 "geometry_type",
                                 "plasticity_type",
-                            ):
+                            }:
                                 value = getattr(config, field_name)
                                 if isinstance(value, (int, float, bool, str)):
                                     box[f"{ax_name}.{field_name}"] = value
@@ -530,14 +534,14 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
                                     box[f"{ax_name}.{hp_name}"] = math.sqrt(
                                         domain[0] * domain[1]
                                     )
-                                elif domain_type in ("log_int", "int"):
+                                elif domain_type in {"log_int", "int"}:
                                     import math
 
                                     if domain_type == "log_int":
                                         val = math.sqrt(domain[0] * domain[1])
                                     else:
                                         val = (domain[0] + domain[1]) / 2
-                                    box[f"{ax_name}.{hp_name}"] = int(round(val))
+                                    box[f"{ax_name}.{hp_name}"] = round(val)
                                 else:
                                     box[f"{ax_name}.{hp_name}"] = (
                                         domain[0] + domain[1]
@@ -606,7 +610,7 @@ async def run_rung1_ladder(
         async with semaphore:
             box = dict(base_box)
             # Convert to int for integer params
-            box[knob_key] = int(round(value)) if is_int_param else value
+            box[knob_key] = round(value) if is_int_param else value
             coord = screen_coordinate(box, axis, primitive)
             measured = await _measure_async(coord, schedule)
             return LadderRung(
@@ -623,7 +627,7 @@ async def run_rung1_ladder(
     tasks = [
         run_rung(
             factor,
-            int(round(default_value * factor)) if is_int_param else default_value * factor,
+            round(default_value * factor) if is_int_param else default_value * factor,
         )
         for factor in LADDER_FACTORS
     ]
@@ -674,10 +678,8 @@ async def run_rung2_comparison(
     try:
         registration = EffectSizeRegistration.load(registration_path)
     except KeyError, ValueError:
-        try:
+        with contextlib.suppress(KeyError, ValueError):
             registration = ThresholdRegistration.load(registration_path)
-        except KeyError, ValueError:
-            pass
 
     if registration is None:
         return None
@@ -856,7 +858,16 @@ async def create_registration(
         knob_key: base_box.get(knob_key),
     }
     # Also include the base schedule params that are constant across runs
-    for key in ("fidelity", "seed", "n_seeds", "epochs", "batch_size", "task_id", "device", "precision"):
+    for key in (
+        "fidelity",
+        "seed",
+        "n_seeds",
+        "epochs",
+        "batch_size",
+        "task_id",
+        "device",
+        "precision",
+    ):
         if key in base_box:
             minimal_box[key] = base_box[key]
 
@@ -874,7 +885,7 @@ async def create_registration(
     )
 
     reg_path.parent.mkdir(parents=True, exist_ok=True)
-    reg_path.write_text(json.dumps(registration.to_dict(), indent=2))
+    reg_path.write_text(json.dumps(registration.to_dict(), indent=2), encoding="utf-8")
     return registration
 
 
@@ -924,7 +935,7 @@ async def run_axis_rung2_all(
     if not results_file.exists():
         return []
 
-    results = json.loads(results_file.read_text())
+    results = json.loads(results_file.read_text(encoding="utf-8"))
     viable = [
         r for r in results if r.get("rung1_verdict") == "viable" and r.get("best_rung")
     ]
@@ -960,7 +971,7 @@ async def run_axis_rung2_all(
     # Save combined results
     out_path = Path(f"results/sec/rung2_{axis}.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(rung2_results, indent=2))
+    out_path.write_text(json.dumps(rung2_results, indent=2), encoding="utf-8")
 
     return rung2_results
 
@@ -1017,8 +1028,7 @@ async def main() -> None:
         return
 
     for axis in axes:
-        if args.rung in ("1", "both"):
-            task_override = {args.task: args.task} if args.task else None
+        if args.rung in {"1", "both"}:
             if args.primitive:
                 primitives = [args.primitive]
             else:
@@ -1035,9 +1045,13 @@ async def main() -> None:
                 )
                 # Save result with task_id in filename to avoid overwrites
                 safe_task_id = task_id.replace("/", "_")
-                out_path = Path(f"results/sec/rung12_{axis}_{primitive}_{safe_task_id}.json")
+                out_path = Path(
+                    f"results/sec/rung12_{axis}_{primitive}_{safe_task_id}.json"
+                )
                 out_path.parent.mkdir(parents=True, exist_ok=True)
-                out_path.write_text(json.dumps(result.to_dict(), indent=2))
+                out_path.write_text(
+                    json.dumps(result.to_dict(), indent=2), encoding="utf-8"
+                )
 
 
 if __name__ == "__main__":
