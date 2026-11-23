@@ -161,7 +161,7 @@ uv run python -m computronium.experiment.sec_deep_dive \
 | **DEF-008** | **Stale map coordinates** | Map measured before void rules | — | sec_loop.py --breadth full | All axes | ✅ Phase 1 done |
 | **DEF-009** | **temporal_psi below null** | trace_decay not optimal | Rung 2 (MNIST) | N/A (hyperparam) | temporal_psi | ✅ Phase 4 done (gap documented) |
 | **DEF-010** | **Substrate tasks missing** | No neuromorphic/photonic/quantum tasks | — | domains/ | neuromorphic, photonic, quantum substrates | **Phase 6** |
-| **DEF-011** | **Geometry float params** | Ladder uses float defaults for int params | — | sec_all_axes.py (_get_primary_knob) | All geometry | **Hygiene pass** |
+| **DEF-011** | **Geometry float params** | Ladder uses float defaults for int params | — | sec_all_axes.py (_get_primary_knob, run_rung1_ladder, _build_axis_box) | All geometry | ✅ Fixed |
 | **DEF-012** | **Tile void constraint** | Tile + instantaneous + gradient refused | — | legality/void_rules.py | tile, tile_mesh | **Hygiene pass** |
 | **DEF-013** | **Routing credit defect** | Routing + gradient credit fails | — | kernel/search_space.py | routing | **Hygiene pass** |
 
@@ -180,7 +180,7 @@ uv run python -m computronium.experiment.sec_deep_dive \
 | Phase 2b: muon claim confirmed on tabular (d≥0.5, n=5) | Pre-registered paired comparison passes | ⚠️ Marginal (coordinate) |
 | Phase 4: temporal_psi viability gap closed or gap documented | Rung 2 coordinate or named capability gap | ✅ (Rung 2 coordinate, gap documented) |
 | Phase 5: Geometry accepts task shape from compose | All 12 geometry primitives run Rung 1 on MNIST + iris | ✅ (MNIST 10/12, iris 12/12; 2 task-family refused on MNIST) |
-| Capability gate green after each phase | No regressions in test_primitive_capability.py | ✅ (90/91 passed, 1 expected capability gap failure: causal_transformer on lm) |
+| Capability gate green after each phase | No regressions in test_primitive_capability.py | ✅ (50/56 passed, 1 expected capability gap failure: causal_transformer on lm, 5 skipped) |
 | Experiment log complete | Rung, stop reason, box, cost recorded per cell | ✅ |
 
 ---

@@ -214,6 +214,26 @@ def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> 
     """
     # First try hyperparameters (own_knob_params)
     params = own_knob_params(axis, primitive, task_id=task_id)
+    # Integer-typed params that should be converted from float
+    int_params = {
+        "max_steps",
+        "hidden_dim",
+        "depth",
+        "width",
+        "num_layers",
+        "num_experts",
+        "top_k",
+        "conv_channels",
+        "kernel_size",
+        "num_heads",
+        "seq_len",
+        "lattice_dims",
+        "mem_slots",
+        "mem_width",
+        "grid_hw",
+        "neurons_per_tile",
+        "tiles_per_layer",
+    }
     for name in [
         "step_size",
         "max_steps",
@@ -238,6 +258,8 @@ def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> 
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
         if value > 0:
+            if name in int_params:
+                return key, int(round(value))
             return key, float(value)
 
     # If own_knob_params returns empty, check config class's hyperparameters() method
@@ -300,12 +322,21 @@ def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> 
                     domain = hp_spec.get("domain")
                     if domain:
                         if isinstance(domain, tuple) and len(domain) >= 2:
-                            if domain[2] == "log":
+                            domain_type = domain[2] if len(domain) > 2 else "linear"
+                            if domain_type == "log":
                                 import math
 
                                 return f"{axis}.{name}", math.sqrt(
                                     domain[0] * domain[1]
                                 )
+                            elif domain_type in ("log_int", "int"):
+                                import math
+
+                                if domain_type == "log_int":
+                                    val = math.sqrt(domain[0] * domain[1])
+                                else:
+                                    val = (domain[0] + domain[1]) / 2
+                                return f"{axis}.{name}", int(round(val))
                             else:
                                 return f"{axis}.{name}", (domain[0] + domain[1]) / 2
                         elif isinstance(domain, list):
@@ -492,12 +523,21 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
                         domain = hp_spec.get("domain")
                         if domain:
                             if isinstance(domain, tuple) and len(domain) >= 2:
-                                if domain[2] == "log":
+                                domain_type = domain[2] if len(domain) > 2 else "linear"
+                                if domain_type == "log":
                                     import math
 
                                     box[f"{ax_name}.{hp_name}"] = math.sqrt(
                                         domain[0] * domain[1]
                                     )
+                                elif domain_type in ("log_int", "int"):
+                                    import math
+
+                                    if domain_type == "log_int":
+                                        val = math.sqrt(domain[0] * domain[1])
+                                    else:
+                                        val = (domain[0] + domain[1]) / 2
+                                    box[f"{ax_name}.{hp_name}"] = int(round(val))
                                 else:
                                     box[f"{ax_name}.{hp_name}"] = (
                                         domain[0] + domain[1]
@@ -534,6 +574,28 @@ async def run_rung1_ladder(
     knob_key, default_value = knob_info
     knob_name = knob_key.split(".", 1)[1]
 
+    # Integer-typed params that should be converted from float
+    int_params = {
+        "max_steps",
+        "hidden_dim",
+        "depth",
+        "width",
+        "num_layers",
+        "num_experts",
+        "top_k",
+        "conv_channels",
+        "kernel_size",
+        "num_heads",
+        "seq_len",
+        "lattice_dims",
+        "mem_slots",
+        "mem_width",
+        "grid_hw",
+        "neurons_per_tile",
+        "tiles_per_layer",
+    }
+    is_int_param = knob_name in int_params
+
     base_box = _build_axis_box(axis, primitive, task_id)
     schedule = base_schedule(task_id, "auto")
 
@@ -543,7 +605,8 @@ async def run_rung1_ladder(
     async def run_rung(factor: float, value: float) -> LadderRung:
         async with semaphore:
             box = dict(base_box)
-            box[knob_key] = value
+            # Convert to int for integer params
+            box[knob_key] = int(round(value)) if is_int_param else value
             coord = screen_coordinate(box, axis, primitive)
             measured = await _measure_async(coord, schedule)
             return LadderRung(
@@ -557,7 +620,13 @@ async def run_rung1_ladder(
                 reason=measured["reason"],
             )
 
-    tasks = [run_rung(factor, default_value * factor) for factor in LADDER_FACTORS]
+    tasks = [
+        run_rung(
+            factor,
+            int(round(default_value * factor)) if is_int_param else default_value * factor,
+        )
+        for factor in LADDER_FACTORS
+    ]
     rungs = await asyncio.gather(*tasks)
 
     # Find best rung
