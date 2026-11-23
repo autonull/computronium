@@ -363,7 +363,7 @@ _TASK_FAMILIES = {
     "primitive.plasticity.fast_weights": ("sequence", "rl", "continual"),
     "primitive.plasticity.routing": ("vision", "sequence", "tabular"),
     "primitive.plasticity.closed_form_ridge": ("vision", "sequence", "tabular"),
-    "primitive.plasticity.temporal_psi": ("sequence", "rl"),
+    "primitive.plasticity.temporal_psi": ("vision", "sequence", "rl", "tabular"),
     "primitive.plasticity.conflict_adaptive": ("continual",),
     "primitive.plasticity.rule_state": ("continual", "sequence", "rl"),
     "primitive.plasticity.substrate_coupled": ("neuromorphic", "analog"),

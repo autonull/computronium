@@ -312,14 +312,16 @@ def refusal_for(entry: PrimitiveCensusEntry, task_id: str) -> str | None:
     )
 
 
-def own_knob_params(axis: str, primitive: str) -> dict[str, object]:
+def own_knob_params(
+    axis: str, primitive: str, task_id: str | None = None
+) -> dict[str, object]:
     """The varied axis at its own declared config defaults (TODO95 S2).
 
     The base box shares one step size and one geometry width across
     primitives. This is the other instrument: the varied axis runs at the
     defaults its config classmethod declares, companions stay at the base.
-    A primitive whose config factory needs structural arguments has no
-    own-knob box of its own and returns ``{}``.
+    A primitive whose config factory needs structural arguments (geometry)
+    uses the task's shape when available, or sensible defaults.
     """
     kind = StructuralAxis(axis)
     spec = get_axis_spec(kind, primitive)
@@ -330,18 +332,122 @@ def own_knob_params(axis: str, primitive: str) -> dict[str, object]:
     factory = getattr(config_cls, primitive, None)
     if not callable(factory):
         return {}
-    try:
-        config: Any = factory()
-    except TypeError:
-        # A structural factory (geometry) needs the task's shape: it has no
-        # viability box of its own, so the base box stays.
-        return {}
-    structural = {param.name for param in spec.topology_params}
-    own = {
-        field.name: getattr(config, field.name)
-        for field in fields(config)
-        if field.name in spec.accepted_params and field.name not in structural
-    }
+
+    # For geometry axis, the factory needs input_dim and output_dim from the task
+    if kind == StructuralAxis.GEOMETRY:
+        input_dim = 784  # Default: MNIST flattened
+        output_dim = 10  # Default: MNIST classes
+        if task_id is not None:
+            try:
+                task_spec = TaskRegistry().get(task_id)
+                if task_spec.input_shape:
+                    input_dim = math.prod(task_spec.input_shape)
+                if task_spec.output_dim:
+                    output_dim = task_spec.output_dim
+            except Exception:
+                pass  # Use defaults
+        # Provide minimal structural args for the factory
+        try:
+            if primitive in {"feedforward", "recurrent", "routing"}:
+                config: Any = factory(
+                    input_dim=input_dim, output_dim=output_dim, hidden_dims=(128,)
+                )
+            elif primitive == "attention":
+                config = factory(
+                    input_dim=input_dim,
+                    output_dim=output_dim,
+                    hidden_dim=128,
+                    num_layers=2,
+                )
+            elif primitive == "causal_transformer":
+                # Vision mode with patch embedding
+                config = factory(
+                    vocab_size=output_dim,
+                    d_model=128,
+                    n_layers=2,
+                    n_heads=8,
+                    seq_len=32,
+                    patch_size=4,
+                    patch_embed_dim=128,
+                    image_hw=(28, 28),
+                    in_channels=1,
+                )
+            elif primitive in {"tile", "tile_mesh"}:
+                config = factory(
+                    input_dim=input_dim, output_dim=output_dim, num_layers=2
+                )
+            elif primitive == "conv":
+                config = factory(input_dim=input_dim, output_dim=output_dim)
+            elif primitive == "graph":
+                # Graph needs edge_index - use minimal default
+                config = factory(
+                    input_dim=input_dim,
+                    output_dim=output_dim,
+                    edge_index=[[0, 1], [1, 0]],
+                )
+            elif primitive == "nca":
+                # Derive grid_hw and channels from input_shape
+                # For MNIST (1, 28, 28): use grid_hw=(28, 28), channels=1
+                if task_id is not None:
+                    try:
+                        task_spec = TaskRegistry().get(task_id)
+                        if task_spec.input_shape and len(task_spec.input_shape) >= 3:
+                            c, h, w = (
+                                task_spec.input_shape[0],
+                                task_spec.input_shape[1],
+                                task_spec.input_shape[2],
+                            )
+                            config = factory(
+                                channels=c,
+                                hidden=32,
+                                grid_hw=(h, w),
+                                output_dim=output_dim,
+                            )
+                        else:
+                            config = factory(
+                                channels=32,
+                                hidden=32,
+                                grid_hw=(16, 16),
+                                output_dim=output_dim,
+                            )
+                    except Exception:
+                        config = factory(
+                            channels=32,
+                            hidden=32,
+                            grid_hw=(16, 16),
+                            output_dim=output_dim,
+                        )
+                else:
+                    config = factory(
+                        channels=32, hidden=32, grid_hw=(16, 16), output_dim=output_dim
+                    )
+            elif primitive == "ntm":
+                config = factory(input_dim=input_dim, output_dim=output_dim)
+            elif primitive == "spatial_lattice":
+                config = factory(input_dim=input_dim, output_dim=output_dim)
+            else:
+                return {}
+        except TypeError:
+            return {}
+    else:
+        try:
+            config: Any = factory()
+        except TypeError:
+            return {}
+
+    own = {}
+
+    # For plasticity axis, hyperparameters are stored in consolidation_config dict
+    if kind == StructuralAxis.PLASTICITY and config.consolidation_config:
+        for param_name in spec.accepted_params:
+            if param_name in config.consolidation_config:
+                own[param_name] = config.consolidation_config[param_name]
+
+    # For all axes, get values from config fields
+    for field in fields(config):
+        if field.name in spec.accepted_params:
+            own[field.name] = getattr(config, field.name)
+
     return {f"{kind.value}.{name}": value for name, value in own.items()}
 
 

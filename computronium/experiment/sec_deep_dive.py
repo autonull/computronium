@@ -116,14 +116,16 @@ def _val_acc(row: Mapping[str, Any]) -> float | None:
     return None if value is None else float(value)
 
 
-def primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
+def primary_knob(
+    axis: str, primitive: str, task_id: str | None = None
+) -> tuple[str, float] | None:
     """The primitive's primary knob and its declared default, or ``None``.
 
     The knob is the first name in :data:`LADDER_KNOBS` that the primitive's own
     config classmethod declares as a positive number. A primitive with no such
     knob has no ladder and is not a deep dive: it is not factor-ready here.
     """
-    params = own_knob_params(axis, primitive)
+    params = own_knob_params(axis, primitive, task_id=task_id)
     for name in LADDER_KNOBS.get(axis, ()):
         key = f"{axis}.{name}"
         value = params.get(key)
@@ -156,7 +158,7 @@ class DeepDiveCandidate:
 
 
 def _bound_candidate(
-    primitive: str, row: Mapping[str, Any], bar: float
+    primitive: str, row: Mapping[str, Any], bar: float, task_id: str | None = None
 ) -> DeepDiveCandidate | None:
     """One knobbed bound row above the bar, or ``None`` when it is not one.
 
@@ -172,7 +174,7 @@ def _bound_candidate(
         return None
     axis = axis_segment(str(row.get("axis", "")))
     level = primitive.rsplit(".", 1)[-1]
-    knob = primary_knob(axis, level)
+    knob = primary_knob(axis, level, task_id=task_id)
     if knob is None:
         return None
     return DeepDiveCandidate(
@@ -190,12 +192,18 @@ def _bound_candidate(
 
 def _bound_candidates(map_data: Mapping[str, Any]) -> list[DeepDiveCandidate]:
     bar = (map_data.get("inventory") or {}).get("bar")
+    task_id = (map_data.get("base") or {}).get("task")
     if bar is None:
         return []
     return [
         candidate
         for primitive, row in (map_data.get("primitives") or {}).items()
-        if (candidate := _bound_candidate(str(primitive), row, float(bar))) is not None
+        if (
+            candidate := _bound_candidate(
+                str(primitive), row, float(bar), task_id=task_id
+            )
+        )
+        is not None
     ]
 
 

@@ -207,13 +207,13 @@ def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     return list(families) if families else []
 
 
-def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
+def _get_primary_knob(axis: str, primitive: str, task_id: str | None = None) -> tuple[str, float] | None:
     """Get the primary knob and its default for a primitive.
 
     Checks both own_knob_params (hyperparameters) and config class hyperparameters().
     """
     # First try hyperparameters (own_knob_params)
-    params = own_knob_params(axis, primitive)
+    params = own_knob_params(axis, primitive, task_id=task_id)
     for name in [
         "step_size",
         "max_steps",
@@ -527,7 +527,7 @@ async def run_rung1_ladder(
     """Run 3-point ladder for a primitive on its primary knob."""
     import asyncio
 
-    knob_info = _get_primary_knob(axis, primitive)
+    knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     if knob_info is None:
         return [], None, "no_knob"
 
@@ -591,7 +591,7 @@ async def run_rung2_comparison(
     """Run paired comparison: treatment (primitive at best) vs control (axis default)."""
     import asyncio
 
-    knob_info = _get_primary_knob(axis, primitive)
+    knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     if knob_info is None:
         return None
     knob_key = knob_info[0]
@@ -775,7 +775,7 @@ async def create_registration(
     task_family = task_families[0] if task_families else "vision"
     min_d = MIN_EFFECT_SIZE_BY_FAMILY.get(task_family, 0.5)
 
-    knob_info = _get_primary_knob(axis, primitive)
+    knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     knob_key = knob_info[0] if knob_info else f"{axis}.step_size"
 
     registration = EffectSizeRegistration.for_task_family(

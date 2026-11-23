@@ -809,7 +809,9 @@ def _axis_values(field: str) -> list[str]:
     return values
 
 
-def _params_for(axes: dict[str, str], own_knobs: str | None = None) -> dict[str, Any]:
+def _params_for(
+    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None
+) -> dict[str, Any]:
     """Structural hyperparameters a coordinate needs for the given axes.
 
     ``own_knobs`` names the varied axis of the viability pass: that axis runs
@@ -878,12 +880,15 @@ def _params_for(axes: dict[str, str], own_knobs: str | None = None) -> dict[str,
     }:
         params["credit.feedback_scale"] = 0.01
     if own_knobs is not None:
-        params = _own_knob_overrides(axes, params, own_knobs)
+        params = _own_knob_overrides(axes, params, own_knobs, task_id=task_id)
     return params
 
 
 def _own_knob_overrides(
-    axes: dict[str, str], params: dict[str, Any], own_knobs: str
+    axes: dict[str, str],
+    params: dict[str, Any],
+    own_knobs: str,
+    task_id: str | None = None,
 ) -> dict[str, Any]:
     """The varied axis at its declared defaults, filtered by the system's verdict."""
     from computronium.experiment.schema.axis import StructuralAxis
@@ -911,13 +916,17 @@ def _own_knob_overrides(
     }
     kept.update({
         key: value
-        for key, value in own_knob_params(own_knobs, axes[own_knobs]).items()
+        for key, value in own_knob_params(
+            own_knobs, axes[own_knobs], task_id=task_id
+        ).items()
         if key.split(".", 1)[-1] in accepted
     })
     return kept
 
 
-def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinate:
+def _coordinate(
+    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None
+) -> Coordinate:
     return Coordinate(
         substrate=axes["substrate"],
         geometry=axes["geometry"],
@@ -925,7 +934,7 @@ def _coordinate(axes: dict[str, str], own_knobs: str | None = None) -> Coordinat
         plasticity=axes["plasticity"],
         credit=axes["credit"],
         update=axes["update"],
-        params=_params_for(axes, own_knobs=own_knobs),
+        params=_params_for(axes, own_knobs=own_knobs, task_id=task_id),
     )
 
 
@@ -1060,7 +1069,7 @@ def _iter_legal_coordinates(
     own = axis if own_knobs else None
 
     def emit(axes: dict[str, str]) -> Coordinate | None:
-        coord = _coordinate(axes, own_knobs=own)
+        coord = _coordinate(axes, own_knobs=own, task_id=task_id)
         ok, _ = _is_legal(coord, task_id, shape)
         return coord if ok else None
 
