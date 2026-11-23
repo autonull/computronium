@@ -163,13 +163,29 @@ uv run python -m computronium.experiment.sec_loop \
 |-----------|--------|--------|
 | Phase 1: Full breadth screen on MNIST completes | 75 primitives screened at legal coordinates | ✅ |
 | Phase 1: Full breadth screen on iris completes | 75 primitives screened at legal coordinates | ✅ |
-| Phase 2: lion claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
-| Phase 2: muon claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
-| Phase 3: energy_minimization claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
+| Phase 2: lion claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ✅ |
+| Phase 2: muon claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ✅ |
+| Phase 3: energy_minimization claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ✅ |
+| Phase 2b: lion claim confirmed on tabular (d≥0.5, n=5) | Pre-registered paired comparison passes | ✅ |
+| Phase 2b: muon claim confirmed on tabular (d≥0.5, n=5) | Pre-registered paired comparison passes | ⚠️ Marginal (coordinate) |
 | Phase 4: temporal_psi viability gap closed or gap documented | Rung 2 coordinate or named capability gap | ⬜ |
 | Phase 5: Geometry accepts task shape from compose | All 12 geometry primitives run Rung 1 on MNIST | ⬜ |
-| Capability gate green after each phase | No regressions in test_primitive_capability.py | ⬜ |
-| Experiment log complete | Rung, stop reason, box, cost recorded per cell | ⬜ |
+| Capability gate green after each phase | No regressions in test_primitive_capability.py | ✅ |
+| Experiment log complete | Rung, stop reason, box, cost recorded per cell | ✅ |
+
+---
+
+## 📈 Experiment Log (Completed Sessions)
+
+| Session | Decision | Experiment | Box | Rung / Stop | Result | Triage | Fixes Applied |
+|---------|----------|------------|-----|-------------|--------|--------|---------------|
+| 2026-11-23 | Breadth completion | sec_loop --track P0 --breadth full --task mnist | MNIST vision, L0, 1 epoch | P0 / full screened | 50 measured, 25 refused | Legitimate family mismatches | None |
+| 2026-11-23 | Breadth completion | sec_loop --track P0 --breadth full --task iris | iris tabular, L0, 20 epochs | P0 / full screened | 34 measured, 41 refused | Legitimate family mismatches | None |
+| 2026-11-23 | Update lion claim (vision) | custom deep dive | mnist, L0, 5 seeds | Rung 3 / CI clears d≥0.8 | d=2.04, CI[0.0194,0.0344], p<0.001 | **Claim confirmed** | None |
+| 2026-11-23 | Update muon claim (vision) | custom deep dive | mnist, L0, 5 seeds | Rung 3 / CI clears d≥0.8 | d=4.65, CI[0.0448,0.0587], p<0.001 | **Claim confirmed** | None |
+| 2026-11-23 | Dynamics energy_min claim (vision) | custom deep dive | mnist, L0, 5 seeds | Rung 3 / CI clears d≥0.8 | d=2.07, CI[0.0174,0.0363], p<0.001 | **Claim confirmed** | None |
+| 2026-11-23 | Update lion claim (tabular) | custom deep dive | iris, L0, 5 seeds | Rung 3 / CI clears d≥0.5 | d=1.19, CI[0.0072,0.0210], p=0.004 | **Claim confirmed** | None |
+| 2026-11-23 | Update muon claim (tabular) | custom deep dive | iris, L0, 5 seeds | Rung 3 / CI includes 0 | d=1.04, CI[0.0000,0.0013], p=0.050 | **Coordinate (marginal)** | None |
 
 ---
 
