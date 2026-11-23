@@ -402,39 +402,62 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     )
     ctx = CoordinateContext(coord)
 
-    # Get hyperparams from config factory's class
-    key = f"primitive.{axis}.{primitive}"
-    factory_path = _CONFIG_FACTORIES.get(key)
-    if factory_path:
-        parts = factory_path.split(".")
-        module_name = ".".join(parts[:-2])
-        class_name = parts[-2]
-        method_name = parts[-1]
-        import importlib
-        module = importlib.import_module(module_name)
-        config_cls = getattr(module, class_name)
-        if hasattr(config_cls, "hyperparameters"):
-            hp_dict = config_cls.hyperparameters(primitive)
-            for hp_name, hp_spec in hp_dict.items():
-                avail = True
-                avail_pred = hp_spec.get("availability")
-                if avail_pred is not None:
-                    avail = evaluate(avail_pred, ctx)
-                if not avail:
-                    continue  # Skip unavailable hyperparams
-                # Get default value from domain
-                domain = hp_spec.get("domain")
-                if domain:
-                    if isinstance(domain, tuple) and len(domain) >= 2:
-                        if domain[2] == "log":
-                            import math
-                            box[f"{axis}.{hp_name}"] = math.sqrt(domain[0] * domain[1])
-                        else:
-                            box[f"{axis}.{hp_name}"] = (domain[0] + domain[1]) / 2
-                    elif isinstance(domain, list):
-                        box[f"{axis}.{hp_name}"] = domain[0]
+    # Get hyperparams from config factory's class for ALL axes
+    for ax_name, ax_primitive in axes.items():
+        prefix = _AXIS_REGISTRY_PREFIX.get(ax_name, ax_name)
+        key = f"primitive.{prefix}.{ax_primitive}"
+        factory_path = _CONFIG_FACTORIES.get(key)
+        if factory_path:
+            parts = factory_path.split(".")
+            module_name = ".".join(parts[:-2])
+            class_name = parts[-2]
+            method_name = parts[-1]
+            import importlib
+            module = importlib.import_module(module_name)
+            config_cls = getattr(module, class_name)
+            # Get available hyperparameters from hyperparameters() FIRST
+            available_fields = set()
+            if hasattr(config_cls, "hyperparameters"):
+                hp_dict = config_cls.hyperparameters(ax_primitive)
+                for hp_name, hp_spec in hp_dict.items():
+                    avail = True
+                    avail_pred = hp_spec.get("availability")
+                    if avail_pred is not None:
+                        avail = evaluate(avail_pred, ctx)
+                    if avail:
+                        available_fields.add(hp_name)
+            # Call the config factory method to get actual defaults for available fields
+            if hasattr(config_cls, method_name):
+                try:
+                    config = getattr(config_cls, method_name)()
+                    for field_name in dir(config):
+                        if not field_name.startswith("_") and not callable(getattr(config, field_name)):
+                            # Only add if this field is available for the current primitive
+                            if field_name in available_fields or field_name in ("update_type", "credit_type", "dynamics_type", "substrate_type", "geometry_type", "plasticity_type"):
+                                value = getattr(config, field_name)
+                                if isinstance(value, (int, float, bool, str)):
+                                    box[f"{ax_name}.{field_name}"] = value
+                except Exception:
+                    pass
+            # For available hyperparams not set by config factory, add from domain
+            if hasattr(config_cls, "hyperparameters"):
+                hp_dict = config_cls.hyperparameters(ax_primitive)
+                for hp_name, hp_spec in hp_dict.items():
+                    if hp_name not in available_fields:
+                        continue  # Skip unavailable hyperparams
+                    if f"{ax_name}.{hp_name}" not in box:
+                        domain = hp_spec.get("domain")
+                        if domain:
+                            if isinstance(domain, tuple) and len(domain) >= 2:
+                                if domain[2] == "log":
+                                    import math
+                                    box[f"{ax_name}.{hp_name}"] = math.sqrt(domain[0] * domain[1])
+                                else:
+                                    box[f"{ax_name}.{hp_name}"] = (domain[0] + domain[1]) / 2
+                            elif isinstance(domain, list):
+                                box[f"{ax_name}.{hp_name}"] = domain[0]
 
-    # Axis-specific extra params
+    # Axis-specific extra params for the test axis
     if axis == "dynamics" and primitive in {"energy_minimization", "pc_alm"}:
         box["dynamics.max_steps"] = 10
         box["dynamics.step_size"] = 0.1
@@ -539,15 +562,26 @@ async def run_rung2_comparison(
     if registration is None:
         return None
 
-    # Build treatment box (primitive at best knob value)
-    treatment_box = _build_axis_box(axis, primitive, task_id)
-    treatment_box[knob_key] = best_value
-    treatment_coord = screen_coordinate(treatment_box, axis, primitive)
-
-    # Build control box (axis default primitive)
+    # Build control box (axis default primitive) first
     default_primitive = AXIS_DEFAULTS.get(axis, primitive)
     control_box = _build_axis_box(axis, default_primitive, task_id)
     control_coord = screen_coordinate(control_box, axis, default_primitive)
+
+    # Build treatment box: start from control box, only override the test axis and its knob
+    treatment_box = dict(control_box)
+    treatment_box[axis] = primitive
+    treatment_box[knob_key] = best_value
+    # Apply axis-specific extra params for the treatment primitive from registration
+    if axis == "dynamics" and primitive in {"energy_minimization", "pc_alm"}:
+        treatment_box["dynamics.max_steps"] = 10
+        treatment_box["dynamics.step_size"] = 0.1
+        treatment_box["dynamics.convergence_threshold"] = 1e-3
+        # Also copy dynamics params from registration box if available
+        if hasattr(registration, 'box') and registration.box:
+            for key, value in registration.box.items():
+                if key.startswith("dynamics.") and key != knob_key:
+                    treatment_box[key] = value
+    treatment_coord = screen_coordinate(treatment_box, axis, primitive)
 
     schedule = base_schedule(task_id, "auto")
 

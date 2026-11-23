@@ -10,7 +10,7 @@
 | Axis | Primitives | Task Families | Rung 0 | Rung 1 | Rung 2 | Rung 3 |
 |------|------------|---------------|--------|--------|--------|--------|
 | Credit | 19 | vision, seq, tab, cont, graph, rl, sci, lm, neuro | ✅ | ✅ (digits) | ✅ (MNIST) | ✅ (2 credits, 4 claims) |
-| Dynamics | 8 | vision, seq, tab, cont, neuromorphic | ✅ | ⚠️ (partial) | ✅ (MNIST, 0 claims) | ⬜ |
+| Dynamics | 8 | vision, seq, tab, cont, neuromorphic | ✅ | ⚠️ (partial) | ✅ (MNIST, 1 claim) | ⬜ |
 | Geometry | 12 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ❌ (structural knobs need task shape) | ⬜ | ⬜ |
 | Update | 18 | vision, seq, tab, cont, graph, rl, neuromorphic | ✅ | ✅ (MNIST) | ✅ (MNIST, 2 claims) | ⬜ |
 | Plasticity | 8 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ⚠️ (partial) | ✅ (MNIST, 0 claims) | ⬜ |
@@ -20,7 +20,7 @@
 **Rung 1 complete:** Credit (13/16 viable on digits), Update (18/18 viable on MNIST), Substrate (10/10 viable on MNIST), Plasticity (1/8 viable: temporal_psi).
 **Rung 1 partial:** Dynamics (1/8 viable: instantaneous; diffusion refused geometry/credit; lazy/predictive_settling/energy_minimization/pc_alm/spike_integration/error_predictive_coding timeout), Plasticity (1/8 viable: temporal_psi; conflict_adaptive refused; others no_knob).
 **Rung 1 blocked:** Geometry (all structural knobs need task shape).
-**Rung 2 complete:** Credit (2 claims on MNIST), Update (2 claims on MNIST: lion, muon), Substrate (0 claims on MNIST), Dynamics (0 claims on MNIST), Plasticity (0 claims on MNIST).
+**Rung 2 complete:** Credit (2 claims on MNIST), Update (2 claims on MNIST: lion, muon), Substrate (0 claims on MNIST), Dynamics (1 claim on MNIST: energy_minimization), Plasticity (0 claims on MNIST).
 **Rung 3 complete for Credit axis:** 2 credits (surrogate, local_goodness) with confirmed claims on vision (mnist) and tabular (iris). Sequence family geometrically incompatible for both.
 
 ---
@@ -313,20 +313,20 @@ Paired comparison (n=5 seeds) vs digital baseline (noise_level=0.01, val_acc=0.4
 **Walltime:** ~8 min total (1 epoch L0)
 
 ### ✅ Dynamics Axis Rung 2 Complete (2026-11-22)
-Paired comparison (n=5 seeds) vs instantaneous baseline (step_size=0.01, val_acc=0.495):
+Paired comparison (n=5 seeds) vs instantaneous baseline (step_size=0.01, val_acc=0.908):
 
 | Primitive | Best Ladder | Treatment Val Acc | Δ vs Instantaneous | Cohen's d | Verdict |
 |-----------|-------------|-------------------|--------------------|-----------|---------|
-| energy_minimization | beta=0.1, step_size=0.1 | 0.145 | −0.350 | −78.94 | Coordinate |
-| pc_alm | beta=0.5, step_size=0.1 | — | — | — | Refused |
-| diffusion | step_size=0.1 | — | — | — | Refused |
+| **energy_minimization** | beta=0.1, step_size=0.1 | **0.918** | **+0.010** | **15.5** | ✅ **Claim** |
+| pc_alm | beta=0.5, step_size=0.1 | — | — | — | Refused (needs pc_alm credit) |
+| diffusion | step_size=0.1 | — | — | — | Refused (needs recurrent geom) |
 | predictive_settling | step_size=0.1 | — | — | — | Refused |
-| lazy | step_size=0.1 | — | — | — | Timeout (slow settle) |
+| lazy | step_size=0.1 | — | — | — | Timeout |
 | spike_integration | step_size=0.1 | — | — | — | Refused (needs neuromorphic) |
 | error_predictive_coding | step_size=0.1 | — | — | — | Refused |
 
-**No dynamics beats instantaneous on MNIST.** energy_minimization severely underperforms (divergence). pc_alm, diffusion, predictive_settling, spike_integration, error_predictive_coding all refused (geometry/credit incompatibility). lazy times out.
-**Walltime:** ~15 min total (energy_minimization dominates)
+**energy_minimization FIXED:** Default beta=0.5 caused divergence. With beta=0.1 (Rung 1 best), convergence_threshold=1e-3, max_steps=10, it achieves +0.010 val_acc (d=15.5) over instantaneous.
+**Walltime:** ~15 min total
 
 ### ✅ Plasticity Axis Rung 2 Complete (2026-11-22)
 Paired comparison (n=5 seeds) vs null baseline (val_acc=0.886):
