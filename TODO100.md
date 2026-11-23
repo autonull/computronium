@@ -10,17 +10,17 @@
 | Axis | Primitives | Task Families | Rung 0 | Rung 1 | Rung 2 | Rung 3 |
 |------|------------|---------------|--------|--------|--------|--------|
 | Credit | 19 | vision, seq, tab, cont, graph, rl, sci, lm, neuro | ✅ | ✅ (digits) | ✅ (MNIST) | ✅ (2 credits, 4 claims) |
-| Dynamics | 8 | vision, seq, tab, cont, neuromorphic | ✅ | ⚠️ (partial) | ⬜ | ⬜ |
+| Dynamics | 8 | vision, seq, tab, cont, neuromorphic | ✅ | ⚠️ (partial) | ✅ (MNIST, 0 claims) | ⬜ |
 | Geometry | 12 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ❌ (structural knobs need task shape) | ⬜ | ⬜ |
 | Update | 18 | vision, seq, tab, cont, graph, rl, neuromorphic | ✅ | ✅ (MNIST) | ✅ (MNIST, 2 claims) | ⬜ |
-| Plasticity | 8 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ⚠️ (partial) | ⬜ | ⬜ |
-| Substrate | 10 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic, photonic, quantum, analog | ✅ | ✅ (MNIST) | ⬜ | ⬜ |
+| Plasticity | 8 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic | ✅ | ⚠️ (partial) | ✅ (MNIST, 0 claims) | ⬜ |
+| Substrate | 10 | vision, seq, tab, cont, graph, rl, sci, lm, neuromorphic, photonic, quantum, analog | ✅ | ✅ (MNIST) | ✅ (MNIST, 0 claims) | ⬜ |
 
 **Total:** 75 primitives, all Rung 0 wired.
 **Rung 1 complete:** Credit (13/16 viable on digits), Update (18/18 viable on MNIST), Substrate (10/10 viable on MNIST), Plasticity (1/8 viable: temporal_psi).
 **Rung 1 partial:** Dynamics (1/8 viable: instantaneous; diffusion refused geometry/credit; lazy/predictive_settling/energy_minimization/pc_alm/spike_integration/error_predictive_coding timeout), Plasticity (1/8 viable: temporal_psi; conflict_adaptive refused; others no_knob).
 **Rung 1 blocked:** Geometry (all structural knobs need task shape).
-**Rung 2 complete:** Credit (2 claims on MNIST), Update (2 claims on MNIST: lion, muon).
+**Rung 2 complete:** Credit (2 claims on MNIST), Update (2 claims on MNIST: lion, muon), Substrate (0 claims on MNIST), Dynamics (0 claims on MNIST), Plasticity (0 claims on MNIST).
 **Rung 3 complete for Credit axis:** 2 credits (surrogate, local_goodness) with confirmed claims on vision (mnist) and tabular (iris). Sequence family geometrically incompatible for both.
 
 ---
@@ -298,10 +298,51 @@ All 12 geometry primitives have **structural knobs** (hidden_dim, num_layers, de
 **Registered claims confirmed:** 2/13 (surrogate, local_goodness).
 **Walltime:** ~2.5 hours total.
 
-### Next: Rung 2 for Other Axes (Planned)
-- **Substrate Axis:** Test digital (0.495) vs analog (0.488) — both below gradient
-- **Plasticity Axis:** Test temporal_psi (0.838) vs null baseline
-- **Dynamics Axis:** Test energy_minimization (0.748) vs instantaneous (0.495) with matched geometries
+### ✅ Substrate Axis Rung 2 Complete (2026-11-22)
+Paired comparison (n=5 seeds) vs digital baseline (noise_level=0.01, val_acc=0.495):
+
+| Primitive | Best Ladder | Treatment Val Acc | Δ vs Digital | Cohen's d | Verdict |
+|-----------|-------------|-------------------|--------------|-----------|---------|
+| analog | noise_level=0.01 | 0.458 | −0.037 | −0.44 | Coordinate |
+| memristive | noise_level=0.01 | 0.456 | −0.039 | −0.46 | Coordinate |
+| sparse | noise_level=0.01 | 0.456 | −0.039 | −0.47 | Coordinate |
+| ternary | noise_level=0.01 | 0.264 | −0.231 | −2.75 | Coordinate |
+| noisy | noise_level=0.01 | — | — | — | Defect |
+
+**No substrate beats digital on MNIST.** All are coordinates or defects. Digital remains the best substrate for vision tasks.
+**Walltime:** ~8 min total (1 epoch L0)
+
+### ✅ Dynamics Axis Rung 2 Complete (2026-11-22)
+Paired comparison (n=5 seeds) vs instantaneous baseline (step_size=0.01, val_acc=0.495):
+
+| Primitive | Best Ladder | Treatment Val Acc | Δ vs Instantaneous | Cohen's d | Verdict |
+|-----------|-------------|-------------------|--------------------|-----------|---------|
+| energy_minimization | beta=0.1, step_size=0.1 | 0.145 | −0.350 | −78.94 | Coordinate |
+| pc_alm | beta=0.5, step_size=0.1 | — | — | — | Refused |
+| diffusion | step_size=0.1 | — | — | — | Refused |
+| predictive_settling | step_size=0.1 | — | — | — | Refused |
+| lazy | step_size=0.1 | — | — | — | Timeout (slow settle) |
+| spike_integration | step_size=0.1 | — | — | — | Refused (needs neuromorphic) |
+| error_predictive_coding | step_size=0.1 | — | — | — | Refused |
+
+**No dynamics beats instantaneous on MNIST.** energy_minimization severely underperforms (divergence). pc_alm, diffusion, predictive_settling, spike_integration, error_predictive_coding all refused (geometry/credit incompatibility). lazy times out.
+**Walltime:** ~15 min total (energy_minimization dominates)
+
+### ✅ Plasticity Axis Rung 2 Complete (2026-11-22)
+Paired comparison (n=5 seeds) vs null baseline (val_acc=0.886):
+
+| Primitive | Best Ladder | Treatment Val Acc | Δ vs Null | Cohen's d | Verdict |
+|-----------|-------------|-------------------|-----------|-----------|---------|
+| temporal_psi | trace_decay=0.55 | 0.835 | −0.051 | −11.41 | Coordinate |
+| closed_form_ridge | — | — | — | — | Refused |
+| routing | — | — | — | — | Refused |
+| rule_state | — | — | — | — | Refused |
+| fast_weights | — | — | — | — | Refused |
+| substrate_coupled | — | — | — | — | Refused (needs analog/neuromorphic) |
+| conflict_adaptive | — | — | — | — | Refused |
+
+**No plasticity beats null on MNIST.** temporal_psi underperforms (0.835 vs 0.886). All other plasticity primitives refused or no effect.
+**Walltime:** ~2 min total (1 epoch L0)
 
 ### ✅ Update Axis Rung 2 Complete (2026-11-22)
 Paired comparison (n=5 seeds) vs euclidean baseline (momentum=0.9, step_size=0.01, val_acc=0.894):
