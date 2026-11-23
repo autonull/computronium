@@ -13,6 +13,7 @@ of trained (TODO97 S5j). A row with no map box falls back to one epoch over
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -239,6 +240,15 @@ def _run_cell(
 
     # Error-aware rows: the row's priced cell is the rung's budget, so above
     # chance is its bar, not the screen's calibrated one.
+    if task.domain_type == DomainType.RL:
+        # An RL cell's contract is a usable reward signal, not a class bar:
+        # a finite mean reward proves the policy ran and the credit reached it.
+        reward = (metrics.custom or {}).get("mean_reward")
+        assert reward is not None and math.isfinite(reward), (
+            f"{spec.id} on {family} ({rung.task_id}): "
+            f"no finite mean reward ({reward!r})"
+        )
+        return
     if task.domain_type in {DomainType.LM, DomainType.LANGUAGE}:
         assert metrics.perplexity is not None
         assert metrics.perplexity < task.output_dim, (

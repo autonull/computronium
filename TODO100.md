@@ -629,15 +629,16 @@ For credits with confirmed claims (surrogate, local_goodness), tested on compati
 ### ✅ Session E (Done): Defect pass — all 8 plasticity primitives train
 
 Goal: every primitive is essentially working and ready for optimization.
-Fixed the three blockers that kept plasticity capability tests skipped or crashing:
+Fixed the four blockers that kept plasticity and dynamics capability tests skipped or crashing:
 
 - **DEF-003**: the capability test aborted its family loop at the first refused family, so later legal families never ran. Fix: `continue` on a refusal; skip only when every family is refused.
 - **DEF-004**: the Hopfield interaction energy assumed 2-D activations; a time-major `[time, batch, feat]` cell raised `12 vs 10`. Fix: one contraction `((h @ W) * h_prev).sum()` covers 2-D and 3-D.
 - **DEF-005**: `fast_weights.modulate` added per-sample weights to a time-major activation on the wrong axis. Fix: place them on the axis matching the sample count.
+- **DEF-006**: the capability bar read `accuracy` on an RL cell, which returns `mean_reward` in `custom`. Fix: an RL cell asserts a finite mean reward.
 - **Stale map rows**: rows measured before a void rule are rebuilt to a legal box by the screen's own builder instead of refused.
 
-**Result:** plasticity capability rung `8 passed` (was `7 passed, 1 skipped`). `fast_weights` now trains on sequence.
-**Next:** re-screen stale map rows (`--breadth full`) and finish Dynamics rung (diffusion/lazy/predictive_settling pass individually; their failures in the all-dynamics run were parallel timeouts, not defects). Geometry needs task shape by design, not a fix.
+**Result:** plasticity capability rung `8 passed` (was `7 passed, 1 skipped`). Dynamics capability rung `8 passed` when run sequentially; `fast_weights` now trains on sequence and `spike_integration` on cartpole.
+**Next:** re-screen stale map rows (`--breadth full`). The dynamics failures in the parallel all-dynamics run were pytest-timeout at 300 s from four heavy cells on one CPU, not defects: each passes sequentially. The capability runner could size its worker count from the measured cell cost. Geometry needs task shape by design, not a fix.
 
 ---
 
@@ -651,6 +652,7 @@ Fixed the three blockers that kept plasticity capability tests skipped or crashi
 | DEF-003 | Later declared families never tried | `pytest.skip` inside the family loop aborted the whole test at the first refused family | test_primitive_on_declared_families (multi-family primitives) | tests/primitives/test_primitive_capability.py | all multi-family primitives | ✅ |
 | DEF-004 | time-major energy crashes | `(h @ W @ h_prev.T).trace()` assumes 2-D; a `[time, batch, feat]` activation doubles batch and trace fails | test_primitive_on_declared_families[fast_weights] (delayed_cue) | ontology/dynamics/_dynamics.py | energy_minimization (all settle) | ✅ |
 | DEF-005 | fast_weights crash on sequence | `modulate` adds `[batch, feat]` fast weights to `[time, batch, feat]` activations on axis 0 | test_primitive_on_declared_families[fast_weights] (delayed_cue) | core/plasticity/fast_weights.py | fast_weights | ✅ |
+| DEF-006 | RL cell compared on accuracy | a policy returns `mean_reward` in `custom`, no `accuracy`, so `None > float` raised in the capability bar | test_primitive_on_declared_families[spike_integration] (cartpole) | tests/primitives/test_primitive_capability.py | all dynamics/plasticity on RL | ✅ |
 
 *Populated as defects are discovered. Each entry requires: named mechanism + failing test + fix file + verification.*
 
