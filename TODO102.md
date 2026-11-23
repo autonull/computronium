@@ -1,274 +1,275 @@
-# TODO102 — Self-Improving System: Hygiene, Specialized Tasks & Recursive Optimization
+# TODO102 — Self-Improving System: Consolidated Hygiene, Specialized Tasks & Recursive Optimization
 
-**Status:** 2026-11-23. TODO101 complete (breadth + 8 Rung 3 claims). Next: hygiene pass, specialized tasks, recursive self-improvement.
+**Status:** 2026-11-23. TODO101 complete (breadth + 8 Rung 3 claims). Next: hygiene, specialized tasks, recursive self-improvement.
 
 **Principle:** The system improves itself. Every defect fixed widens capability. Every measurement feeds the next rung. The map is the artifact; the loop is the engine.
 
 ---
 
-## 🎯 Scope: From Breadth → Depth → Self-Improvement
+## 🎯 Consolidated Scope: 3 Tracks, Not 9 Phases
 
-| Phase | Focus | Deliverable |
-|-------|-------|-------------|
-| **Hygiene** | Fix DEF-012, DEF-013 | All 12 geometries viable on MNIST |
-| **Phase 6** | Specialized substrate tasks | Neuromorphic/photonic/quantum Rung 1 |
-| **Phase 7** | Geometry Rung 2/3 claims | 6+ geometry claims at matched boxes |
-| **Phase 8** | Recursive SEC | System runs SEC on itself (meta-learning) |
-| **Phase 9** | Capability gap closure | temporal_psi, causal_transformer, conv, routing, tile |
+| Track | Focus | Duration | Dependencies |
+|-------|-------|----------|--------------|
+| **A: Foundation** | Hygiene + Specialized Tasks | Week 1-2 | None (parallel) |
+| **B: Depth** | Geometry/Plasticity/Substrate Rung 2/3 | Week 2-3 | Track A |
+| **C: Recursive** | Meta-SEC + Gap Closure | Week 3-4 | Track B |
 
----
-
-## 📋 Phase H: Hygiene Pass (Immediate — unblocks Geometry claims)
-
-### DEF-012: Tile void constraint
-**Problem:** `tile` + `instantaneous` + `gradient` refused by `nonlayered_instantaneous_gradient_credit` void rule.
-**Root Cause:** Tile geometry is non-layered (modular), but void rule expects layered geometry for gradient credit.
-**Fix:** Update void rule in `legality/void_rules.py` to allow tile/tile_mesh with gradient when `num_layers ≥ 2`.
-**Test:** `pytest tests/primitives/test_primitive_capability.py -k "tile" -n 1`
-
-### DEF-013: Routing credit defect
-**Problem:** `routing` geometry fails with `gradient` credit: "no gradient reached target indices".
-**Root Cause:** Mixture-of-experts routing detaches gradients; gradient credit requires full graph connectivity.
-**Fix:** Update `kernel/search_space.py` compatibility matrix: routing geometry incompatible with gradient credit; declare compatible credits (pc_alm, target_inversion, random_projections).
-**Test:** `pytest tests/primitives/test_primitive_capability.py -k "routing" -n 1`
-
-**Hygiene Exit Criteria:**
-- [ ] DEF-012 fixed: tile, tile_mesh viable on MNIST with gradient
-- [ ] DEF-013 fixed: routing viable on MNIST with compatible credit
-- [ ] All 12 geometries Rung 1 viable on MNIST (no refused except task-family)
-- [ ] Capability gate: 56/56 pass (geometry + plasticity + dynamics + update + substrate)
+**Key Insight:** Tracks A and B are the *work*; Track C is the *engine* that makes future work cheaper. Run C's instrumentation *during* A/B, not after.
 
 ---
 
-## 📋 Phase 6: Substrate Specialized Tasks (Unblocks Substrate Rung 3)
+## 📋 Track A: Foundation (Week 1-2, Parallel)
 
-**Status:** DEF-010 — No task implementations for neuromorphic, photonic, quantum, analog families.
+### A.1: Hygiene — 2 Fixes, 1 File Each
+| Defect | Fix | File | Test |
+|--------|-----|------|------|
+| DEF-012 | Tile void constraint | `legality/void_rules.py:allow_tile_gradient()` | `pytest -k "tile" -n 1` |
+| DEF-013 | Routing credit incompatibility | `kernel/search_space.py:routing_compatible_credits` | `pytest -k "routing" -n 1` |
 
-| Substrate | Target Task Family | Task Needed | Status |
-|-----------|-------------------|-------------|--------|
-| neuromorphic | neuromorphic | spiking_mnist, dvs_gestures | ⬜ |
-| photonic | photonic | optical_mnist_sim | ⬜ |
-| quantum | quantum | quantum_circuit_learning | ⬜ |
-| analog/memristive | analog | memristor_simulation | ⬜ |
-| ternary | neuromorphic | spiking_mnist | ⬜ |
-| sparse | vision/tabular | (existing MNIST/iris work) | ✅ |
+**Efficiency:** Both are single-function edits. Run tests in parallel.
 
-**Implementation Pattern** (per `domains/factory.py`):
+### A.2: Specialized Substrate Tasks — 4 Tasks, 1 Pattern
+**Pattern:** Each task = 1 file in `domains/<family>.py` with `@register_task` decorator.
+
+| Family | Tasks | File | Base Template |
+|--------|-------|------|---------------|
+| neuromorphic | spiking_mnist, dvs_gestures | `domains/neuromorphic.py` | `domains/vision.py` |
+| photonic | optical_mnist_sim | `domains/photonic.py` | `domains/vision.py` |
+| quantum | quantum_circuit_learning | `domains/quantum.py` | `domains/scientific.py` |
+| analog | memristor_simulation | `domains/analog.py` | `domains/scientific.py` |
+
+**Low-Effort Win:** Copy `domains/vision.py` → modify `input_shape`, `domain`, `geometry_hint`, `pass_bar`. 15 min/task.
+
+**Parallelization:** All 4 independent. Assign to subagents.
+
+### A.3: Instrumentation for Track C (Free, During A/B)
+Add to every SEC run (already in `sec_loop.py`, `sec_all_axes.py`):
 ```python
-# domains/neuromorphic.py
-@register_task
-def spiking_mnist() -> TaskSpecEnriched:
-    return TaskSpecEnriched(
-        name="spiking_mnist",
-        domain=DomainType.NEUROMORPHIC,
-        task_families=("neuromorphic",),
-        input_shape=(2, 28, 28, 20),  # (polarity, H, W, time_bins)
-        output_dim=10,
-        primary_objective="validation_accuracy",
-        pass_bar=0.10,  # chance = 1/10
-        resolution=10_000,
-        geometry_hint="neuromorphic",
-        cost_class=CostClass.EXPENSIVE,
-    )
+# Already captured: walltime_s, replay_hash, box params, refusal reason
+# Add to cell record: primitive_signature = hash(primitive + knob + task)
+```
+No code change — data already flows. Track C reads `cells.jsonl`.
+
+**Track A Exit Criteria:**
+- [ ] DEF-012, DEF-013 fixed → 56/56 capability gate
+- [ ] 4 specialized tasks registered → `uv run python -c "from computronium.experiment.registry.task_registry import TaskRegistry; print([t for t in TaskRegistry().list() if TaskRegistry().get(t).domain in (NEUROMORPHIC, PHOTONIC, QUANTUM, ANALOG)])"`
+- [ ] All 12 geometries Rung 1 viable on MNIST
+
+---
+
+## 📋 Track B: Depth (Week 2-3, After A)
+
+### B.1: Geometry Rung 2/3 — 7 Primitives, Batched
+**Viable on MNIST:** attention, feedforward, recurrent, ntm, tile_mesh, spatial_lattice, nca
+
+**Batch Command:**
+```bash
+# Rung 2 ladders (parallel, 7 primitives × 2 tasks)
+uv run python -m computronium.experiment.sec_all_axes --axis geometry --rung both --task mnist --semaphore 3
+uv run python -m computronium.experiment.sec_all_axes --axis geometry --rung both --task iris --semaphore 3
 ```
 
-**Phase 6 Exit Criteria:**
-- [ ] 4+ specialized tasks implemented (one per substrate family)
-- [ ] Each substrate runs Rung 1 on its declared family
-- [ ] Substrate Rung 2/3 claims on specialized tasks
+**Auto-Register Claims:** Script reads best ladder point → writes `configs/preregistrations/sec_geometry_<prim>.json`.
 
----
+### B.2: Plasticity Rung 3 — temporal_psi Only
+**Gap:** -0.47pp vs null. Fix: add `trace_decay_schedule` hyperparam (exponential/linear).
 
-## 📋 Phase 7: Geometry Rung 2/3 Claims (Depth on Viable Primitives)
+**Action:**
+1. Add `trace_decay_schedule` to `TemporalPsiConfig.hyperparameters()` (domain: ["constant", "exponential", "linear"])
+2. Run Rung 2 with schedule as knob (vs constant baseline)
+3. If viable → Rung 3 claim
 
-**Viable Geometries on MNIST (from TODO101):** attention (0.910), feedforward (0.913), recurrent (0.913), ntm (0.872), tile_mesh (0.898), spatial_lattice (0.908), nca (0.893)
-
-**Action per primitive:**
-1. Run Rung 2 ladder (hidden_dim, num_layers) on MNIST + iris
-2. Pre-register paired comparison vs feedforward baseline
-3. Run Rung 3 (n=5 seeds, paired CI)
-
-**Priority Order:**
-| Geometry | MNIST Best | Iris Best | Claim Target |
-|----------|------------|-----------|--------------|
-| attention | 0.910 | 0.933 | vision ≥ 0.8 |
-| recurrent | 0.913 | 0.933 | sequence ≥ 0.8 |
-| feedforward | 0.913 | 1.0 | baseline (no claim) |
-| spatial_lattice | 0.908 | 0.967 | vision ≥ 0.8 |
-| tile_mesh | 0.898 | 0.967 | vision ≥ 0.8 |
-| nca | 0.893 | — | vision ≥ 0.8 |
-| ntm | 0.872 | 0.867 | sequence ≥ 0.8 |
-
-**Phase 7 Exit Criteria:**
-- [ ] 6+ geometry Rung 2 coordinates
-- [ ] 4+ geometry Rung 3 claims (d ≥ 0.8 vision, d ≥ 0.5 tabular)
-- [ ] Claims recorded in `configs/preregistrations/sec_geometry_*.json`
-
----
-
-## 📋 Phase 8: Recursive SEC — System Runs SEC on Itself (Meta-Learning)
-
-**Core Idea:** The SEC loop is a fixed point. The system should optimize its own SEC configuration.
-
-### 8.1: Meta-Parameter Optimization
-Optimize SEC hyperparameters via SEC itself:
-- `LADDER_FACTORS` (currently 0.1, 1.0, 10.0)
-- `CLAIM_SEEDS` (currently 5)
-- `MIN_EFFECT_SIZE_BY_FAMILY` (currently 0.8 vision, 0.5 tabular)
-- `semaphore_limit` (concurrency)
-- Fidelity schedule (L0→L1→L2 promotion rules)
-
-### 8.2: Search Space Auto-Tuning
-- Use SEC results to prune void regions of search space
-- Learn compatibility rules from measured refusals (not hand-coded)
-- Auto-generate `void_rules.py` from empirical data
-
-### 8.3: Primitive Generation
-- System proposes new primitive configurations from gaps
-- Example: "temporal_psi fails on vision → propose trace_decay schedule primitive"
-- Validate via Rung 0→1 before human review
-
-### 8.4: Budget Allocation Learning
-- Learn per-primitive cost models from walltime measurements
-- Optimize wave sizing: `n_wave = budget / (measured_cost × seed_plan)`
-- Replace static `ADAPTIVE_L0_SHARE` with learned policy
-
-**Phase 8 Exit Criteria:**
-- [ ] SEC hyperparameters tuned via SEC (meta-Rung 1)
-- [ ] Search space pruning reduces refused cells by ≥ 50%
-- [ ] Budget allocation policy beats static 30/50% L0 split
-- [ ] At least 1 auto-generated primitive clears Rung 1
-
----
-
-## 📋 Phase 9: Capability Gap Closure (From Measurements)
-
-| Gap | Primitive | Root Cause | Proposed Fix |
-|-----|-----------|------------|--------------|
-| temporal_psi -0.47pp vs null | temporal_psi | trace_decay static; needs schedule | Add `trace_decay_schedule` hyperparam (exponential/linear decay) |
-| causal_transformer on lm | causal_transformer | No embedding layer for token indices | Add `embedding_dim` to causal_transformer factory; declare `reads_tokens=True` |
-| conv below bar (0.319) | conv | Flattened MNIST (784) not spatial; needs `input_hw=(28,28)` | Fix own_knob_params to pass `input_hw` from task shape |
-| routing gradient defect | routing | MoE detaches gradients | Already in DEF-013 (hygiene) |
-| tile void constraint | tile | Non-layered + gradient refused | Already in DEF-012 (hygiene) |
-
-**Phase 9 Exit Criteria:**
-- [ ] temporal_psi closes gap or documents as capability gap with fix primitive
-- [ ] causal_transformer viable on lm (with embedding)
-- [ ] conv viable on MNIST (with spatial shape)
-- [ ] All gaps have named mechanism + failing test or documented fix primitive
-
----
-
-## 📊 Compounded Impact Projection
-
-| Metric | TODO101 (Current) | TODO102 Target | TODO103 (Recursive) |
-|--------|-------------------|----------------|---------------------|
-| Rung 3 claims | 8 | 18+ | 30+ (auto) |
-| Geometries viable | 7/12 MNIST | 12/12 MNIST | 12/12 all families |
-| Substrates with claims | 0 | 4 (specialized) | 6+ |
-| Search space efficiency | ~40% refused | <20% refused | <5% refused (learned) |
-| Capability gaps | 5 documented | 0 (fixed or primitive) | Self-identified |
-| SEC meta-parameters | Fixed | Tuned via SEC | Self-optimizing |
-
----
-
-## 🔄 Self-Improvement Loop Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    COMPUTRONIUM SYSTEM                      │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │  Primitives │───▶│  SEC Loop   │───▶│ Capability  │     │
-│  │  (75 axes)  │    │  (map)      │    │  Map        │     │
-│  └─────────────┘    └──────┬──────┘    └──────┬──────┘     │
-│                            │                    │            │
-│                            ▼                    ▼            │
-│                   ┌──────────────────────────────────┐      │
-│                   │      META-SEC (Phase 8)          │      │
-│                   │  • Tunes SEC hyperparams         │      │
-│                   │  • Prunes search space           │      │
-│                   │  • Proposes new primitives       │      │
-│                   │  • Learns budget allocation      │      │
-│                   └──────────────────────────────────┘      │
-│                            │                    │            │
-│                            ▼                    ▼            │
-│                   ┌─────────────┐    ┌─────────────┐         │
-│                   │ New Config  │    │ New Primitive│        │
-│                   │ (SEC.yaml)  │    │ (auto-gen)  │        │
-│                   └─────────────┘    └─────────────┘         │
-└─────────────────────────────────────────────────────────────┘
+### B.3: Substrate Rung 2/3 — On Specialized Tasks
+Run on tasks from Track A.2:
+```bash
+uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung both --task spiking_mnist --semaphore 2
+uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung both --task optical_mnist_sim --semaphore 2
+# ... etc
 ```
 
-**Implementation:** `computronium/experiment/meta_sec.py`
-- Reads `results/sec/map.json` + `results/sec/cells.jsonl`
-- Runs SEC on SEC configuration space
-- Outputs: updated `sec_all_axes.py` params, new void rules, primitive proposals
+**Track B Exit Criteria:**
+- [ ] 6+ Geometry Rung 3 claims (d ≥ 0.8 vision)
+- [ ] temporal_psi Rung 3 claim or documented gap with fix primitive
+- [ ] 4 Substrate Rung 2 coordinates on specialized tasks
 
 ---
 
-## 📋 Execution Order (Dependency-Aware)
+## 📋 Track C: Recursive Meta-SEC (Week 3-4, Continuous)
+
+### C.1: Meta-SEC Engine (1 File: `computronium/experiment/meta_sec.py`)
+**Reads:** `results/sec/cells.jsonl` + `results/sec/map.json`
+**Optimizes:**
+| Parameter | Current | Search Space |
+|-----------|---------|--------------|
+| LADDER_FACTORS | (0.1, 1.0, 10.0) | 3-5 points, log-spaced |
+| CLAIM_SEEDS | 5 | 3, 5, 7, 10 |
+| MIN_EFFECT_SIZE | 0.8/0.5 | 0.5-1.2 per family |
+| Fidelity schedule | L0→L1→L2 | L0 only, L0→L1, L0→L2 |
+| semaphore_limit | 2 | 1, 2, 4, 8 |
+
+**Method:** Bayesian optimization (TPE) on meta-objective: `claims_per_gpu_hour`.
+
+### C.2: Search Space Pruning (From Data, Not Code)
+**Current:** Hand-coded void rules in `legality/void_rules.py`
+**New:** Learn from `cells.jsonl` refusals:
+```python
+# For each (geometry, credit, dynamics) tuple: count refused vs measured
+# If refused_rate > 0.8 and measured_count > 5 → add void rule
+# If measured_count > 10 and all viable → remove void rule
+```
+**Output:** Auto-generated `void_rules_learned.py` → reviewed → replaces hand-coded.
+
+### C.3: Primitive Proposals (From Gaps)
+**Input:** Capability gaps from Track B (temporal_psi, causal_transformer, conv)
+**Output:** New primitive configs in `primitives/registry.py` with `available=False, unavailable_reason="proposed"`.
+**Validation:** Rung 0 (wiring) auto-run on proposal.
+
+### C.4: Budget Allocation Policy
+**Current:** Static `ADAPTIVE_L0_SHARE = 0.3` (spaces <1000) / `0.5`
+**Learned:** Per-primitive cost model from `walltime_s` → `n_wave = budget / (pred_cost × seed_plan)`
+**Model:** Linear regression on `log(walltime) ~ log(param_count) + fidelity + axis_knob`
+
+**Track C Exit Criteria:**
+- [ ] Meta-SEC runs → improves `claims_per_gpu_hour` by ≥ 2×
+- [ ] Learned void rules match hand-coded ≥ 90% + find 2+ new
+- [ ] 3+ primitive proposals auto-generated, 1+ clears Rung 0
+- [ ] Budget policy beats static split on held-out wave
+
+---
+
+## 🔄 Consolidated Execution Graph
 
 ```
-Hygiene (H) ──▶ Phase 6 ──▶ Phase 7 ──▶ Phase 8 ──▶ Phase 9
-   │            │           │           │           │
-   │            │           │           │           └── Requires H, 7
-   │            │           │           └───────────── Requires 6, 7
-   │            │           └──────────────────────── Requires H
-   │            └───────────────────────────────────── Independent
-   └────────────────────────────────────────────────── Independent
+                    ┌─────────────────────┐
+                    │   START (TODO101)   │
+                    └──────────┬──────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+       ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+       │  A.1 Hygiene │ │ A.2 Tasks   │ │ A.3 Instrument│
+       │  (2 fixes)   │ │ (4 files)   │ │ (free)      │
+       └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+              │               │               │
+              └───────────────┼───────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  CAPABILITY     │
+                    │  GATE 56/56     │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+       ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+       │ B.1 Geometry│ │ B.2 Plastic │ │ B.3 Substrate│
+       │ Rung 2/3    │ │ temporal_psi│ │ Specialized │
+       └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+              │               │               │
+              └───────────────┼───────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  CLAIMS + GAPS  │
+                    │  (data for C)   │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+       ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+       │ C.1 Meta-SEC│ │ C.2 Prune   │ │ C.3 Propose │
+       │ Optimize    │ │ Void Rules  │ │ Primitives  │
+       └──────┬──────┘ └──────┬──────┘ └──────┬──────┘
+              │               │               │
+              └───────────────┼───────────────┘
+                              ▼
+                    ┌─────────────────┐
+                    │  TODO103 READY  │
+                    │  (Self-Improving)│
+                    └─────────────────┘
 ```
 
-**Parallelizable:** H + Phase 6 (independent)
-**Sequential:** Phase 7 needs H; Phase 8 needs 6+7; Phase 9 needs H+7
+**Parallelization:**
+- A.1 + A.2 + A.3: Fully parallel (Week 1)
+- B.1 + B.2 + B.3: Parallel after A (Week 2)
+- C.1-4: Continuous during A/B; full run after B (Week 3-4)
 
 ---
 
-## 🛠 Implementation Checklist
+## 📊 Low-Effort High-Impact Capabilities (Achieved During A/B)
 
-### Hygiene (Week 1)
-- [ ] Fix DEF-012: `legality/void_rules.py` — allow tile/tile_mesh with gradient when layered
-- [ ] Fix DEF-013: `kernel/search_space.py` — routing incompatible with gradient credit
-- [ ] Run capability gate: 56/56 pass
+| Capability | Effort | When | Value |
+|------------|--------|------|-------|
+| **Auto-claim registration** | 1 script | B.1 | No manual JSON writing |
+| **Cost model per primitive** | 1 query | A.3 (free) | Optimal wave sizing |
+| **Refusal taxonomy** | 1 query | A.3 (free) | Debug via `grep "refused" cells.jsonl` |
+| **Primitive signature hashing** | 1 field | A.3 (free) | Exact replay, deduplication |
+| **Cross-task normalization** | 1 metric | B (free) | Fair comparison across families |
+| **Gap → primitive pipeline** | C.3 | C | Self-generating roadmap |
 
-### Phase 6 (Week 2-3)
-- [ ] Implement `domains/neuromorphic.py` (spiking_mnist, dvs_gestures)
-- [ ] Implement `domains/photonic.py` (optical_mnist_sim)
-- [ ] Implement `domains/quantum.py` (quantum_circuit_learning)
-- [ ] Implement `domains/analog.py` (memristor_simulation)
-- [ ] Run substrate Rung 1 on each specialized task
-
-### Phase 7 (Week 3-4)
-- [ ] Run geometry Rung 2 ladders (7 primitives × 2 tasks)
-- [ ] Pre-register 7 claims in `configs/preregistrations/`
-- [ ] Run Rung 3 paired comparisons (n=5)
-
-### Phase 8 (Week 4-6)
-- [ ] Implement `computronium/experiment/meta_sec.py`
-- [ ] Define SEC meta-search space (LADDER_FACTORS, CLAIM_SEEDS, MIN_EFFECT_SIZE, etc.)
-- [ ] Run meta-Rung 1 on SEC config space
-- [ ] Implement search space pruning from empirical refusals
-- [ ] Implement primitive proposal from gap analysis
-
-### Phase 9 (Week 5-6)
-- [ ] Fix temporal_psi: add `trace_decay_schedule` hyperparam
-- [ ] Fix causal_transformer: add embedding layer + `reads_tokens=True`
-- [ ] Fix conv: pass `input_hw` from task shape in own_knob_params
-- [ ] Verify all gaps closed or documented with fix primitives
+**All free** — just read existing `cells.jsonl` with 1-2 SQL queries.
 
 ---
 
-## 📈 Success Metrics (Per Phase)
+## 📈 Success Metrics (Consolidated)
 
-| Phase | Metric | Target |
-|-------|--------|--------|
-| H | Capability gate pass rate | 56/56 |
-| 6 | Substrates with Rung 1 data | 4/4 specialized families |
-| 7 | Geometry Rung 3 claims | ≥4 (d ≥ 0.8 vision) |
-| 8 | Meta-SEC improves walltime | ≥2× cells/budget |
-| 8 | Search space refusal rate | <20% |
-| 9 | Capability gaps remaining | 0 |
+| Metric | Baseline (TODO101) | Target (TODO102) | Measurement |
+|--------|-------------------|------------------|-------------|
+| Rung 3 claims | 8 | 18+ | `grep "rung3_verdict.*claim" results/sec/*.json \| wc -l` |
+| Geometries viable MNIST | 7/12 | 12/12 | Capability gate geometry subset |
+| Substrates with Rung 2 | 0 | 4 | Specialized task results |
+| Refusal rate | ~40% | <15% | `cells.jsonl` status counts |
+| Claims/GPU-hour | ~0.5 | ≥2.0 | Meta-SEC objective |
+| Void rules hand-coded | ~20 | 0 (learned) | `void_rules_learned.py` |
+| Primitive proposals | 0 | 3+ | `registry.py unavailable_reason="proposed"` |
+| Capability gaps | 5 | 0 | All fixed or proposed |
 
 ---
 
-*TODO102 continues the SEC loop. The system improves itself. Every measurement feeds the next rung. The map is the artifact; the loop is the engine.*
+## 🛠 Implementation Checklist (Ordered by Dependency)
+
+### Week 1: Track A (Parallel)
+- [ ] **A.1.1** Fix DEF-012: `legality/void_rules.py` — `allow_tile_gradient()` 
+- [ ] **A.1.2** Fix DEF-013: `kernel/search_space.py` — routing compatible credits
+- [ ] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures)
+- [ ] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
+- [ ] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
+- [ ] **A.2.4** `domains/analog.py` (memristor_simulation)
+- [ ] **A.3** Verify capability gate 56/55 → 56/56
+
+### Week 2: Track B (Parallel after A)
+- [ ] **B.1** Geometry Rung 2/3 batched (7 prims × MNIST + iris)
+- [ ] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam → Rung 2/3
+- [ ] **B.3** Substrate Rung 2/3 on 4 specialized tasks
+
+### Week 3-4: Track C (Continuous from Week 1)
+- [ ] **C.1** `meta_sec.py` — Bayesian opt on SEC hyperparams
+- [ ] **C.2** Learned void rules from `cells.jsonl`
+- [ ] **C.3** Gap→primitive pipeline (temporal_psi, causal_transformer, conv)
+- [ ] **C.4** Budget allocation policy from cost model
+
+---
+
+## 🎯 TODO102 Deliverable: Self-Improving Computronium
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    COMPUTRONIUM v2 (Self-Improving)           │
+├────────────────────────────────────────────────────────────────┤
+│  Primitives (75)  ──SEC──▶  Capability Map  ──Meta-SEC──▶    │
+│       ▲                                    │                  │
+│       │                                    ▼                  │
+│       └────── Void Rules (learned) ◀─── New Configs          │
+│       └────── Primitive Proposals ◀─── Gap Analysis          │
+│       └────── Budget Policy (learned) ◀─── Cost Model        │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**The system now:**
+1. **Measures** everything (cells.jsonl = complete history)
+2. **Learns** void rules from refusals (not hand-coded)
+3. **Proposes** primitives from gaps (not human-guessed)
+4. **Optimizes** its own SEC config (not fixed constants)
+5. **Allocates** budget from cost models (not static splits)
+
+---
+
+*TODO102: Consolidated, parallelized, instrumented. The loop improves itself.*
