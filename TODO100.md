@@ -676,7 +676,7 @@ verification is not hostage to a stale map. Re-screening those rows
 - [x] Rung 1 (full): ≥12 credits viable on ≥1 declared family (vision: 13 viable)
 - [x] Rung 2: 13 credits at best box with provisional coordinate (2 claims confirmed)
 - [x] Rung 3: ≥3 credits with confirmed claim (pre-registered, n=5, effect size) — **2 credits (surrogate, local_goodness) with 4 confirmed claims across vision + tabular families** (sequence geometrically incompatible)
-- [x] All defects in registry have fixing test + fix file + verification (DEF-001, DEF-002 resolved via hyperparam)
+- [x] All defects in registry have fixing test + fix file + verification (DEF-001–DEF-006 resolved; GAP-001 verified)
 - [x] Capability gate green after each session (no regressions) — Session B passes
 - [x] Experiment log table complete with rung, stop reason, box, cost (vision subset + tabular)
 
