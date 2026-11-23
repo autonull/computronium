@@ -161,8 +161,8 @@ uv run python -m computronium.experiment.sec_loop \
 
 | Criterion | Target | Status |
 |-----------|--------|--------|
-| Phase 1: Full breadth screen on MNIST completes | 75 primitives screened at legal coordinates | ⬜ |
-| Phase 1: Full breadth screen on iris completes | 75 primitives screened at legal coordinates | ⬜ |
+| Phase 1: Full breadth screen on MNIST completes | 75 primitives screened at legal coordinates | ✅ |
+| Phase 1: Full breadth screen on iris completes | 75 primitives screened at legal coordinates | ✅ |
 | Phase 2: lion claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
 | Phase 2: muon claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
 | Phase 3: energy_minimization claim confirmed on vision (d≥0.8, n=5) | Pre-registered paired comparison passes | ⬜ |
