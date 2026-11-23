@@ -320,7 +320,7 @@ class KernelRegistry:
             if backend is None:
                 continue
 
-            try:  # ruff: ignore[complex-structure] — benchmark ladder is one unit
+            try:  # ruff: ignore[complex-structure, too-many-statements-in-try-clause] — benchmark ladder is one unit
                 if benchmark_fn is not None:
                     # Use custom benchmark function
                     time_ms = benchmark_fn(backend, shape)
@@ -361,7 +361,7 @@ class KernelRegistry:
         # Create dummy inputs based on shape
         if hasattr(backend, "initialize"):
             # Try to initialize with minimal config
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 from computronium.acceleration.kernel_backend import (
                     HardwareTarget,
                     KernelConfig,

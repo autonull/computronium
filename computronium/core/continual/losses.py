@@ -108,9 +108,7 @@ class SynapticIntelligence:
     Works with pseudo-gradients from local credit assignment.
     """
 
-    def __init__(
-        self, model: ParameterSource, xi: float = 0.1, epsilon: float = 1e-3
-    ):
+    def __init__(self, model: ParameterSource, xi: float = 0.1, epsilon: float = 1e-3):
         self.model = model
         self.xi = xi
         self.epsilon = epsilon
@@ -178,7 +176,10 @@ class SynapticIntelligence:
         stays here (the source of truth), not in the rule.
         """
         return {
-            id(param): 2 * self.xi * self.omega[id(param)] * (param.data - self.prev_params[id(param)])
+            id(param): 2
+            * self.xi
+            * self.omega[id(param)]
+            * (param.data - self.prev_params[id(param)])
             for _name, param in self.model.named_parameters()
             if id(param) in self.omega and id(param) in self.prev_params
         }

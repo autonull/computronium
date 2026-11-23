@@ -311,7 +311,7 @@ def _apply_activation(x: Tensor, activation: str) -> Tensor:
 
 
 # Triton kernels for fused PC operations
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice

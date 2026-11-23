@@ -17,31 +17,29 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Final
 
-from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_loop import (
     _measure,
     base_schedule,
     screen_coordinate,
 )
-from computronium.experiment.sec_pilot import own_knob_params, BASE_BOXES, base_family
-from computronium.experiment.schema.coordinate import Schedule
-from computronium.experiment.schema.axis import AXES_REGISTRIES
+from computronium.experiment.sec_pilot import BASE_BOXES, base_family, own_knob_params
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
     EffectSizeRegistration,
-    PairedComparison,
     ThresholdRegistration,
     paired_comparison,
 )
 
 __all__ = [
-    "AXIS_PRIMARY_KNOB",
     "AXIS_DEFAULTS",
-    "run_rung1_ladder",
-    "run_rung2_comparison",
+    "AXIS_PRIMARY_KNOB",
+    "preregister_axis_primitives",
     "run_axis_rung1_all",
     "run_axis_rung2_all",
-    "preregister_axis_primitives",
+    "run_rung1_ladder",
+    "run_rung2_comparison",
 ]
 
 # Ladder factors: 0.1x, 1.0x, 10.0x of declared default
@@ -97,6 +95,7 @@ FAMILY_TO_TASK: Final[MappingProxyType[str, str]] = MappingProxyType({
 @dataclass(frozen=True, slots=True)
 class LadderRung:
     """One point of the 3-point ladder."""
+
     factor: float
     value: float
     status: str
@@ -122,6 +121,7 @@ class LadderRung:
 @dataclass(frozen=True, slots=True)
 class PairedCell:
     """One arm of the paired comparison."""
+
     arm: str  # treatment | control
     factor: float
     seed: int
@@ -151,6 +151,7 @@ class PairedCell:
 @dataclass(frozen=True, slots=True)
 class RungResult:
     """Result of Rung 1 + Rung 2 for one primitive."""
+
     axis: str
     primitive: str
     task_id: str
@@ -199,6 +200,7 @@ _AXIS_REGISTRY_PREFIX: Final[Mapping[str, str]] = MappingProxyType({
 def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     """Get declared task families for a primitive."""
     from computronium.primitives.registry import _TASK_FAMILIES
+
     prefix = _AXIS_REGISTRY_PREFIX.get(axis, axis)
     key = f"primitive.{prefix}.{primitive}"
     families = _TASK_FAMILIES.get(key, [])
@@ -212,8 +214,25 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
     """
     # First try hyperparameters (own_knob_params)
     params = own_knob_params(axis, primitive)
-    for name in ["step_size", "max_steps", "hidden_dim", "depth", "width", "num_layers", "momentum", "trace_decay", "noise_level", "sparsity",
-                  "feedback_scale", "beta", "readout_scale", "fd_step", "estimator_samples", "aux_head_scale", "lr"]:
+    for name in [
+        "step_size",
+        "max_steps",
+        "hidden_dim",
+        "depth",
+        "width",
+        "num_layers",
+        "momentum",
+        "trace_decay",
+        "noise_level",
+        "sparsity",
+        "feedback_scale",
+        "beta",
+        "readout_scale",
+        "fd_step",
+        "estimator_samples",
+        "aux_head_scale",
+        "lr",
+    ]:
         key = f"{axis}.{name}"
         value = params.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -231,12 +250,14 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
         module_name = ".".join(parts[:-2])
         class_name = parts[-2]
         import importlib
+
         module = importlib.import_module(module_name)
         config_cls = getattr(module, class_name)
         if hasattr(config_cls, "hyperparameters"):
             hp_dict = config_cls.hyperparameters(primitive)
             # Check the preferred knobs for this axis from LADDER_KNOBS
             from computronium.experiment.sec_deep_dive import LADDER_KNOBS
+
             for name in LADDER_KNOBS.get(axis, ()):
                 if name in hp_dict:
                     hp_spec = hp_dict[name]
@@ -245,8 +266,11 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
                     avail_pred = hp_spec.get("availability")
                     if avail_pred is not None:
                         from computronium.experiment.legality.dsl import evaluate
-                        from computronium.experiment.schema.harvest import CoordinateContext
                         from computronium.experiment.schema.coordinate import Coordinate
+                        from computronium.experiment.schema.harvest import (
+                            CoordinateContext,
+                        )
+
                         # Build coordinate with the actual primitive for the axis being tested
                         axes = {
                             "substrate": "digital",
@@ -256,7 +280,9 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
                             "credit": "gradient",
                             "update": "euclidean",
                         }
-                        axes[axis] = primitive  # Use the actual primitive for availability check
+                        axes[axis] = (
+                            primitive  # Use the actual primitive for availability check
+                        )
                         coord = Coordinate(
                             substrate=axes["substrate"],
                             geometry=axes["geometry"],
@@ -276,14 +302,18 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
                         if isinstance(domain, tuple) and len(domain) >= 2:
                             if domain[2] == "log":
                                 import math
-                                return f"{axis}.{name}", math.sqrt(domain[0] * domain[1])
+
+                                return f"{axis}.{name}", math.sqrt(
+                                    domain[0] * domain[1]
+                                )
                             else:
                                 return f"{axis}.{name}", (domain[0] + domain[1]) / 2
                         elif isinstance(domain, list):
                             return f"{axis}.{name}", float(domain[0])
 
     # For structural axes (geometry), check topology_params from axis spec
-    from computronium.experiment.schema.axis import get_axis_spec, StructuralAxis
+    from computronium.experiment.schema.axis import StructuralAxis, get_axis_spec
+
     axis_enum = StructuralAxis(axis.lower())
     spec = get_axis_spec(axis_enum, primitive)
     if spec and spec.topology_params:
@@ -297,6 +327,7 @@ def _get_primary_knob(axis: str, primitive: str) -> tuple[str, float] | None:
                 class_name = parts[-2]
                 method_name = parts[-1]
                 import importlib
+
                 module = importlib.import_module(module_name)
                 config_cls = getattr(module, class_name)
                 factory = getattr(config_cls, method_name, None)
@@ -335,17 +366,19 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     family = base_family(task_id)
     if not family:
         raise ValueError(f"{task_id} declares no task family")
-    
+
     base_box = BASE_BOXES.get(family)
     if not base_box:
         raise ValueError(f"Family {family} has no base box")
-    
+
     base_coord = base_box.base_coordinate
     schedule_task_id = base_box.task_id
 
     schedule = base_schedule(schedule_task_id, "auto")
     if schedule is None:
-        raise ValueError(f"Base task {schedule_task_id} for family {family} declares no base box")
+        raise ValueError(
+            f"Base task {schedule_task_id} for family {family} declares no base box"
+        )
 
     # Start with base schedule
     box = schedule.to_dict()
@@ -377,10 +410,10 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
         box["substrate"] = primitive
 
     # Get hyperparams from config class's hyperparameters() method
-    from computronium.primitives.registry import _CONFIG_FACTORIES
-    from computronium.experiment.schema.harvest import CoordinateContext
-    from computronium.experiment.schema.coordinate import Coordinate
     from computronium.experiment.legality.dsl import evaluate
+    from computronium.experiment.schema.coordinate import Coordinate
+    from computronium.experiment.schema.harvest import CoordinateContext
+    from computronium.primitives.registry import _CONFIG_FACTORIES
 
     # Create coordinate for availability checking
     axes = {
@@ -413,6 +446,7 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
             class_name = parts[-2]
             method_name = parts[-1]
             import importlib
+
             module = importlib.import_module(module_name)
             config_cls = getattr(module, class_name)
             # Get available hyperparameters from hyperparameters() FIRST
@@ -431,9 +465,18 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
                 try:
                     config = getattr(config_cls, method_name)()
                     for field_name in dir(config):
-                        if not field_name.startswith("_") and not callable(getattr(config, field_name)):
+                        if not field_name.startswith("_") and not callable(
+                            getattr(config, field_name)
+                        ):
                             # Only add if this field is available for the current primitive
-                            if field_name in available_fields or field_name in ("update_type", "credit_type", "dynamics_type", "substrate_type", "geometry_type", "plasticity_type"):
+                            if field_name in available_fields or field_name in (
+                                "update_type",
+                                "credit_type",
+                                "dynamics_type",
+                                "substrate_type",
+                                "geometry_type",
+                                "plasticity_type",
+                            ):
                                 value = getattr(config, field_name)
                                 if isinstance(value, (int, float, bool, str)):
                                     box[f"{ax_name}.{field_name}"] = value
@@ -451,9 +494,14 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
                             if isinstance(domain, tuple) and len(domain) >= 2:
                                 if domain[2] == "log":
                                     import math
-                                    box[f"{ax_name}.{hp_name}"] = math.sqrt(domain[0] * domain[1])
+
+                                    box[f"{ax_name}.{hp_name}"] = math.sqrt(
+                                        domain[0] * domain[1]
+                                    )
                                 else:
-                                    box[f"{ax_name}.{hp_name}"] = (domain[0] + domain[1]) / 2
+                                    box[f"{ax_name}.{hp_name}"] = (
+                                        domain[0] + domain[1]
+                                    ) / 2
                             elif isinstance(domain, list):
                                 box[f"{ax_name}.{hp_name}"] = domain[0]
 
@@ -513,7 +561,9 @@ async def run_rung1_ladder(
     rungs = await asyncio.gather(*tasks)
 
     # Find best rung
-    measured_rungs = [r for r in rungs if r.status == "measured" and r.val_acc is not None]
+    measured_rungs = [
+        r for r in rungs if r.status == "measured" and r.val_acc is not None
+    ]
     if not measured_rungs:
         return rungs, None, "all_refused"
 
@@ -521,6 +571,7 @@ async def run_rung1_ladder(
 
     # Check if best clears the bar
     from computronium.experiment.sec_loop import _task_bar
+
     bar = _task_bar(task_id)
     if bar is not None and (best.val_acc or 0.0) <= bar.value:
         return rungs, best, "below_bar"
@@ -553,10 +604,10 @@ async def run_rung2_comparison(
     registration = None
     try:
         registration = EffectSizeRegistration.load(registration_path)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         try:
             registration = ThresholdRegistration.load(registration_path)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             pass
 
     if registration is None:
@@ -577,7 +628,7 @@ async def run_rung2_comparison(
         treatment_box["dynamics.step_size"] = 0.1
         treatment_box["dynamics.convergence_threshold"] = 1e-3
         # Also copy dynamics params from registration box if available
-        if hasattr(registration, 'box') and registration.box:
+        if hasattr(registration, "box") and registration.box:
             for key, value in registration.box.items():
                 if key.startswith("dynamics.") and key != knob_key:
                     treatment_box[key] = value
@@ -620,8 +671,7 @@ async def run_rung2_comparison(
     treatments = [c for c in cells if c.arm == "treatment"]
     controls = [c for c in cells if c.arm == "control"]
     identical = all(
-        t.val_acc == c.val_acc
-        for t, c in zip(treatments, controls, strict=True)
+        t.val_acc == c.val_acc for t, c in zip(treatments, controls, strict=True)
     )
     if identical:
         return cells, {}, "no_power"
@@ -687,8 +737,12 @@ async def run_primitive_full(
             await create_registration(axis, primitive, task_id, reg_path)
 
         result = await run_rung2_comparison(
-            axis, primitive, task_id, best.value, reg_path,
-            semaphore_limit=semaphore_limit
+            axis,
+            primitive,
+            task_id,
+            best.value,
+            reg_path,
+            semaphore_limit=semaphore_limit,
         )
         if result:
             rung2_cells, rung2_effect, rung2_verdict = result
@@ -757,7 +811,9 @@ async def run_axis_rung1_all(
             continue
 
         task_family = task_families[0]
-        task_id = (task_override or {}).get(task_family, FAMILY_TO_TASK.get(task_family, "mnist"))
+        task_id = (task_override or {}).get(
+            task_family, FAMILY_TO_TASK.get(task_family, "mnist")
+        )
 
         print(f"\n=== Rung 1: {axis}/{primitive} on {task_id} ===")
         result = await run_primitive_full(axis, primitive, task_id, semaphore_limit)
@@ -765,9 +821,13 @@ async def run_axis_rung1_all(
 
         print(f"  Rung 1 verdict: {result.rung1_verdict}")
         if result.best_rung:
-            print(f"  Best: {result.best_rung['factor']}x = {result.best_rung['val_acc']:.4f}")
+            print(
+                f"  Best: {result.best_rung['factor']}x = {result.best_rung['val_acc']:.4f}"
+            )
         if result.rung2_verdict:
-            print(f"  Rung 2: {result.rung2_verdict} (d={result.rung2_effect.get('cohens_dz', 0):.2f})")
+            print(
+                f"  Rung 2: {result.rung2_verdict} (d={result.rung2_effect.get('cohens_dz', 0):.2f})"
+            )
 
     return results
 
@@ -783,7 +843,9 @@ async def run_axis_rung2_all(
         return []
 
     results = json.loads(results_file.read_text())
-    viable = [r for r in results if r.get("rung1_verdict") == "viable" and r.get("best_rung")]
+    viable = [
+        r for r in results if r.get("rung1_verdict") == "viable" and r.get("best_rung")
+    ]
 
     rung2_results = []
     for r in viable:
@@ -798,11 +860,17 @@ async def run_axis_rung2_all(
             await create_registration(axis, primitive, task_id, reg_path)
 
         rung2_result = await run_rung2_comparison(
-            axis, primitive, task_id, best_value, reg_path,
-            semaphore_limit=semaphore_limit
+            axis,
+            primitive,
+            task_id,
+            best_value,
+            reg_path,
+            semaphore_limit=semaphore_limit,
         )
 
-        r["rung2_cells"] = [c.to_dict() for c in rung2_result[0]] if rung2_result else None
+        r["rung2_cells"] = (
+            [c.to_dict() for c in rung2_result[0]] if rung2_result else None
+        )
         r["rung2_effect"] = rung2_result[1] if rung2_result else None
         r["rung2_verdict"] = rung2_result[2] if rung2_result else None
         rung2_results.append(r)
@@ -836,12 +904,26 @@ async def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="SEC Rung 1/2 for all axes")
-    parser.add_argument("--axis", choices=["credit", "dynamics", "geometry", "update", "plasticity", "substrate", "all"], default="all")
+    parser.add_argument(
+        "--axis",
+        choices=[
+            "credit",
+            "dynamics",
+            "geometry",
+            "update",
+            "plasticity",
+            "substrate",
+            "all",
+        ],
+        default="all",
+    )
     parser.add_argument("--rung", choices=["1", "2", "both"], default="both")
     parser.add_argument("--primitive", type=str, help="Run only this primitive")
     parser.add_argument("--semaphore", type=int, default=2)
     parser.add_argument("--task", type=str, help="Override task_id (e.g., mnist)")
-    parser.add_argument("--preregister", action="store_true", help="Create registration files")
+    parser.add_argument(
+        "--preregister", action="store_true", help="Create registration files"
+    )
 
     args = parser.parse_args()
 
@@ -865,8 +947,10 @@ async def main() -> None:
                 if not task_families:
                     continue
                 task_family = task_families[0]
-                task_id = (args.task or FAMILY_TO_TASK.get(task_family, "mnist"))
-                result = await run_primitive_full(axis, primitive, task_id, args.semaphore)
+                task_id = args.task or FAMILY_TO_TASK.get(task_family, "mnist")
+                result = await run_primitive_full(
+                    axis, primitive, task_id, args.semaphore
+                )
                 # Save result
                 out_path = Path(f"results/sec/rung12_{axis}_{primitive}.json")
                 out_path.parent.mkdir(parents=True, exist_ok=True)

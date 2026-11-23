@@ -161,13 +161,10 @@ class TaskBatches:
         if lane == "get_batch":
             for _ in range(self.batches_per_epoch or 0):
                 inputs, targets = self.task.get_batch(self.split, self.batch_size)
-                if _is_graph_data(inputs):
+                if _is_graph_data(inputs) or is_time_major:
                     yield inputs, targets
                 else:
-                    if is_time_major:
-                        yield inputs, targets
-                    else:
-                        yield _flatten(inputs, self.task.name), targets
+                    yield _flatten(inputs, self.task.name), targets
             return
         raise ValueError(f"Unknown lane: {lane}")
 

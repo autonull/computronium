@@ -75,7 +75,9 @@ def _compose_credit_arm(
         credit,
         update,
     )
-    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
+    return ContinualJointSystem.from_joint_system(
+        joint, classes_per_task=classes_per_task
+    ).to(device)
 
 
 def create_local_arm(
@@ -186,7 +188,9 @@ def create_fast_weight_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, plasticity, credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
+    return ContinualJointSystem.from_joint_system(
+        joint, classes_per_task=classes_per_task
+    ).to(device)
 
 
 def create_ewc_arm(
@@ -222,7 +226,9 @@ def create_ewc_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, NullPlasticity(), credit, update
     )
-    system = ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
+    system = ContinualJointSystem.from_joint_system(
+        joint, classes_per_task=classes_per_task
+    ).to(device)
 
     # Return the update object for consolidation at task boundaries
     return system, update
@@ -258,7 +264,9 @@ def create_backprop_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, NullPlasticity(), credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
+    return ContinualJointSystem.from_joint_system(
+        joint, classes_per_task=classes_per_task
+    ).to(device)
 
 
 def create_plasticity_arm(
@@ -293,7 +301,9 @@ def create_plasticity_arm(
     joint = _get_compose_joint_system()(
         substrate, geometry, dynamics, psi, credit, update
     )
-    return ContinualJointSystem.from_joint_system(joint, classes_per_task=classes_per_task).to(device)
+    return ContinualJointSystem.from_joint_system(
+        joint, classes_per_task=classes_per_task
+    ).to(device)
 
 
 def create_replay_arm(
@@ -306,7 +316,9 @@ def create_replay_arm(
     classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, ReplayBuffer]:
     """Create replay buffer arm (matched total memory)."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
+    system = create_backprop_arm(
+        input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task
+    )
     # Fast weight plasticity has ~512 * 4 bytes * batch_size = ~2KB per sample
     # Match replay buffer capacity to equivalent memory
     buffer = ReplayBuffer(buffer_capacity, (input_dim,), torch.device(device))
@@ -322,7 +334,9 @@ def create_lwf_arm(
     classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, LwFLoss]:
     """Create LwF arm."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
+    system = create_backprop_arm(
+        input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task
+    )
     lwf_loss = LwFLoss(temperature=2.0, lambda_lwf=1.0)
     return system, lwf_loss
 
@@ -337,7 +351,9 @@ def create_si_arm(
     classes_per_task: int = 2,
 ) -> tuple[ContinualJointSystem, SynapticIntelligence]:
     """Create Synaptic Intelligence arm."""
-    system = create_backprop_arm(input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task)
+    system = create_backprop_arm(
+        input_dim, hidden_dim, output_dim, device, lr, classes_per_task=classes_per_task
+    )
     si = SynapticIntelligence(system, xi=xi)
     return system, si
 

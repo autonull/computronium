@@ -131,26 +131,6 @@ def capability_matrix() -> None:
     table = Table(title="Capability Matrix (Kind × Stage)")
     table.add_column("Kind", style="cyan")
     for stage in stages:
-        table.add_column(stage, style="green")
-
-    for kind in kinds:
-        row = [kind.value]
-        for stage in stages:
-            count = len([c for c in caps if c.kind == kind and c.stage == stage])
-            req_count = len([
-                c for c in caps if c.kind == kind and c.stage == stage and c.required
-            ])
-            cell = f"{count}" + (f" ({req_count} req)" if req_count else "")
-            table.add_row(*row) if stage == stages[0] else table.add_row(
-                *row
-            ) if False else None
-            # Rich table needs add_row for each row
-            # We'll build differently
-
-    # Rebuild properly
-    table = Table(title="Capability Matrix (Kind × Stage)")
-    table.add_column("Kind", style="cyan")
-    for stage in stages:
         table.add_column(stage, justify="center")
 
     for kind in kinds:

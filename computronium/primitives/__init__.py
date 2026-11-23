@@ -20,9 +20,9 @@ from computronium.primitives.registry import (
 )
 
 __all__ = [
+    "REGISTRY",
     "PrimitiveProtocol",
     "PrimitiveSpec",
-    "REGISTRY",
     "ReferenceAdapter",
     "StepResult",
     "count_primitives",

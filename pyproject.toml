@@ -273,13 +273,13 @@ select = [
     "W",    # pycodestyle warnings
     "UP",   # pyupgrade
     "C4",   # flake8-comprehensions
-    "C9",   # mccabe complexity
+    "C90",   # mccabe complexity
     "PLR",  # pylint refactoring
     "PLE",  # pylint errors
     "PLW",  # pylint warnings
     "RUF",  # ruff-specific
     "S",    # bandit security
-    "TCH",  # flake8-type-checking
+    "TC",  # flake8-type-checking
     "TRY",  # tryceratops
     "ARG",  # flake8-unused-arguments
     "PTH",  # pathlib

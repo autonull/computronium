@@ -725,7 +725,7 @@ class InferenceServer:
         if not self.tensorrt_config.enabled:
             return
 
-        try:  # ruff: ignore[too-many-statements]
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             import torch_tensorrt  # type: ignore  # ruff: ignore[blanket-type-ignore]
 
             self.model.eval()
@@ -812,7 +812,7 @@ class InferenceServer:
 
         start_time = time.perf_counter()
 
-        try:  # ruff: ignore[too-many-statements]
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Stack inputs
             batch_data = []
             for req in requests:
@@ -957,8 +957,10 @@ class _AppState:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             await self.server.start()
-            yield
-            await self.server.stop()
+            try:
+                yield
+            finally:
+                await self.server.stop()
 
         self.app = FastAPI(
             title="Bioplausible Inference API",

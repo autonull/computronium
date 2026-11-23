@@ -42,7 +42,7 @@ def _parse_time_budget(s: str) -> float:
     return float(s)
 
 
-async def _run_from_spec(
+async def _run_from_spec(  # ruff: ignore[complex-structure, too-many-statements]
     spec: ExperimentSpec, device: str = "auto", output_dir: str | None = None
 ) -> None:
     """Run an experiment from an ExperimentSpec."""
@@ -157,7 +157,7 @@ async def _run_from_spec(
             raise ValueError(f"Unknown experiment type: {spec.type}")
 
 
-async def _run_inline(
+async def _run_inline(  # ruff: ignore[complex-structure]
     type: str,
     vary: list[str],
     fix: dict[str, str],

@@ -877,7 +877,9 @@ class ModelBasedPolicy:
                 counts[r.credit, r.update] += 1
         return dict(counts)
 
-    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+    def propose(  # ruff: ignore[too-many-statements, complex-structure, too-many-branches]
+        self, ctx: ProposalContext
+    ) -> Iterator[Proposal]:
         """Ask the study for the next cells' hyperparameters.
 
         The cells come from the run's own space and each is asked with the

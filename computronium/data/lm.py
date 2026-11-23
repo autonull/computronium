@@ -98,7 +98,7 @@ def get_lm_dataset(  # ruff: ignore[complex-structure, too-many-branches]
         )
 
     if name == "tiny_shakespeare":
-        try:  # ruff: ignore[too-many-statements]
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             dataset = load_dataset("tiny_shakespeare")
             split_data = dataset[split]
             texts = []

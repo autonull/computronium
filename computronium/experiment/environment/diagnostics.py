@@ -120,7 +120,7 @@ def check_uv() -> tuple[bool, str]:
         return False, f"uv check failed: {e}"
 
 
-def check_torch(device: str = "auto") -> tuple[bool, str, bool, dict]:
+def check_torch(device: str = "auto") -> tuple[bool, str, bool, dict]:  # ruff: ignore[too-many-statements]
     """Check torch is available and functional. Returns (ok, message, cuda_available, cuda_info)."""
     cuda_info = {}
     try:

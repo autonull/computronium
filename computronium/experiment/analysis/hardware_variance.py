@@ -35,7 +35,7 @@ class HardwareVarianceConfig:
     confidence_level: float = 0.95
 
 
-def compare_hardware_performance(
+def compare_hardware_performance(  # ruff: ignore[too-many-locals]
     records_by_device: dict[str, list[Any]],
     metric: str,
     config: HardwareVarianceConfig | None = None,

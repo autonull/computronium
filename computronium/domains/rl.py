@@ -137,7 +137,7 @@ class RLTask(DomainTask):
 
         return RLTrainer(model, self.env_id, device=str(self.device), **rl_args)
 
-    def evaluate(
+    def evaluate(  # ruff: ignore[too-many-locals]
         self,
         model: nn.Module,
         split: TaskSplit = TaskSplit.VAL,
@@ -156,7 +156,6 @@ class RLTask(DomainTask):
 
         is_continuous = isinstance(self._env.action_space, Box)
         if is_continuous:
-            assert isinstance(self._env.action_space, Box)
             high = self._env.action_space.high
             low = self._env.action_space.low
             scale = (high - low) / 2.0

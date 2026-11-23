@@ -275,7 +275,7 @@ class DashboardConfig:
     and the writer's published mirror when the writer is elsewhere.
     """
 
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # ruff: ignore[hardcoded-bind-all-interfaces]
     port: int = 8080
     update_interval: float = 2.0  # seconds
     store_path: str | None = None
@@ -369,11 +369,11 @@ class WebDashboard:
                 "/static", StaticFiles(directory=str(static_dir)), name="static"
             )
 
-    def _setup_routes(self) -> None:
+    def _setup_routes(self) -> None:  # ruff: ignore[complex-structure, too-many-statements]
         """Setup FastAPI routes."""
 
         @self.app.get("/", response_class=HTMLResponse)
-        async def index(request: Request) -> HTMLResponse:
+        async def index(request: Request) -> HTMLResponse:  # ruff: ignore[unused-async]
             return self.templates.TemplateResponse(request=request, name="index.html")
 
         @self.app.get("/api/status")
@@ -413,7 +413,7 @@ class WebDashboard:
             return JSONResponse(await self._account_payload(run_id))
 
         @self.app.get("/api/runs/{run_id}/flow")
-        async def api_run_flow(run_id: str) -> JSONResponse:
+        async def api_run_flow(run_id: str) -> JSONResponse:  # ruff: ignore[unused-async]
             """The run's cells, from the space to the evidence (TODO69).
 
             The stages the run reached, the counts each one reported, and
@@ -652,7 +652,7 @@ class WebDashboard:
             return JSONResponse(axes_payload())
 
         @self.app.get("/api/databases")
-        async def api_databases() -> JSONResponse:
+        async def api_databases() -> JSONResponse:  # ruff: ignore[unused-async, too-many-nested-blocks]
             """List available databases."""
             from pathlib import Path
 
@@ -665,10 +665,10 @@ class WebDashboard:
                 Path.home() / "computronium",
             ]
 
-            for search_path in search_paths:
+            for search_path in search_paths:  # ruff: ignore[too-many-nested-blocks]
                 if search_path.exists():
                     for db_file in search_path.glob("*.duckdb"):
-                        try:
+                        try:  # ruff: ignore[too-many-statements-in-try-clause]
                             resolved = db_file.resolve()
                             if resolved in seen_paths:
                                 continue
@@ -686,7 +686,7 @@ class WebDashboard:
                                     StoreConfig(path=resolved, read_only=True)
                                 ) as store:
                                     runs = len(list(store.query_runs()))
-                            except Exception:
+                            except Exception:  # ruff: ignore[try-except-pass]
                                 pass
 
                             databases.append({
@@ -698,7 +698,7 @@ class WebDashboard:
                                 ).isoformat(),
                                 "runs": runs,
                             })
-                        except Exception:
+                        except Exception:  # ruff: ignore[try-except-pass]
                             pass
 
             # Also check the configured store
@@ -737,7 +737,7 @@ class WebDashboard:
 
             # Create the database by initializing a store
             try:
-                with RecordStore(StoreConfig(path=db_path, read_only=False)) as store:
+                with RecordStore(StoreConfig(path=db_path, read_only=False)):
                     # Just opening it creates the schema
                     pass
             except Exception as e:
@@ -766,7 +766,7 @@ class WebDashboard:
             })
 
         @self.app.get("/api/databases/export")
-        async def api_export_database(path: str) -> Response:
+        async def api_export_database(path: str) -> Response:  # ruff: ignore[unused-async]
             """Export database as download."""
             from pathlib import Path
 
@@ -914,7 +914,7 @@ class WebDashboard:
         if not torch.cuda.is_available():
             return None
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             import pynvml
 
             pynvml.nvmlInit()
@@ -962,8 +962,6 @@ class WebDashboard:
                     "power_watts": round(power_watts, 1),
                     "temperature_c": temp,
                 })
-
-            return {"gpus": gpus}
         except ImportError:
             # NVML not available, fall back to basic torch info
             device_count = torch.cuda.device_count()
@@ -979,6 +977,8 @@ class WebDashboard:
         except Exception as e:
             logger.debug("GPU telemetry unavailable: %s", e)
             return None
+
+        return {"gpus": gpus}
 
     async def _apply_control(self, body: ControlCommand) -> ActionResult:
         """Merge a command into the plane, and answer with the new state."""
@@ -1200,7 +1200,7 @@ class WebDashboard:
         if not self.config.store_path:
             return {"error": "No store path configured"}
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             with self._readable_store() as store:
                 records = store.query_records()
                 campaign_records = [
@@ -1848,7 +1848,7 @@ class WebDashboard:
         # A client that arrives late still sees what happened.
         await self._replay_events(websocket)
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Keep the connection alive; handle incoming messages (ping/pong).
             while True:
                 data = await websocket.receive_text()
@@ -1877,9 +1877,10 @@ class WebDashboard:
         async with lock:
             try:
                 await websocket.send_json(message)
-                return True
             except Exception:
                 return False
+            else:
+                return True
 
     async def _replay_events(self, websocket: WebSocket) -> None:
         """Send the recent events to a client that just connected."""
@@ -1895,7 +1896,7 @@ class WebDashboard:
         if not self.config.store_path:
             return
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             logger.info("Sending initial campaign metrics on connect")
             with self._readable_store() as store:
                 runs = store.query_runs()
@@ -1989,7 +1990,7 @@ class WebDashboard:
     async def _update_loop(self) -> None:
         """Background loop to broadcast updates."""
         while self._running:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 await asyncio.sleep(self.config.update_interval)
                 if not self._running:
                     break
@@ -2043,7 +2044,7 @@ class WebDashboard:
                 try:
                     with self._readable_store() as store:
                         record_count = store.count_records(run_id=campaign_id)
-                except Exception:
+                except Exception:  # ruff: ignore[try-except-pass]
                     pass
             await self._maybe_send_metrics(campaign_id, status, record_count)
 
@@ -2056,7 +2057,7 @@ class WebDashboard:
         if not self.config.store_path:
             return
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Fetch run IDs with records in a thread to avoid blocking.
             run_ids, newest_id = await asyncio.to_thread(self._get_store_run_ids_sync)
 
@@ -2079,7 +2080,7 @@ class WebDashboard:
                         run = store.query_run(run_id)
                         if run:
                             run_status = run.status
-                except Exception:
+                except Exception:  # ruff: ignore[try-except-pass]
                     pass
                 await self._maybe_send_metrics(run_id, run_status, record_count)
                 if newest_id is not None and run_id == newest_id:
@@ -2441,7 +2442,7 @@ def create_dashboard_app(
 
 
 async def run_dashboard(
-    host: str = "0.0.0.0",
+    host: str = "0.0.0.0",  # ruff: ignore[hardcoded-bind-all-interfaces]
     port: int = 8080,
     store_path: str | None = None,
     run_queue: RunQueue | None = None,

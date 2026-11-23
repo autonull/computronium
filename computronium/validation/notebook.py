@@ -256,7 +256,7 @@ class ValidationTrack:
 
         start_time = time.time()
 
-        try:  # ruff: ignore[too-many-statements]
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Execute validation
             # Tracks assume self-contained or use global settings.
             # Pass verifier props if needed.

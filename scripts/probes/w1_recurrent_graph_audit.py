@@ -100,7 +100,7 @@ def _make_credit(config: CreditAssignmentConfig):
         return RandomProjectionsCredit(config)
     if config.credit_type == "local_goodness" and config.local_objective == "lemma":
         return LocalGoodnessCredit(config)
-    raise ValueError("audit supports rp/pepita configs only")  # noqa: TRY003
+    raise ValueError("audit supports rp/pepita configs only")  # ruff: ignore[too-many-statements-in-try-clause]
 
 
 def main() -> int:

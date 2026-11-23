@@ -71,7 +71,9 @@ class ContinualJointSystem(nn.Module):
         self._psi: dict[str, Tensor] | None = None
 
     @classmethod
-    def from_joint_system(cls, joint_system, classes_per_task: int = 2) -> ContinualJointSystem:
+    def from_joint_system(
+        cls, joint_system, classes_per_task: int = 2
+    ) -> ContinualJointSystem:
         """Create from a composed JointSystem."""
         return cls(
             substrate=joint_system.substrate,
@@ -242,7 +244,9 @@ class ContinualJointSystem(nn.Module):
         task_id = task_id if task_id is not None else self.current_task
         from computronium.core.continual.training import run_continual_train_step
 
-        metrics, self._psi = run_continual_train_step(self, x, y, task_id, self._psi, self.classes_per_task)
+        metrics, self._psi = run_continual_train_step(
+            self, x, y, task_id, self._psi, self.classes_per_task
+        )
         return metrics
 
     def set_task(self, task_id: int) -> None:

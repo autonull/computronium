@@ -29,7 +29,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.acceleration.spec import axis_segment
-from computronium.experiment.sec_pilot import own_knob_params, BASE_BOXES, base_family
+from computronium.experiment.sec_pilot import BASE_BOXES, base_family, own_knob_params
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
     EffectSizeRegistration,
@@ -402,14 +402,18 @@ def load_registration(
     # Try EffectSizeRegistration first (new format), fall back to ThresholdRegistration
     try:
         registration = EffectSizeRegistration.load(path)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         registration = None
-    if registration is not None and registration.metric == "val_acc" and registration.box_mismatch(box) is None:
+    if (
+        registration is not None
+        and registration.metric == "val_acc"
+        and registration.box_mismatch(box) is None
+    ):
         return registration
 
     try:
         registration = ThresholdRegistration.load(path)
-    except (KeyError, ValueError):
+    except KeyError, ValueError:
         return None
     if registration.metric == "val_acc" and registration.box_mismatch(box) is None:
         return registration
@@ -482,7 +486,13 @@ def _add_credit_config_params(
 
     for field_name in dir(config):
         _process_config_field(
-            field_name, config, credit, accepted_params, ctx, structural_params, evaluate
+            field_name,
+            config,
+            credit,
+            accepted_params,
+            ctx,
+            structural_params,
+            evaluate,
         )
 
 
@@ -561,7 +571,11 @@ def _credit_base_box(credit: str, task_id: str = "mnist") -> dict[str, Any]:
 
     # Get family base coordinate for structural axes
     family = base_family(task_id)
-    base_coord = BASE_BOXES.get(family).base_coordinate if family and BASE_BOXES.get(family) else None
+    base_coord = (
+        BASE_BOXES.get(family).base_coordinate
+        if family and BASE_BOXES.get(family)
+        else None
+    )
 
     # Start with credit-specific axes, then override structural axes from base_coordinate
     axes = _credit_axes(credit)
@@ -685,7 +699,7 @@ async def run_rung2_comparison(  # ruff: ignore[too-many-locals]
         # Try loading directly
         try:
             registration = ThresholdRegistration.load(registration_path)
-        except (KeyError, ValueError):
+        except KeyError, ValueError:
             registration = EffectSizeRegistration.load(registration_path)
 
     # Get the credit's primary knob and Rung 1 best value
@@ -1003,7 +1017,7 @@ async def run_credit_deep_dive(  # ruff: ignore[too-many-locals]
     }
 
 
-def main() -> None:  # ruff: ignore[too-many-statements]
+def main() -> None:  # ruff: ignore[too-many-statements-in-try-clause]
     """SEC deep dive: pre-register or run a credit's deep dive.
 
     Pre-register:

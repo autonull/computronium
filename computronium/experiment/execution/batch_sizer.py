@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from computronium.experiment.execution.deadline import CellTiming, Deadline
+if TYPE_CHECKING:
+    from computronium.experiment.execution.deadline import CellTiming, Deadline
 
 logger = logging.getLogger(__name__)
 

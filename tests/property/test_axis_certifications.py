@@ -506,16 +506,21 @@ class TestCAxisTargetInversionCredit:
         torch.manual_seed(42)
         device = torch.device("cpu")
 
-        credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion(
-            feedback_scale=0.01,
-            beta=0.5,
-        ))
+        credit = TargetInversionCredit(
+            CreditAssignmentConfig.target_inversion(
+                feedback_scale=0.01,
+                beta=0.5,
+            )
+        )
 
         substrate = DigitalSubstrate(SubstrateConfig.digital())
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,),
-                init_scheme="innocenti", residual=True,
+                input_dim=WIDTH,
+                output_dim=10,
+                hidden_dims=(WIDTH,),
+                init_scheme="innocenti",
+                residual=True,
             )
         )
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
@@ -568,8 +573,12 @@ class TestCAxisTargetInversionCredit:
         # Check pseudo-gradients are non-zero and finite
         assert len(pseudo_grads) > 0, "Should produce pseudo-gradients"
         total_norm = sum(g.norm().item() for g in pseudo_grads)
-        assert total_norm > 0.0, "Total pseudo-gradient norm must be > 0 (feedback_scale must be applied)"
-        assert all(torch.isfinite(g).all() for g in pseudo_grads), "All pseudo-gradients must be finite"
+        assert total_norm > 0.0, (
+            "Total pseudo-gradient norm must be > 0 (feedback_scale must be applied)"
+        )
+        assert all(torch.isfinite(g).all() for g in pseudo_grads), (
+            "All pseudo-gradients must be finite"
+        )
 
         # Check each layer has non-zero gradient
         for i, g in enumerate(pseudo_grads):

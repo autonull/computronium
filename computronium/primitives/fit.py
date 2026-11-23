@@ -191,6 +191,7 @@ def ladder(spec: PrimitiveSpec) -> list[tuple[str, tuple[float, float, str]]]:
     The scale is "log" or "linear" as declared in the hyperparameter domain.
     """
     from importlib import import_module
+
     from computronium.core.identity_card import AlgorithmIdentityCard
     from computronium.experiment.schema import AXES_REGISTRIES
     from computronium.experiment.schema.axis import StructuralAxis
@@ -231,12 +232,20 @@ def ladder(spec: PrimitiveSpec) -> list[tuple[str, tuple[float, float, str]]]:
                 members = list(hp.domain.members)
                 if len(members) >= 2:
                     try:
-                        domain[hp.name] = (float(members[0]), float(members[-1]), "linear")
-                    except (ValueError, TypeError):
+                        domain[hp.name] = (
+                            float(members[0]),
+                            float(members[-1]),
+                            "linear",
+                        )
+                    except ValueError, TypeError:
                         pass
             elif hp.domain.lo is not None and hp.domain.hi is not None:
                 # Continuous domain
-                scale = "log" if hp.domain.scale and hp.domain.scale.value == "log" else "linear"
+                scale = (
+                    "log"
+                    if hp.domain.scale and hp.domain.scale.value == "log"
+                    else "linear"
+                )
                 domain[hp.name] = (float(hp.domain.lo), float(hp.domain.hi), scale)
 
     # Intersection: law reads ∩ axis accepts ∩ domain declares

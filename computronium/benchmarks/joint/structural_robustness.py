@@ -70,13 +70,12 @@ def create_damage_scenarios(
             noise = torch.randn_like(param) * severity * param.data.std()
             param.data += noise
 
-        elif damage_type == "dead_channels":
+        elif damage_type == "dead_channels" and param.dim() >= 2:
             # For conv-like: zero out entire channels
-            if param.dim() >= 2:
-                num_channels = param.shape[0]
-                num_damage = int(num_channels * severity)
-                damage_indices = torch.randperm(num_channels)[:num_damage]
-                param.data[damage_indices] = 0
+            num_channels = param.shape[0]
+            num_damage = int(num_channels * severity)
+            damage_indices = torch.randperm(num_channels)[:num_damage]
+            param.data[damage_indices] = 0
 
     return original_state
 

@@ -140,9 +140,11 @@ def test_the_plastic_step_carries_the_substrate_state() -> None:
     settled = SystemState(x=x, y=y)
     settled.activations = [x, torch.randn(4, 16), torch.randn(4, 4)]
     reader = _Reader()
+
     # Provide a minimal context with theta (persistent parameters) like a real SystemContext
     class _Ctx:
         theta: dict[str, torch.Tensor] = {"weight": torch.randn(16, 8)}
+
     _step_psi(
         reader,
         {},

@@ -185,9 +185,17 @@ _CONFIG_FACTORIES = {
 _TASK_FAMILIES = {
     # Credit (19)
     "primitive.credit_assignment.random_projections": ("vision", "sequence", "tabular"),
-    "primitive.credit_assignment.target_inversion": ("continual_energy_min", "continual", "vision"),
+    "primitive.credit_assignment.target_inversion": (
+        "continual_energy_min",
+        "continual",
+        "vision",
+    ),
     "primitive.credit_assignment.pc_alm": ("graph_energy_min", "graph", "vision"),
-    "primitive.credit_assignment.thermodynamic_contrast": ("sequence_energy_min", "vision", "sequence"),
+    "primitive.credit_assignment.thermodynamic_contrast": (
+        "sequence_energy_min",
+        "vision",
+        "sequence",
+    ),
     "primitive.credit_assignment.local_goodness": ("vision", "sequence", "tabular"),
     "primitive.credit_assignment.temporal_trace": ("sequence", "vision"),
     "primitive.credit_assignment.homeostatic": (
@@ -490,12 +498,8 @@ _COMPATIBLE_GEOMETRIES = {
         "feedforward",
         "recurrent",
     ),
-    "primitive.credit_assignment.unbiased_rtrl": (
-        "recurrent",
-    ),
-    "primitive.credit_assignment.rtrl_reference": (
-        "recurrent",
-    ),
+    "primitive.credit_assignment.unbiased_rtrl": ("recurrent",),
+    "primitive.credit_assignment.rtrl_reference": ("recurrent",),
     "primitive.credit_assignment.zeroth_order": (
         "feedforward",
         "conv",
@@ -1089,41 +1093,23 @@ _COMPATIBLE_DYNAMICS = {
         "lazy",
         "diffusion",
     ),
-    "primitive.credit_assignment.pepita": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.gradient": (
-        "instantaneous",
-    ),
+    "primitive.credit_assignment.pepita": ("instantaneous",),
+    "primitive.credit_assignment.gradient": ("instantaneous",),
     "primitive.credit_assignment.local_contrastive": (
         "instantaneous",
         "energy_minimization",
     ),
-    "primitive.credit_assignment.hybrid": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.forward_tangent": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.score_function": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.surrogate": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.local_supervision": (
-        "instantaneous",
-    ),
+    "primitive.credit_assignment.hybrid": ("instantaneous",),
+    "primitive.credit_assignment.forward_tangent": ("instantaneous",),
+    "primitive.credit_assignment.score_function": ("instantaneous",),
+    "primitive.credit_assignment.surrogate": ("instantaneous",),
+    "primitive.credit_assignment.local_supervision": ("instantaneous",),
     "primitive.credit_assignment.eligibility_prop": (
         "instantaneous",
         "energy_minimization",
     ),
-    "primitive.credit_assignment.unbiased_rtrl": (
-        "instantaneous",
-    ),
-    "primitive.credit_assignment.rtrl_reference": (
-        "instantaneous",
-    ),
+    "primitive.credit_assignment.unbiased_rtrl": ("instantaneous",),
+    "primitive.credit_assignment.rtrl_reference": ("instantaneous",),
     "primitive.credit_assignment.zeroth_order": (
         "instantaneous",
         "energy_minimization",

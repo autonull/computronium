@@ -25,11 +25,6 @@ from computronium.core.continual.arms import (
     create_replay_arm,
     create_si_arm,
 )
-from computronium.core.continual.constants import (
-    CL_CLASSES_PER_TASK,
-    CL_NUM_TASKS,
-    SPLIT_MNIST_TASKS,
-)
 from computronium.core.continual.metrics import CLConfig, CLMetrics, compute_cl_metrics
 from computronium.core.continual.stability import (
     check_stability,
@@ -38,7 +33,7 @@ from computronium.core.continual.stability import (
 )
 from computronium.core.continual.training import _lwf_train_step, _si_train_step
 from computronium.domains.base import TaskSplit
-from computronium.domains.vision import SplitMNIST, PermutedMNIST
+from computronium.domains.vision import PermutedMNIST, SplitMNIST
 
 if TYPE_CHECKING:
     from computronium.core.continual.system import ContinualJointSystem
@@ -420,7 +415,9 @@ def _evaluate_tasks_so_far(
 ) -> None:
     """Evaluate on all tasks up to current task_id."""
     for eval_task_id in range(task_id + 1):
-        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task)
+        acc = _evaluate_task(
+            model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task
+        )
         accuracy_matrix[eval_task_id][task_id] = acc
 
 
@@ -434,7 +431,9 @@ def _evaluate_periodic_tasks(
 ) -> None:
     """Evaluate on tasks up to eval_task (for task-free protocol)."""
     for eval_task_id in range(eval_task + 1):
-        acc = _evaluate_task(model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task)
+        acc = _evaluate_task(
+            model, test_loaders[eval_task_id], eval_task_id, device, classes_per_task
+        )
         accuracy_matrix[eval_task_id][eval_task] = acc
 
 
@@ -480,7 +479,14 @@ def _run_task_incremental_protocol(
                 _run_replay_training(arm_name, model, extra, config)
 
         _update_arm_importance(arm_name, model, extra, task_id)
-        _evaluate_tasks_so_far(model, test_loaders, task_id, device, accuracy_matrix, config.classes_per_task)
+        _evaluate_tasks_so_far(
+            model,
+            test_loaders,
+            task_id,
+            device,
+            accuracy_matrix,
+            config.classes_per_task,
+        )
 
 
 def _run_task_free_protocol(
@@ -529,7 +535,12 @@ def _run_task_free_protocol(
             eval_task = batch_idx // (total_batches // config.num_tasks)
             if eval_task < config.num_tasks:
                 _evaluate_periodic_tasks(
-                    model, test_loaders, eval_task, device, accuracy_matrix, config.classes_per_task
+                    model,
+                    test_loaders,
+                    eval_task,
+                    device,
+                    accuracy_matrix,
+                    config.classes_per_task,
                 )
 
 
@@ -545,7 +556,11 @@ def _finalize_metrics(
 ) -> CLMetrics:
     """Compute and finalize CL metrics."""
     final_metrics = compute_cl_metrics(
-        model, test_loaders, config.num_tasks - 1, accuracy_matrix, config.classes_per_task
+        model,
+        test_loaders,
+        config.num_tasks - 1,
+        accuracy_matrix,
+        config.classes_per_task,
     )
     final_metrics.total_time_s = total_time
     final_metrics.stability_verdicts = stability_verdicts
@@ -582,13 +597,15 @@ def run_continual_learning(
 
     task_loaders, test_loaders = _create_task_loaders(config, device_str)
     model, extra = _create_arm(arm_name, config, device_str)
-    
+
     # Capture initial parameters for EWC baseline (before any training)
     initial_params = {k: v.clone().detach() for k, v in model.geometry.params.items()}
-    
+
     guard, transition_fn, guard_context = _setup_stability_guard(config, model)
 
-    accuracy_matrix = [[0.0 for _ in range(config.num_tasks)] for _ in range(config.num_tasks)]
+    accuracy_matrix = [
+        [0.0 for _ in range(config.num_tasks)] for _ in range(config.num_tasks)
+    ]
     stability_verdicts: list = []
     start_time = time.perf_counter()
 

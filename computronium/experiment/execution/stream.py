@@ -142,7 +142,8 @@ class CellStream:
             if self._iterator is None:
                 self._open_page()
             iterator = self._iterator
-            assert iterator is not None
+            if iterator is None:
+                break
             examined = False
             for coordinate, schedule in iterator:
                 examined = True

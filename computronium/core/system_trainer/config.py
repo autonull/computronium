@@ -6,12 +6,11 @@ Protocols are in protocol.py, serialization utilities are in spec.py.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from torch import Tensor
 

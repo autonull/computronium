@@ -351,7 +351,7 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
 
 
 # Triton kernels for fused Hebbian operations
-try:  # ruff: ignore[too-many-statements]
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
 

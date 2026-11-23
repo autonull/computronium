@@ -37,14 +37,17 @@ def main() -> None:
         except Exception as exc:  # ruff: ignore[blind-except] - a probe reports
             print(f"{axis:10} {name:24} CRASH {type(exc).__name__}: {exc}")
             continue
-        delta = sum(
-            (after[key].double() - before[key].double()).pow(2).sum().item()
-            for key in before
-        ) ** 0.5
+        delta = (
+            sum(
+                (after[key].double() - before[key].double()).pow(2).sum().item()
+                for key in before
+            )
+            ** 0.5
+        )
         norm = sum(before[key].double().pow(2).sum().item() for key in before) ** 0.5
         moved = any(not torch.equal(before[key], after[key]) for key in before)
         print(
-            f"{axis:10} {name:24} params={count:>7} moved={str(moved):5} "
+            f"{axis:10} {name:24} params={count:>7} moved={moved!s:5} "
             f"|dW|={delta:.3e} |W|={norm:.3e} relative={delta / norm:.3e}"
         )
 

@@ -31,11 +31,12 @@ from typing import TYPE_CHECKING, Final
 
 import torch
 
+from computronium.acceleration.spec import AlgorithmFamily
+
 if TYPE_CHECKING:
     from torch import Tensor
 
     from computronium.acceleration.kernel_backend import KernelConfig
-    from computronium.acceleration.spec import AlgorithmFamily
     from computronium.ontology import System
 
 __all__ = [
@@ -252,7 +253,7 @@ def kernel_config_of(system: System, backend_cls: type) -> KernelConfig:
     base_lr = update.step_size
     if backend_cls.name == AlgorithmFamily.BACKPROP:
         # Heuristic: scale by inverse sqrt of typical batch count (375 for vision)
-        base_lr = base_lr / 20.0
+        base_lr /= 20.0
 
     extra: dict[str, object] = {
         "input_dim": geometry.input_dim,

@@ -36,7 +36,7 @@ class GradientStatsConfig:
     sample_batches: int = 10
 
 
-def compute_gradient_statistics(
+def compute_gradient_statistics(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
     model: nn.Module,
     dataloader,
     device: str = "cpu",

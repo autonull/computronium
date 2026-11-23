@@ -28,9 +28,9 @@ _GATE_POLL_SECONDS = 0.25
 
 try:
     import torch.distributed as dist
-    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP  # ruff: ignore[camelcase-imported-as-acronym]
     from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
-    from torch.nn.parallel import DistributedDataParallel as DDP
+    from torch.nn.parallel import DistributedDataParallel as DDP  # ruff: ignore[camelcase-imported-as-acronym]
 
     HAS_DDP = True
 except ImportError:
@@ -265,7 +265,7 @@ class _ThreadedBackend:
             params=params,
         )
 
-    async def submit(
+    async def submit(  # ruff: ignore[complex-structure]
         self,
         coordinate: Coordinate,
         schedule: Schedule,
@@ -284,7 +284,7 @@ class _ThreadedBackend:
 
         # Check for existing checkpoint artifact to resume from
         resume_checkpoint_path = None
-        if schedule.checkpoint_every_n > 0:
+        if schedule.checkpoint_every_n > 0:  # ruff: ignore[too-many-nested-blocks]
             # Find records with the same cell_key that have checkpoint artifacts
             existing_records = store.query_records(cell_key=cell_key)
             for record in existing_records:
@@ -294,12 +294,11 @@ class _ThreadedBackend:
                         # Found a checkpoint, save it to a temp file and use for resume
                         checkpoint_bytes = store.artifacts.get(artifact.digest)
                         if checkpoint_bytes:
-                            temp_ckpt = tempfile.NamedTemporaryFile(
+                            with tempfile.NamedTemporaryFile(
                                 suffix=".pt", delete=False
-                            )
-                            temp_ckpt.write(checkpoint_bytes)
-                            temp_ckpt.close()
-                            resume_checkpoint_path = temp_ckpt.name
+                            ) as temp_ckpt:
+                                temp_ckpt.write(checkpoint_bytes)
+                                resume_checkpoint_path = temp_ckpt.name
                             logger.info(
                                 "Resuming cell %s from checkpoint (epoch %d)",
                                 cell_key[:12],
@@ -380,12 +379,9 @@ class _ThreadedBackend:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
-                    import traceback
-
-                    logger.error(
-                        "Evaluation failed for %s: %s", coord.cell_key()[:12], e
+                    logger.exception(
+                        "Evaluation failed for %s", coord.cell_key()[:12]
                     )
-                    logger.error("Full traceback: %s", traceback.format_exc())
                     return Failure(
                         failure_event=self._create_failure_event(
                             coord, sched, prov, str(e)
@@ -528,7 +524,7 @@ class DDPBackend:
                 init_method=self.config.init_method,
                 world_size=int(os.environ["WORLD_SIZE"]),
                 rank=int(os.environ["RANK"]),
-                local_rank=int(os.environ.get("LOCAL_RANK", 0)),
+                local_rank=int(os.environ.get("LOCAL_RANK", "0")),
                 use_fsdp=self.config.use_fsdp,
                 fsdp_min_params=self.config.fsdp_min_params,
                 sharding_strategy=self.config.sharding_strategy,
@@ -625,22 +621,18 @@ class DDPBackend:
 
         # Only rank 0 creates the full model; others get empty models
         # cell_record handles the actual training, we just wrap the model
-        try:
-            record = cell_record(
-                coordinate,
-                schedule,
-                provenance,
-                geometry=None,
-                checkpoint_dir=checkpoint_dir,
-                resume_checkpoint_path=resume_checkpoint_path,
-                params=params,
-            )
-            return record
-        finally:
-            # Note: We don't destroy process group here as it may be reused
-            pass
+        record = cell_record(
+            coordinate,
+            schedule,
+            provenance,
+            geometry=None,
+            checkpoint_dir=checkpoint_dir,
+            resume_checkpoint_path=resume_checkpoint_path,
+            params=params,
+        )
+        return record
 
-    async def submit(
+    async def submit(  # ruff: ignore[complex-structure]
         self,
         coordinate: Coordinate,
         schedule: Schedule,
@@ -664,7 +656,7 @@ class DDPBackend:
 
         # Check for existing checkpoint artifact to resume from
         resume_checkpoint_path = None
-        if schedule.checkpoint_every_n > 0:
+        if schedule.checkpoint_every_n > 0:  # ruff: ignore[too-many-nested-blocks]
             existing_records = store.query_records(cell_key=cell_key)
             for record in existing_records:
                 artifacts = store.artifacts.get_for_record(record.record_id)
@@ -672,12 +664,11 @@ class DDPBackend:
                     if artifact.role == ArtifactRole.MODEL_CHECKPOINT:
                         checkpoint_bytes = store.artifacts.get(artifact.digest)
                         if checkpoint_bytes:
-                            temp_ckpt = tempfile.NamedTemporaryFile(
+                            with tempfile.NamedTemporaryFile(
                                 suffix=".pt", delete=False
-                            )
-                            temp_ckpt.write(checkpoint_bytes)
-                            temp_ckpt.close()
-                            resume_checkpoint_path = temp_ckpt.name
+                            ) as temp_ckpt:
+                                temp_ckpt.write(checkpoint_bytes)
+                                resume_checkpoint_path = temp_ckpt.name
                             logger.info(
                                 "Resuming cell %s from checkpoint (epoch %d)",
                                 cell_key[:12],
@@ -765,12 +756,9 @@ class DDPBackend:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
-                    import traceback
-
-                    logger.error(
-                        "DDP evaluation failed for %s: %s", coord.cell_key()[:12], e
+                    logger.exception(
+                        "DDP evaluation failed for %s", coord.cell_key()[:12]
                     )
-                    logger.error("Full traceback: %s", traceback.format_exc())
                     return Failure(
                         failure_event=FailureEvent(
                             cell_key=coord.cell_key(),

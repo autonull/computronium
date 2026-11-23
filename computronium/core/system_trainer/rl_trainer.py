@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import gymnasium as gym
 import numpy as np
@@ -204,7 +204,11 @@ class RLSystemTrainer:
     def _setup_action_space(self) -> None:
         """Initialize action space specific parameters."""
         if self.is_continuous:
-            assert isinstance(self._env.action_space, Box)
+            if not isinstance(self._env.action_space, Box):
+                raise TypeError(
+                    f"Continuous action space requires gymnasium.spaces.Box, "
+                    f"got {type(self._env.action_space)}"
+                )
             high = self._env.action_space.high
             low = self._env.action_space.low
 
@@ -395,13 +399,13 @@ class RLSystemTrainer:
         )
         return float((actor_loss + critic_loss).detach())
 
-    def _train_episode_ddpg(self) -> dict[str, float]:
+    def _train_episode_ddpg(self) -> dict[str, float]:  # ruff: ignore[too-many-locals]
         """Continuous actions: per-step DDPG with replay and target networks."""
         self.system.geometry.train()
         self.critic.train()
         action_space = self._env.action_space
         if not isinstance(action_space, Box):
-            raise RuntimeError("continuous lane requires a Box action space")
+            raise TypeError("continuous lane requires a Box action space")
         low, high = action_space.low, action_space.high
         obs = self._reset_env()
         total_reward = 0.0
@@ -520,8 +524,8 @@ class RLSystemTrainer:
 
                 if self.is_continuous:
                     # Deterministic policy for eval (mean)
-                    assert self.action_scale is not None
-                    assert self.action_bias is not None
+                    if self.action_scale is None or self.action_bias is None:
+                        raise RuntimeError("action_scale and action_bias must be initialized")
                     action_tensor = (
                         torch.tanh(logits) * self.action_scale + self.action_bias
                     )
@@ -700,16 +704,19 @@ class RLSystemTrainer:
 
     def close(self) -> None:
         """Clean up resources."""
-        if hasattr(self, "system") and self.system is not None:
-            if hasattr(self.system.geometry, "cpu"):
-                self.system.geometry.cpu()
+        if (
+            hasattr(self, "system")
+            and self.system is not None
+            and hasattr(self.system.geometry, "cpu")
+        ):
+            self.system.geometry.cpu()
         if hasattr(self, "_env") and self._env is not None:
             self._env.close()
         if hasattr(self, "device") and self.device.type == "cuda":
             torch.cuda.empty_cache()
         logger.debug("RLSystemTrainer resources cleaned up")
 
-    def __enter__(self) -> RLSystemTrainer:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(

@@ -41,7 +41,7 @@ class _ConstantModel(nn.Module):
         self.anchor = nn.Parameter(torch.zeros(1))
         self.num_classes = num_classes
 
-    def forward(self, x, edge_index, batch):  # ruff: ignore[missing-type-function-argument, missing-return-type-undocumented-public-function]
+    def forward(self, x, edge_index, batch):  # ruff: ignore[missing-type-function-argument, missing-return-type-public-function]
         rows = int(batch.max()) + 1
         logits = torch.zeros(rows, self.num_classes, device=x.device)
         logits[:, 0] = 1.0

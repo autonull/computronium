@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-
-
 if TYPE_CHECKING:
     from computronium.core.continual.system import ContinualJointSystem
 

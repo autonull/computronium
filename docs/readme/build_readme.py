@@ -221,7 +221,9 @@ def _axis_primitives(axis: str) -> tuple[int, list[str]]:
 
     seed_all_registries()
     axis_enum = StructuralAxis(axis)
-    names = [spec.name for spec in AXES_REGISTRIES[axis_enum].values() if spec.available]
+    names = [
+        spec.name for spec in AXES_REGISTRIES[axis_enum].values() if spec.available
+    ]
     return len(names), names
 
 

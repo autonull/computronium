@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from computronium.acceleration.spec import ImplementationSpec
+    from computronium.experiment.schema.coordinate import Coordinate
 
 
 def register_module(
@@ -224,8 +225,8 @@ def list_by_axis() -> dict[str, list[str]]:
 
 
 def find_algorithm_for_coordinate(
-    coordinate: "Coordinate",
-) -> "ImplementationSpec | None":
+    coordinate: Coordinate,
+) -> ImplementationSpec | None:
     """Find an algorithm implementation that matches the coordinate's primitives.
 
     Returns the algorithm spec if the coordinate's primitive combination contains
@@ -252,8 +253,7 @@ def find_algorithm_for_coordinate(
 
     # Build the coordinate's full primitive IDs
     coord_primitives = {
-        f"{axis_prefix[axis]}.{getattr(coordinate, axis)}"
-        for axis in axis_prefix
+        f"{axis_prefix[axis]}.{getattr(coordinate, axis)}" for axis in axis_prefix
     }
 
     # Find algorithms whose uses_primitives are a subset of the coordinate's primitives

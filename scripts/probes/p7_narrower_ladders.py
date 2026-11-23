@@ -73,7 +73,7 @@ CREDIT_PRIMARY_KNOBS = {
 # Custom ladder factors per credit (factor multipliers of the default)
 # These override the default LADDER_FACTORS = (0.1, 1.0, 10.0)
 CUSTOM_LADDER_FACTORS = {
-    "pepita": (0.5, 1.0, 2.0),           # narrower around 0.05 -> 0.025, 0.05, 0.1
+    "pepita": (0.5, 1.0, 2.0),  # narrower around 0.05 -> 0.025, 0.05, 0.1
     "score_function": (0.25, 0.5, 1.0, 2.0),  # narrower around 32 -> 8, 16, 32, 64
     "local_supervision": (0.01, 0.1, 1.0, 10.0),  # wider domain for aux_head_scale
     "forward_tangent": (0.1, 1.0, 10.0, 100.0),  # wider for estimator_samples
@@ -132,7 +132,9 @@ def _get_ladder_factors(credit: str) -> tuple[float, ...]:
     return CUSTOM_LADDER_FACTORS.get(credit, (0.1, 1.0, 10.0))
 
 
-def _ladder_points(candidate: DeepDiveCandidate, factors: tuple[float, ...]) -> tuple[tuple[float, float], ...]:
+def _ladder_points(
+    candidate: DeepDiveCandidate, factors: tuple[float, ...]
+) -> tuple[tuple[float, float], ...]:
     """The ladder points: each factor and the knob value it declares."""
     return tuple((factor, candidate.default * factor) for factor in factors)
 
@@ -414,7 +416,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="P7: Narrower/asymmetric ladder tests for remaining credits"
     )
-    parser.add_argument("--credit", help="Single credit to run (default: all custom ladder credits)")
+    parser.add_argument(
+        "--credit", help="Single credit to run (default: all custom ladder credits)"
+    )
     parser.add_argument(
         "--family", help="Single family to run (default: first 2 from CREDIT_FAMILIES)"
     )

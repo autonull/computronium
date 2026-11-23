@@ -163,7 +163,7 @@ _DISCOVERED = None
 
 
 def _get_components() -> dict[str, list[str]]:
-    global _DISCOVERED
+    global _DISCOVERED  # ruff: ignore[global-statement]
     if _DISCOVERED is None:
         _DISCOVERED = _discover_components()
     return _DISCOVERED

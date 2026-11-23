@@ -7,14 +7,9 @@ Run:
 from __future__ import annotations
 
 import json
-import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 
 class WatchHandler(BaseHTTPRequestHandler):
@@ -85,7 +80,9 @@ class WatchHandler(BaseHTTPRequestHandler):
         map_path = self.watch_dir / "map.json"
         cells_path = self.watch_dir / "cells.jsonl"
 
-        portfolio = json.loads(portfolio_path.read_text()) if portfolio_path.exists() else {}
+        portfolio = (
+            json.loads(portfolio_path.read_text()) if portfolio_path.exists() else {}
+        )
         map_data = json.loads(map_path.read_text()) if map_path.exists() else {}
         cells = []
         if cells_path.exists():
@@ -98,12 +95,12 @@ class WatchHandler(BaseHTTPRequestHandler):
         for track in portfolio.get("tracks", []):
             tracks_html += f"""
             <tr>
-                <td>{track['track']}</td>
-                <td>{track['rank']}</td>
-                <td>{track['last_result']}</td>
-                <td>{track['kill_rule']}</td>
-                <td>cells: {track['budget_used'].get('cells', 0)}, seeds: {track['budget_used'].get('seeds', 0)}</td>
-                <td>{'⚠️' if track['contention'] else '✅'}</td>
+                <td>{track["track"]}</td>
+                <td>{track["rank"]}</td>
+                <td>{track["last_result"]}</td>
+                <td>{track["kill_rule"]}</td>
+                <td>cells: {track["budget_used"].get("cells", 0)}, seeds: {track["budget_used"].get("seeds", 0)}</td>
+                <td>{"⚠️" if track["contention"] else "✅"}</td>
             </tr>
             """
 
@@ -117,12 +114,12 @@ class WatchHandler(BaseHTTPRequestHandler):
                 val_acc = f"{val_acc:.4f}"
             cells_html += f"""
             <tr>
-                <td>{cell.get('track', '?')}</td>
-                <td>{cell.get('credit', cell.get('primitive', '?'))}</td>
-                <td>{cell.get('seed', '?')}</td>
+                <td>{cell.get("track", "?")}</td>
+                <td>{cell.get("credit", cell.get("primitive", "?"))}</td>
+                <td>{cell.get("seed", "?")}</td>
                 <td>{status}</td>
                 <td>{val_acc}</td>
-                <td>{cell.get('walltime_s', 0):.1f}s</td>
+                <td>{cell.get("walltime_s", 0):.1f}s</td>
             </tr>
             """
 
@@ -162,10 +159,10 @@ class WatchHandler(BaseHTTPRequestHandler):
         </head>
         <body>
             <h1>🔬 SEC Loop Watch Dashboard</h1>
-            <p class="refresh-note">Auto-refreshes every 10s | {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p class="refresh-note">Auto-refreshes every 10s | {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
 
             <h2>📊 Portfolio</h2>
-            <p>Session: {portfolio.get('session_count', 0)} | Active: {portfolio.get('active_track', 'R1')} | Last: {portfolio.get('last_session', 'never')}</p>
+            <p>Session: {portfolio.get("session_count", 0)} | Active: {portfolio.get("active_track", "R1")} | Last: {portfolio.get("last_session", "never")}</p>
             <table>
                 <tr><th>Track</th><th>Rank</th><th>Last Result</th><th>Kill Rule</th><th>Budget Used</th><th>Contention</th></tr>
                 {tracks_html}
@@ -210,9 +207,13 @@ def run_watch_server(port: int, watch_dir: Path) -> None:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="SEC Watch - monitor SEC loop progress")
+    parser = argparse.ArgumentParser(
+        description="SEC Watch - monitor SEC loop progress"
+    )
     parser.add_argument("--port", type=int, default=8080, help="Port to serve on")
-    parser.add_argument("--dir", type=Path, default=Path("results/sec"), help="Directory to watch")
+    parser.add_argument(
+        "--dir", type=Path, default=Path("results/sec"), help="Directory to watch"
+    )
     args = parser.parse_args()
 
     run_watch_server(args.port, args.dir)

@@ -170,7 +170,7 @@ def compute_ice_curves(
     return ice_by_axis
 
 
-def analyze_axis_importance(
+def analyze_axis_importance(  # ruff: ignore[too-many-locals]
     records: list[Any],
     axes: list[str],
     metric: str,

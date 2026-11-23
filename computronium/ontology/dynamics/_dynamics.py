@@ -1141,7 +1141,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         self._settle_steps_used: int = 0
         self._last_kernel: SubstrateSettleKernel | None = None
 
-    def settle(  # ruff: ignore[too-many-statements]
+    def settle(  # ruff: ignore[too-many-statements-in-try-clause]
         self,
         state: SettableState,
         geometry: Geometry,

@@ -42,7 +42,7 @@ class SeedVariabilityConfig:
     group_by_axis: str | None = None
 
 
-def compute_seed_variability(
+def compute_seed_variability(  # ruff: ignore[complex-structure, too-many-locals]
     records: list[Any],
     metric: str,
     config: SeedVariabilityConfig | None = None,

@@ -185,9 +185,7 @@ class SecondMomentMixin:
         return dict(self._second)
 
     def _snapshot_second(self) -> dict[str, dict[str, Tensor]]:
-        return {
-            "second": {k: v.detach().clone() for k, v in self._second.items()}
-        }
+        return {"second": {k: v.detach().clone() for k, v in self._second.items()}}
 
     def _restore_second(self, state: dict[str, dict[str, Tensor]]) -> None:
         self._second = {k: v.clone() for k, v in state.get("second", {}).items()}

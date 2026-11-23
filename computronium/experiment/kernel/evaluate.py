@@ -84,7 +84,6 @@ def _attach_algorithm_kernel_backend(system: Any, coordinate: Any) -> None:
     """
     from computronium.acceleration.dispatch import finish_with_backend
     from computronium.acceleration.registry import find_algorithm_for_coordinate
-    from computronium.acceleration.spec import ImplementationSpec
 
     # Find matching algorithm spec for this coordinate
     alg_spec = find_algorithm_for_coordinate(coordinate)
@@ -359,7 +358,7 @@ def _evaluate_cell(
         cell.system.to("cuda")
     elif resolved_device == "cpu":
         cell.system.to("cpu")
-    
+
     if resolved_device == "cuda":
         try:
             _attach_algorithm_kernel_backend(cell.system, coordinate)

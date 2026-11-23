@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
-
+from computronium.core.continual.constants import CL_CLASSES_PER_TASK
 from computronium.core.pipeline import forward_pass
 from computronium.ontology import Phase, SystemState
 from computronium.state import CompositeState

@@ -100,9 +100,14 @@ def run_capability(primitives: list[str], extra_args: list[str]) -> int:
     """Run capability tests for the given primitives."""
     k_expr = build_k_expression(primitives)
     cmd = [
-        "uv", "run", "python", "-m", "pytest",
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "pytest",
         "tests/primitives/test_primitive_capability.py",
-        "-k", k_expr,
+        "-k",
+        k_expr,
         "-q",
         *extra_args,
     ]

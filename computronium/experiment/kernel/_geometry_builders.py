@@ -139,7 +139,7 @@ def _fit_depth(dims: tuple[int, ...], depth: int, fallback: int) -> tuple[int, .
     return dims + (dims[-1],) * (depth - len(dims))
 
 
-def _auto_size_geometry(
+def _auto_size_geometry(  # ruff: ignore[complex-structure]
     topology: str, param_budget: int, input_dim: int, output_dim: int, depth: int
 ) -> tuple[tuple[int, ...], int]:
     if param_budget <= 0:
@@ -378,7 +378,7 @@ def _derive_conv_params(
     return kernel_size, in_channels, input_hw, pool_hw, conv_channels
 
 
-def build_feedforward_config(
+def build_feedforward_config(  # ruff: ignore[too-many-arguments]
     *,
     input_dim: int,
     output_dim: int,
@@ -445,7 +445,7 @@ def build_routing_config(  # ruff: ignore[too-many-arguments]
     )
 
 
-def build_recurrent_config(
+def build_recurrent_config(  # ruff: ignore[too-many-arguments]
     *,
     input_dim: int,
     output_dim: int,
@@ -520,7 +520,7 @@ def build_tile_mesh_config(
     )
 
 
-def build_attention_config(
+def build_attention_config(  # ruff: ignore[too-many-arguments]
     *,
     input_dim: int,
     output_dim: int,
@@ -636,7 +636,7 @@ def build_ntm_config(
     )
 
 
-def build_conv_config(
+def build_conv_config(  # ruff: ignore[too-many-arguments]
     *,
     input_dim: int,
     output_dim: int,
@@ -687,7 +687,7 @@ def _as_pooling(value: object) -> PoolingMode:
     """Validate the graph readout reduction; unknown values fail loud."""
     if value is None:
         return "mean"
-    if value == "mean" or value == "sum":
+    if value in {"mean", "sum"}:
         return value
     raise ValueError(f"graph pooling must be 'mean' or 'sum', got {value!r}")
 
@@ -772,7 +772,7 @@ _GEOMETRY_BUILDERS: dict[str, Any] = {
 }
 
 
-def build_geometry_config_dispatch(
+def build_geometry_config_dispatch(  # ruff: ignore[complex-structure, too-many-locals, too-many-return-statements, too-many-statements, too-many-branches]
     topology: str,
     *,
     input_shape: tuple[int, ...],
@@ -844,7 +844,7 @@ def build_geometry_config_dispatch(
 
     init_scheme, init_scale = _derive_init_params(geometry)
     npt, tpl = _derive_tile_params(topology, geometry, param_budget, hidden, depth)
-    nca_grid_hw, channels = _derive_nca_params(
+    _nca_grid_hw, _channels = _derive_nca_params(
         topology, geometry, param_budget, hidden, input_shape
     )
     kernel_size, in_channels, input_hw, pool_hw, conv_channels = _derive_conv_params(

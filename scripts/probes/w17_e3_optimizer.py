@@ -108,7 +108,7 @@ def train_screened(
         if acc > best_acc:
             best_head, best_acc = head, acc
     if best_head is None:  # CANDIDATES >= 1 guarantees a head
-        raise RuntimeError("no candidate trained")  # noqa: TRY003
+        raise RuntimeError("no candidate trained")  # ruff: ignore[too-many-statements-in-try-clause]
     return best_head, best_acc, sigma_max_jacobian(best_head, pos)
 
 

@@ -151,7 +151,7 @@ def _run(
             acts = state.activations
             out = acts[-1] if isinstance(acts, list) else acts
             if out is None:
-                raise RuntimeError(  # noqa: TRY003 — probe-local invariant
+                raise RuntimeError(  # ruff: ignore[too-many-statements-in-try-clause] — probe-local invariant
                     "settle produced no activations"
                 )
             ok += (out.argmax(1) == batch_y).sum().item()

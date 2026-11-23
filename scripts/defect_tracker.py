@@ -15,8 +15,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class DefectMarker:
     """A @pytest.mark.fixes or @pytest.mark.verifies marker found in code."""
+
     gap_id: str
     marker_type: str  # "fixes" or "verifies"
     file_path: str
@@ -38,6 +38,7 @@ class DefectMarker:
 @dataclass(frozen=True, slots=True)
 class DefectInfo:
     """Aggregated information about a GAP defect."""
+
     gap_id: str
     fixes: list[DefectMarker]
     verifies: list[DefectMarker]
@@ -89,7 +90,7 @@ def find_pytest_markers(root: Path) -> Iterator[DefectMarker]:
             continue
         try:
             content = py_file.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError, OSError:
             continue
 
         try:
@@ -231,11 +232,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Check for GAPs with fixes but no verifies",
     )
+    parser.add_argument("--output", "-o", type=Path, help="Output file for report")
     parser.add_argument(
-        "--output", "-o", type=Path, help="Output file for report"
-    )
-    parser.add_argument(
-        "--root", type=Path, default=Path("."), help="Root directory to scan"
+        "--root", type=Path, default=Path(), help="Root directory to scan"
     )
     args = parser.parse_args(argv)
 

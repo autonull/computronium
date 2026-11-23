@@ -11,7 +11,7 @@ import dataclasses
 from collections.abc import Callable, Mapping
 from dataclasses import field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import torch
 
@@ -27,7 +27,6 @@ from computronium.core.system_trainer._resume import (
     TrainerSnapshot,
     fold_in,
 )
-from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.ontology._settle_kernel import IGNORE_INDEX
 
 if TYPE_CHECKING:
@@ -35,6 +34,7 @@ if TYPE_CHECKING:
 
     from torch import Tensor
 
+    from computronium.core.system_trainer.config import SystemTrainerConfig
     from computronium.ontology import System
 
 type StepCallback = Callable[[Mapping[str, float]], None]
@@ -217,17 +217,17 @@ class GraphSystemTrainer:
         total_correct = 0
         total_samples = 0
 
-        for data_batch in loader:
-            data_batch = data_batch.to(self.device)
+        for batch in loader:
+            batch_on_device = batch.to(self.device)
 
             with self._autocast:
                 step_metrics = self.system.train_step(
-                    data_batch.x,
-                    data_batch.y,
-                    edge_index=data_batch.edge_index,
-                    batch=data_batch.batch,
+                    batch_on_device.x,
+                    batch_on_device.y,
+                    edge_index=batch_on_device.edge_index,
+                    batch=batch_on_device.batch,
                 )
-            num_graphs = data_batch.num_graphs
+            num_graphs = batch_on_device.num_graphs
             total_loss += step_metrics.get("loss", 0.0) * num_graphs
             total_correct += (
                 step_metrics.get(
@@ -323,17 +323,17 @@ class GraphSystemTrainer:
         total_samples = 0
 
         with torch.no_grad(), self._autocast:
-            for data_batch in loader:
-                data_batch = data_batch.to(self.device)
+            for batch in loader:
+                batch_on_device = batch.to(self.device)
                 out = self.system.forward(
-                    data_batch.x, data_batch.edge_index, data_batch.batch
+                    batch_on_device.x, batch_on_device.edge_index, batch_on_device.batch
                 )
-                loss = torch.nn.functional.cross_entropy(out, data_batch.y)
+                loss = torch.nn.functional.cross_entropy(out, batch_on_device.y)
 
                 pred = out.argmax(dim=1)
-                total_loss += loss.item() * data_batch.num_graphs
-                total_correct += (pred == data_batch.y).sum().item()
-                total_samples += data_batch.num_graphs
+                total_loss += loss.item() * batch_on_device.num_graphs
+                total_correct += (pred == batch_on_device.y).sum().item()
+                total_samples += batch_on_device.num_graphs
 
         avg_loss = total_loss / total_samples if total_samples > 0 else 0.0
         acc = total_correct / total_samples if total_samples > 0 else 0.0
@@ -484,14 +484,17 @@ class GraphSystemTrainer:
 
     def close(self) -> None:
         """Clean up resources."""
-        if hasattr(self, "system") and self.system is not None:
-            if hasattr(self.system.geometry, "cpu"):
-                self.system.geometry.cpu()
+        if (
+            hasattr(self, "system")
+            and self.system is not None
+            and hasattr(self.system.geometry, "cpu")
+        ):
+            self.system.geometry.cpu()
         if hasattr(self, "device") and self.device.type == "cuda":
             torch.cuda.empty_cache()
         logger.debug("GraphSystemTrainer resources cleaned up")
 
-    def __enter__(self) -> GraphSystemTrainer:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(

@@ -101,7 +101,7 @@ def _regression_coefficient(X: np.ndarray, Y: np.ndarray) -> tuple[float, float]
         return 0.0, 0.0
 
 
-def analyze_mediation(
+def analyze_mediation(  # ruff: ignore[too-many-locals]
     records: list[Record],
     independent: str,  # e.g., "credit"
     mediator: str,  # e.g., "stability_margin"
@@ -134,7 +134,7 @@ def analyze_mediation(
     # Path b: M -> Y (controlling for X)
     # Multiple regression: Y ~ X + M
     X_design = np.column_stack([np.ones(len(X)), X, M])
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         coefs = np.linalg.lstsq(X_design, Y, rcond=None)[0]
         b_coef = float(coefs[2])  # M coefficient
         # Direct effect c': X -> Y controlling for M

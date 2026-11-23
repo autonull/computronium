@@ -31,10 +31,10 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from computronium.experiment.sec_pilot import BASE_BOXES
 from computronium.primitives import cases, fit
 from computronium.primitives.registry import get_primitive_spec
 from computronium.primitives.surface import laws, surface, validate
-from computronium.experiment.sec_pilot import BASE_BOXES
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate
@@ -282,19 +282,27 @@ def _grid(
         for value in points:
             # Drop points outside declared domain
             if not (knob_min <= value <= knob_max):
-                dropped.append(f"{knob}={value:.6f}: outside declared domain [{knob_min}, {knob_max}]")
+                dropped.append(
+                    f"{knob}={value:.6f}: outside declared domain [{knob_min}, {knob_max}]"
+                )
                 continue
             trial = replace(base, params={**base.params, knob: value})
             try:
                 measured = _fit_at(
-                    spec, trial, steps=options.steps, seconds=watchdog, seed=options.seed
+                    spec,
+                    trial,
+                    steps=options.steps,
+                    seconds=watchdog,
+                    seed=options.seed,
                 )
             except (ValueError, fit.FitError) as exc:
                 dropped.append(f"{knob}={value:.6f}: {type(exc).__name__}: {exc}")
                 row["error"] = row["error"] or f"{type(exc).__name__}: {exc}"
                 continue
             if measured.killed:
-                dropped.append(f"{knob}={value:.6f}: over budget ({measured.seconds:.1f}s)")
+                dropped.append(
+                    f"{knob}={value:.6f}: over budget ({measured.seconds:.1f}s)"
+                )
                 continue
             fits.append(measured)
     return (min(fits, key=lambda measured: measured.final) if fits else None), dropped
@@ -475,7 +483,9 @@ def _run(options: Options) -> Report:
 
     # Load previous rows and dependency hashes
     previous_rows = (
-        {row["key"]: row for row in _previous(options.out)} if options.resume or options.incremental else {}
+        {row["key"]: row for row in _previous(options.out)}
+        if options.resume or options.incremental
+        else {}
     )
     previous_deps = _previous_deps(options.out) if options.incremental else {}
 
@@ -520,7 +530,9 @@ def _run(options: Options) -> Report:
             report.rows[cached["key"]] = cached
         else:
             if deps_changed:
-                print(f"  {law.id}: axis {axis} deps changed, re-running", file=sys.stderr)
+                print(
+                    f"  {law.id}: axis {axis} deps changed, re-running", file=sys.stderr
+                )
             pending.append(law)
 
     with ProcessPoolExecutor(
@@ -721,7 +733,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--incremental", action="store_true", help="Only re-run laws whose axis dependencies changed")
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Only re-run laws whose axis dependencies changed",
+    )
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--row-budget", type=float, default=180.0)
     options = parser.parse_args(argv)

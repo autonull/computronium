@@ -151,6 +151,7 @@ class EnvironmentCapture:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                check=False,
             )
             if result.returncode == 0:
                 for pkg in json.loads(result.stdout):
@@ -207,11 +208,12 @@ class EnvironmentCapture:
             pass
 
         try:
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],  # ruff: ignore[start-process-with-partial-path]
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             if result.returncode == 0:
                 nvidia_driver_version = result.stdout.strip().split("\n")[0]
@@ -234,38 +236,41 @@ class EnvironmentCapture:
 
     def _capture_git(self) -> GitEnvironment | None:
         """Capture git repository state."""
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause, start-process-with-partial-path]
             repo_root = self._find_git_root()
             if not repo_root:
                 return None
 
             # Get commit SHA
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["git", "rev-parse", "HEAD"],
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             commit_sha = result.stdout.strip() if result.returncode == 0 else "unknown"
 
             # Get branch
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             branch = result.stdout.strip() if result.returncode == 0 else "unknown"
 
             # Check if dirty
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["git", "status", "--porcelain"],
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],  # ruff: ignore[start-process-with-partial-path]
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             is_dirty = bool(result.stdout.strip())
             untracked_files = (
@@ -279,12 +284,13 @@ class EnvironmentCapture:
             )
 
             # Get remote URL
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["git", "config", "--get", "remote.origin.url"],
+            result = subprocess.run(
+                ["git", "config", "--get", "remote.origin.url"],  # ruff: ignore[start-process-with-partial-path]
                 cwd=repo_root,
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             remote_url = result.stdout.strip() if result.returncode == 0 else None
 
@@ -303,11 +309,12 @@ class EnvironmentCapture:
     def _find_git_root(self) -> str | None:
         """Find git repository root."""
         try:
-            result = subprocess.run(  # ruff: ignore[start-process-with-partial-path, subprocess-without-shell-equals-true]
-                ["git", "rev-parse", "--show-toplevel"],
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],  # ruff: ignore[start-process-with-partial-path]
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -412,8 +419,8 @@ class ContainerManager:
                 base_image=base_image,
                 build_args=build_args or {},
             )
-        except Exception as e:
-            logger.exception(f"Failed to build Docker image: {e}")
+        except Exception:
+            logger.exception("Failed to build Docker image")
             return None
 
     def save_image(self, image_name: str, output_path: Path) -> Path:
@@ -429,8 +436,8 @@ class ContainerManager:
                 for chunk in image.save(named=True):
                     f.write(chunk)
             logger.info(f"Saved Docker image to {output_path}")
-        except Exception as e:
-            logger.exception(f"Failed to save Docker image: {e}")
+        except Exception:
+            logger.exception("Failed to save Docker image")
             raise
         else:
             return output_path
@@ -443,8 +450,8 @@ class ContainerManager:
         try:
             with input_path.open("rb") as f:
                 images = self._client.images.load(f)  # type: ignore[union-attr]
-        except Exception as e:  # ruff: ignore[try-consider-else]
-            logger.exception(f"Failed to load Docker image: {e}")
+        except Exception:  # ruff: ignore[try-consider-else]
+            logger.exception("Failed to load Docker image")
             return None
         else:
             if images:

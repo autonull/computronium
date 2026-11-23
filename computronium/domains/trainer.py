@@ -143,7 +143,7 @@ class _TaskTrainer:
     inline validation, preserving the ``train_*``-prefixed metric shape.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-positional-arguments]
         self,
         model: nn.Module,
         task: TaskProtocol,

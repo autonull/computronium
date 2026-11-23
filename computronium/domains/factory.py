@@ -704,7 +704,7 @@ def _normalize_vision_name(base_name: str) -> str:  # ruff: ignore[too-many-retu
             return base_name
 
 
-def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
+def create_task(  # ruff: ignore[too-many-return-statements, complex-structure, too-many-branches]
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
 ) -> DomainTask:
     """Factory function for tasks. Maps string names to Task classes via heuristics.

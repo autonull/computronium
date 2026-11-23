@@ -9,14 +9,16 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.evidence.claims import (
     claim_eligible,
     derive_claims,
 )
-from computronium.experiment.evidence.store import RecordStore
-from computronium.experiment.schema.record import Record
+
+if TYPE_CHECKING:
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +78,7 @@ def _record_to_scope(record: Record) -> dict[str, Any]:
     }
 
 
-def export_claims_to_ceec(
+def export_claims_to_ceec(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals]
     store: RecordStore,
     run_id: str,
     *,
@@ -113,7 +115,7 @@ def export_claims_to_ceec(
         logger.warning("CEEC ledger not found; skipping export")
         return None
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         from ceec.store import CEECStore
 
         from ceec import models
@@ -231,12 +233,12 @@ def export_claims_to_ceec(
         finally:
             ceec_store.__exit__(None, None, None)
 
-    except Exception as e:
-        logger.exception("Failed to export to CEEC: %s", e)
+    except Exception:
+        logger.exception("Failed to export to CEEC")
         return None
 
 
-def export_statistical_result_to_ceec(
+def export_statistical_result_to_ceec(  # ruff: ignore[complex-structure]
     store: RecordStore,
     run_id: str,
     *,
@@ -265,7 +267,7 @@ def export_statistical_result_to_ceec(
         logger.warning("CEEC ledger not found; skipping export")
         return None
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         from ceec.builders import experiment, quality_flags
         from ceec.store import CEECStore
 
@@ -388,8 +390,8 @@ def export_statistical_result_to_ceec(
         finally:
             ceec_store.__exit__(None, None, None)
 
-    except Exception as e:
-        logger.exception("Failed to export statistical result to CEEC: %s", e)
+    except Exception:
+        logger.exception("Failed to export statistical result to CEEC")
         return None
 
 

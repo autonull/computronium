@@ -36,9 +36,7 @@ def _states() -> dict[Phase, CompositeState]:
     x = torch.randn((_BATCH, _IN), generator=generator)
     y = torch.randint(0, _OUT, (_BATCH,), generator=generator)
     return {
-        Phase.FREE: CompositeState(
-            activity={"x": x, "y": y}, plastic={}, substrate={}
-        )
+        Phase.FREE: CompositeState(activity={"x": x, "y": y}, plastic={}, substrate={})
     }
 
 

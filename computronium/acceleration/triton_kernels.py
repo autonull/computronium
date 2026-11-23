@@ -33,7 +33,7 @@ class TritonEqPropOps:
     @classmethod
     def _init_triton(cls):
         if cls._triton_kernel is None and TRITON_IMPORTED:
-            try:  # ruff: ignore[too-many-statements]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice
@@ -366,7 +366,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_muon(cls):
         if cls._muon_gram_kernel is None and TRITON_IMPORTED:
-            try:  # ruff: ignore[too-many-statements]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
 
@@ -443,7 +443,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                     )
 
                 @triton.jit
-                def _ns5_update_kernel(
+                def _ns5_update_kernel(  # ruff: ignore[too-many-positional-arguments]
                     X_ptr,
                     A_ptr,
                     A2_ptr,
@@ -522,7 +522,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         a, b, c = 3.4445, -4.7750, 2.0315
 
         if TRITON_IMPORTED and out.is_cuda and M >= 16 and N >= 16:
-            try:  # ruff: ignore[too-many-statements]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
 
                 cls._init_muon()
@@ -620,7 +620,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_fisher(cls):
         if cls._fisher_kernel is None and TRITON_IMPORTED:
-            try:  # ruff: ignore[too-many-statements]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
 
@@ -680,7 +680,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     @classmethod
     def _init_ep_settle(cls):
         if cls._ep_settle_kernel is None and TRITON_IMPORTED:
-            try:  # ruff: ignore[too-many-statements]
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice

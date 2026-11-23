@@ -676,12 +676,17 @@ class ParameterUpdateConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         # EWC/SI/cascade/VON need wider step_size domain: they reach 0.1x at 0.3
-        step_domain = (1e-5, 1.0, "log") if _primitive_name in (
-            "elastic_consolidation",
-            "synaptic_intelligence",
-            "cascade_synapse",
-            "bayesian_online",
-        ) else (1e-5, 0.1, "log")
+        step_domain = (
+            (1e-5, 1.0, "log")
+            if _primitive_name
+            in (
+                "elastic_consolidation",
+                "synaptic_intelligence",
+                "cascade_synapse",
+                "bayesian_online",
+            )
+            else (1e-5, 0.1, "log")
+        )
 
         return {
             "step_size": {"domain": step_domain},

@@ -60,10 +60,17 @@ def main() -> None:
                 )
                 torch.cuda.empty_cache()
     # Does the hybrid's free pass exist and return one readout tensor?
-    system = build_arm("hybrid", PilotPoint(depth=8, width=64, batch=128), lr=0.3, seed=21)
+    system = build_arm(
+        "hybrid", PilotPoint(depth=8, width=64, batch=128), lr=0.3, seed=21
+    )
     x = x_train[:128].to(device)
     acts = system.credit.free_activations(system.substrate, system.geometry, x)
-    print(json.dumps({"owned_free": list(acts.shape), "params": len(system.geometry.params)}))
+    print(
+        json.dumps({
+            "owned_free": list(acts.shape),
+            "params": len(system.geometry.params),
+        })
+    )
 
 
 if __name__ == "__main__":
