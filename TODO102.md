@@ -53,6 +53,7 @@ No code change — data already flows. Track C reads `cells.jsonl`.
 **Track A Exit Criteria:**
 - [x] DEF-012, DEF-013 fixed → tile + instantaneous + gradient allowed; routing_compatible_credits() returns 13 credits
 - [x] 4 specialized tasks registered → neuromorphic (2), photonic (1), quantum (1), analog (1)
+- [x] All specialized tasks instantiate and setup correctly
 - [ ] All 12 geometries Rung 1 viable on MNIST (pending capability test run)
 
 ---
@@ -237,7 +238,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 
 ### Week 2: Track B (Parallel after A)
 - [ ] **B.1** Geometry Rung 2/3 batched (7 prims × MNIST + iris)
-- [ ] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam → Rung 2/3
+- [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2/3 pending
 - [ ] **B.3** Substrate Rung 2/3 on 4 specialized tasks
 
 ### Week 3-4: Track C (Continuous from Week 1)

@@ -329,7 +329,11 @@ _PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
         "Closed-form ridge plasticity: psi solved, never trained",
         ("ridge_lambda",),
     ),
-    ("temporal_psi", "Trace-decayed supervised psi", ("trace_decay",)),
+    (
+        "temporal_psi",
+        "Trace-decayed supervised psi",
+        ("trace_decay", "trace_decay_schedule"),
+    ),
     (
         "conflict_adaptive",
         "Conflict-adaptive psi",

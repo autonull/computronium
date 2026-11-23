@@ -42,6 +42,9 @@ if TYPE_CHECKING:
 class TemporalPsiConfig:
     """Trace decay ρ and scale-free ridge regularization λ.
 
+    ``trace_decay_schedule``: schedule for ρ over episodes. "constant" (default)
+    uses fixed trace_decay; "exponential" decays ρ toward 0.5; "linear" decays
+    ρ toward 0.5 linearly over episodes.
     ``replace_readout``: modulate replaces the output logits with the
     ridge prediction instead of adding the correction. The additive
     residual channel is swamped by confident frozen-net margins (measured
@@ -52,6 +55,7 @@ class TemporalPsiConfig:
     trace_decay: float = 0.9
     ridge_lambda: float = 1e-3
     replace_readout: bool = False
+    trace_decay_schedule: str = "constant"  # "constant", "exponential", "linear"
 
 
 def apply_readout(
@@ -106,6 +110,7 @@ class TemporalPsiPlasticity:
             "trace_decay=0.9",
             "ridge_lambda=1e-3",
             "replace_readout=False",
+            "trace_decay_schedule=constant",
         ),
         validated_limits=(
             "quick-budget CPU probes (3 seeds, ≤600 episodes/task); ρ ∈ {0.5, 0.9, 1.0}",
@@ -120,7 +125,7 @@ class TemporalPsiPlasticity:
     def initial_psi(
         self, context: SystemContext | None, batch_size: int = 1
     ) -> dict[str, Tensor]:
-        return {}
+        return {"trace_steps": torch.tensor(0.0)}
 
     def _stats(self, z: CompositeState) -> tuple[Tensor, Tensor] | None:
         h = z.activity.get("h")
@@ -169,8 +174,33 @@ class TemporalPsiPlasticity:
         stats = self._stats(z)
         if stats is None:
             return psi
-        gram, cross = decayed(*stats, psi, self.config.trace_decay)
-        return solve_trace_readout(psi, gram, cross, self.config.ridge_lambda)
+
+        # Compute effective trace_decay based on schedule
+        episode = psi.get("trace_steps", torch.tensor(0.0))
+        episode_num = (
+            float(episode.item())
+            if isinstance(episode, torch.Tensor)
+            else float(episode)
+        )
+
+        trace_decay = self.config.trace_decay
+        if self.config.trace_decay_schedule == "exponential":
+            # Exponential decay toward 0.5
+            trace_decay = 0.5 + (self.config.trace_decay - 0.5) * (0.99**episode_num)
+        elif self.config.trace_decay_schedule == "linear":
+            # Linear decay toward 0.5 over ~100 episodes
+            trace_decay = max(
+                0.5,
+                self.config.trace_decay
+                - (self.config.trace_decay - 0.5) * (episode_num / 100.0),
+            )
+        # "constant" uses the base trace_decay value
+
+        gram, cross = decayed(*stats, psi, trace_decay)
+        result = solve_trace_readout(psi, gram, cross, self.config.ridge_lambda)
+        # Increment episode counter
+        result["trace_steps"] = torch.tensor(episode_num + 1.0, device=gram.device)
+        return result
 
     def modulate(
         self,
@@ -185,12 +215,14 @@ def create_temporal_psi_plasticity(
     trace_decay: float = 0.9,
     ridge_lambda: float = 1e-3,
     replace_readout: bool = False,
+    trace_decay_schedule: str = "constant",
 ) -> TemporalPsiPlasticity:
     return TemporalPsiPlasticity(
         TemporalPsiConfig(
             trace_decay=trace_decay,
             ridge_lambda=ridge_lambda,
             replace_readout=replace_readout,
+            trace_decay_schedule=trace_decay_schedule,
         )
     )
 
@@ -210,5 +242,8 @@ def temporal_psi_from_config(config: PlasticityConfig) -> TemporalPsiPlasticity:
             trace_decay=cast("float", raw.get("trace_decay", 0.9)),
             ridge_lambda=cast("float", raw.get("ridge_lambda", 1e-3)),
             replace_readout=cast("bool", raw.get("replace_readout", False)),
+            trace_decay_schedule=cast(
+                "str", raw.get("trace_decay_schedule", "constant")
+            ),
         )
     )

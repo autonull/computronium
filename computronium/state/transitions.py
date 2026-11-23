@@ -79,12 +79,16 @@ class PlasticityConfig:
 
     @classmethod
     def temporal_psi(
-        cls, trace_decay: float = 0.9, **kwargs: object
+        cls,
+        trace_decay: float = 0.9,
+        trace_decay_schedule: str = "constant",
+        **kwargs: object,
     ) -> PlasticityConfig:
         """Temporal-ψ plasticity (TODO19): trace-decayed ridge readout.
 
         ρ < 1 forgets: enables frozen-θ task migration A₀ → A₁ where the
         forget-free ρ = 1 law blends conflicting task fits.
+        ``trace_decay_schedule``: "constant" (default), "exponential", or "linear".
         ``replace_readout`` defaults to True — the margin-robust channel is
         the validated operating point (the additive residual channel is
         inert on confident frozen-net margins, X-TPC-001 defect D-TPC-b).
@@ -94,6 +98,7 @@ class PlasticityConfig:
             plastic_state_dims=None,
             consolidation_config={
                 "trace_decay": trace_decay,
+                "trace_decay_schedule": trace_decay_schedule,
                 "replace_readout": True,
                 **kwargs,
             },
@@ -157,6 +162,10 @@ class PlasticityConfig:
                 "availability": expr_from_string(
                     'plasticity in ["temporal_psi", "conflict_adaptive"]'
                 ),
+            },
+            "trace_decay_schedule": {
+                "domain": ["constant", "exponential", "linear"],
+                "availability": expr_from_string('plasticity == "temporal_psi"'),
             },
             "conflict_threshold": {
                 "domain": (0.1, 0.9, "linear"),
