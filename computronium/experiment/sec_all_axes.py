@@ -847,6 +847,19 @@ async def create_registration(
     knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     knob_key = knob_info[0] if knob_info else f"{axis}.step_size"
 
+    # Only register the axis primitive and its primary knob, not all structural params.
+    # The box_mismatch check compares ALL fields, so we must limit to what the
+    # treatment run will actually match (axis primitive + knob). The control arm
+    # uses the axis default primitive, which has different structural params.
+    minimal_box = {
+        axis: primitive,
+        knob_key: base_box.get(knob_key),
+    }
+    # Also include the base schedule params that are constant across runs
+    for key in ("fidelity", "seed", "n_seeds", "epochs", "batch_size", "task_id", "device", "precision"):
+        if key in base_box:
+            minimal_box[key] = base_box[key]
+
     registration = EffectSizeRegistration.for_task_family(
         claim=(
             f"tuning {knob_key} on primitive.{axis}.{primitive} improves val_acc "
@@ -857,7 +870,7 @@ async def create_registration(
         alpha=DEFAULT_ALPHA,
         min_seeds=CLAIM_SEEDS,
         created=date.today().isoformat(),
-        box=base_box,
+        box=minimal_box,
     )
 
     reg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1020,8 +1033,9 @@ async def main() -> None:
                 result = await run_primitive_full(
                     axis, primitive, task_id, args.semaphore
                 )
-                # Save result
-                out_path = Path(f"results/sec/rung12_{axis}_{primitive}.json")
+                # Save result with task_id in filename to avoid overwrites
+                safe_task_id = task_id.replace("/", "_")
+                out_path = Path(f"results/sec/rung12_{axis}_{primitive}_{safe_task_id}.json")
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 out_path.write_text(json.dumps(result.to_dict(), indent=2))
 

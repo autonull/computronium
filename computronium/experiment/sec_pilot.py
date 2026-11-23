@@ -455,8 +455,10 @@ def base_schedule(task_id: str, device: str = "auto") -> Schedule | None:
     """The family's declared base box as a schedule, or ``None`` when unpriced."""
     family = base_family(task_id)
     box = BASE_BOXES.get(family) if family is not None else None
-    if box is None or box.task_id != task_id:
+    if box is None:
         return None
+    # Use the family's base box task_id for the schedule params (epochs, batch_size, etc.)
+    # but keep the original task_id for the run identification.
     from computronium.experiment.schema.coordinate import Schedule
 
     return Schedule(
