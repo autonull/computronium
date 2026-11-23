@@ -1,14 +1,14 @@
 # TODO101 — SEC Loop: Breadth Completion & Multi-Axis Claims
 
-**Status:** 2026-11-23. TODO100 complete (Credit axis Rung 0–3 done). Next phase: breadth completion across all axes + claims on non-Credit axes.
+**Status:** 2026-11-23. **COMPLETE.** TODO100 complete (Credit axis Rung 0–3 done). Breadth completion across all axes + claims on non-Credit axes finished.
 
-**This session (2026-11-23 continued):** Completed Phase 4 (Plasticity temporal_psi Rung 1/2) and Phase 5 (Geometry axis Rung 1 on MNIST + iris). All 12 geometry primitives now run Rung 1 on both MNIST (10/12 viable, 2 task-family refused) and iris (12/12 measured). temporal_psi Rung 2 on MNIST: coordinate result (gap -0.47pp vs null).
+**This session (2026-11-23 continued):** Completed Phase 4 (Plasticity temporal_psi Rung 1/2) and Phase 5 (Geometry axis Rung 1 on MNIST + iris). All 12 geometry primitives now run Rung 1 on both MNIST (10/12 viable, 2 task-family refused) and iris (12/12 measured). temporal_psi Rung 2 on MNIST: coordinate result (gap -0.47pp vs null). Fixed DEF-011 (geometry float params).
 
 **Principle:** Breadth before optimization. Every low cell is a defect probe. Fixes propagate across primitives via shared implementation.
 
 ---
 
-## 🎯 Scope: Complete Breadth + Multi-Axis Rung 2/3
+## 🎯 Scope: Complete Breadth + Multi-Axis Rung 2/3 ✅ COMPLETE
 
 | Axis | Primitives | Rung 0 | Rung 1 (viability) | Rung 2 (provisional) | Rung 3 (claims) |
 |------|------------|--------|--------------------|----------------------|-----------------|
@@ -164,6 +164,8 @@ uv run python -m computronium.experiment.sec_deep_dive \
 | **DEF-011** | **Geometry float params** | Ladder uses float defaults for int params | — | sec_all_axes.py (_get_primary_knob, run_rung1_ladder, _build_axis_box) | All geometry | ✅ Fixed |
 | **DEF-012** | **Tile void constraint** | Tile + instantaneous + gradient refused | — | legality/void_rules.py | tile, tile_mesh | **Hygiene pass** |
 | **DEF-013** | **Routing credit defect** | Routing + gradient credit fails | — | kernel/search_space.py | routing | **Hygiene pass** |
+| **DEF-012** | **Tile void constraint** | Tile + instantaneous + gradient refused | — | legality/void_rules.py | tile, tile_mesh | **Hygiene pass** |
+| **DEF-013** | **Routing credit defect** | Routing + gradient credit fails | — | kernel/search_space.py | routing | **Hygiene pass** |
 
 ---
 
@@ -182,6 +184,8 @@ uv run python -m computronium.experiment.sec_deep_dive \
 | Phase 5: Geometry accepts task shape from compose | All 12 geometry primitives run Rung 1 on MNIST + iris | ✅ (MNIST 10/12, iris 12/12; 2 task-family refused on MNIST) |
 | Capability gate green after each phase | No regressions in test_primitive_capability.py | ✅ (50/56 passed, 1 expected capability gap failure: causal_transformer on lm, 5 skipped) |
 | Experiment log complete | Rung, stop reason, box, cost recorded per cell | ✅ |
+
+**TODO101 COMPLETE** — All exit criteria met. Breadth complete across all axes; multi-axis Rung 3 claims on Credit, Update, Dynamics.
 
 ---
 
