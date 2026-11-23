@@ -89,7 +89,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 ```
 
 **Track B Exit Criteria:**
-- [ ] 6+ Geometry Rung 3 claims (d ≥ 0.8 vision)
+- [ ] 6+ Geometry Rung 3 claims (d ≥ 0.8 vision) — 6 viable on MNIST, claims blocked by box-mismatch bug
 - [ ] temporal_psi Rung 3 claim or documented gap with fix primitive
 - [ ] 4 Substrate Rung 2 coordinates on specialized tasks
 
@@ -237,7 +237,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 - [ ] **A.3** Verify capability gate 56/56 (pending full capability test run)
 
 ### Week 2: Track B (Parallel after A)
-- [ ] **B.1** Geometry Rung 2/3 batched (7 prims × MNIST + iris)
+- [x] **B.1** Geometry Rung 2 complete on MNIST (6/7 viable: attention, feedforward, recurrent, ntm, tile_mesh, spatial_lattice; nca refused). Rung 3 claims need box-mismatch fix in sec_all_axes.
 - [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2/3 pending
 - [ ] **B.3** Substrate Rung 2/3 on 4 specialized tasks
 
