@@ -15,9 +15,13 @@ from computronium.domains.base import (
     Metrics,
     TaskSplit,
 )
+from computronium.domains.analog import MemristorSimulationTask
 from computronium.domains.factory import CharNGramTask, create_task
 from computronium.domains.graph import GraphTask
 from computronium.domains.lm import LMTask
+from computronium.domains.neuromorphic import DVSGesturesTask, SpikingMNISTTask
+from computronium.domains.photonic import OpticalMNISTSimTask
+from computronium.domains.quantum import QuantumCircuitLearningTask
 from computronium.domains.registry import (
     SUPPORTED_TASKS,
     TaskSpec,
@@ -39,6 +43,10 @@ _DOMAIN_REGISTRY = {  # ruff: ignore[non-empty-init-module]
     "tabular": TabularTask,
     "timeseries": TimeSeriesTask,
     "scientific": ScientificTask,
+    "neuromorphic": SpikingMNISTTask,  # Default for neuromorphic
+    "photonic": OpticalMNISTSimTask,
+    "quantum": QuantumCircuitLearningTask,
+    "analog": MemristorSimulationTask,
 }
 
 
@@ -80,6 +88,11 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "TimeSeriesTask",
     "ScientificTask",
     "CharNGramTask",
+    "SpikingMNISTTask",
+    "DVSGesturesTask",
+    "OpticalMNISTSimTask",
+    "QuantumCircuitLearningTask",
+    "MemristorSimulationTask",
     # Task registry
     "SUPPORTED_TASKS",
     "TaskSpec",

@@ -51,9 +51,9 @@ Add to every SEC run (already in `sec_loop.py`, `sec_all_axes.py`):
 No code change — data already flows. Track C reads `cells.jsonl`.
 
 **Track A Exit Criteria:**
-- [ ] DEF-012, DEF-013 fixed → 56/56 capability gate
-- [ ] 4 specialized tasks registered → `uv run python -c "from computronium.experiment.registry.task_registry import TaskRegistry; print([t for t in TaskRegistry().list() if TaskRegistry().get(t).domain in (NEUROMORPHIC, PHOTONIC, QUANTUM, ANALOG)])"`
-- [ ] All 12 geometries Rung 1 viable on MNIST
+- [x] DEF-012, DEF-013 fixed → tile + instantaneous + gradient allowed; routing_compatible_credits() returns 13 credits
+- [x] 4 specialized tasks registered → neuromorphic (2), photonic (1), quantum (1), analog (1)
+- [ ] All 12 geometries Rung 1 viable on MNIST (pending capability test run)
 
 ---
 
@@ -227,13 +227,13 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 ## 🛠 Implementation Checklist (Ordered by Dependency)
 
 ### Week 1: Track A (Parallel)
-- [ ] **A.1.1** Fix DEF-012: `legality/void_rules.py` — `allow_tile_gradient()` 
-- [ ] **A.1.2** Fix DEF-013: `kernel/search_space.py` — routing compatible credits
-- [ ] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures)
-- [ ] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
-- [ ] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
-- [ ] **A.2.4** `domains/analog.py` (memristor_simulation)
-- [ ] **A.3** Verify capability gate 56/55 → 56/56
+- [x] **A.1.1** Fix DEF-012: `experiment/schema/seed_registries.py` — removed `nonlayered_instantaneous_gradient_credit` void constraint (tile + instantaneous + gradient now allowed)
+- [x] **A.1.2** Fix DEF-013: `experiment/kernel/search_space.py` — added `routing_compatible_credits()` function (13 compatible credits for routing geometry)
+- [x] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures)
+- [x] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
+- [x] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
+- [x] **A.2.4** `domains/analog.py` (memristor_simulation)
+- [ ] **A.3** Verify capability gate 56/56 (pending full capability test run)
 
 ### Week 2: Track B (Parallel after A)
 - [ ] **B.1** Geometry Rung 2/3 batched (7 prims × MNIST + iris)

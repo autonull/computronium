@@ -643,7 +643,7 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
     ),
     "spiking_mnist": TaskSpecEnriched(
         name="spiking_mnist",
-        domain=DomainType.VISION,
+        domain=DomainType.NEUROMORPHIC,
         task_families=("neuromorphic",),
         input_shape=(784,),
         output_dim=10,
@@ -672,6 +672,137 @@ TASK_ENRICHMENTS: dict[str, TaskSpecEnriched] = {
         typical_lr=1e-3,
         tags=("neuromorphic", "spiking", "mnist"),
         description="MNIST frames as binary spike rasters",
+    ),
+    "dvs_gestures": TaskSpecEnriched(
+        name="dvs_gestures",
+        domain=DomainType.NEUROMORPHIC,
+        task_families=("neuromorphic",),
+        input_shape=(20, 2, 128, 128),  # (time_bins, channels, height, width)
+        output_dim=11,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        resolution=10_000,
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=16,
+        typical_lr=1e-3,
+        tags=("neuromorphic", "dvs", "event", "gesture"),
+        description="DVS Gestures: event-based gesture recognition",
+    ),
+    "optical_mnist_sim": TaskSpecEnriched(
+        name="optical_mnist_sim",
+        domain=DomainType.PHOTONIC,
+        task_families=("photonic",),
+        input_shape=(1, 28, 28),
+        output_dim=10,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        resolution=10_000,
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("photonic", "optical", "mnist", "simulation"),
+        description="Optical MNIST: MNIST with simulated optical noise and diffraction",
+    ),
+    "quantum_circuit_learning": TaskSpecEnriched(
+        name="quantum_circuit_learning",
+        domain=DomainType.QUANTUM,
+        task_families=("quantum",),
+        input_shape=(36,),  # num_qubits * num_layers * 3
+        output_dim=2,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        resolution=10_000,
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+            TaskObjective(
+                "fidelity", "maximize", "minmax", 0.8, True, "fidelity", "task"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=16,
+        typical_lr=1e-2,
+        tags=("quantum", "vqe", "variational", "circuit"),
+        description="Quantum circuit learning: variational state preparation",
+    ),
+    "memristor_simulation": TaskSpecEnriched(
+        name="memristor_simulation",
+        domain=DomainType.ANALOG,
+        task_families=("analog",),
+        input_shape=(1, 28, 28),
+        output_dim=10,
+        cost_class=CostClass.MEDIUM,
+        primary_objective="validation_accuracy",
+        resolution=10_000,
+        objectives=(
+            TaskObjective(
+                "validation_accuracy",
+                "maximize",
+                "minmax",
+                1.0,
+                True,
+                "val_acc",
+                "task",
+            ),
+            TaskObjective(
+                "validation_loss", "minimize", "log", 0.5, True, "val_loss", "task"
+            ),
+            TaskObjective(
+                "walltime_total", "minimize", "minmax", 0.3, True, "walltime_s", "cost"
+            ),
+        ),
+        geometry_hint="feedforward",
+        typical_batch_size=32,
+        typical_lr=1e-3,
+        tags=("analog", "memristor", "crossbar", "mnist", "simulation"),
+        description="Memristor simulation: MNIST with memristor crossbar non-idealities",
     ),
     "copy_task": TaskSpecEnriched(
         name="copy_task",

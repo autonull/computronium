@@ -39,6 +39,10 @@ class DomainType(StrEnum):
     MEMORY = "memory"
     CONTINUAL = "continual"
     MULTITASK = "multitask"
+    NEUROMORPHIC = "neuromorphic"
+    PHOTONIC = "photonic"
+    QUANTUM = "quantum"
+    ANALOG = "analog"
     CUSTOM = "custom"
     UNKNOWN = "unknown"
 

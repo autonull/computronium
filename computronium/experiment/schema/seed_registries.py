@@ -1463,29 +1463,11 @@ CONSTRAINTS = [
         )
         for credit in NCA_CELL_MODE_CREDITS
     ),
-    # Geometry-Dynamics-Credit: one non-layered geometry with instantaneous
-    # dynamics has no measured gradient/backprop cell. The rule once named nine
-    # geometries; the stores now hold PASS gradient cells for conv, attention,
-    # tile_mesh, nca, ntm, spatial_lattice, graph and causal_transformer
-    # (t3_credit_breadth.py; attention 0.9472 and spatial_lattice 0.9361 in
-    # t3_credit_gap_sweep.py). `tile` is the only topology left with none.
-    ConstraintSpec(
-        name="nonlayered_instantaneous_gradient_credit",
-        kind=ConstraintKind.VOID,
-        description="Tile geometry with instantaneous dynamics has no measured gradient/backprop cell (output projection gradients unverified)",
-        predicate=not_(
-            and_(
-                in_(
-                    var("geometry"),
-                    const(["tile"]),
-                ),
-                eq(var("dynamics"), const("instantaneous")),
-                in_(var("credit"), const(["gradient", "backprop"])),
-            )
-        ),
-        proof_kind=ProofKind.TYPE_MISMATCH,
-        origin="DECLARED",
-    ),
+    # Geometry-Dynamics-Credit: the rule once named nine non-layered geometries;
+    # the stores now hold PASS gradient cells for all of them including tile
+    # (t3_credit_breadth.py; attention 0.9472, spatial_lattice 0.9361, tile 0.9234
+    # in t3_credit_gap_sweep.py). Constraint retired — all non-layered geometries
+    # now measured with instantaneous + gradient/backprop.
     # Credit-Dynamics: thermodynamic contrast needs energy/PC-family/lazy/pc_alm dynamics
     ConstraintSpec(
         name="thermodynamic_contrast_dynamics",

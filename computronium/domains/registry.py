@@ -44,6 +44,7 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     "sequential_mnist",
     # neuromorphic vision
     "spiking_mnist",
+    "dvs_gestures",
     # continual learning
     "split_mnist",
     # memory/sequence tasks
@@ -73,6 +74,12 @@ SUPPORTED_TASKS: frozenset[str] = frozenset({
     # scientific (offline physics-simulation loader)
     "pendulum_state",
     "lorenz_state",
+    # photonic
+    "optical_mnist_sim",
+    # quantum
+    "quantum_circuit_learning",
+    # analog
+    "memristor_simulation",
 })
 
 

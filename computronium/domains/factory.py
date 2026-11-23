@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from torch.utils.data import DataLoader
 
 from computronium.core.logging import get_logger
+from computronium.domains.analog import MemristorSimulationTask
 from computronium.domains.base import (
     DomainSpec,
     DomainTask,
@@ -24,14 +25,22 @@ from computronium.domains.base import (
     Metrics,
     TaskSplit,
 )
+from computronium.domains.neuromorphic import DVSGesturesTask, SpikingMNISTTask
+from computronium.domains.photonic import OpticalMNISTSimTask
+from computronium.domains.quantum import QuantumCircuitLearningTask
 from computronium.domains.timeseries import TimeSeriesTask
 from computronium.domains.trainer import _TaskTrainer
 
 __all__ = [
     "CharNGramTask",
     "CopyTask",
+    "DVSGesturesTask",
     "GraphClassificationTask",
+    "MemristorSimulationTask",
+    "OpticalMNISTSimTask",
+    "QuantumCircuitLearningTask",
     "SequentialMNISTTask",
+    "SpikingMNISTTask",
     "TimeSeriesTask",
     "create_task",
     "logger",
@@ -758,9 +767,23 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure, 
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )
         case "spiking_mnist":
-            from computronium.domains.vision import SpikingMNISTTask
-
             return SpikingMNISTTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "dvs_gestures":
+            return DVSGesturesTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "optical_mnist_sim":
+            return OpticalMNISTSimTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "quantum_circuit_learning":
+            return QuantumCircuitLearningTask(
+                name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
+            )
+        case "memristor_simulation":
+            return MemristorSimulationTask(
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )
         case "split_mnist":

@@ -390,6 +390,44 @@ def _is_target_lane_compatible(axis: str, name: str, target_kind: str) -> bool:
     return AXES_REGISTRIES[StructuralAxis[axis.upper()]][name].target_kind == "any"
 
 
+def routing_compatible_credits() -> frozenset[str]:
+    """Credits compatible with routing geometry.
+
+    Routing geometry supports credits that do not require a dense Linear stack
+    (unlike LOCAL_STACK_CREDITS). The surrogate credit is the canonical pairing
+    (it differentiates the hard top-k gate), but gradient, random_projections,
+    target_inversion, and temporal credits also work.
+    """
+    from computronium.ontology.system import LOCAL_STACK_CREDITS
+
+    all_credits = {
+        "gradient",
+        "backprop",
+        "random_projections",
+        "local_goodness",
+        "local_contrastive",
+        "target_inversion",
+        "homeostatic",
+        "pepita",
+        "hybrid",
+        "pc_alm",
+        "forward_tangent",
+        "score_function",
+        "zeroth_order",
+        "surrogate",
+        "local_supervision",
+        "eligibility_prop",
+        "unbiased_rtrl",
+        "rtrl_reference",
+        "thermodynamic_contrast",
+        "temporal_trace",
+    }
+    # Exclude credits that require feedforward geometry (LOCAL_STACK_CREDITS)
+    # and credits with specific dynamics requirements incompatible with routing
+    excluded = LOCAL_STACK_CREDITS | {"hybrid", "pc_alm", "thermodynamic_contrast"}
+    return frozenset(all_credits - excluded)
+
+
 def _target_lane_rule(coordinate: Coordinate, target_kind: str) -> str | None:
     """The target-lane rule a six-axis coordinate violates, else ``None``."""
     from computronium.experiment.schema.axis import StructuralAxis
