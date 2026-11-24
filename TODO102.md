@@ -227,7 +227,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 
 ## 🛠 Implementation Checklist (Ordered by Dependency)
 
-### Week 1: Track A (Parallel)
+### Week 1: Track A (Parallel) — COMPLETE
 - [x] **A.1.1** Fix DEF-012: `experiment/schema/seed_registries.py` — removed `nonlayered_instantaneous_gradient_credit` void constraint (tile + instantaneous + gradient now allowed)
 - [x] **A.1.2** Fix DEF-013: `experiment/kernel/search_space.py` — added `routing_compatible_credits()` function (13 compatible credits for routing geometry)
 - [x] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures) — dvs_gestures size reduced for quick_mode
@@ -239,7 +239,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
   - conv: auto-derives `input_hw`/`in_channels` from task `input_shape`
   - causal_transformer: auto-derives `hidden_dim`/`num_layers`/`num_heads` from base_coordinate
 
-### Week 2: Track B (Parallel after A)
+### Week 2: Track B (Parallel after A) — COMPLETE
 - [x] **B.1** Geometry Rung 1/2 on MNIST + iris (8/12 viable on MNIST: attention, causal_transformer, feedforward, nca, ntm, recurrent, spatial_lattice, tile_mesh; 8/12 viable on iris). Box-mismatch fixed.
 - [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2 complete on MNIST (verdict: coordinate, d=-0.31); needs ladder with schedule knob for Rung 3
 - [x] **B.3** Substrate Rung 2/3 on specialized tasks:
@@ -249,11 +249,11 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
   - dvs_gestures: 4 measured, all below_bar (task too hard for 1 epoch)
   - memristor_simulation: 1 viable (sparse), others pending (data size/timeouts)
 
-### Week 3-4: Track C (Continuous from Week 1)
+### Week 3-4: Track C (Continuous from Week 1) — MOVED TO TODO103
 - [x] **C.1** `meta_sec.py` — Bayesian opt on SEC hyperparams (code complete, runs on cells.jsonl)
 - [x] **C.2** `learn_void_rules.py` — Learns void rules from cells.jsonl (code complete, needs more diverse data for meaningful rules)
-- [ ] **C.3** Gap→primitive pipeline (temporal_psi schedule knob, causal_transformer ladder, conv viability)
-- [ ] **C.4** Budget allocation policy from cost model (per-primitive walltime regression)
+- [➡️] **C.3** Gap→primitive pipeline → **TODO103 Phase 5.1**
+- [➡️] **C.4** Budget allocation policy → **TODO103 Phase 5.2**
 
 ---
 
@@ -278,6 +278,17 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 3. **Proposes** primitives from gaps (not human-guessed)
 4. **Optimizes** its own SEC config (not fixed constants)
 5. **Allocates** budget from cost models (not static splits)
+
+---
+
+## 🔗 Next: TODO103
+
+See **TODO103.md** for:
+- Hardcoded shortcuts removal (GeometryConfig factory defaults, BASE_BOXES spatial params)
+- Rung 3 claims (18+ competitive)
+- Track C completion (Gap→primitive pipeline, Budget policy)
+- Meta-SEC production run
+- Full SEC competitive run with learned void rules
 
 ---
 
