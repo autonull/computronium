@@ -92,7 +92,9 @@
   - ✅ spiking_mnist: neuromorphic substrate (coordinate)
   - ✅ memristor_simulation: memristive substrate (coordinate)
   - ⏭️ optical_mnist: no base family
-- [ ] **4.4** Auto-register claims: Script reads best ladder point → writes `configs/preregistrations/sec_*.json`
+- [x] **4.4** Auto-register claims: Script reads best ladder point → writes `configs/preregistrations/sec_*.json`
+  - ✅ Created sec_primitive_parameter_update_muon_iris.json (min_d=0.5)
+  - ✅ Created sec_primitive_credit_assignment_random_projections_mnist.json (min_d=0.8)
 
 ### Phase 5: Track C Completion (Recursive Loop)
 - [ ] **5.1** **C.3** Gap→primitive pipeline:
@@ -184,7 +186,7 @@
 - [x] 4.1 Geometry Rung 3: 8 MNIST + 4 iris (muon on iris claims d>0.8) + local_goodness, random_projections (claim)
 - [x] 4.2 temporal_psi Rung 3 (coordinate)
 - [x] 4.3 Substrate Rung 3: spiking_mnist (neuromorphic), memristor_simulation (memristive) - both coordinates
-- [ ] 4.4 Auto-register claims script
+- [x] 4.4 Auto-register claims script (2 registrations created)
 
 ### Phase 5: Track C Completion
 - [ ] 5.1 C.3 Gap→primitive pipeline (temporal_psi, causal_transformer, conv)
