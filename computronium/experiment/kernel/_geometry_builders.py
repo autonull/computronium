@@ -721,14 +721,9 @@ def build_causal_transformer_config(
     heads, hidden = _derive_head_params("causal_transformer", geometry, hidden)
     patch_size = _as_int(geometry.get("patch_size"), 0)
     if patch_size > 0:
-        # Vision mode: input_dim is the product of input_shape (C*H*W)
-        # We need to derive image_hw and in_channels from input_shape
-        # This is handled by the caller - we need to pass them through
-        # For now, use defaults
-        image_hw_raw = geometry.get("image_hw", (28, 28))
-        image_hw = (
-            tuple(image_hw_raw) if isinstance(image_hw_raw, (list, tuple)) else (28, 28)
-        )
+        # Vision mode: the dispatch function guarantees image_hw and in_channels are in geometry
+        image_hw = geometry["image_hw"]
+        in_channels = geometry["in_channels"]
         return GeometryConfig.causal_transformer(
             vocab_size=output_dim,
             d_model=hidden,
@@ -737,8 +732,8 @@ def build_causal_transformer_config(
             seq_len=_as_int(geometry.get("seq_len"), 32),
             patch_size=patch_size,
             patch_embed_dim=_as_int(geometry.get("patch_embed_dim"), 0),
-            image_hw=image_hw,
-            in_channels=_as_int(geometry.get("in_channels"), 1),
+            image_hw=tuple(image_hw) if isinstance(image_hw, (list, tuple)) else image_hw,
+            in_channels=int(in_channels),
         )
     else:
         # Standard LM mode: a token task's ``input_shape`` is its sequence

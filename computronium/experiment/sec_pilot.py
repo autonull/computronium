@@ -101,6 +101,8 @@ class BaseBox:
 BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
     "vision": BaseBox("vision", "mnist", 32, 375, 1, base_coordinate={
         "geometry": "feedforward",
+        "geometry.input_hw": (28, 28),
+        "geometry.in_channels": 1,
     }),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
     "graph": BaseBox(
@@ -122,7 +124,11 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         32,
         0,
         10,
-        base_coordinate={"geometry": "recurrent"},
+        base_coordinate={
+            "geometry": "recurrent",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
+        },
     ),
     "continual": BaseBox(
         "continual",
@@ -145,7 +151,11 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         32,
         0,
         10,
-        base_coordinate={"geometry": "feedforward"},
+        base_coordinate={
+            "geometry": "feedforward",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
+        },
     ),
     "neuromorphic": BaseBox(
         "neuromorphic",
@@ -156,6 +166,8 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         base_coordinate={
             "substrate": "neuromorphic",
             "dynamics": "energy_minimization",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
         },
     ),
     "lm": BaseBox(
@@ -187,6 +199,8 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
             "dynamics": "instantaneous",
             "credit": "gradient",
             "update": "euclidean",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
         },
     ),
     "photonic": BaseBox(
@@ -201,6 +215,8 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
             "dynamics": "instantaneous",
             "credit": "gradient",
             "update": "euclidean",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
         },
     ),
     "analog": BaseBox(
@@ -215,6 +231,8 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
             "dynamics": "instantaneous",
             "credit": "gradient",
             "update": "euclidean",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
         },
     ),
     # Energy-minimization variants for credits requiring settle (TODO99 #3)
@@ -241,6 +259,8 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         base_coordinate={
             "geometry": "recurrent",
             "dynamics": "energy_minimization",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
         },
     ),
     "continual_energy_min": BaseBox(

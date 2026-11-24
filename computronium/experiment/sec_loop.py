@@ -837,6 +837,16 @@ def _params_for(
             params["geometry.num_layers"] = params["geometry.n_layers"]
         if "geometry.n_heads" in params and "geometry.num_heads" not in params:
             params["geometry.num_heads"] = params["geometry.n_heads"]
+        # Map base_coordinate spatial params (input_hw, in_channels) to causal_transformer names
+        if "geometry.input_hw" in params and "geometry.image_hw" not in params:
+            params["geometry.image_hw"] = params["geometry.input_hw"]
+        # in_channels name is the same
+    elif geometry == "nca":
+        # Map base_coordinate spatial params (input_hw, in_channels) to nca names
+        if "geometry.input_hw" in params and "geometry.grid_hw" not in params:
+            params["geometry.grid_hw"] = params["geometry.input_hw"]
+        if "geometry.in_channels" in params and "geometry.channels" not in params:
+            params["geometry.channels"] = params["geometry.in_channels"]
     # Only set geometry defaults if not already provided by base_coordinate
     if geometry in {
         "feedforward",
@@ -958,10 +968,23 @@ def _own_knob_overrides(
     active = harvest_schema().active(base)
     kind = StructuralAxis(own_knobs)
     accepted = set(active.values_for_axis(kind))
+
+    # Spatial params derived from task's input_shape (from base_coordinate) should
+    # be preserved across geometry changes. These are not primitive defaults.
+    spatial_param_keys = {
+        "geometry.input_hw",
+        "geometry.in_channels",
+        "geometry.grid_hw",
+        "geometry.channels",
+        "geometry.image_hw",
+        "geometry.pool_hw",
+        "geometry.lattice_dims",
+        "geometry.edge_index",
+    }
     kept = {
         key: value
         for key, value in params.items()
-        if not key.startswith(f"{own_knobs}.")
+        if not key.startswith(f"{own_knobs}.") or key in spatial_param_keys
     }
     kept.update({
         key: value
@@ -987,7 +1010,7 @@ def _coordinate(
     )
 
 
-def screen_coordinate(box: Mapping[str, Any], axis: str, level: str) -> Coordinate:
+def screen_coordinate(box: Mapping[str, Any], axis: str, level: str, shape: TaskShape | None = None, task_id: str | None = None) -> Coordinate:
     """The coordinate a map row was screened in: its axes and its own params.
 
     A row's box carries the six axes, the schedule and the structural params
@@ -1002,7 +1025,19 @@ def screen_coordinate(box: Mapping[str, Any], axis: str, level: str) -> Coordina
         axes[axis] = level
     params = box_params(box)
     if not params:
-        return _coordinate(axes, own_knobs=axis or None)
+        # Fallback: include base_coordinate spatial params from the task's family
+        if task_id is not None:
+            from computronium.experiment.sec_pilot import BASE_BOXES, base_family
+            family = base_family(task_id)
+            if family is not None:
+                base_box = BASE_BOXES.get(family)
+                if base_box is not None and base_box.base_coordinate:
+                    # Add spatial params from base_coordinate (e.g., geometry.input_hw, geometry.in_channels)
+                    # but NOT the geometry axis value itself (that's the varied axis)
+                    for key, value in base_box.base_coordinate.items():
+                        if "." in key and key.partition(".")[0] == "geometry" and key != "geometry":
+                            axes.setdefault(key, value)
+        return _coordinate(axes, own_knobs=axis or None, task_id=task_id, shape=shape)
     return Coordinate(
         substrate=axes["substrate"],
         geometry=axes["geometry"],
@@ -2134,14 +2169,21 @@ def _interaction_result(
 DEEP_DIVE_REGISTRATION = Path("configs/preregistrations/sec_deep_dive.json")
 
 
-def _deep_dive_coordinate(candidate: Any, factor: float) -> Coordinate:
+def _deep_dive_coordinate(candidate: Any, factor: float, task_id: str | None = None) -> Coordinate:
     """The row's box with its primary knob at one ladder point.
 
     The arm rebuilds from the row's screened box, so the ladder's base params
     travel: a coordinate built from the six axes alone runs another box than
     the row (TODO97 S9c).
     """
-    base = screen_coordinate(candidate.box, candidate.axis, candidate.level)
+    shape = None
+    if task_id is not None:
+        from computronium.experiment.kernel.evaluate import task_shape
+        try:
+            shape = task_shape(task_id)
+        except Exception:
+            pass
+    base = screen_coordinate(candidate.box, candidate.axis, candidate.level, shape=shape, task_id=task_id)
     return replace(
         base,
         params={**base.params, candidate.knob: candidate.default * factor},
@@ -2289,7 +2331,7 @@ def _ladder(candidate: Any, schedule: Schedule) -> list[Any]:
     rungs: list[LadderRung] = []
     for factor, value in ladder_points(candidate):
         measured = _measure(
-            _deep_dive_coordinate(candidate, factor),
+            _deep_dive_coordinate(candidate, factor, schedule.task_id),
             replace(schedule, seed=0, n_seeds=1),
         )
         rungs.append(
@@ -2329,7 +2371,7 @@ async def _ladder_async(
     async def _run_one(factor: float, value: float) -> LadderRung:
         async with semaphore:
             measured = await _measure_async(
-                _deep_dive_coordinate(candidate, factor),
+                _deep_dive_coordinate(candidate, factor, schedule.task_id),
                 replace(schedule, seed=0, n_seeds=1),
             )
         return LadderRung(
@@ -2356,7 +2398,7 @@ def _paired_cells(candidate: Any, schedule: Schedule, treatment: float) -> list[
     for seed in range(CLAIM_SEEDS):
         for arm, factor in (("control", 1.0), ("treatment", treatment)):
             measured = _measure(
-                _deep_dive_coordinate(candidate, factor),
+                _deep_dive_coordinate(candidate, factor, schedule.task_id),
                 replace(schedule, seed=seed, n_seeds=1),
             )
             cells.append(
@@ -2401,7 +2443,7 @@ async def _paired_cells_async(
     async def _run_one(seed: int, arm: str, factor: float) -> PairedCell:
         async with semaphore:
             measured = await _measure_async(
-                _deep_dive_coordinate(candidate, factor),
+                _deep_dive_coordinate(candidate, factor, schedule.task_id),
                 replace(schedule, seed=seed, n_seeds=1),
             )
         return PairedCell(

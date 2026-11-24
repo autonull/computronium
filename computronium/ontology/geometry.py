@@ -385,17 +385,22 @@ class GeometryConfig:
         seq_len: int,
         patch_size: int = 0,
         patch_embed_dim: int = 0,
-        image_hw: tuple[int, int] = (28, 28),
-        in_channels: int = 1,
+        image_hw: tuple[int, int] | None = None,
+        in_channels: int | None = None,
     ) -> GeometryConfig:
         """Create a causal transformer config.
 
         For standard LM: vocab_size = input_dim = output_dim, patch_size = 0.
         For vision: patch_size > 0, input_dim = in_channels * patch_size^2,
                     output_dim = vocab_size (num classes), seq_len = num_patches.
+                    image_hw and in_channels are required when patch_size > 0.
         """
         if patch_size > 0:
-            # Vision mode: patch embedding
+            # Vision mode: patch embedding - require spatial params
+            if image_hw is None:
+                raise ValueError("causal_transformer vision mode (patch_size > 0) requires image_hw")
+            if in_channels is None:
+                raise ValueError("causal_transformer vision mode (patch_size > 0) requires in_channels")
             num_patches = (image_hw[0] // patch_size) * (image_hw[1] // patch_size)
             patch_dim = in_channels * patch_size * patch_size
             embed_dim = patch_embed_dim if patch_embed_dim > 0 else d_model
@@ -514,11 +519,11 @@ class GeometryConfig:
         *,
         input_dim: int,
         output_dim: int,
-        conv_channels: tuple[int, ...] = (8, 16),
+        conv_channels: tuple[int, ...],
         kernel_size: int = 3,
-        in_channels: int = 1,
-        input_hw: tuple[int, int] = (28, 28),
-        pool_hw: tuple[int, int] = (4, 4),
+        in_channels: int,
+        input_hw: tuple[int, int],
+        pool_hw: tuple[int, int],
         init_scale: float = 0.1,
     ) -> GeometryConfig:
         return cls(
@@ -654,7 +659,7 @@ class GeometryConfig:
         *,
         channels: int,
         hidden: int = 32,
-        grid_hw: tuple[int, int] = (16, 16),
+        grid_hw: tuple[int, int],
         delta_scale: float = 0.5,
         mask_prob: float = 0.5,
         label_channels: int = 0,
@@ -666,7 +671,7 @@ class GeometryConfig:
         Args:
             channels: State channels per cell (also the cell output dim)
             hidden: Shared cell MLP hidden width
-            grid_hw: Grid extent (height, width)
+            grid_hw: Grid extent (height, width) — required, derived from task input_shape
             delta_scale: tanh bound on the per-step state delta
             mask_prob: Probability that a cell updates on a given step
                 (functional damping; deterministic masks diverge, §11.4)
