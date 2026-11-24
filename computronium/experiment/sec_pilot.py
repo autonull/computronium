@@ -421,7 +421,29 @@ def own_knob_params(
                     input_dim=input_dim, output_dim=output_dim, num_layers=2
                 )
             elif primitive == "conv":
-                config = factory(input_dim=input_dim, output_dim=output_dim)
+                # Conv needs in_channels, input_hw, pool_hw, conv_channels
+                # Derive from task's input_shape
+                in_channels = 1
+                input_hw = (28, 28)
+                pool_hw = (4, 4)
+                if task_id is not None:
+                    try:
+                        task_spec = TaskRegistry().get(task_id)
+                        if task_spec.input_shape and len(task_spec.input_shape) >= 3:
+                            in_channels = task_spec.input_shape[0]
+                            input_hw = (task_spec.input_shape[1], task_spec.input_shape[2])
+                            # Default pool to 1/4 of spatial dims
+                            pool_hw = (max(1, input_hw[0] // 4), max(1, input_hw[1] // 4))
+                    except Exception:
+                        pass
+                config = factory(
+                    input_dim=input_dim,
+                    output_dim=output_dim,
+                    in_channels=in_channels,
+                    input_hw=input_hw,
+                    pool_hw=pool_hw,
+                    conv_channels=(32, 64),
+                )
             elif primitive == "graph":
                 # Graph needs edge_index - use minimal default
                 config = factory(
@@ -484,11 +506,23 @@ def own_knob_params(
         for param_name in spec.accepted_params:
             if param_name in config.consolidation_config:
                 own[param_name] = config.consolidation_config[param_name]
-
-    # For all axes, get values from config fields
-    for field in fields(config):
-        if field.name in spec.accepted_params:
-            own[field.name] = getattr(config, field.name)
+    else:
+        # For other axes, the factory signature parameters are the true knobs
+        # (config fields may have different names, e.g., pepita: gamma -> feedback_scale)
+        import inspect
+        factory_params = inspect.signature(factory).parameters
+        for param_name, param in factory_params.items():
+            if param_name in spec.accepted_params:
+                # Use the default value from the factory signature
+                if param.default is not inspect.Parameter.empty:
+                    own[param_name] = param.default
+                # Also check if config has a field with this name
+                if hasattr(config, param_name):
+                    own[param_name] = getattr(config, param_name)
+        # Also include config fields that are in accepted_params
+        for field in fields(config):
+            if field.name in spec.accepted_params:
+                own[field.name] = getattr(config, field.name)
 
     return {f"{kind.value}.{name}": value for name, value in own.items()}
 
