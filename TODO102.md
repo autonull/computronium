@@ -230,7 +230,7 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 ### Week 1: Track A (Parallel)
 - [x] **A.1.1** Fix DEF-012: `experiment/schema/seed_registries.py` — removed `nonlayered_instantaneous_gradient_credit` void constraint (tile + instantaneous + gradient now allowed)
 - [x] **A.1.2** Fix DEF-013: `experiment/kernel/search_space.py` — added `routing_compatible_credits()` function (13 compatible credits for routing geometry)
-- [x] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures)
+- [x] **A.2.1** `domains/neuromorphic.py` (spiking_mnist, dvs_gestures) — dvs_gestures size reduced for quick_mode
 - [x] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
 - [x] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
 - [x] **A.2.4** `domains/analog.py` (memristor_simulation)
@@ -238,14 +238,19 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 
 ### Week 2: Track B (Parallel after A)
 - [x] **B.1** Geometry Rung 2 complete on MNIST + iris (8/12 viable on MNIST: attention, causal_transformer, feedforward, nca, ntm, recurrent, spatial_lattice, tile_mesh; 8/12 viable on iris). Box-mismatch fixed.
-- [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2/3 pending
-- [x] **B.3** Substrate Rung 2/3 on specialized tasks (3/5 tasks complete with full results: spiking_mnist ✓, optical_mnist_sim ✓, quantum_circuit_learning ✓; dvs_gestures, memristor_simulation have data size issues)
+- [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2 complete on MNIST (verdict: coordinate, d=-0.31); needs ladder with schedule knob for Rung 3
+- [x] **B.3** Substrate Rung 2/3 on specialized tasks:
+  - spiking_mnist: 7 viable, 1 claim (quantum), 2 refused (complex, neuromorphic)
+  - optical_mnist_sim: 5 viable, 2 refused (complex, neuromorphic)
+  - quantum_circuit_learning: 7 viable, all no_power (task scale issue)
+  - dvs_gestures: 4 measured, all below_bar (task too hard for 1 epoch)
+  - memristor_simulation: 1 viable (sparse), others pending (data size/timeouts)
 
 ### Week 3-4: Track C (Continuous from Week 1)
 - [x] **C.1** `meta_sec.py` — Bayesian opt on SEC hyperparams (code complete, runs on cells.jsonl)
 - [x] **C.2** `learn_void_rules.py` — Learns void rules from cells.jsonl (code complete, needs more diverse data for meaningful rules)
-- [ ] **C.3** Gap→primitive pipeline (temporal_psi, causal_transformer, conv)
-- [ ] **C.4** Budget allocation policy from cost model
+- [ ] **C.3** Gap→primitive pipeline (temporal_psi schedule knob, causal_transformer ladder, conv viability)
+- [ ] **C.4** Budget allocation policy from cost model (per-primitive walltime regression)
 
 ---
 
