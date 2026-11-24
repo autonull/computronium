@@ -818,8 +818,26 @@ def _params_for(
     at its own declared config defaults, companions stay at the base box
     (TODO95 S2). The base box shares one step size and one geometry width.
     """
-    params: dict[str, Any] = {"credit.lr": 0.01, "update.step_size": 0.01}
+    # Start with any axis-prefixed params from the axes dict (e.g., from base_coordinate)
+    params: dict[str, Any] = {
+        key: value
+        for key, value in axes.items()
+        if isinstance(key, str) and "." in key and key.partition(".")[0] in _PARM_AXES
+    }
+    # Default credit/update params
+    params.setdefault("credit.lr", 0.01)
+    params.setdefault("update.step_size", 0.01)
     geometry = axes["geometry"]
+    # Map base_coordinate param names to builder-expected names for specific geometries
+    if geometry == "causal_transformer":
+        # Map d_model -> hidden_dim, n_layers -> num_layers, etc.
+        if "geometry.d_model" in params and "geometry.hidden_dim" not in params:
+            params["geometry.hidden_dim"] = params["geometry.d_model"]
+        if "geometry.n_layers" in params and "geometry.num_layers" not in params:
+            params["geometry.num_layers"] = params["geometry.n_layers"]
+        if "geometry.n_heads" in params and "geometry.num_heads" not in params:
+            params["geometry.num_heads"] = params["geometry.n_heads"]
+    # Only set geometry defaults if not already provided by base_coordinate
     if geometry in {
         "feedforward",
         "recurrent",
@@ -828,14 +846,14 @@ def _params_for(
         "causal_transformer",
         "attention",
     }:
-        params["geometry.hidden_dim"] = P0_HIDDEN_DIM
-        params["geometry.depth"] = 2
+        params.setdefault("geometry.hidden_dim", P0_HIDDEN_DIM)
+        params.setdefault("geometry.num_layers", 2)
     elif geometry in {"tile", "tile_mesh"}:
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
     elif geometry == "nca":
         params["geometry.grid_hw"] = (28, 28)
-        params["geometry.input_dim"] = 1
+        params["geometry.channels"] = 1
     elif geometry == "spatial_lattice":
         params["geometry.lattice_dims"] = (8, 8)
     elif geometry == "routing":

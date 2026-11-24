@@ -223,7 +223,10 @@ def _run_cell(
         # A loader lane has an epoch length, so ``None`` runs the full epoch.
         # A ``get_batch`` lane has none, so the fallback cap is its length.
         batches = rung.batch_limit
-        if batches is None and task.get_dataloader("train") is None:
+        has_loader = task.get_dataloader("train") is not None
+        has_get_batch = hasattr(task, "get_batch") and callable(task.get_batch)
+        is_token_lane = getattr(task, "token_lane", False)
+        if batches is None and (not has_loader or is_token_lane or has_get_batch):
             batches = CAPABILITY_BATCHES
         train_on_task(
             lambda *_, **__: cell.system,
@@ -290,11 +293,19 @@ def test_primitive_on_declared_families(spec, screened_rows):
             pytest.skip(f"no dataset: task {rung.task_id} not available: {e}")
 
         try:
-            input_shape = (
-                tuple(task.input_dim)
-                if isinstance(task.input_dim, (tuple, list))
-                else (1, int(task.input_dim))
-            )
+            # For LM tasks with causal_transformer, input_dim is seq_len, so input_shape should be (seq_len,)
+            if (
+                hasattr(task, "domain_type")
+                and task.domain_type.value == "lm"
+                and rung.coordinate.geometry == "causal_transformer"
+            ):
+                input_shape = (int(task.input_dim),)
+            else:
+                input_shape = (
+                    tuple(task.input_dim)
+                    if isinstance(task.input_dim, (tuple, list))
+                    else (1, int(task.input_dim))
+                )
             assert rung.coordinate is not None
             # Add geometry.sequence for time-major tasks with recurrent geometry
             coord = rung.coordinate

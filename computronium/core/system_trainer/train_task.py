@@ -114,11 +114,15 @@ class TaskBatches:
 
     def _resolve(self) -> str:
         if self._lane is None:
-            loader = self.task.get_dataloader(self.split)  # type: ignore[arg-type]
-            first = next(iter(loader), None) if loader is not None else None
-            self._lane = (
-                "loader" if first is not None and _is_pair(first) else "get_batch"
-            )
+            # Check if task has token_lane property - prefer get_batch for token tasks
+            if getattr(self.task, "token_lane", False):
+                self._lane = "get_batch"
+            else:
+                loader = self.task.get_dataloader(self.split)  # type: ignore[arg-type]
+                first = next(iter(loader), None) if loader is not None else None
+                self._lane = (
+                    "loader" if first is not None and _is_pair(first) else "get_batch"
+                )
             if self._lane == "loader":
                 self._length = len(loader)  # type: ignore[arg-type]
                 if self.batches_per_epoch is not None:
@@ -161,7 +165,9 @@ class TaskBatches:
         if lane == "get_batch":
             for _ in range(self.batches_per_epoch or 0):
                 inputs, targets = self.task.get_batch(self.split, self.batch_size)
-                if _is_graph_data(inputs) or is_time_major:
+                # Token-lane tasks (LM) yield token indices that should not be flattened
+                is_token_lane = getattr(self.task, "token_lane", False)
+                if _is_graph_data(inputs) or is_time_major or is_token_lane:
                     yield inputs, targets
                 else:
                     yield _flatten(inputs, self.task.name), targets

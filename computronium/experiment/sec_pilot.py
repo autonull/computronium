@@ -163,7 +163,15 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         0,
         3,
         param_budget=600_000,
-        base_coordinate={"geometry": "causal_transformer"},
+        base_coordinate={
+            "geometry": "causal_transformer",
+            "geometry.vocab_size": 65,
+            "geometry.d_model": 256,
+            "geometry.n_layers": 4,
+            "geometry.n_heads": 4,
+            "geometry.seq_len": 128,
+            "geometry.patch_size": 0,
+        },
     ),
     "quantum": BaseBox(
         "quantum",
