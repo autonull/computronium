@@ -13,7 +13,6 @@ Objective: maximize claims_per_gpu_hour
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,16 +25,14 @@ except ImportError:
     optuna = None
 
 from computronium.experiment.sec_all_axes import (
-    CLAIM_SEEDS,
-    LADDER_FACTORS,
     MIN_EFFECT_SIZE_BY_FAMILY,
 )
 
 __all__ = [
     "MetaSECConfig",
     "MetaSECObjective",
-    "run_meta_sec",
     "analyze_cells_jsonl",
+    "run_meta_sec",
 ]
 
 
@@ -51,42 +48,33 @@ class MetaSECConfig:
     seed: int = 42
 
 
-def analyze_cells_jsonl(cells_path: Path) -> dict[str, Any]:
-    """Analyze cells.jsonl for meta-SEC insights.
-
-    Returns:
-        Dict with statistics: total cells, claims, refusals, avg walltime, etc.
-    """
-    if not cells_path.exists():
-        return {"error": f"File not found: {cells_path}"}
-
-    cells = []
-    with cells_path.open() as f:
-        for line in f:
-            if line.strip():
-                cells.append(json.loads(line))
-
-    if not cells:
-        return {"error": "No cells found"}
-
-    # Parse the screen format
+def _parse_cells(cells_path: Path) -> list[dict[str, Any]]:
+    """Parse cells.jsonl into a list of normalized records."""
     parsed = []
-    for c in cells:
-        screen = c.get("screen", {})
-        record = c.get("record")
-        parsed.append({
-            "axis": _extract_axis(screen.get("primitive", "")),
-            "primitive": _extract_primitive(screen.get("primitive", "")),
-            "status": screen.get("status", "unknown"),
-            "reason": screen.get("reason", ""),
-            "walltime_s": record.get("walltime_s", 0) if record else 0,
-            "val_acc": record.get("val_acc", 0) if record else 0,
-            "task_id": screen.get("box", {}).get("task_id", "unknown"),
-        })
+    with cells_path.open(encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            c = json.loads(line)
+            screen = c.get("screen", {})
+            record = c.get("record")
+            parsed.append({
+                "axis": _extract_axis(screen.get("primitive", "")),
+                "primitive": _extract_primitive(screen.get("primitive", "")),
+                "status": screen.get("status", "unknown"),
+                "reason": screen.get("reason", ""),
+                "walltime_s": record.get("walltime_s", 0) if record else 0,
+                "val_acc": record.get("val_acc", 0) if record else 0,
+                "task_id": screen.get("box", {}).get("task_id", "unknown"),
+            })
+    return parsed
 
+
+def _compute_stats(parsed: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute statistics from parsed cell records."""
     total = len(parsed)
     measured = sum(1 for c in parsed if c.get("status") == "MEASURED")
-    refused = sum(1 for c in parsed if c.get("status") in ("REFUSED", "UNAVAILABLE"))
+    refused = sum(1 for c in parsed if c.get("status") in {"REFUSED", "UNAVAILABLE"})
     defects = sum(1 for c in parsed if c.get("status") == "DEFECT")
     unavailable = sum(1 for c in parsed if c.get("status") == "UNAVAILABLE")
 
@@ -102,14 +90,17 @@ def analyze_cells_jsonl(cells_path: Path) -> dict[str, Any]:
     # Refusal reasons
     refusal_reasons = {}
     for c in parsed:
-        if c.get("status") in ("REFUSED", "UNAVAILABLE", "UNIMPLEMENTED"):
+        if c.get("status") in {"REFUSED", "UNAVAILABLE", "UNIMPLEMENTED"}:
             reason = c.get("reason", "unknown")
-            # Truncate long reasons
             reason_short = reason[:100] if len(reason) > 100 else reason
             refusal_reasons[reason_short] = refusal_reasons.get(reason_short, 0) + 1
 
     # Claims (measured cells with val_acc > chance)
-    claims = sum(1 for c in parsed if c.get("status") == "MEASURED" and c.get("val_acc", 0) > 0.15)
+    claims = sum(
+        1
+        for c in parsed
+        if c.get("status") == "MEASURED" and c.get("val_acc", 0) > 0.15
+    )
 
     return {
         "total_cells": total,
@@ -122,6 +113,22 @@ def analyze_cells_jsonl(cells_path: Path) -> dict[str, Any]:
         "by_axis_primitive": by_axis_primitive,
         "refusal_reasons": refusal_reasons,
     }
+
+
+def analyze_cells_jsonl(cells_path: Path) -> dict[str, Any]:
+    """Analyze cells.jsonl for meta-SEC insights.
+
+    Returns:
+        Dict with statistics: total cells, claims, refusals, avg walltime, etc.
+    """
+    if not cells_path.exists():
+        return {"error": f"File not found: {cells_path}"}
+
+    parsed = _parse_cells(cells_path)
+    if not parsed:
+        return {"error": "No cells found"}
+
+    return _compute_stats(parsed)
 
 
 def _extract_axis(primitive_str: str) -> str:
@@ -191,8 +198,10 @@ class MetaSECObjective:
         """Sample log-spaced ladder factors."""
         log_min = trial.suggest_float("ladder_log_min", -3.0, -1.0)
         log_max = trial.suggest_float("ladder_log_max", 0.0, 2.0)
-        return [10 ** (log_min + i * (log_max - log_min) / (n_points - 1))
-                for i in range(n_points)]
+        return [
+            10 ** (log_min + i * (log_max - log_min) / (n_points - 1))
+            for i in range(n_points)
+        ]
 
     def _simulate_sec_run(
         self,
@@ -218,7 +227,9 @@ class MetaSECObjective:
         ladder_cells = n_primitives * n_tasks * len(ladder_factors)
 
         # Rung 2 cost: viable_primitives * n_tasks * claim_seeds * 2 arms
-        viable_rate = baseline.get("measured", 1) / max(baseline.get("total_cells", 1), 1)
+        viable_rate = baseline.get("measured", 1) / max(
+            baseline.get("total_cells", 1), 1
+        )
         rung2_cells = int(n_primitives * viable_rate * n_tasks * claim_seeds * 2)
 
         # Fidelity multiplier
