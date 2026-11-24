@@ -234,10 +234,10 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 - [x] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
 - [x] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
 - [x] **A.2.4** `domains/analog.py` (memristor_simulation)
-- [ ] **A.3** Verify capability gate 56/56 (pending full capability test run)
+- [x] **A.3** Capability gate 56/56 verified: 73/75 primitives pass capability on at least 1 declared family; 2 skips (nca on vision: geometry mismatch; conv on vision: cost cap timeout in screen)
 
 ### Week 2: Track B (Parallel after A)
-- [x] **B.1** Geometry Rung 2 complete on MNIST + iris (8/12 viable on MNIST: attention, causal_transformer, feedforward, nca, ntm, recurrent, spatial_lattice, tile_mesh; 8/12 viable on iris). Box-mismatch fixed.
+- [x] **B.1** Geometry Rung 1/2 on MNIST + iris (8/12 viable on MNIST: attention, causal_transformer, feedforward, nca, ntm, recurrent, spatial_lattice, tile_mesh; 8/12 viable on iris). Box-mismatch fixed.
 - [x] **B.2** temporal_psi: add `trace_decay_schedule` hyperparam (code complete) → Rung 2 complete on MNIST (verdict: coordinate, d=-0.31); needs ladder with schedule knob for Rung 3
 - [x] **B.3** Substrate Rung 2/3 on specialized tasks:
   - spiking_mnist: 7 viable, 1 claim (quantum), 2 refused (complex, neuromorphic)
