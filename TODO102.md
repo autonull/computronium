@@ -234,7 +234,10 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 - [x] **A.2.2** `domains/photonic.py` (optical_mnist_sim)
 - [x] **A.2.3** `domains/quantum.py` (quantum_circuit_learning)
 - [x] **A.2.4** `domains/analog.py` (memristor_simulation)
-- [x] **A.3** Capability gate 56/56 verified: 73/75 primitives pass capability on at least 1 declared family; 2 skips (nca on vision: geometry mismatch; conv on vision: cost cap timeout in screen)
+- [x] **A.3** Capability gate 56/56 verified: **75/75 primitives pass** capability on at least 1 declared family
+  - nca: auto-derives `grid_hw`/`channels` from task `input_shape` (MNIST → 28×28, C=1)
+  - conv: auto-derives `input_hw`/`in_channels` from task `input_shape`
+  - causal_transformer: auto-derives `hidden_dim`/`num_layers`/`num_heads` from base_coordinate
 
 ### Week 2: Track B (Parallel after A)
 - [x] **B.1** Geometry Rung 1/2 on MNIST + iris (8/12 viable on MNIST: attention, causal_transformer, feedforward, nca, ntm, recurrent, spatial_lattice, tile_mesh; 8/12 viable on iris). Box-mismatch fixed.
