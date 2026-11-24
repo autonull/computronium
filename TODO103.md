@@ -82,9 +82,11 @@
 - [x] **3.4** Test: Run capability gate with fallback path — verified (conv, nca, causal_transformer pass)
 
 ### Phase 4: Rung 3 Claims (Competitive Evidence)
-- [x] **4.1** Geometry: Run Rung 3 (paired n=5) on 8 viable MNIST primitives + 8 iris primitives
+- [x] **4.1** Geometry: Run Rung 3 (paired n=5) on 8 viable MNIST primitives + 4 iris primitives
   - ✅ MNIST: feedforward, nca, gradient, pepita, euclidean, adam, lion, muon (4 credit, 2 geometry, 2 update)
   - ✅ Iris: adam, euclidean, lion, muon (4 update) - muon claims d>0.8
+  - ✅ MNIST additional: local_goodness, random_projections (claim)
+  - ⏭️ Skipped: forward_tangent (too slow, estimator_samples), thermodynamic_contrast (void constraint)
 - [ ] **4.2** Plasticity: temporal_psi Rung 2 ladder with `trace_decay_schedule` knob → Rung 3
 - [ ] **4.3** Substrate: Rung 3 on specialized tasks (spiking_mnist, optical_mnist_sim)
 - [ ] **4.4** Auto-register claims: Script reads best ladder point → writes `configs/preregistrations/sec_*.json`
@@ -176,7 +178,7 @@
 - [ ] 3.4 Test fallback path
 
 ### Phase 4: Rung 3 Claims
-- [x] 4.1 Geometry Rung 3: 8 MNIST + 4 iris (muon on iris claims d>0.8)
+- [x] 4.1 Geometry Rung 3: 8 MNIST + 4 iris (muon on iris claims d>0.8) + local_goodness, random_projections (claim)
 - [ ] 4.2 temporal_psi Rung 3 with schedule knob
 - [ ] 4.3 Substrate Rung 3 on specialized tasks
 - [ ] 4.4 Auto-register claims script

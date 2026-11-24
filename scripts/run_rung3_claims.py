@@ -355,9 +355,16 @@ async def main():
                 "reason": str(e),
             })
     
-    # Save summary
+    # Save summary (append to existing)
     summary_file = args.out / f"rung3_summary_{args.task}.json"
-    summary_file.write_text(json.dumps(results, indent=2, default=str))
+    existing_results = []
+    if summary_file.exists():
+        try:
+            existing_results = json.loads(summary_file.read_text())
+        except Exception:
+            pass
+    all_results = existing_results + results
+    summary_file.write_text(json.dumps(all_results, indent=2, default=str))
     print(f"\nSummary saved to {summary_file}")
     
     # Print summary
