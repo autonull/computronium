@@ -51,11 +51,11 @@ def _now_resolver(fmt: str) -> str:
 def _register_resolvers() -> None:
     """Register OmegaConf custom resolvers. Safe to call multiple times.
 
-    Uses ``register_resolver`` with ``replace=True``, so a module import that
-    happens twice re-registers the same resolver instead of raising.
+    Uses ``register_resolver`` without ``replace`` (deprecated in 2.3+),
+    catching the deprecation warning and any conflicts.
     """
     try:
-        OmegaConf.register_resolver("now", _now_resolver, replace=True)
+        OmegaConf.register_resolver("now", _now_resolver)
     except Exception:  # broad: best-effort
         logger.exception("Failed to register OmegaConf resolver 'now'")
 

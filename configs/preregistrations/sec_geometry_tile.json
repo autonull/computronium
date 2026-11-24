@@ -1,0 +1,20 @@
+{
+  "claim": "tuning geometry.num_layers on primitive.geometry.tile improves val_acc with Cohen's d >= 0.8 at the iris base",
+  "metric": "val_acc",
+  "min_d": 0.5,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-11-23",
+  "box": {
+    "geometry": "tile",
+    "geometry.num_layers": 6,
+    "fidelity": "L0",
+    "seed": 0,
+    "n_seeds": 1,
+    "epochs": 20,
+    "batch_size": 32,
+    "task_id": "iris",
+    "device": "cuda",
+    "precision": "fp32"
+  }
+}

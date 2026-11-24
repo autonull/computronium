@@ -12,8 +12,6 @@ from computronium.experiment.legality.classify import (
 
 # Rules to ADD (high refusal rate)
 ADD_RULES = [
-    ("credit", "gradient", "geometry", "feedforward", DefectClass.VOID_CREDIT_GEOMETRY, VoidReason.INCOMPATIBLE_CREDIT_GEOMETRY),  # refused_rate=0.51, measured=78
-    ("credit", "gradient", "update", "euclidean", DefectClass.VOID_UNCLASSIFIED, VoidReason.INCOMPATIBLE_UNCLASSIFIED),  # refused_rate=0.59, measured=52
 ]
 
 # Rules to REMOVE (all viable, no refusals)

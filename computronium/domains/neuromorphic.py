@@ -172,10 +172,10 @@ class DVSGesturesTask(DomainTask):
         # DVS Gestures is not in torchvision; use synthetic fallback for quick_mode
         # In production, this would download from the original source
         if self.quick_mode:
-            # Synthetic data: 11 classes, 128x128 spatial, time_bins temporal
-            num_train = 1000
-            num_val = 200
-            c, h, w = 2, 128, 128  # DVS has 2 polarity channels
+            # Synthetic data: 11 classes, 32x32 spatial, time_bins temporal (smaller for quick_mode)
+            num_train = 500
+            num_val = 100
+            c, h, w = 2, 32, 32  # DVS has 2 polarity channels, reduced for quick_mode
             train_x = torch.randn(num_train, self.time_bins, c, h, w)
             train_y = torch.randint(0, 11, (num_train,))
             val_x = torch.randn(num_val, self.time_bins, c, h, w)
@@ -200,7 +200,7 @@ class DVSGesturesTask(DomainTask):
             val_ds, batch_size=batch_size, shuffle=False, num_workers=self.num_workers
         )
         self._test_loader = self._val_loader
-        self._input_dim = (self.time_bins, 2, 128, 128)  # (T, C, H, W)
+        self._input_dim = (self.time_bins, 2, 32, 32)  # (T, C, H, W) - reduced for quick_mode
         self._output_dim = 11
         self._setup_done = True
 
