@@ -126,8 +126,10 @@ def _rung_for(
         return Rung(task_id="", reason=f"no declared base box for {family}")
     task_id = base.task_id
     row = rows.get((spec.id, task_id))
-    if row is not None and row.get("status") != "measured":
+    if row is not None and row.get("status") in {"unavailable", "unimplemented"}:
         return Rung(task_id, reason=_row_reason(row))
+    # For refused/defective rows, don't skip - try legal rebuild
+    # (refusal/defect may be from stale params or cost cap, not geometry mismatch)
     seed = CAPABILITY_SEED
     if row is None:
         coordinate = _fallback_coordinate(spec, task_id)

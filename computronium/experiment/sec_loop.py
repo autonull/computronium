@@ -810,7 +810,7 @@ def _axis_values(field: str) -> list[str]:
 
 
 def _params_for(
-    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None
+    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None, shape: TaskShape | None = None
 ) -> dict[str, Any]:
     """Structural hyperparameters a coordinate needs for the given axes.
 
@@ -841,7 +841,6 @@ def _params_for(
     if geometry in {
         "feedforward",
         "recurrent",
-        "conv",
         "graph",
         "causal_transformer",
         "attention",
@@ -852,8 +851,23 @@ def _params_for(
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
     elif geometry == "nca":
-        params["geometry.grid_hw"] = (28, 28)
-        params["geometry.channels"] = 1
+        # Auto-derive grid_hw and channels from task's input_shape if available
+        if shape is not None and shape.input_shape is not None:
+            input_shape = shape.input_shape
+            if len(input_shape) >= 2:
+                # input_shape is (C, H, W) or (H, W)
+                if len(input_shape) == 3:
+                    c, h, w = input_shape
+                else:
+                    c, h, w = 1, input_shape[0], input_shape[1]
+                params.setdefault("geometry.grid_hw", (h, w))
+                params.setdefault("geometry.channels", c)
+            else:
+                params.setdefault("geometry.grid_hw", (28, 28))
+                params.setdefault("geometry.channels", 1)
+        else:
+            params.setdefault("geometry.grid_hw", (28, 28))
+            params.setdefault("geometry.channels", 1)
     elif geometry == "spatial_lattice":
         params["geometry.lattice_dims"] = (8, 8)
     elif geometry == "routing":
@@ -865,6 +879,23 @@ def _params_for(
         # The graph topology also needs its connectivity; it is not a
         # feedforward width, so the first branch cannot carry it.
         params["geometry.edge_index"] = [[0, 1], [1, 0]]
+    elif geometry == "conv":
+        # Auto-derive input_hw and in_channels from task's input_shape if available
+        if shape is not None and shape.input_shape is not None:
+            input_shape = shape.input_shape
+            if len(input_shape) >= 2:
+                if len(input_shape) == 3:
+                    c, h, w = input_shape
+                else:
+                    c, h, w = 1, input_shape[0], input_shape[1]
+                params.setdefault("geometry.input_hw", (h, w))
+                params.setdefault("geometry.in_channels", c)
+            else:
+                params.setdefault("geometry.input_hw", (28, 28))
+                params.setdefault("geometry.in_channels", 1)
+        else:
+            params.setdefault("geometry.input_hw", (28, 28))
+            params.setdefault("geometry.in_channels", 1)
 
     dynamics = axes["dynamics"]
     if dynamics in {
@@ -943,7 +974,7 @@ def _own_knob_overrides(
 
 
 def _coordinate(
-    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None
+    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None, shape: TaskShape | None = None
 ) -> Coordinate:
     return Coordinate(
         substrate=axes["substrate"],
@@ -952,7 +983,7 @@ def _coordinate(
         plasticity=axes["plasticity"],
         credit=axes["credit"],
         update=axes["update"],
-        params=_params_for(axes, own_knobs=own_knobs, task_id=task_id),
+        params=_params_for(axes, own_knobs=own_knobs, task_id=task_id, shape=shape),
     )
 
 
@@ -1087,7 +1118,7 @@ def _iter_legal_coordinates(
     own = axis if own_knobs else None
 
     def emit(axes: dict[str, str]) -> Coordinate | None:
-        coord = _coordinate(axes, own_knobs=own, task_id=task_id)
+        coord = _coordinate(axes, own_knobs=own, task_id=task_id, shape=shape)
         ok, _ = _is_legal(coord, task_id, shape)
         return coord if ok else None
 

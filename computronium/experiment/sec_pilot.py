@@ -99,7 +99,9 @@ class BaseBox:
 #: fallback. ``base_coordinate`` is the one source of the family's axes: a
 #: screen, a calibration and the P3 slice all compose from it.
 BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
-    "vision": BaseBox("vision", "mnist", 32, 375, 1),
+    "vision": BaseBox("vision", "mnist", 32, 375, 1, base_coordinate={
+        "geometry": "feedforward",
+    }),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
     "graph": BaseBox(
         "graph",
