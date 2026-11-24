@@ -117,7 +117,13 @@
 - [x] **6.3** Run `learn_void_rules.py` on full dataset → `configs/void_rules_learned.py`
   - 20 ADD rules (e.g., neuromorphic substrate void constraints)
   - 20+ REMOVE rules (e.g., spectral_constrained update no longer void)
-- [ ] **6.4** Full SEC competitive run with learned void rules + meta-SEC params
+- [~] **6.4** Full SEC competitive run with learned void rules + meta-SEC params
+  - ✅ Learned void rules applied (20 ADD, 20+ REMOVE rules registered)
+  - ✅ Meta-SEC best params loaded and validated (4 ladder points, log-spaced -1.1 to 1.5, 3 claim seeds, L0_L2 fidelity, semaphore=8)
+  - ✅ Family-specific min_d configured (vision=1.09, tabular=0.55, neuromorphic=0.55, etc.)
+  - ✅ Test runs confirm Rung 1 (L0) completes in ~0.3-1s per cell
+  - ⏳ Full competitive run across all 6 axes pending (long-running GPU job)
+  - 📋 Script ready: `scripts/run_full_sec_competitive.py`
 
 ---
 
@@ -201,5 +207,5 @@
 - [x] 6.1 Meta-SEC 5 trials (1388 cells)
 - [x] 6.2 Apply best params (meta_sec_best.json)
 - [x] 6.3 Learned void rules (void_rules_learned.py)
-- [ ] 6.4 Full competitive run
+- [~] 6.4 Full competitive run (setup complete, ready for background execution)
 ```
