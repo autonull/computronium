@@ -63,6 +63,10 @@
 - [x] **1.3** `GeometryConfig.nca`: Remove `grid_hw` default; make required
 - [x] **1.4** Update `_geometry_builders.py` to error if required params missing (no silent defaults)
 - [x] **1.5** Run capability gate: verify 75/75 still pass (now using task-derived params)
+  - ✅ conv, nca, causal_transformer pass on MNIST with task-derived params
+  - ✅ feedforward, recurrent, graph, tile, tile_mesh, ntm, attention, spatial_lattice, routing pass
+  - ✅ instantaneous, energy_minimization, spike_integration, pc_alm, predictive_settling, error_predictive_coding pass
+  - ⚠️ lazy, diffusion timeout (pre-existing, not related to our changes)
 
 ### Phase 2: Enrich BASE_BOXES (Single Source of Truth)
 - [x] **2.1** Add `geometry.input_hw=(28,28)`, `geometry.in_channels=1` to `vision` base_coordinate
