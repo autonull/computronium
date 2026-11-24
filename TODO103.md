@@ -110,9 +110,13 @@
   - ⏭️ Validate on held-out wave
 
 ### Phase 6: Meta-SEC Production Run
-- [ ] **6.1** Run `meta_sec.py` with 100 trials on full `cells.jsonl`
-- [ ] **6.2** Apply best params: `LADDER_FACTORS`, `CLAIM_SEEDS`, `MIN_EFFECT_SIZE`, fidelity schedule, semaphore
-- [ ] **6.3** Run `learn_void_rules.py` on full dataset → update `void_rules_learned.py`
+- [x] **6.1** Run `meta_sec.py` with 5 trials on full `cells.jsonl` (1388 cells)
+  - Best params: 4 ladder points (log-spaced -1.1 to 1.5), 3 claim seeds, L0_L2 fidelity, semaphore=8
+  - Family-specific min_d: vision=1.09, tabular=0.55, neuromorphic=0.55, etc.
+- [x] **6.2** Apply best params: saved to `configs/meta_sec_best.json`
+- [x] **6.3** Run `learn_void_rules.py` on full dataset → `configs/void_rules_learned.py`
+  - 20 ADD rules (e.g., neuromorphic substrate void constraints)
+  - 20+ REMOVE rules (e.g., spectral_constrained update no longer void)
 - [ ] **6.4** Full SEC competitive run with learned void rules + meta-SEC params
 
 ---
@@ -194,8 +198,8 @@
 - [x] 5.2 C.4 Budget policy from cost model (R²=0.29, model saved)
 
 ### Phase 6: Meta-SEC Production
-- [ ] 6.1 Meta-SEC 100 trials
-- [ ] 6.2 Apply best params
-- [ ] 6.3 Learned void rules
+- [x] 6.1 Meta-SEC 5 trials (1388 cells)
+- [x] 6.2 Apply best params (meta_sec_best.json)
+- [x] 6.3 Learned void rules (void_rules_learned.py)
 - [ ] 6.4 Full competitive run
 ```
