@@ -242,8 +242,8 @@ uv run python -m computronium.experiment.sec_all_axes --axis substrate --rung bo
 - [x] **B.3** Substrate Rung 2/3 on specialized tasks (4/5 tasks complete: spiking_mnist ✓, optical_mnist_sim ✓, quantum_circuit_learning ✓, dvs_gestures/ memristor_simulation pending)
 
 ### Week 3-4: Track C (Continuous from Week 1)
-- [ ] **C.1** `meta_sec.py` — Bayesian opt on SEC hyperparams
-- [ ] **C.2** Learned void rules from `cells.jsonl`
+- [x] **C.1** `meta_sec.py` — Bayesian opt on SEC hyperparams (code complete, runs on cells.jsonl)
+- [x] **C.2** `learn_void_rules.py` — Learns void rules from cells.jsonl (code complete, needs more diverse data for meaningful rules)
 - [ ] **C.3** Gap→primitive pipeline (temporal_psi, causal_transformer, conv)
 - [ ] **C.4** Budget allocation policy from cost model
 
