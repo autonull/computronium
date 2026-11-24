@@ -155,8 +155,10 @@ async def run_deep_dive_on_primitive(
     
     knob_key, knob_default = knob_info
     
-    # Build the base coordinate for this task
-    axes = {
+    # Use the family's base coordinate (from BASE_BOXES)
+    base_axes = base.base_coordinate.copy() if base.base_coordinate else {}
+    # Ensure all required axes are present
+    default_axes = {
         "substrate": "digital",
         "geometry": "feedforward",
         "dynamics": "instantaneous",
@@ -164,15 +166,20 @@ async def run_deep_dive_on_primitive(
         "credit": "gradient",
         "update": "euclidean",
     }
-    axes[axis] = level
+    # Merge: family's base coordinate overrides defaults
+    for k, v in default_axes.items():
+        if k not in base_axes:
+            base_axes[k] = v
+    # Override the axis under test
+    base_axes[axis] = level
     
     # Get the base schedule
     schedule = base_schedule(task_id, device)
     if schedule is None:
         raise ValueError(f"No schedule for task {task_id}")
     
-    # Build the coordinate with the base axes
-    base_coord = _coordinate(axes)
+    # Build the coordinate with the family's base axes
+    base_coord = _coordinate(base_axes)
     
     # Get the box summary for the base coordinate
     base_box = _box_summary(base_coord, schedule)
@@ -313,7 +320,7 @@ async def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Run Rung 3 claims on specific primitives")
-    parser.add_argument("--task", choices=["mnist", "iris"], required=True, help="Task to run on")
+    parser.add_argument("--task", required=True, help="Task to run on (e.g., mnist, iris, spiking_mnist, optical_mnist, memristor_simulation)")
     parser.add_argument("--device", default="cuda", help="Device to use")
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument("--registration", type=Path, help="Pre-registration file")
@@ -322,10 +329,15 @@ async def main():
     
     args.out.mkdir(parents=True, exist_ok=True)
     
-    if args.task == "mnist":
-        primitives = args.primitives or MNIST_PRIMITIVES
+    if args.primitives:
+        primitives = args.primitives
+    elif args.task == "mnist":
+        primitives = MNIST_PRIMITIVES
+    elif args.task == "iris":
+        primitives = IRIS_PRIMITIVES
     else:
-        primitives = args.primitives or IRIS_PRIMITIVES
+        # For other tasks, use the primitives passed via --primitives
+        primitives = []
     
     print(f"Running Rung 3 claims on {len(primitives)} primitives for {args.task}")
     print(f"Primitives: {primitives}")

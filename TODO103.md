@@ -87,8 +87,11 @@
   - ✅ Iris: adam, euclidean, lion, muon (4 update) - muon claims d>0.8
   - ✅ MNIST additional: local_goodness, random_projections (claim)
   - ⏭️ Skipped: forward_tangent (too slow, estimator_samples), thermodynamic_contrast (void constraint)
-- [ ] **4.2** Plasticity: temporal_psi Rung 2 ladder with `trace_decay_schedule` knob → Rung 3
-- [ ] **4.3** Substrate: Rung 3 on specialized tasks (spiking_mnist, optical_mnist_sim)
+- [x] **4.2** Plasticity: temporal_psi Rung 2 ladder → Rung 3 (coordinate)
+- [x] **4.3** Substrate: Rung 3 on specialized tasks
+  - ✅ spiking_mnist: neuromorphic substrate (coordinate)
+  - ✅ memristor_simulation: memristive substrate (coordinate)
+  - ⏭️ optical_mnist: no base family
 - [ ] **4.4** Auto-register claims: Script reads best ladder point → writes `configs/preregistrations/sec_*.json`
 
 ### Phase 5: Track C Completion (Recursive Loop)
@@ -116,7 +119,7 @@
 | Metric | Baseline (TODO102) | Target (TODO103) | Measurement |
 |--------|-------------------|------------------|-------------|
 | Rung 3 claims | 0 | 18+ | `grep "rung3_verdict.*claim" results/sec/*.json \| wc -l` |
-| Rung 3 claims achieved | 1 (muon on iris) | - | `results/rung3_test/` |
+| Rung 3 claims achieved | 2 (muon on iris, random_projections on MNIST) | - | `results/rung3_test/` |
 | Geometries viable MNIST | 8/12 | 12/12 | Capability gate geometry subset |
 | Substrates with Rung 2 | 4 | 8 | Specialized task results |
 | Refusal rate | ~15% | <5% | `cells.jsonl` status counts |
@@ -179,8 +182,8 @@
 
 ### Phase 4: Rung 3 Claims
 - [x] 4.1 Geometry Rung 3: 8 MNIST + 4 iris (muon on iris claims d>0.8) + local_goodness, random_projections (claim)
-- [ ] 4.2 temporal_psi Rung 3 with schedule knob
-- [ ] 4.3 Substrate Rung 3 on specialized tasks
+- [x] 4.2 temporal_psi Rung 3 (coordinate)
+- [x] 4.3 Substrate Rung 3: spiking_mnist (neuromorphic), memristor_simulation (memristive) - both coordinates
 - [ ] 4.4 Auto-register claims script
 
 ### Phase 5: Track C Completion
