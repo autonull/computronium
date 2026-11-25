@@ -18,7 +18,6 @@ import pytest
 from computronium.experiment.sec_deep_dive import (
     CLAIM_SEEDS,
     LADDER_FACTORS,
-    MARGIN,
     DeepDiveCandidate,
     LadderRung,
     best_rung,
@@ -177,8 +176,12 @@ def test_the_registration_is_written_before_the_first_seed(tmp_path: Path) -> No
     assert candidate is not None
     path = tmp_path / "sec_deep_dive.json"
     registration = preregister(_map(), schedule, path)
+    from computronium.validation.preregistration import MIN_EFFECT_SIZE_BY_FAMILY
+
     assert registration.min_seeds == CLAIM_SEEDS == 5
-    assert registration.threshold == pytest.approx(MARGIN)
+    # The registration carries the family's declared Cohen's d minimum (A25),
+    # not a raw accuracy margin: the verdict compares a CI on d.
+    assert registration.min_d == pytest.approx(MIN_EFFECT_SIZE_BY_FAMILY["vision"])
     assert registration.box
     assert path.exists()
     assert load_registration(path, candidate_box(candidate, 1.0, schedule)) == (
@@ -266,8 +269,10 @@ def test_the_claim_reads_the_registered_margin_and_box() -> None:
     )
     box = candidate_box(candidate, 1.0, schedule)
     registration = claim_registration(candidate, schedule)
+    # mean_diff/sd_diff = dz: ci_lower 0.05 at sd 0.05 is a d lower bound of
+    # 1.0, above the vision minimum 0.8 (A22 compares d, not raw units).
     clear = PairedComparison(
-        n=5, mean_diff=0.05, ci_lower=0.03, ci_upper=0.07, p_value=0.01, cohens_dz=1.0
+        n=5, mean_diff=0.05, ci_lower=0.05, ci_upper=0.07, p_value=0.01, cohens_dz=1.0
     )
     assert claim_verdict(clear, registration, box) == "claim"
     inside = replace(clear, mean_diff=0.005, ci_lower=0.0, ci_upper=0.01)

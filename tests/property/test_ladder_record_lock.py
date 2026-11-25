@@ -376,10 +376,11 @@ def test_the_ladder_sweeps_the_primitive_own_axis(spec_id: str) -> None:
 def test_a_ladder_point_the_declared_space_refuses_is_not_trained() -> None:
     """A point the planner would never propose is refused, never trained.
 
-    Measured 2026-11-20: ``tile`` + gradient credit + instantaneous dynamics
-    is refused by ``nonlayered_instantaneous_gradient_credit``, but the ladder
-    trained it and published a false ``tuned`` coordinate; the S9 claim then
-    refused the same box before its first cell.
+    Measured 2026-11-20: a refused box was trained by the ladder and published
+    a false ``tuned`` coordinate; the S9 claim then refused the same box before
+    its first cell. The fixture uses the live declared-space rule: a graph
+    topology on a 4-feature table cannot read the task's input shape (the
+    earlier ``nonlayered_instantaneous_gradient_credit`` row no longer exists).
     """
     from computronium.experiment.sec_ladder import run_ladder
     from computronium.experiment.sec_pilot import base_schedule
@@ -395,23 +396,21 @@ def test_a_ladder_point_the_declared_space_refuses_is_not_trained() -> None:
         "ruler": "val_acc on iris (chance 0.333)",
         "box": {
             "substrate": "digital",
-            "geometry": "tile",
+            "geometry": "graph",
             "dynamics": "instantaneous",
             "plasticity": "null",
             "credit": "gradient",
             "update": "euclidean",
             "credit.lr": 0.01,
-            "geometry.neurons_per_tile": 8,
-            "geometry.tiles_per_layer": 2,
         },
     }
     record = run_ladder(
-        "primitive.geometry.tile", row, 1.0 / 3.0, evaluate=boom, schedule=schedule
+        "primitive.geometry.graph", row, 1.0 / 3.0, evaluate=boom, schedule=schedule
     )
     assert record.rungs
     assert all(rung.status == "refused" for rung in record.rungs)
     assert all(
-        rung.reason and "nonlayered_instantaneous_gradient_credit" in rung.reason
+        rung.reason and "cannot read iris's input shape" in rung.reason
         for rung in record.rungs
     )
     assert record.verdict == "unimplemented"

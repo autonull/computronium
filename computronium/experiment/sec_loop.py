@@ -846,6 +846,12 @@ def _apply_task_spatial(
         case "nca":
             params["geometry.grid_hw"] = extent
             params["geometry.channels"] = channels
+        case "spatial_lattice":
+            # The extent is (depth, height, width); a 2-D task declares none.
+            if shape is not None and len(shape.input_shape) >= 3:
+                params["geometry.lattice_dims"] = tuple(
+                    int(v) for v in shape.input_shape[-3:]
+                )
     return params
 
 
@@ -896,12 +902,6 @@ def _params_for(
     elif geometry in {"tile", "tile_mesh"}:
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
-    elif geometry == "spatial_lattice":
-        # A lattice extent is a task fact, never a literal (TODO104 B5): the
-        # builder refuses a cell that declares none.
-        if shape is not None and len(shape.input_shape) >= 3:
-            depth, height, width = (*shape.input_shape[-3:], 1)[:3]
-            params["geometry.lattice_dims"] = (depth, height, width)
     elif geometry == "routing":
         params["geometry.hidden_dim"] = P0_HIDDEN_DIM
         params["geometry.depth"] = 2
@@ -1039,13 +1039,6 @@ def screen_coordinate(
         axes[axis] = level
     if task_id is None and isinstance(box.get("task"), str):
         task_id = box["task"]
-    if shape is None and task_id is not None:
-        from computronium.experiment.kernel.evaluate import task_shape
-
-        try:
-            shape = task_shape(task_id, "cpu")
-        except Exception:  # ruff: ignore[blind-except] - a shape-less task has no facts
-            shape = None
     params = box_params(box)
     if not params:
         # Fallback: include base_coordinate spatial params from the task's family
@@ -1073,7 +1066,7 @@ def screen_coordinate(
         plasticity=axes["plasticity"],
         credit=axes["credit"],
         update=axes["update"],
-        params=_apply_task_spatial(params, axes["geometry"], shape),
+        params=params,
     )
 
 

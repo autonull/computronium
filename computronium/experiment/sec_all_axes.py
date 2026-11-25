@@ -665,6 +665,17 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
             for field, value in box.items()
             if not field.startswith(prefix) or field[len(prefix) :] in accepted
         }
+    # The task's pixel grid is a box fact (TODO104 A28/A31): the family base
+    # box describes its own task, so a usps cell must leave at 16x16 and a
+    # lattice must carry the extent its 3-D shape declares.
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.sec_loop import _apply_task_spatial
+
+    try:
+        shape = task_shape(task_id, "cpu")
+    except Exception:  # ruff: ignore[blind-except] - a shape-less task keeps its box
+        shape = None
+    _apply_task_spatial(box, box.get("geometry", "feedforward"), shape)
     return box
 
 

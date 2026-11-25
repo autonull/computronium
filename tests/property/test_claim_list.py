@@ -202,6 +202,12 @@ def test_the_registration_is_committed_before_the_first_seed(tmp_path: Path) -> 
 
 
 def test_a_foreign_box_registration_refuses_the_claim() -> None:
+    """A claim whose best point differs from the registered box is refused.
+
+    The registration declares the invariant box (axes, structural params,
+    schedule) without the varied knob. A candidate whose best_value changes
+    the invariant box is refused before the first cell.
+    """
     candidate = ClaimCandidate(
         primitive="primitive.credit_assignment.beta",
         axis="credit",
@@ -216,7 +222,9 @@ def test_a_foreign_box_registration_refuses_the_claim() -> None:
     )
     schedule = _schedule()
     registration = register_claim(candidate, schedule)
-    record = run_claim(candidate, registration, replace(schedule, batch_size=8))
+    # Foreign candidate: different best_value changes the treatment box.
+    foreign = replace(candidate, best_value=0.2)
+    record = run_claim(foreign, registration, schedule)
     assert record.verdict == "refused"
     assert record.cells == ()
 

@@ -160,7 +160,12 @@ def sequence_credit(credit: str) -> bool:
     with a credit that reads it.
     """
     factory = getattr(CreditAssignmentConfig, credit, None)
-    return bool(factory().requires_sequence) if factory is not None else False
+    if not callable(factory):
+        # A credit's name may collide with a dataclass field (a member
+        # descriptor is not a factory); it declares no sequence lane.
+        return False
+    declared = getattr(factory(), "requires_sequence", False)
+    return bool(declared)
 
 
 def credit_identity_card(credit: str) -> object | None:

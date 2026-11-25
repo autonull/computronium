@@ -136,7 +136,7 @@ def test_a_cuda_fault_stops_the_screen(
     monkeypatch.setattr(sec_loop, "evaluate_cell", fault)
 
     with pytest.raises(sec_loop.CudaContextError):
-        sec_loop._train_nearest([coordinate], schedule)
+        sec_loop._train_nearest([coordinate], schedule, 60.0)
 
 
 def test_an_ordinary_failure_is_one_box_not_the_screen(
@@ -155,7 +155,7 @@ def test_an_ordinary_failure_is_one_box_not_the_screen(
     monkeypatch.setattr(sec_loop, "evaluate_cell", fail)
 
     evaluation, coord, last_error, tried, timed_out = sec_loop._train_nearest(
-        [coordinate], schedule
+        [coordinate], schedule, 60.0
     )
 
     assert (evaluation, coord, timed_out) == (None, None, False)

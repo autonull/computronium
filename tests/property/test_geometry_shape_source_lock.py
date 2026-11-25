@@ -106,14 +106,25 @@ def test_params_for_reads_the_tasks_extent() -> None:
 
 
 def test_screen_coordinate_reads_its_box_task_extent() -> None:
-    """The SEC path builds the box and screens it without a shape argument."""
+    """The box builder carries the task's grid; the screen reads it back."""
     from computronium.experiment.sec_all_axes import _build_axis_box
     from computronium.experiment.sec_loop import screen_coordinate
 
     box = _build_axis_box("geometry", "conv", "usps")
+    assert box["geometry.input_hw"] == (16, 16)
+
     coord = screen_coordinate(box, "geometry", "conv")
     assert coord.params["geometry.input_hw"] == (16, 16)
     assert coord.params["geometry.in_channels"] == 1
+
+
+def test_a_lattice_box_carries_its_task_extent() -> None:
+    """A lattice's (depth, height, width) is the 3-D task shape, not a literal."""
+    from computronium.experiment.sec_all_axes import _build_axis_box
+
+    box = _build_axis_box("geometry", "spatial_lattice", "mnist")
+
+    assert box["geometry.lattice_dims"] == (1, 28, 28)
 
 
 def test_a_graph_cell_is_legal_on_a_graph_task() -> None:
