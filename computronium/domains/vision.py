@@ -448,16 +448,11 @@ class SplitMNIST(DomainTask):
             loaders.append(self.get_dataloader(split))
         return loaders
 
-    def evaluate(
-        self,
-        model: nn.Module,
-        split: TaskSplit = TaskSplit.VAL,
-        max_batches: int | None = None,
-    ) -> Metrics:
-        """Evaluate on the current task."""
-        if self.task_id is None:
-            raise ValueError("task_id must be set before evaluation")
-        return super().evaluate(model, split, max_batches)
+    # The ruler is the vision task's: this class supplies the loader (the
+    # current split's samples), the loss and the device, so delegating to
+    # ``DomainTask.evaluate`` — a documented empty body — returned None and
+    # every continual cell measured a non-finite metric (TODO104 A16).
+    evaluate = VisionTask.evaluate
 
     def evaluate_all_tasks(
         self, model: nn.Module, split: TaskSplit = TaskSplit.TEST
@@ -614,16 +609,11 @@ class PermutedMNIST(DomainTask):
             loaders.append(self.get_dataloader(split))
         return loaders
 
-    def evaluate(
-        self,
-        model: nn.Module,
-        split: TaskSplit = TaskSplit.VAL,
-        max_batches: int | None = None,
-    ) -> Metrics:
-        """Evaluate on the current task."""
-        if self.task_id is None:
-            raise ValueError("task_id must be set before evaluation")
-        return super().evaluate(model, split, max_batches)
+    # The ruler is the vision task's: this class supplies the loader (the
+    # current split's samples), the loss and the device, so delegating to
+    # ``DomainTask.evaluate`` — a documented empty body — returned None and
+    # every continual cell measured a non-finite metric (TODO104 A16).
+    evaluate = VisionTask.evaluate
 
     def evaluate_all_tasks(
         self, model: nn.Module, split: TaskSplit = TaskSplit.TEST

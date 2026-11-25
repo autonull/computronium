@@ -92,3 +92,26 @@ def test_conv_reads_the_deterministic_pool() -> None:
     source = _geometry_source()
     assert "adaptive_avg_pool2d(x, self.config.pool_hw)" not in source
     assert source.count("_pool_to(x, self.config.pool_hw)") == 2
+
+
+def test_every_geometry_backend_builds() -> None:
+    """The registry's conv entry builds a geometry, not the pool helper.
+
+    A helper inserted between a ``@geometry_backend(...)`` decorator and its
+    class registered the helper as the backend, and every conv cell died with
+    ``_pool_to() missing 1 required positional argument`` (TODO104 A15).
+    """
+    from computronium.ontology.geometry import geometry_from_config
+
+    config = GeometryConfig.conv(
+        input_dim=784,
+        output_dim=10,
+        conv_channels=(4,),
+        in_channels=1,
+        input_hw=(28, 28),
+        pool_hw=(4, 4),
+    )
+    geometry = geometry_from_config(config)
+    assert type(geometry).__name__ == "ConvGeometry"
+    out = geometry.forward(torch.randn(2, 784))
+    assert out.shape == (2, 10)

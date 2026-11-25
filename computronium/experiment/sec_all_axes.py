@@ -221,6 +221,19 @@ def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     return list(families) if families else []
 
 
+def preferred_task_family(families: list[str]) -> str | None:
+    """The family a mechanism map measures on (TODO104 A17).
+
+    An axis rule's declared families say where the row is *available*, not
+    which one a map compares: a family the base box cannot express (a 4096-wide
+    head over a 2-class split) measures the box, not the mechanism. ``vision``
+    is the common, coherent box; any declared family is the fallback.
+    """
+    if not families:
+        return None
+    return "vision" if "vision" in families else families[0]
+
+
 def _accepted_knobs(axis: str, primitive: str) -> frozenset[str]:
     """The knobs this axis' primitive reads (a harvested fact, TODO104 A4).
 
@@ -956,7 +969,7 @@ async def run_primitive_full(
     started = time.monotonic()
 
     task_families = _get_task_families_for_primitive(axis, primitive)
-    task_family = task_families[0] if task_families else "vision"
+    task_family = preferred_task_family(task_families) or "vision"
 
     # Rung 1: 3-point ladder
     rungs, best, rung1_verdict = await run_rung1_ladder(
@@ -1014,7 +1027,7 @@ async def create_registration(
     base_box = _build_axis_box(axis, primitive, task_id)
 
     task_families = _get_task_families_for_primitive(axis, primitive)
-    task_family = task_families[0] if task_families else "vision"
+    task_family = preferred_task_family(task_families) or "vision"
     min_d = MIN_EFFECT_SIZE_BY_FAMILY.get(task_family, 0.5)
 
     knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
@@ -1074,7 +1087,7 @@ async def run_axis_rung1_all(
         if not task_families:
             continue
 
-        task_family = task_families[0]
+        task_family = preferred_task_family(task_families) or "vision"
         task_id = (task_override or {}).get(
             task_family, FAMILY_TO_TASK.get(task_family, "mnist")
         )
@@ -1154,7 +1167,9 @@ async def preregister_axis_primitives(axis: str) -> None:
         task_families = _get_task_families_for_primitive(axis, primitive)
         if not task_families:
             continue
-        task_id = FAMILY_TO_TASK.get(task_families[0], "mnist")
+        task_id = FAMILY_TO_TASK.get(
+            preferred_task_family(task_families) or "mnist", "mnist"
+        )
 
         reg_dir = Path("configs/preregistrations")
         reg_path = reg_dir / f"sec_{axis}_{primitive}.json"
@@ -1209,7 +1224,7 @@ async def main() -> None:
                 task_families = _get_task_families_for_primitive(axis, primitive)
                 if not task_families:
                     continue
-                task_family = task_families[0]
+                task_family = preferred_task_family(task_families) or "vision"
                 task_id = args.task or FAMILY_TO_TASK.get(task_family, "mnist")
                 result = await run_primitive_full(
                     axis, primitive, task_id, args.semaphore

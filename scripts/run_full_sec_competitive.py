@@ -82,6 +82,7 @@ from computronium.experiment.sec_all_axes import (
     _get_primary_knob,
     _get_task_families_for_primitive,
     _measure_async,
+    preferred_task_family,
     resolve_semaphore,
     run_rung2_comparison,
     create_registration,
@@ -340,7 +341,7 @@ async def run_primitive_full_fixed(
         started = time.monotonic()
 
         task_families = _get_task_families_for_primitive(axis, primitive)
-        task_family = task_families[0] if task_families else "vision"
+        task_family = preferred_task_family(task_families) or "vision"
 
         # Rung 1: L0 fidelity ladder
         rungs, best, rung1_verdict = await run_rung1_ladder_fixed(
@@ -420,7 +421,7 @@ async def run_axis_full(
             write_part(RESULTS_DIR, axis, primitive, "skipped", {})
             continue
 
-        task_family = task_families[0]
+        task_family = preferred_task_family(task_families) or "vision"
         task_id = FAMILY_TO_TASK.get(task_family, "mnist")
 
         print(f"\n=== {axis}/{primitive} on {task_id} ({task_family}) ===")

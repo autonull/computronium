@@ -26,6 +26,7 @@ from computronium.experiment.sec_all_axes import (
     _get_primary_knob,
     ladder_verdict,
     pair_schedule,
+    preferred_task_family,
     resolve_semaphore,
 )
 from computronium.experiment.sec_loop import deadline_params
@@ -271,3 +272,11 @@ def test_error_blind_credit_is_not_a_bar_verdict() -> None:
     assert ladder_verdict("credit", "random_projections", "mnist", _rung(None)) == (
         "measured"
     )
+
+
+def test_the_map_measures_the_common_family() -> None:
+    """A declared family is availability; the map compares on one box (A17)."""
+    assert preferred_task_family(["continual", "vision"]) == "vision"
+    assert preferred_task_family(["continual"]) == "continual"
+    assert preferred_task_family(["rl", "tabular"]) == "rl"
+    assert preferred_task_family([]) is None

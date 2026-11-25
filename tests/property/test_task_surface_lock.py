@@ -46,6 +46,18 @@ def test_continual_task_ids_are_declared() -> None:
     assert getattr(task, "task_id", None) is not None
 
 
+def test_continual_tasks_carry_a_ruler() -> None:
+    """A continual task evaluates: an empty base body measured NaN (A16)."""
+    import torch
+
+    task = create_task("split_mnist", device="cpu", quick_mode=True)
+    task.setup()
+    model = torch.nn.Sequential(torch.nn.Flatten(), torch.nn.Linear(784, 2))
+    metrics = task.evaluate(model, max_batches=1)
+    assert metrics is not None
+    assert 0.0 <= metrics.accuracy <= 1.0
+
+
 def test_offline_names_are_supported_and_resolve() -> None:
     expected = {"diabetes": (10, 1), "lorenz_state": (3, 3)}
     for name, shape in expected.items():

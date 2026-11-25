@@ -2599,7 +2599,6 @@ class TileGeometry(nn.Module):
         return tile_hopfield_energy(self._block_view, acts, self.params)
 
 
-@geometry_backend("conv")
 def _pool_to(x: Tensor, pool_hw: tuple[int, int]) -> Tensor:
     """Pool a conv feature map onto ``pool_hw``.
 
@@ -2616,6 +2615,7 @@ def _pool_to(x: Tensor, pool_hw: tuple[int, int]) -> Tensor:
     return nn.functional.adaptive_avg_pool2d(x, pool_hw)
 
 
+@geometry_backend("conv")
 class ConvGeometry(nn.Module):
     """Convolutional topology: shared kernels routed through the substrate operator.
 

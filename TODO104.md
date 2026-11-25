@@ -126,6 +126,27 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   cannot beat 0, mark the study **invalid** and fall back to declared defaults
   rather than emitting a zero-value "best".
 
+### A16. The continual tasks had no ruler (`evaluate` returned `None`)
+- **Evidence:** 33 of 46 defect rungs in the 2026-11-25 map were
+  `non-finite metric`, all on cells whose family mapped to `split_mnist`;
+  the log names `task.evaluate() failed: 'NoneType' object has no attribute
+  'to_dict'`.
+- **Mechanism:** `SplitMNIST`/`PermutedMNIST` delegated `evaluate` to
+  `DomainTask.evaluate`, whose body is a docstring — so the ruler returned
+  `None` and the metric became non-finite. The cell trained; the ruler was
+  absent.
+- **Fix:** both continual tasks use `evaluate = VisionTask.evaluate` (the
+  loader, loss and device are theirs; the ruler is the shared one). Lock:
+  `test_continual_tasks_carry_a_ruler`.
+
+### A17. A declared family was used as the comparison box
+- **Evidence:** the same 33 rows show the family chosen was the first declared
+  (`continual`), whose base box carries a 4096-wide head over a 2-class
+  split — the map measured the box, not the mechanism.
+- **Fix:** `preferred_task_family` — a rule's families declare *availability*;
+  the map measures on `vision` when declared, else the first. Lock:
+  `test_the_map_measures_the_common_family`.
+
 ### A15. `conv` died on the reproducibility box (deterministic backward)
 - **Evidence:** every `geometry/conv` rung — the vision geometry's own row —
   defected: `adaptive_avg_pool2d_backward_cuda does not have a deterministic
@@ -282,9 +303,12 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       declared default (factor 1.0).
 
 ### Phase 4 — Recover coverage hidden by A1–A5
-- [ ] **4.1** Re-run the skipped/refused primitives per axis (serial, fresh
-      process) now that Phase 1–2 fixes land. **Launched:**
-      `bash scripts/run_sec_axes_serial.sh` → `logs/serial_todo104_driver.log`.
+- [x] **4.1** Re-ran all six axes serially (one process per axis,
+      `SEC_RUNG2=none`): `results/sec/serial3`, `logs/serial3_*`.
+      First pass: **37 viable + 2 error_blind = 39/75**, 139 measured /
+      41 refused / 46 defect / 3 timeout rungs. The 46 defects exposed A15
+      (conv pool), A16 (continual ruler) and A17 (family choice); with those
+      fixed, five axes re-run into the same root (`logs/serial4_*`).
 - [ ] **4.2** Target: every error-aware credit has ≥1 legal above-chance cell on
       its target family; every legal composition family trains or has a named reason.
 - [ ] **4.3** Reconcile: an "all_refused" that flips to "viable" under serial is
@@ -343,9 +367,9 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 | Metric | TODO103 actual | TODO104 target | Measurement |
 |---|---|---|---|
-| Valid claims | 1 | 18+ | `results/sec/serial` rung2 verdicts |
-| Viable primitives (serial) | 23/75 | 45+ | serial summary |
-| Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | rung `status` counts |
+| Valid claims | 1 (A11 artifact) | 18+ | `results/sec/serial` rung2 verdicts |
+| Viable primitives (serial) | 23/75 | 45+ | **37 viable + 2 error_blind = 39/75** (serial3, pre-A16/A17) |
+| Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | 3 of 229 rungs (serial3 census: 139 measured, 41 refused, 46 defect, 3 timeout) |
 | Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
 | Update primitives running | 8/18 | 18/18 or named reason | axis log |
 | Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` → **3.589, valid, seeds=7** |
@@ -431,6 +455,13 @@ three lock tests + one probe, `configs/meta_sec_best.json`.
 pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
 each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
 dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
+
+**Fifth finding (A16/A17):** 33 defect rungs were `non-finite metric` because
+the continual tasks' `evaluate` was the base class's empty body (no ruler), and
+the map had chosen `continual` as the comparison family for axis-orthogonal
+rules. Both are fixed: the continual tasks use the vision ruler, and the map
+measures on `vision` when a rule declares it. A16/A17 are re-running for
+geometry/dynamics/update/plasticity/substrate.
 
 **Fourth finding (A15):** `geometry/conv` could not run at the reproducibility
 box — `adaptive_avg_pool2d` has no deterministic CUDA backward. `_pool_to`
