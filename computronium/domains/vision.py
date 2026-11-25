@@ -298,6 +298,12 @@ class SpikingMNISTTask(VisionTask):
         self._setup_done = True
 
 
+#: A continual task's bare id means its first split. A caller that evaluates a
+#: specific split passes it; without this the task cannot be created from its
+#: registry id at all (TODO104 A14).
+CONTINUAL_DEFAULT_TASK_ID: int = 0
+
+
 class SplitMNIST(DomainTask):
     """Split-MNIST continual learning benchmark.
 

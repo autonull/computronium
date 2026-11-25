@@ -2600,6 +2600,22 @@ class TileGeometry(nn.Module):
 
 
 @geometry_backend("conv")
+def _pool_to(x: Tensor, pool_hw: tuple[int, int]) -> Tensor:
+    """Pool a conv feature map onto ``pool_hw``.
+
+    ``adaptive_avg_pool2d`` has no deterministic CUDA backward, so a cell at
+    the reproducibility box (``deterministic=True``) died with "does not have a
+    deterministic implementation" (TODO104 A15). When the extent divides
+    evenly the two operators are identical, and ``avg_pool2d`` is
+    deterministic; a non-divisible extent keeps the adaptive operator.
+    """
+    height, width = x.shape[-2:]
+    pool_h, pool_w = pool_hw
+    if height % pool_h == 0 and width % pool_w == 0:
+        return nn.functional.avg_pool2d(x, (height // pool_h, width // pool_w))
+    return nn.functional.adaptive_avg_pool2d(x, pool_hw)
+
+
 class ConvGeometry(nn.Module):
     """Convolutional topology: shared kernels routed through the substrate operator.
 
@@ -2686,7 +2702,7 @@ class ConvGeometry(nn.Module):
             out = out + self._conv_biases[f"layer_{i}"]  # ruff: ignore[non-augmented-assignment]
             x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
             x = x.reshape(x.shape[0], -1, side, side)
-        return nn.functional.adaptive_avg_pool2d(x, self.config.pool_hw).flatten(1)
+        return _pool_to(x, self.config.pool_hw).flatten(1)
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         if substrate is None:
@@ -2723,7 +2739,7 @@ class ConvGeometry(nn.Module):
             x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
             x = x.reshape(x.shape[0], -1, side, side)
             acts.append(x.flatten(1))
-        pooled = nn.functional.adaptive_avg_pool2d(x, self.config.pool_hw).flatten(1)
+        pooled = _pool_to(x, self.config.pool_hw).flatten(1)
         acts.append(op(pooled, self._head.weight) + self._head.bias)
         return acts
 

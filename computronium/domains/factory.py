@@ -787,8 +787,14 @@ def create_task(  # ruff: ignore[too-many-return-statements, complex-structure, 
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )
         case "split_mnist":
-            from computronium.domains.vision import SplitMNIST
+            from computronium.domains.vision import (
+                CONTINUAL_DEFAULT_TASK_ID,
+                SplitMNIST,
+            )
 
+            # A registry task must be creatable from its id alone (TODO104 A14):
+            # a bare continual id means its declared first split.
+            kwargs.setdefault("task_id", CONTINUAL_DEFAULT_TASK_ID)
             return SplitMNIST(
                 name=task_name, device=str(device), quick_mode=quick_mode, **kwargs
             )

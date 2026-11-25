@@ -35,6 +35,17 @@ def test_every_supported_task_constructs_offline() -> None:
         assert task.domain_type is not DomainType.UNKNOWN, name
 
 
+def test_continual_task_ids_are_declared() -> None:
+    """A continual task is creatable from its bare id (TODO104 A14).
+
+    ``SplitMNIST`` raises on first use when no split is set, so a bare
+    ``split_mnist`` id must carry its declared default split; removing it
+    makes the registry row unusable and every cell on that family a defect.
+    """
+    task = create_task("split_mnist", device="cpu", quick_mode=True)
+    assert getattr(task, "task_id", None) is not None
+
+
 def test_offline_names_are_supported_and_resolve() -> None:
     expected = {"diabetes": (10, 1), "lorenz_state": (3, 3)}
     for name, shape in expected.items():
