@@ -173,7 +173,7 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 | ID | Item | State | Where |
 |---|---|---|---|
-| B1 | Primitive proposals from gaps (`unavailable_reason="proposed"`) | ❌ none present | `primitives/registry.py` |
+| B1 | Primitive proposals from gaps | 🟡 three candidates named in 8.1; each needs a spec row + wiring lock (the gap table is census-locked) | `schema/gaps.py`, `schema/seed_registries.py` |
 | B2 | Budget policy from measured cost model | ✅ `wave.py` sizes each wave from that fidelity's measured cells (measured → positive control → default); the offline `configs/cost_model.pkl` had no reader and is deleted | `wave.py` |
 | B3 | Success metrics unmet | ❌ see Section D | — |
 | B4 | Consolidated checklist stale (all `[ ]` despite detailed `[x]`) | 🟡 TODO103 §E marked superseded by TODO104 §E | `TODO103.md` |
@@ -265,8 +265,17 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - [ ] **7.2** Validate on one held-out wave: predicted vs measured walltime.
 
 ### Phase 8 — Proposals & metrics (B1, B3, B4)
-- [ ] **8.1** Emit ≥3 primitive proposals (`unavailable_reason="proposed"`) from
-      the gaps fixed in Phases 4–5.
+- [ ] **8.1** Emit ≥3 primitive proposals. The gap table is locked to the
+      census (`test_inventory_single_source`), so a proposal needs a spec row +
+      config classmethod + the wiring lockstep lock — not a bare gap row.
+      Candidates from tonight's evidence, each with its trigger:
+      1. `primitive.geometry.graph_carrier` — reads the task's own connectivity;
+         trigger: a task declares `edge_index` in its shape (B5 refusal today).
+      2. `primitive.geometry.lattice_carrier` — derives the lattice extent from
+         a 3-D task shape; trigger: a spatial task declares a 3-D extent (A10).
+      3. `primitive.substrate.gpu_neuromorphic` — neuromorphic settle on the
+         GPU (every cell's box declares `substrate.device=cpu`, so the cell is
+         CPU-bound: `spiking_mnist` L0 measured 51–81 s/cell).
 - [ ] **8.2** Regenerate the TODO103 consolidated checklist to match reality.
 - [ ] **8.3** Record the serial competitive table and the claim in
       `docs/readme/stability-eval.md` (implemented row + box).

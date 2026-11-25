@@ -145,12 +145,15 @@ SLOW_PRIMITIVES = {
     "update": {"adafactor", "natural_gradient"},
 }
 
-# Rung 2 uses each task family's declared base box (base_schedule). Seeds must
-# meet the pre-registration floor of DEFAULT_MIN_SEEDS=5; the meta-SEC 3-seed
-# optimum is below that floor and cannot carry a paired comparison.
-RUNG2_SEEDS = 5
+# Rung 2 uses each task family's declared base box (base_schedule) and the seed
+# budget its registration declares. One source: the registration's min_seeds is
+# CLAIM_SEEDS, so a claim runs exactly the budget it was registered at.
+RUNG2_SEEDS = CLAIM_SEEDS
 
-print(f"\n🎯 Rung 2 seeds: {RUNG2_SEEDS} (family base-box epochs)")
+print(
+    f"\n🎯 Rung 2 seeds: {RUNG2_SEEDS} (family base-box epochs, "
+    f"floor {DEFAULT_MIN_SEEDS})"
+)
 
 # Cooperative cell budgets: a cell stops itself mid-epoch at its deadline and
 # returns a timeout record. Priced from the measured L0 pilot (~1-7s/cell); Rung 2
