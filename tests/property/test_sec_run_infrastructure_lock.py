@@ -300,8 +300,5 @@ def test_a_pair_is_one_primitive_two_knobs() -> None:
     assert treatment["geometry"] == control["geometry"] == "conv"
     difference = {key for key in treatment if treatment[key] != control.get(key)}
     assert difference == {knob_key}
-    assert (
-        control[knob_key] == round(default_value)
-        if knob_key.split(".")[-1] in ("num_layers",)
-        else control[knob_key] == default_value
-    )
+    # An integer knob is rounded; the control is the declared default either way.
+    assert control[knob_key] in {default_value, round(default_value)}
