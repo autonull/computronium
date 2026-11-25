@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -160,8 +161,6 @@ print(
 # runs a family base box (epochs x seeds x 2 arms), so allow generously.
 RUNG_TIMEOUT = 120.0
 RUNG2_TIMEOUT = 600.0
-
-import os
 
 # Environment overrides keep each axis in its own process: a fresh torch.compile
 # state per axis and one GPU training at a time (semaphore=1) avoid the

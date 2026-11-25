@@ -1,0 +1,20 @@
+{
+  "claim": "tuning substrate.noise_level on primitive.substrate.quantum improves val_acc with Cohen's d >= 1.101871482704785 at the quantum_circuit_learning base",
+  "metric": "val_acc",
+  "min_d": 0.8,
+  "alpha": 0.05,
+  "min_seeds": 7,
+  "created": "2026-11-25",
+  "box": {
+    "substrate": "quantum",
+    "substrate.noise_level": 0.02,
+    "fidelity": "L0",
+    "seed": 0,
+    "n_seeds": 1,
+    "epochs": 1,
+    "batch_size": 32,
+    "task_id": "mnist",
+    "device": "cuda",
+    "precision": "fp32"
+  }
+}

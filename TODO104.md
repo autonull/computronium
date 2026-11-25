@@ -409,6 +409,24 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       "best factor ≠ 1.0 and above bar"; the run is `results/sec/claims2`
       (`logs/claims2_*`) at the registered box, 7 seeds × 2 arms.
 - [ ] **5.3** Read the verdicts: claim / marginal / coordinate / refused.
+      First valid run (`claims2`, 7 pairs): **0 claims, 6 coordinates,
+      1 no_power, 1 defect** — but with real effects
+      (`random_projections` d=+1.21 p=0.0004, `analog` d=+1.00,
+      `optical` d=+0.92). A22 explains the gap (the CI lower bound on d vs
+      `min_d`).
+
+### Pre-registration — `random_projections` at n_max=64 (2026-11-25 04:27)
+- **Claim:** tuning `credit.feedback_scale` to the ladder's best (22.653x of
+  its 0.01 default) on `credit/random_projections` raises val_acc at the
+  mnist base box.
+- **Test:** paired comparison, 64 index-matched seeds per arm (one cell per
+  seed), fixed-n, no peeking; `alpha=0.05`; `min_d` = vision 0.916.
+- **Decision rule:** `claim` iff the 95 % CI lower bound on Cohen's d exceeds
+  0.916 and `p < 0.05`; otherwise `coordinate` (a boxed effect size).
+- **Basis:** the 7-pair run measured d=+1.21, sd_diff≈0.0245; at n=64 the
+  lower bound is 1.21 - 1.96/8 ≈ 0.965 (A22's arithmetic).
+- **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
+  SEC_RUNG2=auto SEC_RUNG2_SEEDS=64 SEC_RESULTS_DIR=results/sec/claim64`.
 - [ ] **5.2** Pre-register paired comparisons (fixed `n_max≥5`, no peeking) and
       run to `n_max`; report `equivalent/superior/inferior/inconclusive`.
 - [ ] **5.3** Push claim count toward the 18+ target with valid boxes; a claim
