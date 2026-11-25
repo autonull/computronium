@@ -202,8 +202,8 @@ def test_every_base_axis_declares_its_family() -> None:
     Otherwise the screen refuses the family's own base axis as "no shared
     task family" while the control composes it: two declarations, one truth.
     """
-    from computronium.experiment.sec_loop import _base_axes
-    from computronium.experiment.sec_pilot import BASE_BOXES
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
+    from computronium.experiment.sec_pilot import BASE_BOXES, TASK_FAMILIES
 
     prefix = {
         "substrate": "substrate",
@@ -213,17 +213,23 @@ def test_every_base_axis_declares_its_family() -> None:
         "credit": "credit_assignment",
         "update": "parameter_update",
     }
+    missing = []
     census = {entry.id: entry for entry in build_census()}
-    missing = [
-        f"{family}: {primitive_id} declares {census[primitive_id].task_families}"
-        for family, box in BASE_BOXES.items()
-        for axis, value in _base_axes(box.task_id).items()
-        if (
-            (primitive_id := f"primitive.{prefix[axis]}.{value}") in census
-            and census[primitive_id].task_families
-            and family not in census[primitive_id].task_families
-        )
-    ]
+    for family, box in BASE_BOXES.items():
+        if family not in TASK_FAMILIES:
+            continue  # variant boxes key a substrate, not a task family
+        axes = {**_AXIS_DEFAULTS, **(box.base_coordinate or {})}
+        for axis, value in axes.items():
+            if axis not in prefix:
+                continue
+            primitive_id = f"primitive.{prefix[axis]}.{value}"
+            entry = census.get(primitive_id)
+            if entry is None or not entry.task_families:
+                continue
+            if family not in entry.task_families:
+                missing.append(
+                    f"{family}: {primitive_id} declares {entry.task_families}"
+                )
 
     assert not missing
 

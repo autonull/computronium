@@ -94,6 +94,47 @@ def test_conv_reads_the_deterministic_pool() -> None:
     assert source.count("_pool_to(x, self.config.pool_hw)") == 2
 
 
+def test_params_for_reads_the_tasks_extent() -> None:
+    """A usps cell carries usps' grid, not its family base box's mnist grid."""
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS, _params_for
+
+    axes = {**_AXIS_DEFAULTS, "geometry": "conv"}
+    params = _params_for(axes, task_id="usps", shape=task_shape("usps", "cpu"))
+    assert params["geometry.input_hw"] == (16, 16)
+    assert params["geometry.in_channels"] == 1
+
+
+def test_screen_coordinate_reads_its_box_task_extent() -> None:
+    """The SEC path builds the box and screens it without a shape argument."""
+    from computronium.experiment.sec_all_axes import _build_axis_box
+    from computronium.experiment.sec_loop import screen_coordinate
+
+    box = _build_axis_box("geometry", "conv", "usps")
+    coord = screen_coordinate(box, "geometry", "conv")
+    assert coord.params["geometry.input_hw"] == (16, 16)
+    assert coord.params["geometry.in_channels"] == 1
+
+
+def test_params_for_carries_no_literal_extent() -> None:
+    """The box builder has no MNIST-shaped fallback left to guess from."""
+    from computronium.experiment.sec_loop import _params_for
+
+    source = inspect.getsource(_params_for)
+    assert "28, 28" not in source
+    assert "16, 16" not in source
+
+
+def test_own_knob_defaults_refuse_an_undeclared_extent() -> None:
+    """A topology the task cannot declare has no invented structural default."""
+    from computronium.experiment.sec_pilot import own_knob_params
+
+    assert own_knob_params("geometry", "conv", "iris") == {}
+    assert own_knob_params("geometry", "graph", "cora") == {}
+    conv = own_knob_params("geometry", "conv", "usps")
+    assert conv["geometry.input_hw"] == (16, 16)
+
+
 def test_every_geometry_backend_builds() -> None:
     """The registry's conv entry builds a geometry, not the pool helper.
 

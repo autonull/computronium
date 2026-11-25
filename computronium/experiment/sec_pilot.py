@@ -26,6 +26,7 @@ from dataclasses import dataclass, fields, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
+from computronium.experiment.kernel.evaluate import task_shape
 from computronium.experiment.registry.task_registry import (
     PassBar,
     TaskRegistry,
@@ -99,11 +100,18 @@ class BaseBox:
 #: fallback. ``base_coordinate`` is the one source of the family's axes: a
 #: screen, a calibration and the P3 slice all compose from it.
 BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
-    "vision": BaseBox("vision", "mnist", 32, 375, 1, base_coordinate={
-        "geometry": "feedforward",
-        "geometry.input_hw": (28, 28),
-        "geometry.in_channels": 1,
-    }),
+    "vision": BaseBox(
+        "vision",
+        "mnist",
+        32,
+        375,
+        1,
+        base_coordinate={
+            "geometry": "feedforward",
+            "geometry.input_hw": (28, 28),
+            "geometry.in_channels": 1,
+        },
+    ),
     "tabular": BaseBox("tabular", "iris", 32, 0, 20),
     "graph": BaseBox(
         "graph",
@@ -124,11 +132,7 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         32,
         0,
         10,
-        base_coordinate={
-            "geometry": "recurrent",
-            "geometry.input_hw": (28, 28),
-            "geometry.in_channels": 1,
-        },
+        base_coordinate={"geometry": "recurrent"},
     ),
     "continual": BaseBox(
         "continual",
@@ -151,11 +155,7 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         32,
         0,
         10,
-        base_coordinate={
-            "geometry": "feedforward",
-            "geometry.input_hw": (28, 28),
-            "geometry.in_channels": 1,
-        },
+        base_coordinate={"geometry": "feedforward"},
     ),
     "neuromorphic": BaseBox(
         "neuromorphic",
@@ -259,8 +259,6 @@ BASE_BOXES: Final[Mapping[str, BaseBox]] = MappingProxyType({
         base_coordinate={
             "geometry": "recurrent",
             "dynamics": "energy_minimization",
-            "geometry.input_hw": (28, 28),
-            "geometry.in_channels": 1,
         },
     ),
     "continual_energy_min": BaseBox(
@@ -356,6 +354,89 @@ def refusal_for(entry: PrimitiveCensusEntry, task_id: str) -> str | None:
     )
 
 
+def _geometry_defaults(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
+    factory: Callable[..., Any], primitive: str, task_id: str | None
+) -> Any | None:
+    """The geometry factory at its declared defaults and the task's own shape.
+
+    Structural arguments are task facts (TODO104 A10): a topology that needs an
+    extent or channels the task does not declare is refused by its builder, so
+    this returns ``None`` rather than inventing one. A graph's connectivity is
+    the task's data (``compose_configs`` extracts it), never a literal chain.
+    """
+    from computronium.experiment.kernel._geometry_builders import (
+        channel_count,
+        spatial_extent,
+    )
+
+    if task_id is None:
+        return None
+    try:
+        shape = task_shape(task_id, "cpu")
+    except Exception:  # ruff: ignore[blind-except] - a shape-less task has no defaults
+        return None
+    input_dim = math.prod(shape.input_shape)
+    output_dim = shape.output_dim
+    spatial = len(shape.input_shape) > 1
+    channels = channel_count(shape.input_shape)
+    hw = spatial_extent(shape.input_shape)
+    match primitive:
+        case "feedforward" | "recurrent" | "routing":
+            return factory(
+                input_dim=input_dim, output_dim=output_dim, hidden_dims=(128,)
+            )
+        case "attention":
+            return factory(
+                input_dim=input_dim, output_dim=output_dim, hidden_dim=128, num_layers=2
+            )
+        case "causal_transformer":
+            if not spatial:
+                return None
+            patch = 4
+            return factory(
+                vocab_size=output_dim,
+                d_model=128,
+                n_layers=2,
+                n_heads=8,
+                seq_len=(hw[0] // patch) * (hw[1] // patch),
+                patch_size=patch,
+                patch_embed_dim=128,
+                image_hw=hw,
+                in_channels=channels,
+            )
+        case "tile" | "tile_mesh":
+            return factory(input_dim=input_dim, output_dim=output_dim, num_layers=2)
+        case "conv":
+            if not spatial:
+                return None
+            return factory(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                in_channels=channels,
+                input_hw=hw,
+                pool_hw=(max(1, hw[0] // 4), max(1, hw[1] // 4)),
+                conv_channels=(32, 64),
+            )
+        case "nca":
+            if not spatial:
+                return None
+            return factory(
+                channels=channels, hidden=32, grid_hw=hw, output_dim=output_dim
+            )
+        case "spatial_lattice":
+            if len(shape.input_shape) < 3:
+                return None
+            return factory(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                lattice_dims=tuple(shape.input_shape[-3:]),
+            )
+        case "ntm":
+            return factory(input_dim=input_dim, output_dim=output_dim)
+        case _:
+            return None
+
+
 def own_knob_params(
     axis: str, primitive: str, task_id: str | None = None
 ) -> dict[str, object]:
@@ -364,8 +445,8 @@ def own_knob_params(
     The base box shares one step size and one geometry width across
     primitives. This is the other instrument: the varied axis runs at the
     defaults its config classmethod declares, companions stay at the base.
-    A primitive whose config factory needs structural arguments (geometry)
-    uses the task's shape when available, or sensible defaults.
+    A geometry primitive's structural arguments are the task's own shape; a
+    topology the task cannot declare gets no defaults here.
     """
     kind = StructuralAxis(axis)
     spec = get_axis_spec(kind, primitive)
@@ -377,121 +458,10 @@ def own_knob_params(
     if not callable(factory):
         return {}
 
-    # For geometry axis, the factory needs input_dim and output_dim from the task
+    # For geometry axis, the factory needs structural arguments from the task
     if kind == StructuralAxis.GEOMETRY:
-        input_dim = 784  # Default: MNIST flattened
-        output_dim = 10  # Default: MNIST classes
-        if task_id is not None:
-            try:
-                task_spec = TaskRegistry().get(task_id)
-                if task_spec.input_shape:
-                    input_dim = math.prod(task_spec.input_shape)
-                if task_spec.output_dim:
-                    output_dim = task_spec.output_dim
-            except Exception:
-                pass  # Use defaults
-        # Provide minimal structural args for the factory
-        try:
-            if primitive in {"feedforward", "recurrent", "routing"}:
-                config: Any = factory(
-                    input_dim=input_dim, output_dim=output_dim, hidden_dims=(128,)
-                )
-            elif primitive == "attention":
-                config = factory(
-                    input_dim=input_dim,
-                    output_dim=output_dim,
-                    hidden_dim=128,
-                    num_layers=2,
-                )
-            elif primitive == "causal_transformer":
-                # Vision mode with patch embedding
-                config = factory(
-                    vocab_size=output_dim,
-                    d_model=128,
-                    n_layers=2,
-                    n_heads=8,
-                    seq_len=32,
-                    patch_size=4,
-                    patch_embed_dim=128,
-                    image_hw=(28, 28),
-                    in_channels=1,
-                )
-            elif primitive in {"tile", "tile_mesh"}:
-                config = factory(
-                    input_dim=input_dim, output_dim=output_dim, num_layers=2
-                )
-            elif primitive == "conv":
-                # Conv needs in_channels, input_hw, pool_hw, conv_channels
-                # Derive from task's input_shape
-                in_channels = 1
-                input_hw = (28, 28)
-                pool_hw = (4, 4)
-                if task_id is not None:
-                    try:
-                        task_spec = TaskRegistry().get(task_id)
-                        if task_spec.input_shape and len(task_spec.input_shape) >= 3:
-                            in_channels = task_spec.input_shape[0]
-                            input_hw = (task_spec.input_shape[1], task_spec.input_shape[2])
-                            # Default pool to 1/4 of spatial dims
-                            pool_hw = (max(1, input_hw[0] // 4), max(1, input_hw[1] // 4))
-                    except Exception:
-                        pass
-                config = factory(
-                    input_dim=input_dim,
-                    output_dim=output_dim,
-                    in_channels=in_channels,
-                    input_hw=input_hw,
-                    pool_hw=pool_hw,
-                    conv_channels=(32, 64),
-                )
-            elif primitive == "graph":
-                # Graph needs edge_index - use minimal default
-                config = factory(
-                    input_dim=input_dim,
-                    output_dim=output_dim,
-                    edge_index=[[0, 1], [1, 0]],
-                )
-            elif primitive == "nca":
-                # Derive grid_hw and channels from input_shape
-                # For MNIST (1, 28, 28): use grid_hw=(28, 28), channels=1
-                if task_id is not None:
-                    try:
-                        task_spec = TaskRegistry().get(task_id)
-                        if task_spec.input_shape and len(task_spec.input_shape) >= 3:
-                            c, h, w = (
-                                task_spec.input_shape[0],
-                                task_spec.input_shape[1],
-                                task_spec.input_shape[2],
-                            )
-                            config = factory(
-                                channels=c,
-                                hidden=32,
-                                grid_hw=(h, w),
-                                output_dim=output_dim,
-                            )
-                        else:
-                            config = factory(
-                                channels=32,
-                                hidden=32,
-                                grid_hw=(16, 16),
-                                output_dim=output_dim,
-                            )
-                    except Exception:
-                        config = factory(
-                            channels=32,
-                            hidden=32,
-                            grid_hw=(16, 16),
-                            output_dim=output_dim,
-                        )
-                else:
-                    config = factory(
-                        channels=32, hidden=32, grid_hw=(16, 16), output_dim=output_dim
-                    )
-            elif primitive in {"ntm", "spatial_lattice"}:
-                config = factory(input_dim=input_dim, output_dim=output_dim)
-            else:
-                return {}
-        except TypeError:
+        config = _geometry_defaults(factory, primitive, task_id)
+        if config is None:
             return {}
     else:
         try:
@@ -510,6 +480,7 @@ def own_knob_params(
         # For other axes, the factory signature parameters are the true knobs
         # (config fields may have different names, e.g., pepita: gamma -> feedback_scale)
         import inspect
+
         factory_params = inspect.signature(factory).parameters
         for param_name, param in factory_params.items():
             if param_name in spec.accepted_params:

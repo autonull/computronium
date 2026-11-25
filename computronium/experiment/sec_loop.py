@@ -809,6 +809,46 @@ def _axis_values(field: str) -> list[str]:
     return values
 
 
+def _task_spatial(shape: TaskShape | None) -> tuple[int, tuple[int, int]] | None:
+    """A task's channel count and pixel grid, or ``None`` when it declares none.
+
+    The task's shape is the one source of these facts (``channel_count`` and
+    ``spatial_extent`` read it); a family base box contributes axes, never
+    another task's extent (TODO104 A10).
+    """
+    from computronium.experiment.kernel._geometry_builders import (
+        channel_count,
+        spatial_extent,
+    )
+
+    if shape is None or not shape.input_shape or len(shape.input_shape) < 2:
+        return None
+    return channel_count(shape.input_shape), spatial_extent(shape.input_shape)
+
+
+def _apply_task_spatial(
+    params: dict[str, Any], geometry: str, shape: TaskShape | None
+) -> dict[str, Any]:
+    """Override the base box's pixel grid with the task's own.
+
+    A family base box describes its own task (vision is mnist); a usps cell must
+    carry usps' 16x16 grid, not the base box's 28x28 (TODO104 A10).
+    """
+    spatial = _task_spatial(shape)
+    if spatial is None:
+        return params
+    channels, extent = spatial
+    params["geometry.input_hw"] = extent
+    params["geometry.in_channels"] = channels
+    match geometry:
+        case "causal_transformer":
+            params["geometry.image_hw"] = extent
+        case "nca":
+            params["geometry.grid_hw"] = extent
+            params["geometry.channels"] = channels
+    return params
+
+
 def _params_for(
     axes: dict[str, str],
     own_knobs: str | None = None,
@@ -831,6 +871,9 @@ def _params_for(
     params.setdefault("credit.lr", 0.01)
     params.setdefault("update.step_size", 0.01)
     geometry = axes["geometry"]
+    # A task's pixel grid is the task's own (TODO104 A10): a usps cell must
+    # not inherit its family's base box (mnist) at 28x28.
+    params = _apply_task_spatial(params, geometry, shape)
     # Map base_coordinate param names to builder-expected names for specific geometries
     if geometry == "causal_transformer":
         # Map d_model -> hidden_dim, n_layers -> num_layers, etc.
@@ -840,16 +883,6 @@ def _params_for(
             params["geometry.num_layers"] = params["geometry.n_layers"]
         if "geometry.n_heads" in params and "geometry.num_heads" not in params:
             params["geometry.num_heads"] = params["geometry.n_heads"]
-        # Map base_coordinate spatial params (input_hw, in_channels) to causal_transformer names
-        if "geometry.input_hw" in params and "geometry.image_hw" not in params:
-            params["geometry.image_hw"] = params["geometry.input_hw"]
-        # in_channels name is the same
-    elif geometry == "nca":
-        # Map base_coordinate spatial params (input_hw, in_channels) to nca names
-        if "geometry.input_hw" in params and "geometry.grid_hw" not in params:
-            params["geometry.grid_hw"] = params["geometry.input_hw"]
-        if "geometry.in_channels" in params and "geometry.channels" not in params:
-            params["geometry.channels"] = params["geometry.in_channels"]
     # Only set geometry defaults if not already provided by base_coordinate
     if geometry in {
         "feedforward",
@@ -863,24 +896,6 @@ def _params_for(
     elif geometry in {"tile", "tile_mesh"}:
         params["geometry.neurons_per_tile"] = 8
         params["geometry.tiles_per_layer"] = 2
-    elif geometry == "nca":
-        # Auto-derive grid_hw and channels from task's input_shape if available
-        if shape is not None and shape.input_shape is not None:
-            input_shape = shape.input_shape
-            if len(input_shape) >= 2:
-                # input_shape is (C, H, W) or (H, W)
-                if len(input_shape) == 3:
-                    c, h, w = input_shape
-                else:
-                    c, h, w = 1, input_shape[0], input_shape[1]
-                params.setdefault("geometry.grid_hw", (h, w))
-                params.setdefault("geometry.channels", c)
-            else:
-                params.setdefault("geometry.grid_hw", (28, 28))
-                params.setdefault("geometry.channels", 1)
-        else:
-            params.setdefault("geometry.grid_hw", (28, 28))
-            params.setdefault("geometry.channels", 1)
     elif geometry == "spatial_lattice":
         # A lattice extent is a task fact, never a literal (TODO104 B5): the
         # builder refuses a cell that declares none.
@@ -894,24 +909,8 @@ def _params_for(
         params["geometry.top_k"] = 2
     # A graph topology's connectivity is the task's data (TODO104 B5). A literal
     # two-node chain trained a nonsense graph; the geometry builder now refuses a
-    # cell that declares no edge_index, so this builder invents none.
-    if geometry == "conv":
-        # Auto-derive input_hw and in_channels from task's input_shape if available
-        if shape is not None and shape.input_shape is not None:
-            input_shape = shape.input_shape
-            if len(input_shape) >= 2:
-                if len(input_shape) == 3:
-                    c, h, w = input_shape
-                else:
-                    c, h, w = 1, input_shape[0], input_shape[1]
-                params.setdefault("geometry.input_hw", (h, w))
-                params.setdefault("geometry.in_channels", c)
-            else:
-                params.setdefault("geometry.input_hw", (28, 28))
-                params.setdefault("geometry.in_channels", 1)
-        else:
-            params.setdefault("geometry.input_hw", (28, 28))
-            params.setdefault("geometry.in_channels", 1)
+    # cell that declares no edge_index, so this builder invents none. A conv
+    # extent is likewise the task's own, applied above from its shape.
 
     dynamics = axes["dynamics"]
     if dynamics in {
@@ -1038,6 +1037,15 @@ def screen_coordinate(
     axes = {name: box.get(name) or _AXIS_DEFAULTS[name] for name in _AXIS_DEFAULTS}
     if axis in axes:
         axes[axis] = level
+    if task_id is None and isinstance(box.get("task"), str):
+        task_id = box["task"]
+    if shape is None and task_id is not None:
+        from computronium.experiment.kernel.evaluate import task_shape
+
+        try:
+            shape = task_shape(task_id, "cpu")
+        except Exception:  # ruff: ignore[blind-except] - a shape-less task has no facts
+            shape = None
     params = box_params(box)
     if not params:
         # Fallback: include base_coordinate spatial params from the task's family
@@ -1065,7 +1073,7 @@ def screen_coordinate(
         plasticity=axes["plasticity"],
         credit=axes["credit"],
         update=axes["update"],
-        params=params,
+        params=_apply_task_spatial(params, axes["geometry"], shape),
     )
 
 

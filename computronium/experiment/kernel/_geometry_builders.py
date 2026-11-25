@@ -71,12 +71,12 @@ def _as_int_tuple(
     return default
 
 
-def _channel_count(input_shape: tuple[int, ...]) -> int:
+def channel_count(input_shape: tuple[int, ...]) -> int:
     """A per-example channel count: ``(3, 28, 28)`` is 3, ``(784,)`` is 1."""
     return input_shape[0] if len(input_shape) > 1 else 1
 
 
-def _spatial_extent(input_shape: tuple[int, ...]) -> tuple[int, int]:
+def spatial_extent(input_shape: tuple[int, ...]) -> tuple[int, int]:
     """The height and width a spatial topology should cover."""
     return (
         (int(input_shape[-2]), int(input_shape[-1])) if len(input_shape) > 2 else (1, 1)
@@ -323,10 +323,10 @@ def _derive_nca_params(
     if topology != "nca":
         return (16, 16), hidden
 
-    nca_grid_hw = _as_int_pair(geometry.get("grid_hw"), _spatial_extent(input_shape))
+    nca_grid_hw = _as_int_pair(geometry.get("grid_hw"), spatial_extent(input_shape))
     if param_budget > 0 and "grid_hw" not in geometry:
         max_grid_area = max(1, param_budget // max(1, hidden * hidden))
-        task_side = min(_spatial_extent(input_shape))
+        task_side = min(spatial_extent(input_shape))
         grid_side = max(1, min(int(max_grid_area**0.5), task_side))
         nca_grid_hw = (grid_side, grid_side)
 
@@ -355,8 +355,8 @@ def _derive_conv_params(
 
     conv_channels_raw = geometry.get("conv_channels")
     kernel_size = _as_int(geometry.get("kernel_size"), 3)
-    in_channels = _as_int(geometry.get("in_channels"), _channel_count(input_shape))
-    input_hw = _as_int_pair(geometry.get("input_hw"), _spatial_extent(input_shape))
+    in_channels = _as_int(geometry.get("in_channels"), channel_count(input_shape))
+    input_hw = _as_int_pair(geometry.get("input_hw"), spatial_extent(input_shape))
     pool_hw = _as_int_pair(geometry.get("pool_hw"), (2, 2))
 
     if param_budget > 0 and conv_channels_raw is None:
