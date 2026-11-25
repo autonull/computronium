@@ -126,6 +126,21 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   cannot beat 0, mark the study **invalid** and fall back to declared defaults
   rather than emitting a zero-value "best".
 
+### A15. `conv` died on the reproducibility box (deterministic backward)
+- **Evidence:** every `geometry/conv` rung — the vision geometry's own row —
+  defected: `adaptive_avg_pool2d_backward_cuda does not have a deterministic
+  implementation` (the schedule runs `deterministic=True`).
+- **Mechanism:** `nn.functional.adaptive_avg_pool2d` has no deterministic CUDA
+  backward; the conv stack pooled through it.
+- **Fix:** `geometry._pool_to` uses `avg_pool2d` when the feature extent divides
+  evenly by `pool_hw` (the same pooling up to float summation order, and its
+  backward is deterministic — verified on the GPU) and keeps the adaptive
+  operator for a non-divisible extent. Lock:
+  `test_conv_pool_is_deterministic` + `test_conv_reads_the_deterministic_pool`.
+- **Note:** the geometry source lock was fake — `__import__("pkg.mod")` returns
+  the top package, so it read `computronium/__init__.py`. Fixed to
+  `importlib.import_module`.
+
 ### A13. Error-blind credits were judged by the accuracy bar
 - **Evidence:** `credit/temporal_trace` at 0.1028 (chance 0.10) was reported
   `viable`, and `credit/homeostatic` at 0.0646 `below_bar` — both read no
@@ -411,11 +426,16 @@ A1 artifact (five of five flipped viable serially).
 `geometry.py`, `_geometry_builders.py`, `sec_loop.py`, `sec_all_axes.py`,
 `meta_sec.py`, new `sec_parts.py`, `scripts/run_full_sec_competitive.py`,
 three lock tests + one probe, `configs/meta_sec_best.json`.
-**Next experiment:** the coverage re-run
-(`SEC_RUNG2=none`, `results/sec/serial2/<axis>`, `logs/serial2_*`), then a
+**Next experiment:** the final coverage re-run (`SEC_RUNG2=none`,
+`results/sec/serial3/<axis>`, `logs/serial3_*`) with every fix in it, then a
 pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
 each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
 dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
+
+**Fourth finding (A15):** `geometry/conv` could not run at the reproducibility
+box — `adaptive_avg_pool2d` has no deterministic CUDA backward. `_pool_to`
+switches to `avg_pool2d` on a divisible extent (same pooling, deterministic
+backward, verified on the GPU).
 
 **Third finding (A12):** the ladder swept a field its rule ignores (four
 identical rungs). `reads(...)` already declared the fields each rule uses but
