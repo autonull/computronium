@@ -117,13 +117,24 @@
 - [x] **6.3** Run `learn_void_rules.py` on full dataset → `configs/void_rules_learned.py`
   - 20 ADD rules (e.g., neuromorphic substrate void constraints)
   - 20+ REMOVE rules (e.g., spectral_constrained update no longer void)
-- [~] **6.4** Full SEC competitive run with learned void rules + meta-SEC params
+- [x] **6.4** Full SEC competitive run with learned void rules + meta-SEC params
   - ✅ Learned void rules applied (20 ADD, 20+ REMOVE rules registered)
-  - ✅ Meta-SEC best params loaded and validated (4 ladder points, log-spaced -1.1 to 1.5, 3 claim seeds, L0_L2 fidelity, semaphore=8)
-  - ✅ Family-specific min_d configured (vision=1.09, tabular=0.55, neuromorphic=0.55, etc.)
-  - ✅ Test runs confirm Rung 1 (L0) completes in ~0.3-1s per cell
-  - ⏳ Full competitive run across all 6 axes pending (long-running GPU job)
-  - 📋 Script ready: `scripts/run_full_sec_competitive.py`
+  - ✅ Meta-SEC best params loaded (4 ladder points log-spaced -1.1→1.5, L0_L2, per-family min_d)
+  - ✅ Rung 1 ladder at L0 (1 epoch); Rung 2 paired comparison at 5 seeds (pre-registration floor)
+  - ✅ Scripts: `scripts/run_full_sec_competitive.py` + `scripts/run_sec_axes_serial.sh`
+  - 📊 Baseline concurrent run (semaphore≥2, one process): 6/75 viable, 4 coords, 0 claims, **133 rung timeouts** — concurrency thrashes dynamo on one GPU (infrastructure artifact, not a mechanism verdict)
+  - 📊 **Serial authoritative run** (one process per axis, semaphore=1): `results/sec/serial/`
+    - credit: 5/19 viable, 4 coords
+    - dynamics: 1/8 viable, **1 claim** (`energy_minimization` on MNIST: d=31.1, CI [0.0151, 0.0158], p=0.0076)
+    - geometry: 5/12 viable, 5 coords
+    - update: **8/18 viable, 8 coords** (was 0/18 all timeout)
+    - plasticity: 1/8 viable, 1 coord
+    - substrate: 3/10 viable, 3 coords
+    - **TOTAL: 23/75 viable, 1 claim, 21 coords, 0 defects**
+  - 🐞 Defects found (named, not mechanism verdicts):
+    - neuromorphic/quantum/sequence/continual settle kernel: `_eqprop_settle_chunk` recompiles past dynamo limit → leaked semaphore, process dies (skip list; re-run after fix)
+    - `adafactor`/`natural_gradient` on MNIST: hang past the per-primitive watchdog (settle/SVD path)
+    - update primitives with unavailable knobs (`mean_norm`, `role_split`, `orthogonal`) refuse as "inactive hyperparameters" — box-builder supplies knobs the primitive does not accept
 
 ---
 
@@ -131,8 +142,10 @@
 
 | Metric | Baseline (TODO102) | Target (TODO103) | Measurement |
 |--------|-------------------|------------------|-------------|
-| Rung 3 claims | 0 | 18+ | `grep "rung3_verdict.*claim" results/sec/*.json \| wc -l` |
-| Rung 3 claims achieved | 2 (muon on iris, random_projections on MNIST) | - | `results/rung3_test/` |
+| Rung 3 claims | 0 | 18+ | serial run: **1** (`energy_minimization` MNIST d=31.1) |
+| Rung 3 claims achieved | 2 (muon on iris, random_projections on MNIST) | 1 new (energy_minimization MNIST) | `results/sec/serial/` |
+| Serial viable primitives | 6/75 (concurrent baseline) | 23/75 | `results/sec/serial/full_competitive_results.json` |
+| Coordinate results | 4 | 21 | serial summary |
 | Geometries viable MNIST | 8/12 | 12/12 | Capability gate geometry subset |
 | Substrates with Rung 2 | 4 | 8 | Specialized task results |
 | Refusal rate | ~15% | <5% | `cells.jsonl` status counts |
@@ -207,5 +220,5 @@
 - [x] 6.1 Meta-SEC 5 trials (1388 cells)
 - [x] 6.2 Apply best params (meta_sec_best.json)
 - [x] 6.3 Learned void rules (void_rules_learned.py)
-- [~] 6.4 Full competitive run (setup complete, ready for background execution)
+- [x] 6.4 Full competitive run (serial, authoritative): 23/75 viable, 1 claim, 21 coords
 ```
