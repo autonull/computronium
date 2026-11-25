@@ -2,6 +2,10 @@
 
 **Status:** 2026-11-24. Phase 6.4 (serial full competitive run) complete: 23/75 viable, 1 claim, 21 coordinates. **Defects it exposed are now tracked in [`TODO104.md`](TODO104.md)** (settle recompile crash, timeout thread leak, meta-SEC invalid objective/seed floor, registration box mismatch, lost-result durability, remaining hardcoded defaults).
 
+**Superseded:** the open work lives in [`TODO104.md`](TODO104.md) (Phases 1–8,
+progress log). This file stays as the record of what the run established; its
+consolidated checklist in §E is historical, not the live queue.
+
 **Principle:** The system improves itself. Every hardcoded default removed widens capability. Every Rung 3 claim is a reproducible capability. The map is the artifact; the loop is the engine.
 
 ---

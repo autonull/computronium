@@ -13,7 +13,7 @@ import contextlib
 import json
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from types import MappingProxyType
@@ -717,6 +717,16 @@ async def run_rung1_ladder(
     return rungs, best, "viable"
 
 
+def pair_schedule(schedule: Schedule, seed: int) -> Schedule:
+    """The schedule for one arm at one seed (TODO104 A8/A3).
+
+    A paired comparison is ``n`` index-matched seeds; reusing the base
+    schedule's seed ran the same cell twice and reported ``d=0.00``. Each cell
+    is one seed, so the replicate count is 1.
+    """
+    return replace(schedule, seed=seed, n_seeds=1)
+
+
 async def run_rung2_comparison(
     axis: str,
     primitive: str,
@@ -781,7 +791,11 @@ async def run_rung2_comparison(
 
     async def run_cell(arm: str, coord: Any, seed: int) -> PairedCell:
         async with semaphore:
-            measured = await _measure_async(coord, schedule, budget_s)
+            # One pair is one seed: a constant schedule seed made every pair
+            # bit-identical, so the paired difference was 0 and d collapsed to
+            # 0.00 on every comparison (measured 2026-11-25).
+            paired_schedule = pair_schedule(schedule, seed)
+            measured = await _measure_async(coord, paired_schedule, budget_s)
             return PairedCell(
                 arm=arm,
                 factor=1.0,

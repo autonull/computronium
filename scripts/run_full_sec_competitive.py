@@ -170,6 +170,10 @@ AXES = (
     else list(AXIS_DEFAULTS.keys())
 )
 SEMAPHORE = int(os.environ.get("SEC_SEMAPHORE", str(SEMAPHORE)))
+# Coverage and claims are separate decisions: the coverage map is rung 1, a
+# claim is a pre-registered rung 2 at n_seeds x 2 arms. SEC_RUNG2=none maps
+# breadth without spending the paired cells.
+RUNG2_ENABLED = os.environ.get("SEC_RUNG2", "auto").strip().lower() != "none"
 RUNG_TIMEOUT = float(os.environ.get("SEC_RUNG_TIMEOUT", str(RUNG_TIMEOUT)))
 
 
@@ -179,7 +183,10 @@ if _resolved != SEMAPHORE:
 SEMAPHORE = _resolved
 # Cooperative cell budget: each rung stops itself instead of being killed.
 sec_all_axes.MEASURE_BUDGET_S = RUNG_TIMEOUT
-print(f"\n🎯 Running SEC on axes: {AXES} (semaphore={SEMAPHORE})")
+print(
+    f"\n🎯 Running SEC on axes: {AXES} (semaphore={SEMAPHORE}, "
+    f"rung2={'auto' if RUNG2_ENABLED else 'none'})"
+)
 
 # Results directory
 RESULTS_DIR = Path(os.environ.get("SEC_RESULTS_DIR", "results/sec/full_competitive"))
@@ -338,7 +345,7 @@ async def run_primitive_full_fixed(
         rung2_verdict = None
 
         # Rung 2: paired comparison at best point
-        if best is not None and rung1_verdict == "viable":
+        if best is not None and rung1_verdict == "viable" and RUNG2_ENABLED:
             # Generate registration path
             reg_dir = Path("configs/preregistrations")
             reg_dir.mkdir(parents=True, exist_ok=True)

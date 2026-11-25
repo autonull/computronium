@@ -10,11 +10,13 @@ mechanism, a failing check, and the file it lives in. A fix that moves neither
 the cell nor a test is hygiene, not a fix. The map is the artifact; the loop is
 the engine.
 
-**Progress 2026-11-25:** Phase 1 (1.1–1.4), Phase 2.1, Phase 3 (3.1–3.3) and
-Phase 6.1/6.2 (substance) landed, each with a lock. A2 acceptance measured on
-the GPU; meta-SEC regenerated with a nonzero objective. Phase 4 re-run launched
-(`logs/serial_todo104_driver.log`). Open: 2.2, 2.3, 4.x, 5.x, 6.3, 7.x, 8.x —
-see §Progress log for the evidence and the next command.
+**Progress 2026-11-25:** Phase 1 (1.1–1.4), Phase 2.1–2.3, Phase 3 (3.1–3.3),
+Phase 6.1/6.2 and Phase 7.1 landed, each with a lock. A2 acceptance measured on
+the GPU; meta-SEC regenerated with a nonzero objective (3.589). The first
+Phase-4 re-run exposed a new defect (A11: every rung-2 pair ran at one seed, so
+`d=0.00`); it is fixed and the coverage map re-launched with `SEC_RUNG2=none`
+(`logs/serial2_*/`). Open: 2.2 (A5 cost profile), 4.x breadth read, 5.x claims,
+6.3 non-MNIST gate, 7.2, 8.x — see §Progress log.
 
 ---
 
@@ -124,7 +126,22 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   cannot beat 0, mark the study **invalid** and fall back to declared defaults
   rather than emitting a zero-value "best".
 
+### A11. Rung 2 pairs all ran at one seed (`d=0.00` everywhere)
+- **Evidence:** the 2026-11-25 re-run logged `Rung 2: coordinate (d=0.00)` on
+  every viable primitive; the paired difference was exactly 0.
+- **Mechanism:** `sec_all_axes.run_rung2_comparison.run_cell` recorded `seed`
+  in the cell but ran `_measure_async(coord, schedule)` with the base
+  schedule's seed for every pair, so both arms were one cell run twice. A
+  10-cell claim was 1 cell × 10 records.
+- **Fix:** `pair_schedule(schedule, seed)` — one seed per cell, `n_seeds=1`;
+  lock `test_each_pair_runs_its_own_seed`. `sec_claims._paired_cells` already
+  did this, so the defect was the all-axes driver only.
+- **Consequence:** the 2026-11-24 rung-2 verdicts (21 coordinates, 1 claim)
+  are A11 artifacts, not power statements. The re-run must not read them.
+
 ### A8. Registration box fidelity ≠ run fidelity
+- **State:** fixed 2026-11-25 (`claim_schedule`); lock in
+  `tests/property/test_claim_box_identity_lock.py`.
 - **Evidence:** `create_registration` writes `epochs` from the family base box
   (iris=20, cora=200) while the ladder runs `epochs=1`. `box_mismatch` then
   decides a run at a box the ladder never measured.
@@ -157,10 +174,10 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 | ID | Item | State | Where |
 |---|---|---|---|
 | B1 | Primitive proposals from gaps (`unavailable_reason="proposed"`) | ❌ none present | `primitives/registry.py` |
-| B2 | Budget policy from measured cost model | 🟡 `configs/cost_model.pkl` exists (R²=0.29); not wired; `ADAPTIVE_L0_SHARE` already gone | `execution/adaptive_budget.py`, `wave.py` |
+| B2 | Budget policy from measured cost model | ✅ `wave.py` sizes each wave from that fidelity's measured cells (measured → positive control → default); the offline `configs/cost_model.pkl` had no reader and is deleted | `wave.py` |
 | B3 | Success metrics unmet | ❌ see Section D | — |
-| B4 | Consolidated checklist stale (all `[ ]` despite detailed `[x]`) | ❌ regenerate | `TODO103.md` §Consolidated |
-| B5 | `graph`/`spatial_lattice` hardcoded `edge_index`/`lattice_dims` in `_params_for` | ✅ confirmed present | `sec_loop.py:882,891` |
+| B4 | Consolidated checklist stale (all `[ ]` despite detailed `[x]`) | 🟡 TODO103 §E marked superseded by TODO104 §E | `TODO103.md` |
+| B5 | `graph`/`spatial_lattice` hardcoded `edge_index`/`lattice_dims` in `_params_for` | ✅ fixed: no invented topology; builders refuse by name | `sec_loop._params_for` |
 
 ---
 
@@ -192,7 +209,9 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - [ ] **2.2** A5: profile `adafactor`/`natural_gradient`; fix or mark
       `available=False` with a named reason. (Priced as skips for the re-run;
       the deadline now returns a timeout cell instead of a kill.)
-- [ ] **2.3** A8: registration box == measured box (fidelity/epochs/seed).
+- [x] **2.3** A8: `sec_claims.claim_schedule(registration, fallback)` runs the
+      claim at the registered box (fidelity/epochs/seeds), so a ladder cannot
+      decide a box it never measured; lock `test_claim_box_identity_lock.py`.
 
 ### Phase 3 — Meta-SEC validity ✅
 - [x] **3.1** A6: `CLAIM_SEED_CHOICES` derives from `DEFAULT_MIN_SEEDS`
@@ -238,9 +257,11 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       (`digits`/`iris`), and delete the remaining `sec_pilot.py` literals.
 
 ### Phase 7 — Budget policy (B2)
-- [ ] **7.1** Wire the measured cost model into wave sizing (per-primitive cost,
-      not static share). The calibrated `avg_walltime_s=15.1` is now available
-      to the meta proxy; the wave planner still prices from the pilot.
+- [x] **7.1** Wave sizing already prices each wave from *that* fidelity's
+      measured cells (`wave.py`: measured → positive control → default), which is
+      the per-cell cost the plan asked for. The offline
+      `configs/cost_model.pkl` had no reader and is deleted; the meta proxy now
+      reads the same measured walltimes (`avg_walltime_s=15.1`).
 - [ ] **7.2** Validate on one held-out wave: predicted vs measured walltime.
 
 ### Phase 8 — Proposals & metrics (B1, B3, B4)
@@ -280,8 +301,8 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 ### Phase 2 — Box/legality
 - [x] 2.1 intersect box keys with accepted params
-- [ ] 2.2 adafactor/natural_gradient: fix or mark unavailable
-- [ ] 2.3 registration box == measured box
+- [ ] 2.2 adafactor/natural_gradient: profile, then fix or mark unavailable
+- [x] 2.3 claim runs at the registered box (+ lock)
 
 ### Phase 3 — Meta-SEC (done 2026-11-25)
 - [x] 3.1 claim-seed space derives from the floor
@@ -304,7 +325,7 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - [ ] 6.3 grep + non-MNIST capability gate (sec_pilot literals remain)
 
 ### Phase 7 — Budget
-- [ ] 7.1 wire measured cost model into wave sizing
+- [x] 7.1 wave sizing prices the fidelity's measured cells (offline pkl deleted)
 - [ ] 7.2 validate on held-out wave
 
 ### Phase 8 — Proposals & docs
@@ -339,11 +360,18 @@ A1 artifact (five of five flipped viable serially).
 `geometry.py`, `_geometry_builders.py`, `sec_loop.py`, `sec_all_axes.py`,
 `meta_sec.py`, new `sec_parts.py`, `scripts/run_full_sec_competitive.py`,
 three lock tests + one probe, `configs/meta_sec_best.json`.
-**Next experiment:** `bash scripts/run_sec_axes_serial.sh` (in flight,
-`logs/serial_todo104_driver.log`); read each axis' parts under
-`results/sec/serial/<axis>/parts/` even if a process dies.
-Then: pytest A5 (adafactor/natural_gradient profile), A8 box identity, and the
-non-MNIST gate (6.3).
+**Next experiment:** the coverage re-run
+(`SEC_RUNG2=none`, `results/sec/serial2/<axis>`, `logs/serial2_*`), then a
+pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
+each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
+dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
+
+**Second finding (A11):** the first re-run logged `d=0.00` on every rung 2 —
+`run_cell` recorded the seed but measured the base schedule, so both arms were
+one cell twice. `pair_schedule` now sets one seed per cell. Every 2026-11-24
+rung-2 verdict is an A11 artifact: 21 coordinates and 1 claim carry no power
+statement. Coverage (rung 1) was unaffected, so the map re-ran as coverage first
+(`SEC_RUNG2=none`), and claims follow at the registered box only.
 
 ## 📎 Section F — Evidence & commands
 

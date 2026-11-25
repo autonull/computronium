@@ -22,10 +22,12 @@ from computronium.experiment.meta_sec import (
 from computronium.experiment.sec_all_axes import (
     _build_axis_box,
     _get_primary_knob,
+    pair_schedule,
     resolve_semaphore,
 )
 from computronium.experiment.sec_loop import deadline_params
 from computronium.experiment.sec_parts import reduce_parts, write_part
+from computronium.experiment.schema.coordinate import Schedule
 
 
 def test_one_device_runs_one_cell() -> None:
@@ -54,6 +56,23 @@ def test_driver_kills_no_thread() -> None:
         encoding="utf-8"
     )
     assert "asyncio.wait_for" not in source
+
+
+def test_each_pair_runs_its_own_seed() -> None:
+    """A paired comparison is n index-matched seeds, not one cell n times."""
+    base = Schedule(
+        fidelity="L2",
+        seed=0,
+        n_seeds=5,
+        epochs=20,
+        batch_limit=0,
+        budget_id="rung2-mnist",
+        task_id="mnist",
+    )
+    paired = [pair_schedule(base, seed) for seed in range(5)]
+    assert [p.seed for p in paired] == list(range(5))
+    assert all(p.n_seeds == 1 for p in paired)
+    assert (base.seed, base.n_seeds) == (0, 5)
 
 
 def test_parts_survive_and_reduce(tmp_path: Path) -> None:

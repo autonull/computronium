@@ -27,11 +27,12 @@ import json
 import math
 import statistics
 import time
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
+from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.sec_deep_dive import (
     CLAIM_SEEDS,
     MARGIN,
@@ -49,8 +50,6 @@ from computronium.validation.preregistration import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
-
-    from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
 __all__ = [
     "CLAIM_LIMIT",
@@ -234,6 +233,20 @@ def registration_path(
 ) -> Path:
     """The committed registration file for one candidate."""
     return root / f"sec_{candidate.axis}_{candidate.level}.json"
+
+
+def claim_schedule(registration: ThresholdRegistration, fallback: Schedule) -> Schedule:
+    """The schedule a claim is measured at: the box it was registered at.
+
+    A claim decided at the ladder's schedule (``epochs=1``) is refused by
+    ``box_mismatch`` against a registration written at the family base box, so
+    the registration's own fields win (TODO104 A8). A field the registration
+    does not declare keeps the caller's value.
+    """
+    declared = registration.box or {}
+    names = {field.name for field in fields(Schedule)}
+    overrides = {name: declared[name] for name in names if name in declared}
+    return replace(fallback, **overrides)
 
 
 def candidate_box(candidate: ClaimCandidate, schedule: Schedule) -> dict[str, Any]:
@@ -431,6 +444,7 @@ def run_claim(
     by construction, so it is marked no-power without spending the ten cells.
     """
     started = time.perf_counter()
+    schedule = claim_schedule(registration, schedule)
     box = candidate_box(candidate, schedule)
     stale = _stale_box(candidate, registration)
     if stale is not None:
