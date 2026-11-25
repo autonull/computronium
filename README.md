@@ -1230,10 +1230,11 @@ ladder reached an above-chance cell; *error-blind* rows (`homeostatic`,
 | **total** | **52/75** | 229 rungs: 176 measured, 41 refused, 9 defect, 3 timeout |
 
 Two rows the earlier map named *unsupplied* now measure: `geometry/graph` on
-`cora` **0.114 @ 1.1 s** (node classification, one epoch) and
-`geometry/spatial_lattice` on `mnist` **0.9167 @ 67.5 s**. The graph refusal
-was a legality artifact: the declared-space check composed without the task's
-`edge_index`, which the evaluator supplies (`scripts/probes/todo104_carriers.py`).
+`cora` **0.162 @ 0.8 s** (node classification, one epoch, above chance for
+7-class, below bar) and `geometry/spatial_lattice` on `mnist`
+**0.908 @ 5 s**. The graph refusal was a legality artifact: the declared-space
+check composed without the task's `edge_index`, which the evaluator supplies
+(`scripts/probes/todo104_carriers.py`).
 
 The breadth exit is a predicate the repository evaluates:
 
