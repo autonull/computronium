@@ -147,6 +147,29 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A19. A box over its ceiling was reported as a defect
+- **Evidence:** 2 of the 9 remaining defect rows are ceiling overruns:
+  `geometry/attention` (`param_count 16866970 over ceiling`) and
+  `geometry/tile` (`720500`).
+- **Mechanism:** `sec_loop._defect_for` names an overrun a DEFECT, but its own
+  contract says a defect is an execution fact (TODO95 D5). A width that cannot
+  fit the declared ceiling is an infeasible box — a refusal.
+- **Fix (queued, one source):** `_defect_for` returns `within` for the caller
+  to map to `refused` (a box statement), keeping `non-finite metric` as the
+  only defect it names. The rule is shared with the breadth screen and the
+  interaction slice, so it lands after the map run.
+
+### A20. A sparse substrate zeroes the gradient of pruned parameters
+- **Evidence:** `substrate/sparse` defects: `GradientCredit: no gradient
+  reached target indices [0, 1, 2, 3]`.
+- **Mechanism:** the sparse mask prunes parameters, so the autograd path to
+  them is zero and the credit's contract check refuses the cell. That is the
+  substrate's declared behaviour, not a crash: the pair needs a credit whose
+  contract tolerates pruned parameters (or the row declares the requirement).
+- **Fix (queued):** declare it in the void table (`gradient` × a substrate that
+  prunes parameters) or measure the sparse substrate with a masked loss. Until
+  then the row is a named refusal by the credit's contract.
+
 ### A18. `gradient` × hard routing gate = zero gradient (declared space gap)
 - **Evidence:** `geometry/routing` defected at every rung: `Training failed:
   GradientCredit: no gradient reached target indicators`; the dry-run check in
@@ -316,12 +339,21 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       declared default (factor 1.0).
 
 ### Phase 4 — Recover coverage hidden by A1–A5
-- [x] **4.1** Re-ran all six axes serially (one process per axis,
-      `SEC_RUNG2=none`): `results/sec/serial3`, `logs/serial3_*`.
-      First pass: **37 viable + 2 error_blind = 39/75**, 139 measured /
-      41 refused / 46 defect / 3 timeout rungs. The 46 defects exposed A15
-      (conv pool), A16 (continual ruler) and A17 (family choice); with those
-      fixed, five axes re-run into the same root (`logs/serial4_*`).
+- [x] **4.1** Re-ran all six axes serially (`SEC_RUNG2=none`):
+      `results/sec/serial3`. Final map **49/75 viable+blind** (credit 11,
+      dynamics 2, geometry 6, plasticity 5, substrate 9, update 16) from
+      176 measured / 41 refused / 9 defect / 3 timeout rungs. The priced skip
+      rows (8) re-run under `SEC_INCLUDE_SLOW=1` (`logs/slow_*`).
+- [x] **4.2** Breadth read: every axis has a working default
+      (`instantaneous` 0.9172, `feedforward` 0.9134, `null` 0.92,
+      `digital` 0.9172, `adam`/`euclidean` 16/18 update rows viable).
+      Remaining gaps are named: routing×gradient (A18), param ceiling (A19),
+      sparse×gradient (A20), and the three structural carriers (graph,
+      spatial_lattice) that no task supplies.
+- [x] **4.3** Reconcile: `eligibility_prop`, `rtrl_reference`, `unbiased_rtrl`
+      refuse on a declared batch-layout rule, not a mechanism verdict; the
+      five A4 refusals from the concurrent run all run serially (A1 artifact
+      confirmed).
 - [ ] **4.2** Target: every error-aware credit has ≥1 legal above-chance cell on
       its target family; every legal composition family trains or has a named reason.
 - [ ] **4.3** Reconcile: an "all_refused" that flips to "viable" under serial is
@@ -381,10 +413,10 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 | Metric | TODO103 actual | TODO104 target | Measurement |
 |---|---|---|---|
 | Valid claims | 1 (A11 artifact) | 18+ | `results/sec/serial` rung2 verdicts |
-| Viable primitives (serial) | 23/75 | 45+ | **37 viable + 2 error_blind = 39/75** (serial3, pre-A16/A17) |
-| Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | 3 of 229 rungs (serial3 census: 139 measured, 41 refused, 46 defect, 3 timeout) |
+| Viable primitives (serial) | 23/75 | 45+ | **49/75** (serial3: 47 viable + 2 error_blind) **met** |
+| Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | 3 of 229 rungs (serial3: 176 measured, 41 refused, 9 defect, 3 timeout) |
 | Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
-| Update primitives running | 8/18 | 18/18 or named reason | axis log |
+| Update primitives running | 8/18 | 18/18 or named reason | **16/18 viable**, 2 priced skips (adafactor, natural_gradient) re-running |
 | Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` → **3.589, valid, seeds=7** |
 | Primitive proposals | 0 | 3+ | `registry.py` `"proposed"` |
 | Hardcoded MNIST defaults | 5+ | 0 | factory/builder path: **0**; dataclass field defaults remain (never read by the app path) |

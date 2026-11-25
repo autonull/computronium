@@ -192,6 +192,10 @@ print(
 )
 
 # Results directory
+# The skip list is a cost statement; SEC_INCLUDE_SLOW re-runs those rows once
+# the deadline makes their cost measurable.
+INCLUDE_SLOW = bool(os.environ.get("SEC_INCLUDE_SLOW"))
+
 # A claim set is chosen, not "everything viable": SEC_PRIMITIVES restricts an
 # axis run to the arms a claim is pre-registered for.
 PRIMITIVES: set[str] = {
@@ -416,7 +420,7 @@ async def run_axis_full(
             continue
 
         # Skip known-slow primitives
-        if primitive in SLOW_PRIMITIVES.get(axis, set()):
+        if primitive in SLOW_PRIMITIVES.get(axis, set()) and not INCLUDE_SLOW:
             print(f"\n=== {axis}/{primitive}: SKIPPED (known slow) ===")
             write_part(RESULTS_DIR, axis, primitive, "skipped", {})
             continue
