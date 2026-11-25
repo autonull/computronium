@@ -116,6 +116,40 @@ def test_screen_coordinate_reads_its_box_task_extent() -> None:
     assert coord.params["geometry.in_channels"] == 1
 
 
+def test_a_graph_cell_is_legal_on_a_graph_task() -> None:
+    """The evaluator composes with the task's edge_index; legality must too.
+
+    Without the task instance the declared-space check refused every graph
+    cell with "requires edge_index" while the evaluator would have supplied
+    cora's own connectivity (TODO104 A30).
+    """
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.sec_loop import _base_axes, _coordinate, _is_legal
+
+    shape = task_shape("cora", "cpu")
+    axes = _base_axes("cora")
+    axes["geometry"] = "graph"
+    coord = _coordinate(axes, task_id="cora", shape=shape)
+
+    assert _is_legal(coord, "cora", shape) == (True, None)
+
+
+def test_a_graph_cell_on_a_table_stays_refused() -> None:
+    """A task without a graph is still refused by name, not admitted."""
+    from computronium.experiment.kernel.evaluate import task_shape
+    from computronium.experiment.sec_loop import _base_axes, _coordinate, _is_legal
+
+    shape = task_shape("iris", "cpu")
+    axes = _base_axes("iris")
+    axes["geometry"] = "graph"
+    coord = _coordinate(axes, task_id="iris", shape=shape)
+
+    legal, reason = _is_legal(coord, "iris", shape)
+
+    assert legal is False
+    assert reason is not None
+
+
 def test_params_for_carries_no_literal_extent() -> None:
     """The box builder has no MNIST-shaped fallback left to guess from."""
     from computronium.experiment.sec_loop import _params_for

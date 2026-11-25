@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
 
     from computronium.experiment.schema.run_spec import Fidelity
 
@@ -100,6 +100,7 @@ class CostModel:
     startup_s: float
     measured: bool = False
     per_task: dict[str, float] | None = None
+    per_box: dict[str, float] | None = None
 
     @property
     def source(self) -> str:
@@ -118,12 +119,42 @@ class CostModel:
             return next(iter(self.per_task.values()))
         return self.cost_per_cell_s
 
+    def cost_for_box(
+        self, task_id: str | None, geometry: str, dynamics: str, credit: str
+    ) -> float:
+        """Per-cell cost for the box, then its task, then the run-wide estimate.
+
+        One task's cells span two orders of magnitude (an mnist feedforward cell
+        is 4.4 s, its settle cell 130 s), so a task price under-states a wave
+        whose cells differ by topology (TODO104 A29).
+        """
+        if self.per_box:
+            price = self.per_box.get(box_key(task_id, geometry, dynamics, credit))
+            if price is not None:
+                return price
+        return self.cost_for(task_id)
+
+    def cost_for_cells(self, cells: Iterable[tuple[Coordinate, Schedule]]) -> float:
+        """Mean per-cell cost over the boxes a run plans to evaluate."""
+        prices = [
+            self.cost_for_box(
+                schedule.task_id, coord.geometry, coord.dynamics, coord.credit
+            )
+            for coord, schedule in cells
+        ]
+        return sum(prices) / len(prices) if prices else self.cost_per_cell_s
+
     def cost_for_tasks(self, task_ids: Sequence[str]) -> float:
         """Mean per-cell cost over the tasks a run plans to evaluate."""
         if not self.per_task:
             return self.cost_per_cell_s
         known = [self.per_task[t] for t in task_ids if t in self.per_task]
         return sum(known) / len(known) if known else self.cost_per_cell_s
+
+
+def box_key(task_id: str | None, geometry: str, dynamics: str, credit: str) -> str:
+    """One spelling of the box a price was measured at."""
+    return f"{task_id or '?'}|{geometry}|{dynamics}|{credit}"
 
 
 def _load_cost_model(device: str, fidelity: str) -> CostModel:
@@ -134,6 +165,7 @@ def _load_cost_model(device: str, fidelity: str) -> CostModel:
             startup_s=float(entry["startup_s"]),
             measured=True,
             per_task=entry.get("per_task"),
+            per_box=entry.get("per_box"),
         )
     except OSError, ValueError, KeyError, TypeError:
         return CostModel(DEFAULT_COSTS.get(fidelity, 30.0), DEFAULT_STARTUP_S)
@@ -153,6 +185,12 @@ def _save_cost_model(device: str, fidelity: str, model: CostModel) -> None:
             data["per_task"] = {
                 **previous,
                 **{k: round(v, 3) for k, v in model.per_task.items()},
+            }
+        if model.per_box:
+            previous_box = existing.get(key, {}).get("per_box", {})
+            data["per_box"] = {
+                **previous_box,
+                **{k: round(v, 3) for k, v in model.per_box.items()},
             }
         existing[key] = data
         TIMING_CACHE.write_text(json.dumps(existing, indent=2, sort_keys=True))
@@ -1438,6 +1476,7 @@ def _measure_cost_model(
     from collections import defaultdict
 
     task_times: defaultdict[str, list[float]] = defaultdict(list)
+    box_times: defaultdict[str, list[float]] = defaultdict(list)
     for record in records:
         if record.payload.get("fidelity") != fidelity:
             continue
@@ -1448,6 +1487,9 @@ def _measure_cost_model(
         walltime = record.payload.get("walltime_s")
         if complete and task_id and walltime:
             task_times[task_id].append(float(walltime))
+            box_times[
+                box_key(task_id, record.geometry, record.dynamics, record.credit)
+            ].append(float(walltime))
 
     if not task_times:
         return prior
@@ -1455,11 +1497,13 @@ def _measure_cost_model(
     per_task = {
         task_id: sum(times) / len(times) for task_id, times in task_times.items()
     }
+    per_box = {key: sum(times) / len(times) for key, times in box_times.items()}
     # Prices are per task and independent: this run measured only its own
     # tasks, so the task it did not run keeps the price it already had.
     # Replacing the map priced the next run of a different task from this
     # run's unrelated cell time (a 138x under-price on mnist L1).
     merged = {**(prior.per_task or {}), **per_task}
+    merged_box = {**(prior.per_box or {}), **per_box}
     measured = CostModel(
         # The run-wide fallback is the merged map's mean, not this run's mean:
         # a 0.1 s wine cell must not price an unmeasured task at 0.1 s.
@@ -1467,6 +1511,7 @@ def _measure_cost_model(
         startup_s=0.0,
         measured=True,
         per_task=merged,
+        per_box=merged_box,
     )
     logger.info(
         "Measured: %.1fs/cell (prior: %.1fs/cell)",

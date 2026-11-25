@@ -198,7 +198,10 @@ def _print_dry_run(result: dict[str, Any], args: argparse.Namespace) -> None:
         model: CostModel = result["model"]
         n = result.get("n", 0)
         tasks = result.get("tasks", [])
-        cell_cost = model.cost_for_tasks(tasks)
+        cells = result.get("cells") or []
+        cell_cost = (
+            model.cost_for_cells(cells) if cells else model.cost_for_tasks(tasks)
+        )
         total = model.startup_s + n * cell_cost
         split = result.get("budget_split")
         split_text = (

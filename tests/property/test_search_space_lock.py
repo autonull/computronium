@@ -304,6 +304,9 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
     geometry_params: dict[str, object] = {}
     if topology == "graph":
         geometry_params = {"edge_index": [[0, 1], [1, 0]]}
+    if topology == "spatial_lattice":
+        # The lattice extent is the task's, never a factory default (A10).
+        geometry_params = {"lattice_dims": (1, 8, 8)}
 
     # Topologies with a separate output projection cannot receive gradient under
     # instantaneous dynamics (the settle is detached); a local credit

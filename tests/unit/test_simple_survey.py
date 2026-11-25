@@ -159,6 +159,42 @@ def test_cost_model_round_trip(tmp_path, monkeypatch):
     assert loaded.startup_s == pytest.approx(5.5)
 
 
+def test_a_box_price_wins_over_its_task_price():
+    """One task spans 4.4 s to 130 s; the box entry prices the box (A29)."""
+    from computronium.experiment.wave import CostModel, box_key
+
+    model = CostModel(
+        6.0,
+        0.0,
+        measured=True,
+        per_task={"mnist": 6.0},
+        per_box={box_key("mnist", "feedforward", "instantaneous", "gradient"): 4.4},
+    )
+
+    assert (
+        model.cost_for_box("mnist", "feedforward", "instantaneous", "gradient") == 4.4
+    )
+    # An unmeasured box of the same task keeps the task price.
+    assert model.cost_for_box("mnist", "conv", "instantaneous", "gradient") == 6.0
+    # An unmeasured task keeps the run-wide estimate.
+    assert model.cost_for_box("iris", "conv", "instantaneous", "gradient") == 6.0
+
+
+def test_a_box_price_survives_the_cache(tmp_path, monkeypatch):
+    """The cache keeps the box map beside the task map."""
+    from computronium.experiment import wave
+
+    monkeypatch.setattr(wave, "TIMING_CACHE", tmp_path / ".timing.json")
+    box = wave.box_key("mnist", "feedforward", "instantaneous", "gradient")
+    wave._save_cost_model(
+        "cpu", "L0", wave.CostModel(9.25, 5.5, measured=True, per_box={box: 4.4})
+    )
+
+    loaded = wave._load_cost_model("cpu", "L0")
+
+    assert loaded.per_box == {box: pytest.approx(4.4)}
+
+
 def test_cost_model_missing_falls_back_to_defaults(tmp_path, monkeypatch):
     """No cache entry means the documented fallback table, not a crash."""
     from computronium.experiment import wave

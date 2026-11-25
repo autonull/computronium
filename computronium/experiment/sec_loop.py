@@ -1144,12 +1144,24 @@ def _is_legal(
     output_dim = spec.output_dim if shape is None else shape.output_dim
     if input_shape is None or output_dim is None:
         return False, f"{task_id}: task declares no input shape or output dimension"
+    task = None
+    if coord.geometry == "graph":
+        # A graph's connectivity is the task's data (TODO104 B5/A30): the
+        # evaluator composes with the task instance, so the declared-space
+        # check must read the same edge_index or it refuses a legal cell.
+        from computronium.experiment.kernel.evaluate import task_instance
+
+        try:
+            task = task_instance(task_id, "cpu")
+        except Exception:  # ruff: ignore[blind-except] - a graph-less task refuses below
+            task = None
     try:
         compose_configs(
             coordinate=coord,
             geometry={},
             input_shape=input_shape,
             output_dim=output_dim,
+            task=task,
         )
     except ValueError as exc:
         return False, str(exc)

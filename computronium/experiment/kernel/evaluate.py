@@ -109,6 +109,7 @@ __all__ = [
     "evaluate_cell",
     "history_metrics",
     "record_from_evaluation",
+    "task_instance",
     "task_shape",
 ]
 
@@ -289,6 +290,16 @@ def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     filter cells with the same shape the evaluator will use.
     """
     return _task_shape(_task(task_id, device))
+
+
+def task_instance(task_id: str, device: str = "auto") -> Any:
+    """The set-up task instance the evaluator will use (cached per device).
+
+    A geometry that reads task data (a graph's ``edge_index``) must compose
+    against this instance: shape alone cannot carry connectivity, and a
+    legality check without it refuses a cell the evaluator would run.
+    """
+    return _task(task_id, device)
 
 
 def evaluate_cell(

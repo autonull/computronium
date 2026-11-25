@@ -20,10 +20,12 @@ coordinate (A22). **Then:** the breadth exit PASSes (`comp gate breadth`,
 17/17 error-aware credits on ≥2 families, A27), the A1-artifact reconciliation
 is recorded (34 `all_refused → viable` serial flips, A27), the shape-source
 defect is closed across the app path (`_apply_task_spatial`, 6.3, A28), the
-cost model is validated on a held-out wave by box key (A29), and TODO103's
-checklist is regenerated (8.2). 8.1 (3+ primitive proposals) is the only
-Phase-8 item open; 5.3's 18+ claim target is restated as blocked by min_d
-(A22), not by the number of viable rules.
+cost model is validated on a held-out wave and the box-keyed model landed
+(A29), the two "unsupplied" carriers measured (A30), and TODO103's
+checklist is regenerated (8.2). 8.1 is re-triaged: both "unsupplied" carriers
+measure (A30), so no primitive proposal is needed; 5.3's 18+ claim target is
+restated as blocked by the seed-block spread (A22), not by the number of
+viable rules.
 
 ---
 
@@ -31,9 +33,9 @@ Phase-8 item open; 5.3's 18+ claim target is restated as blocked by min_d
 
 | Item | What it needs | Cost / trigger |
 |---|---|---|
-| **8.1 primitive proposals (3)** | each candidate gets a spec row, a config classmethod and the wiring lockstep lock; candidates and triggers are in §C | one session per primitive; the gap table is locked to the census, so a bare gap row is not a proposal |
+| **Breadth composition rules** | A18 routing×gradient, A19 param ceiling, A20 sparse×gradient each need a declared rule or a dispatch path, with a failing composition as the trigger | `kernel/search_space.py`, `kernel/compose.py` |
 | **5.3 claim target** | a pre-registered family minimum below every measured block's CI lower bound (0.5 is below all three blocks) *and* a seed-block variance estimate; fresh seeds, fixed n | 128 cells ≈ 15 min at the measured 6 s/cell |
-| **A29 cost model** | key the persisted model on the box (task, geometry, dynamics, credit) instead of the task | `survey_cli` prices through `cost_for_tasks`; a box-keyed entry moves that cell |
+| **Geometry re-run** | record the two carriers (graph/cora, spatial_lattice/mnist) in the map so 4.2's named gap closes on data, not a probe | geometry axis at `SEC_RUNG2=none`, ~2 cells + its ladder |
 | **2.2 `natural_gradient`** | mark the row unavailable with its measured L0 cost (>180 s/epoch) instead of a priced skip | needs the axis row's own availability flag |
 | **Hygiene queue** | 6 stale fixtures fail at HEAD (API drift: `_train_nearest` gained `budget_s`; two registration/box helpers moved) in `test_paired_ci.py`, `test_ladder_record_lock.py`, `test_screen_has_no_verdict.py` | round-close pass, not a commit blocker |
 
@@ -407,7 +409,7 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 | ID | Item | State | Where |
 |---|---|---|---|
-| B1 | Primitive proposals from gaps | 🟡 three candidates named in 8.1; each needs a spec row + wiring lock (the gap table is census-locked) | `schema/gaps.py`, `schema/seed_registries.py` |
+| B1 | Primitive proposals from gaps | ✅ re-triaged: no proposal is needed. Both carriers are existing rows behind a legality artifact (A30); the remaining gaps are composition rules (A18–A20) | `sec_loop._is_legal`, `schema/gaps.py` |
 | B2 | Budget policy from measured cost model | ✅ `wave.py` sizes each wave from that fidelity's measured cells (measured → positive control → default); the offline `configs/cost_model.pkl` had no reader and is deleted | `wave.py` |
 | B3 | Success metrics unmet | ❌ see Section D | — |
 | B4 | Consolidated checklist stale (all `[ ]` despite detailed `[x]`) | 🟡 TODO103 §E marked superseded by TODO104 §E | `TODO103.md` |
@@ -450,6 +452,22 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   `scripts/probes/todo104_non_mnist_shape.py` — usps/conv measured 0.665 in
   2.2 s, digits/nca 0.625 in 0.5 s, both at their own 16x16/8x8 extent.
 
+### A30. The "unsupplied carriers" both train; legality refused the graph
+- **Evidence:** `geometry/graph` on `cora` was refused by the declarative check
+  (`graph topology requires edge_index`) while the evaluator composes graph
+  cells *with the task instance* and extracts cora's own connectivity. Post-fix
+  probe (`scripts/probes/todo104_carriers.py`): graph/cora **0.114 @ 1.1 s**,
+  spatial_lattice/mnist **0.9167 @ 67.5 s**, both `legal=True, measured`.
+- **Mechanism:** `sec_loop._is_legal` called `compose_configs` without the
+  task instance, so the connectivity extraction never ran; a legal cell was
+  refused, and the map called the carrier "unsupplied" — a legality artifact,
+  not a capability gap. The lattice's refusal was the same class, closed by
+  the task-shape derivation (A28); its extent now comes from the 3-D shape.
+- **Fix:** `evaluate.task_instance` is the public door to the cached task;
+  `_is_legal` passes it when the geometry reads task data. Locks:
+  `test_a_graph_cell_is_legal_on_a_graph_task`,
+  `test_a_graph_cell_on_a_table_stays_refused`.
+
 ### A29. A task price is not a box price (cost-model validation)
 - **Evidence:** held-out split of the 579 measured SEC cells
   (`scripts/probes/todo104_cost_model_heldout.py`): pricing by task gives
@@ -461,9 +479,11 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   (`_first_wave_price`) uses the positive control's measured walltime at the
   run's box, which is why the run path is right and the fallback table is
   not. The fallback under-prices a wave whose cells differ by topology.
-- **Fix (next):** key the persisted model on the box (task, geometry,
-  dynamics, credit), not the task alone. Trigger: `survey_cli` prices a wave
-  through `cost_for_tasks`; a box-keyed entry moves that cell.
+- **Fix (landed):** `CostModel.per_box` keys the persisted model on
+  (task, geometry, dynamics, credit), with `cost_for_box` → `cost_for(task)`
+  → run-wide; the cache round-trips it and `survey_cli`'s dry run prices its
+  own cells (`cost_for_cells`). Locks: `test_a_box_price_wins_over_its_task_price`,
+  `test_a_box_price_survives_the_cache`.
 
 
 
@@ -657,17 +677,16 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
       path is right; the per-task fallback table is the defect (A29).
 
 ### Phase 8 — Proposals & metrics (B1, B3, B4)
-- [ ] **8.1** Emit ≥3 primitive proposals. The gap table is locked to the
-      census (`test_inventory_single_source`), so a proposal needs a spec row +
-      config classmethod + the wiring lockstep lock — not a bare gap row.
-      Candidates from tonight's evidence, each with its trigger:
-      1. `primitive.geometry.graph_carrier` — reads the task's own connectivity;
-         trigger: a task declares `edge_index` in its shape (B5 refusal today).
-      2. `primitive.geometry.lattice_carrier` — derives the lattice extent from
-         a 3-D task shape; trigger: a spatial task declares a 3-D extent (A10).
-      3. `primitive.substrate.gpu_neuromorphic` — neuromorphic settle on the
-         GPU (every cell's box declares `substrate.device=cpu`, so the cell is
-         CPU-bound: `spiking_mnist` L0 measured 51–81 s/cell).
+- [x] **8.1** Re-triaged: **no new primitive is needed**. The three candidates
+      in the earlier list each surveyed an existing row: `graph_carrier` is
+      `geometry/graph` (it reads the task's own `edge_index`; the refusal was
+      A30's legality artifact), `lattice_carrier` is `geometry/spatial_lattice`
+      (its extent derives from any 3-D shape, A28), and `gpu_neuromorphic` is
+      the substrate `device` parameter, not a primitive. Both carriers now
+      measure (`scripts/probes/todo104_carriers.py`: graph/cora 0.114 @ 1.1 s,
+      spatial_lattice/mnist 0.9167 @ 67.5 s), so no spec row, config
+      classmethod or wiring lock is added. The remaining breadth gaps are
+      composition rules (A18–A20), not missing primitives.
 - [x] **8.2** Regenerated TODO103's consolidated checklist against the
       measured evidence: each row names its verdict and the artefact that
       carries it; TODO104 §E is the live list.
@@ -687,7 +706,7 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 | Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
 | Update primitives running | 8/18 | 18/18 or named reason | **17/18 viable**; `natural_gradient` = named L0 cost |
 | Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` → **3.589, valid, seeds=7** |
-| Primitive proposals | 0 | 3+ | **0 — open (8.1)**; candidates and triggers are listed in §C, each needs a spec row + config classmethod + the wiring lockstep lock |
+| Primitive proposals | 0 | 3+ → **re-triaged** | **0 added, none needed**: graph/cora 0.114 and spatial_lattice/mnist 0.9167 both measure (A30); the three candidates were existing rows |
 | Hardcoded MNIST defaults | 5+ | 0 | factory/builder/app path: **0** (A28: `_apply_task_spatial` + task-shaped `own_knob_params`); base-box rows declare their own mnist-shaped task |
 | Lost result on crash | 2 axes | 0 | per-primitive parts under `<axis>/parts/` |
 | Breadth exit | not run | `comp gate breadth` PASS | **PASS** (17/17 error-aware credits, ≥2 families) |
@@ -732,10 +751,10 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 
 ### Phase 7 — Budget
 - [x] 7.1 wave sizing prices the fidelity's measured cells (offline pkl deleted)
-- [x] 7.2 validated on a held-out wave (box price 0.38; task price 0.78 → A29 fix open)
+- [x] 7.2 validated on a held-out wave (box price 0.38; task price 0.78 → box-keyed model landed, A29)
 
 ### Phase 8 — Proposals & docs
-- [ ] 8.1 ≥3 primitive proposals from gaps
+- [x] 8.1 re-triaged: both named carriers measure (A30); no new primitive
 - [x] 8.2 regenerate TODO103 checklist
 - [x] 8.3 record serial table + claim in stability-eval.md
 ```
@@ -774,9 +793,10 @@ base-box extents removed), `_geometry_builders.py` (public
 locks), `test_pilot_calibration.py` (the family-declaration lock now iterates
 the box's own axes and skips variant rows), `sec_pilot.py`/`TODO103.md`/
 `stability-eval.md` docs, two probes.
-**Next Experiment:** 8.1 (3 primitive proposals, each with spec row + config
-classmethod + wiring lock); then the box-keyed cost model (A29) and the
-`surrogate`/`fast_weights`/`rule_state` named refusals.
+**Next Experiment:** the box-keyed cost model is landed (A29, cache + dry-run
+price); next is a geometry-axis re-run that records the two carriers in the map
+(graph/cora, spatial_lattice/mnist), then the `surrogate`/`fast_weights`/
+`rule_state` named refusals and the A18–A20 composition rules.
 
 ### Session 2026-11-25 (continued: map + claims)
 **Decision:** close the infrastructure and meta-SEC defects that made the
