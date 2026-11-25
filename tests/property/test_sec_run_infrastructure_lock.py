@@ -24,6 +24,7 @@ from computronium.experiment.sec_all_axes import (
     _build_axis_box,
     _declared_reads,
     _get_primary_knob,
+    comparison_boxes,
     ladder_verdict,
     pair_schedule,
     preferred_task_family,
@@ -280,3 +281,27 @@ def test_the_map_measures_the_common_family() -> None:
     assert preferred_task_family(["continual"]) == "continual"
     assert preferred_task_family(["rl", "tabular"]) == "rl"
     assert preferred_task_family([]) is None
+
+
+def test_a_pair_is_one_primitive_two_knobs() -> None:
+    """A knob claim is decided on its own primitive, not another mechanism.
+
+    The first claim run compared conv against feedforward and reported
+    d=-61.27 — a different question than "tuning num_layers on conv"
+    (TODO104 A21).
+    """
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    knob_key, default_value = _get_primary_knob("geometry", "conv", task_id="mnist")
+    treatment, control = comparison_boxes(
+        "geometry", "conv", "mnist", default_value * 4, default_value
+    )
+    assert treatment["geometry"] == control["geometry"] == "conv"
+    difference = {key for key in treatment if treatment[key] != control.get(key)}
+    assert difference == {knob_key}
+    assert (
+        control[knob_key] == round(default_value)
+        if knob_key.split(".")[-1] in ("num_layers",)
+        else control[knob_key] == default_value
+    )

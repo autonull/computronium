@@ -221,6 +221,29 @@ def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     return list(families) if families else []
 
 
+#: Knobs whose domain is integer: a ladder point or a comparison box rounds
+#: them, so one declaration serves the ladder and the paired comparison.
+INT_KNOBS: Final[frozenset[str]] = frozenset({
+    "max_steps",
+    "hidden_dim",
+    "depth",
+    "width",
+    "num_layers",
+    "num_experts",
+    "top_k",
+    "conv_channels",
+    "kernel_size",
+    "num_heads",
+    "seq_len",
+    "lattice_dims",
+    "mem_slots",
+    "mem_width",
+    "grid_hw",
+    "neurons_per_tile",
+    "tiles_per_layer",
+})
+
+
 def preferred_task_family(families: list[str]) -> str | None:
     """The family a mechanism map measures on (TODO104 A17).
 
@@ -752,27 +775,7 @@ async def run_rung1_ladder(
     knob_key, default_value = knob_info
     knob_name = knob_key.split(".", 1)[1]
 
-    # Integer-typed params that should be converted from float
-    int_params = {
-        "max_steps",
-        "hidden_dim",
-        "depth",
-        "width",
-        "num_layers",
-        "num_experts",
-        "top_k",
-        "conv_channels",
-        "kernel_size",
-        "num_heads",
-        "seq_len",
-        "lattice_dims",
-        "mem_slots",
-        "mem_width",
-        "grid_hw",
-        "neurons_per_tile",
-        "tiles_per_layer",
-    }
-    is_int_param = knob_name in int_params
+    is_int_param = knob_name in INT_KNOBS
 
     base_box = _build_axis_box(axis, primitive, task_id)
     schedule = base_schedule(task_id, "auto")
@@ -828,6 +831,33 @@ def pair_schedule(schedule: Schedule, seed: int) -> Schedule:
     return replace(schedule, seed=seed, n_seeds=1)
 
 
+def comparison_boxes(
+    axis: str,
+    primitive: str,
+    task_id: str,
+    best_value: float,
+    default_value: float,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The two boxes a paired comparison runs: one primitive, two knob values.
+
+    The registration's claim is about tuning one knob on one primitive, so a
+    control drawn from another primitive measures a different question
+    (TODO104 A21: conv against feedforward reported d=-61.27).
+    """
+    knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
+    if knob_info is None:
+        raise ValueError(f"{axis}/{primitive} declares no knob to compare")
+    knob_key = knob_info[0]
+    name = knob_key.split(".", 1)[1]
+    control = round(default_value) if name in INT_KNOBS else default_value
+    treatment = round(best_value) if name in INT_KNOBS else best_value
+    control_box = _build_axis_box(axis, primitive, task_id)
+    control_box[knob_key] = control
+    treatment_box = dict(control_box)
+    treatment_box[knob_key] = treatment
+    return treatment_box, control_box
+
+
 async def run_rung2_comparison(
     axis: str,
     primitive: str,
@@ -864,15 +894,15 @@ async def run_rung2_comparison(
     if registration is None:
         return None
 
-    # Build control box (axis default primitive) first
-    default_primitive = AXIS_DEFAULTS.get(axis, primitive)
-    control_box = _build_axis_box(axis, default_primitive, task_id)
-    control_coord = screen_coordinate(control_box, axis, default_primitive)
-
-    # Build treatment box: start from control box, only override the test axis and its knob
-    treatment_box = dict(control_box)
-    treatment_box[axis] = primitive
-    treatment_box[knob_key] = best_value
+    declared_default = (
+        registration.box.get(knob_key, knob_info[1])
+        if registration.box
+        else knob_info[1]
+    )
+    treatment_box, control_box = comparison_boxes(
+        axis, primitive, task_id, best_value, declared_default
+    )
+    control_coord = screen_coordinate(control_box, axis, primitive)
     # Apply axis-specific extra params for the treatment primitive from registration
     if axis == "dynamics" and primitive in {"energy_minimization", "pc_alm"}:
         treatment_box["dynamics.max_steps"] = 10

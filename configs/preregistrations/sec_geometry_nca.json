@@ -1,0 +1,20 @@
+{
+  "claim": "tuning geometry.num_layers on primitive.geometry.nca improves val_acc with Cohen's d >= 0.91613823232756 at the mnist base",
+  "metric": "val_acc",
+  "min_d": 0.8,
+  "alpha": 0.05,
+  "min_seeds": 7,
+  "created": "2026-11-25",
+  "box": {
+    "geometry": "nca",
+    "geometry.num_layers": 6,
+    "fidelity": "L0",
+    "seed": 0,
+    "n_seeds": 1,
+    "epochs": 1,
+    "batch_size": 32,
+    "task_id": "mnist",
+    "device": "cuda",
+    "precision": "fp32"
+  }
+}
