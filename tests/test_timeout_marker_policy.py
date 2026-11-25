@@ -45,6 +45,10 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ),
     ("tests/primitives/test_surface_lock.py", 300),
     (
+        "tests/property/test_settle_dynamic_compile_lock.py::test_one_graph_serves_two_shapes",
+        300,
+    ),
+    (
         "tests/property/test_combination_smoke_lock.py::test_budget_eight_cover_trains_with_zero_failures",
         300,
     ),

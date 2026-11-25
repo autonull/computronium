@@ -810,7 +810,10 @@ def _axis_values(field: str) -> list[str]:
 
 
 def _params_for(
-    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None, shape: TaskShape | None = None
+    axes: dict[str, str],
+    own_knobs: str | None = None,
+    task_id: str | None = None,
+    shape: TaskShape | None = None,
 ) -> dict[str, Any]:
     """Structural hyperparameters a coordinate needs for the given axes.
 
@@ -879,17 +882,20 @@ def _params_for(
             params.setdefault("geometry.grid_hw", (28, 28))
             params.setdefault("geometry.channels", 1)
     elif geometry == "spatial_lattice":
-        params["geometry.lattice_dims"] = (8, 8)
+        # A lattice extent is a task fact, never a literal (TODO104 B5): the
+        # builder refuses a cell that declares none.
+        if shape is not None and len(shape.input_shape) >= 3:
+            depth, height, width = (*shape.input_shape[-3:], 1)[:3]
+            params["geometry.lattice_dims"] = (depth, height, width)
     elif geometry == "routing":
         params["geometry.hidden_dim"] = P0_HIDDEN_DIM
         params["geometry.depth"] = 2
         params["geometry.num_experts"] = 8
         params["geometry.top_k"] = 2
-    if geometry == "graph":
-        # The graph topology also needs its connectivity; it is not a
-        # feedforward width, so the first branch cannot carry it.
-        params["geometry.edge_index"] = [[0, 1], [1, 0]]
-    elif geometry == "conv":
+    # A graph topology's connectivity is the task's data (TODO104 B5). A literal
+    # two-node chain trained a nonsense graph; the geometry builder now refuses a
+    # cell that declares no edge_index, so this builder invents none.
+    if geometry == "conv":
         # Auto-derive input_hw and in_channels from task's input_shape if available
         if shape is not None and shape.input_shape is not None:
             input_shape = shape.input_shape
@@ -997,7 +1003,10 @@ def _own_knob_overrides(
 
 
 def _coordinate(
-    axes: dict[str, str], own_knobs: str | None = None, task_id: str | None = None, shape: TaskShape | None = None
+    axes: dict[str, str],
+    own_knobs: str | None = None,
+    task_id: str | None = None,
+    shape: TaskShape | None = None,
 ) -> Coordinate:
     return Coordinate(
         substrate=axes["substrate"],
@@ -1010,7 +1019,13 @@ def _coordinate(
     )
 
 
-def screen_coordinate(box: Mapping[str, Any], axis: str, level: str, shape: TaskShape | None = None, task_id: str | None = None) -> Coordinate:
+def screen_coordinate(
+    box: Mapping[str, Any],
+    axis: str,
+    level: str,
+    shape: TaskShape | None = None,
+    task_id: str | None = None,
+) -> Coordinate:
     """The coordinate a map row was screened in: its axes and its own params.
 
     A row's box carries the six axes, the schedule and the structural params
@@ -1028,6 +1043,7 @@ def screen_coordinate(box: Mapping[str, Any], axis: str, level: str, shape: Task
         # Fallback: include base_coordinate spatial params from the task's family
         if task_id is not None:
             from computronium.experiment.sec_pilot import BASE_BOXES, base_family
+
             family = base_family(task_id)
             if family is not None:
                 base_box = BASE_BOXES.get(family)
@@ -1035,7 +1051,11 @@ def screen_coordinate(box: Mapping[str, Any], axis: str, level: str, shape: Task
                     # Add spatial params from base_coordinate (e.g., geometry.input_hw, geometry.in_channels)
                     # but NOT the geometry axis value itself (that's the varied axis)
                     for key, value in base_box.base_coordinate.items():
-                        if "." in key and key.partition(".")[0] == "geometry" and key != "geometry":
+                        if (
+                            "." in key
+                            and key.partition(".")[0] == "geometry"
+                            and key != "geometry"
+                        ):
                             axes.setdefault(key, value)
         return _coordinate(axes, own_knobs=axis or None, task_id=task_id, shape=shape)
     return Coordinate(
@@ -1876,13 +1896,35 @@ def run_p1_track(
 # ============================================================
 
 
-def _measure(coord: Coordinate, run: Schedule) -> dict[str, Any]:
+def deadline_params(budget_s: float | None) -> dict[str, Any]:
+    """Cooperative cell deadline params for ``evaluate_cell`` (TODO104 A3).
+
+    The trainer stops itself mid-epoch at its deadline, so a spent budget
+    returns a timeout record instead of leaving a live thread holding the
+    device. ``None`` means no deadline.
+    """
+    if budget_s is None:
+        return {}
+    deadline = time.monotonic() + budget_s
+    return {
+        "deadline_check": lambda: time.monotonic() < deadline,
+        "deadline_check_every_n_steps": 1,
+    }
+
+
+def _measure(
+    coord: Coordinate, run: Schedule, budget_s: float | None = None
+) -> dict[str, Any]:
     """One screened cell: status, number, cost, box and replay hash.
 
     A compose-legal box is checked before it is priced; a training-time
     contract failure is a defect with its mechanism named, never a crash. The
     record is written from the evaluation, so the replay hash is the run's
     provenance — one source read by the interaction slice and the deep dive.
+
+    ``budget_s`` is a cooperative training deadline: the trainer stops itself
+    mid-epoch and the cell is reported as a ``timeout``. A cancelled thread
+    would keep the device (TODO104 A3).
     """
     from computronium.experiment.schema.seed_registries import seed_all_registries
 
@@ -1900,11 +1942,12 @@ def _measure(coord: Coordinate, run: Schedule) -> dict[str, Any]:
             "box": box,
             "reason": reason,
         }
+    params = deadline_params(budget_s)
     try:
-        eval_result = evaluate_cell(coord, run)
+        eval_result = evaluate_cell(coord, run, params=params or None)
     except EvaluationError as exc:
         return {
-            "status": "defect",
+            "status": "timeout" if exc.cause == "timeout" else "defect",
             "val_acc": None,
             "loss": None,
             "walltime_s": None,
@@ -2169,7 +2212,9 @@ def _interaction_result(
 DEEP_DIVE_REGISTRATION = Path("configs/preregistrations/sec_deep_dive.json")
 
 
-def _deep_dive_coordinate(candidate: Any, factor: float, task_id: str | None = None) -> Coordinate:
+def _deep_dive_coordinate(
+    candidate: Any, factor: float, task_id: str | None = None
+) -> Coordinate:
     """The row's box with its primary knob at one ladder point.
 
     The arm rebuilds from the row's screened box, so the ladder's base params
@@ -2179,11 +2224,14 @@ def _deep_dive_coordinate(candidate: Any, factor: float, task_id: str | None = N
     shape = None
     if task_id is not None:
         from computronium.experiment.kernel.evaluate import task_shape
+
         try:
             shape = task_shape(task_id)
         except Exception:
             pass
-    base = screen_coordinate(candidate.box, candidate.axis, candidate.level, shape=shape, task_id=task_id)
+    base = screen_coordinate(
+        candidate.box, candidate.axis, candidate.level, shape=shape, task_id=task_id
+    )
     return replace(
         base,
         params={**base.params, candidate.knob: candidate.default * factor},

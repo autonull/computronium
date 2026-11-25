@@ -21,6 +21,7 @@ from computronium.ontology._settle_kernel import (
     LayeredParams,
     SubstrateSettleKernel,
     _one_hot,
+    compile_settle,
     extract_layered_params,
     nudged_output,
 )
@@ -675,7 +676,7 @@ def _layered_settle_loop(
     return acts
 
 
-_compiled_layered_settle = torch.compile(_layered_settle_loop, dynamic=False)
+_compiled_layered_settle = compile_settle(_layered_settle_loop)
 
 
 # ============================================================
@@ -705,7 +706,7 @@ def _lif_layer_loop(
     return v, torch.stack(rasters)
 
 
-_compiled_lif_layer = torch.compile(_lif_layer_loop, dynamic=False)
+_compiled_lif_layer = compile_settle(_lif_layer_loop)
 
 
 # ============================================================

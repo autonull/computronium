@@ -2,7 +2,9 @@
 
 Reads experimental history and optimizes:
 - LADDER_FACTORS: 3-5 points, log-spaced
-- CLAIM_SEEDS: 3, 5, 7, 10
+- CLAIM_SEEDS: values at or above the pre-registration floor
+  (``DEFAULT_MIN_SEEDS``); a lower seed budget cannot carry a paired
+  comparison, so it is not a legal point
 - MIN_EFFECT_SIZE: 0.5-1.2 per family
 - Fidelity schedule: L0 only, L0→L1, L0→L2
 - semaphore_limit: 1, 2, 4, 8
@@ -15,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 
@@ -24,11 +26,20 @@ try:
 except ImportError:
     optuna = None
 
+from computronium.experiment.evidence.claims import DEFAULT_MIN_SEEDS
 from computronium.experiment.sec_all_axes import (
     MIN_EFFECT_SIZE_BY_FAMILY,
 )
 
+# The claim seed floor is declared once (``DEFAULT_MIN_SEEDS``): a suggested
+# seed budget below it cannot carry a paired comparison, so it is dropped from
+# the search space instead of being sampled and refused later (TODO104 A6).
+CLAIM_SEED_CHOICES: Final[tuple[int, ...]] = tuple(
+    seeds for seeds in (3, 5, 7, 10) if seeds >= DEFAULT_MIN_SEEDS
+)
+
 __all__ = [
+    "CLAIM_SEED_CHOICES",
     "MetaSECConfig",
     "MetaSECObjective",
     "analyze_cells_jsonl",
@@ -46,6 +57,10 @@ class MetaSECConfig:
     study_name: str = "meta_sec"
     storage: str | None = None  # e.g., "sqlite:///meta_sec.db"
     seed: int = 42
+    # The declared defaults the driver falls back to when the study is invalid
+    # (TODO104 A7): an optimum that cannot beat 0 was not selected by a live
+    # gradient.
+    declared_params: dict[str, Any] | None = None
 
 
 def _parse_cells(cells_path: Path) -> list[dict[str, Any]]:
@@ -57,14 +72,18 @@ def _parse_cells(cells_path: Path) -> list[dict[str, Any]]:
                 continue
             c = json.loads(line)
             screen = c.get("screen", {})
-            record = c.get("record")
+            record = c.get("record") or {}
+            payload = record.get("payload") or {}
             parsed.append({
                 "axis": _extract_axis(screen.get("primitive", "")),
                 "primitive": _extract_primitive(screen.get("primitive", "")),
                 "status": screen.get("status", "unknown"),
                 "reason": screen.get("reason", ""),
-                "walltime_s": record.get("walltime_s", 0) if record else 0,
-                "val_acc": record.get("val_acc", 0) if record else 0,
+                # The measurement lives in the record's payload; reading the
+                # record's top level left the proxy's cost input at 0 and its
+                # objective degenerate (TODO104 A7).
+                "walltime_s": payload.get("walltime_s") or 0,
+                "val_acc": payload.get("val_acc") or 0,
                 "task_id": screen.get("box", {}).get("task_id", "unknown"),
             })
     return parsed
@@ -168,7 +187,7 @@ class MetaSECObjective:
         n_ladder_points = trial.suggest_int("n_ladder_points", 3, 5)
         ladder_factors = self._sample_ladder_factors(trial, n_ladder_points)
 
-        claim_seeds = trial.suggest_categorical("claim_seeds", [3, 5, 7, 10])
+        claim_seeds = trial.suggest_categorical("claim_seeds", list(CLAIM_SEED_CHOICES))
 
         min_effect_size = {}
         for family in MIN_EFFECT_SIZE_BY_FAMILY:
@@ -255,6 +274,26 @@ class MetaSECObjective:
         return 0.0
 
 
+def _resolve_best(
+    best_value: float,
+    best_params: dict[str, Any],
+    declared: dict[str, Any] | None,
+) -> tuple[dict[str, Any], bool, str | None]:
+    """A study that cannot beat 0 is invalid: use declared defaults.
+
+    ``best_value==0`` means the proxy never priced a claim (no cost model or an
+    empty baseline), so its ``best_params`` were not selected by a live
+    gradient. Return the declared defaults and say why (TODO104 A7).
+    """
+    if best_value > 0:
+        return dict(best_params), True, None
+    return (
+        dict(declared or {}),
+        False,
+        "objective did not exceed 0: the proxy is uncalibrated",
+    )
+
+
 def run_meta_sec(config: MetaSECConfig | None = None) -> dict[str, Any]:
     """Run meta-SEC Bayesian optimization.
 
@@ -281,9 +320,16 @@ def run_meta_sec(config: MetaSECConfig | None = None) -> dict[str, Any]:
 
     study.optimize(objective, n_trials=config.n_trials, timeout=config.timeout_s)
 
+    best_params, valid, reason = _resolve_best(
+        study.best_value, dict(study.best_params), config.declared_params
+    )
+    if not valid:
+        print(f"⛔ meta-SEC study invalid: {reason}")
     return {
-        "best_params": study.best_params,
+        "best_params": best_params,
         "best_value": study.best_value,
+        "valid": valid,
+        "reason": reason,
         "n_trials": len(study.trials),
         "baseline_stats": objective.baseline_stats,
     }

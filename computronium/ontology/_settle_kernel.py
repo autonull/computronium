@@ -12,12 +12,24 @@ mathematical transpose operations, not physical substrate processes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Callable, Final
 
 import torch
 from torch import Tensor
 
 from computronium.core.losses import class_one_hot
+
+
+def compile_settle[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
+    """Compile a settle kernel with shape-dynamic tracing.
+
+    A geometry change (hidden width, chunk length, tile count) re-traced a
+    ``dynamic=False`` graph and hit ``config.recompile_limit``, killing the cell
+    (TODO104 A2). Dynamic tracing reuses one graph across shapes, which is what
+    a settle loop sees across tasks and ladder points.
+    """
+    return torch.compile(fn, dynamic=True)
+
 
 if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
@@ -385,10 +397,10 @@ def _eqprop_settle_chunk(
     return acts, previous_output
 
 
-_compiled_eqprop_settle_chunk = torch.compile(_eqprop_settle_chunk, dynamic=False)
+_compiled_eqprop_settle_chunk = compile_settle(_eqprop_settle_chunk)
 
 # Legacy full-horizon compiled settle (kept for parity tests)
-_compiled_eqprop_settle = torch.compile(_eqprop_settle_loop, dynamic=False)
+_compiled_eqprop_settle = compile_settle(_eqprop_settle_loop)
 
 
 # ============================================================
@@ -457,9 +469,7 @@ def _eqprop_settle_chunk_analog(  # ruff: ignore[too-many-arguments, too-many-po
     return acts, previous_output
 
 
-_compiled_eqprop_settle_chunk_analog = torch.compile(
-    _eqprop_settle_chunk_analog, dynamic=False
-)
+_compiled_eqprop_settle_chunk_analog = compile_settle(_eqprop_settle_chunk_analog)
 
 
 def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, too-many-statements, complex-structure]
@@ -512,8 +522,8 @@ def _eqprop_settle_chunk_simple_noise(  # ruff: ignore[too-many-arguments, too-m
     return acts, previous_output
 
 
-_compiled_eqprop_settle_chunk_simple_noise = torch.compile(
-    _eqprop_settle_chunk_simple_noise, dynamic=False
+_compiled_eqprop_settle_chunk_simple_noise = compile_settle(
+    _eqprop_settle_chunk_simple_noise
 )
 
 
@@ -539,9 +549,7 @@ def _layered_settle_loop_digital(
     return acts
 
 
-_compiled_layered_settle_digital = torch.compile(
-    _layered_settle_loop_digital, dynamic=False
-)
+_compiled_layered_settle_digital = compile_settle(_layered_settle_loop_digital)
 
 
 def _layered_settle_loop_analog(
@@ -572,9 +580,7 @@ def _layered_settle_loop_analog(
     return acts
 
 
-_compiled_layered_settle_analog = torch.compile(
-    _layered_settle_loop_analog, dynamic=False
-)
+_compiled_layered_settle_analog = compile_settle(_layered_settle_loop_analog)
 
 
 def _layered_settle_loop_simple_noise(
@@ -598,8 +604,8 @@ def _layered_settle_loop_simple_noise(
     return acts
 
 
-_compiled_layered_settle_simple_noise = torch.compile(
-    _layered_settle_loop_simple_noise, dynamic=False
+_compiled_layered_settle_simple_noise = compile_settle(
+    _layered_settle_loop_simple_noise
 )
 
 
@@ -632,9 +638,7 @@ def _layered_settle_loop_memristive(
     return acts
 
 
-_compiled_layered_settle_memristive = torch.compile(
-    _layered_settle_loop_memristive, dynamic=False
-)
+_compiled_layered_settle_memristive = compile_settle(_layered_settle_loop_memristive)
 
 
 def _layered_settle_loop_ternary(
@@ -659,9 +663,7 @@ def _layered_settle_loop_ternary(
     return acts
 
 
-_compiled_layered_settle_ternary = torch.compile(
-    _layered_settle_loop_ternary, dynamic=False
-)
+_compiled_layered_settle_ternary = compile_settle(_layered_settle_loop_ternary)
 
 
 def _layered_settle_loop_complex(
@@ -682,9 +684,7 @@ def _layered_settle_loop_complex(
     return acts
 
 
-_compiled_layered_settle_complex = torch.compile(
-    _layered_settle_loop_complex, dynamic=False
-)
+_compiled_layered_settle_complex = compile_settle(_layered_settle_loop_complex)
 
 
 def _layered_settle_loop_quantum(
@@ -709,6 +709,4 @@ def _layered_settle_loop_quantum(
     return acts
 
 
-_compiled_layered_settle_quantum = torch.compile(
-    _layered_settle_loop_quantum, dynamic=False
-)
+_compiled_layered_settle_quantum = compile_settle(_layered_settle_loop_quantum)

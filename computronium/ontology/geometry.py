@@ -398,9 +398,13 @@ class GeometryConfig:
         if patch_size > 0:
             # Vision mode: patch embedding - require spatial params
             if image_hw is None:
-                raise ValueError("causal_transformer vision mode (patch_size > 0) requires image_hw")
+                raise ValueError(
+                    "causal_transformer vision mode (patch_size > 0) requires image_hw"
+                )
             if in_channels is None:
-                raise ValueError("causal_transformer vision mode (patch_size > 0) requires in_channels")
+                raise ValueError(
+                    "causal_transformer vision mode (patch_size > 0) requires in_channels"
+                )
             num_patches = (image_hw[0] // patch_size) * (image_hw[1] // patch_size)
             patch_dim = in_channels * patch_size * patch_size
             embed_dim = patch_embed_dim if patch_embed_dim > 0 else d_model
@@ -625,7 +629,7 @@ class GeometryConfig:
         *,
         input_dim: int,
         output_dim: int,
-        lattice_dims: tuple[int, int, int] = (4, 4, 4),
+        lattice_dims: tuple[int, int, int],
         hidden_dims: tuple[int, ...] = (32, 32),
         connectivity_radius: int = 1,
         init_scale: float = 0.1,
@@ -1551,7 +1555,7 @@ class TransformerGeometry(nn.Module):
         self.num_heads = config.num_heads
         self.patch_size = getattr(config, "patch_size", 0)
         self.patch_embed_dim = getattr(config, "patch_embed_dim", 0)
-        self.image_hw = getattr(config, "image_hw", (28, 28))
+        self.image_hw = config.image_hw
         self.in_channels = getattr(config, "in_channels", 1)
 
         if self.patch_size > 0:

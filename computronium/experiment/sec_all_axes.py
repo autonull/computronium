@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import date
@@ -18,7 +19,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
-from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
+from computronium.experiment.schema.axis import (
+    AXES_REGISTRIES,
+    StructuralAxis,
+    get_axis_spec,
+)
 from computronium.experiment.sec_loop import (
     _measure,
     base_schedule,
@@ -33,6 +38,8 @@ from computronium.validation.preregistration import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium.experiment.schema.coordinate import Schedule
 
 __all__ = [
@@ -47,6 +54,10 @@ __all__ = [
 
 # Ladder factors: 0.1x, 1.0x, 10.0x of declared default
 LADDER_FACTORS: Final[tuple[float, ...]] = (0.1, 1.0, 10.0)
+# Cooperative per-cell training budget in seconds (TODO104 A3). A cancelled
+# ``asyncio.to_thread`` keeps its thread and the GPU; a deadline passed into the
+# trainer stops the cell itself and returns a record. 0 disables the deadline.
+MEASURE_BUDGET_S: float = float(os.environ.get("SEC_MEASURE_BUDGET_S", "0") or 0.0)
 # Paired seeds per arm
 CLAIM_SEEDS: Final[int] = 5
 # Minimum effect size per task family (Cohen's d)
@@ -210,6 +221,17 @@ def _get_task_families_for_primitive(axis: str, primitive: str) -> list[str]:
     return list(families) if families else []
 
 
+def _accepted_knobs(axis: str, primitive: str) -> frozenset[str]:
+    """The knobs this axis' primitive reads (a harvested fact, TODO104 A4).
+
+    A box that carries a knob the primitive does not accept fails loud at
+    composition ("inactive hyperparameters"), so a ladder must vary only an
+    accepted knob and never ship a dead one.
+    """
+    spec = get_axis_spec(StructuralAxis(axis), primitive)
+    return spec.accepted_params if spec is not None else frozenset()
+
+
 def _get_primary_knob(
     axis: str, primitive: str, task_id: str | None = None
 ) -> tuple[str, float] | None:
@@ -239,6 +261,7 @@ def _get_primary_knob(
         "neurons_per_tile",
         "tiles_per_layer",
     }
+    accepted = _accepted_knobs(axis, primitive)
     for name in [
         "step_size",
         "max_steps",
@@ -258,6 +281,8 @@ def _get_primary_knob(
         "aux_head_scale",
         "lr",
     ]:
+        if accepted and name not in accepted:
+            continue
         key = f"{axis}.{name}"
         value = params.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -554,12 +579,52 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
         box["dynamics.max_steps"] = 10
         box["dynamics.step_size"] = 0.1
 
+    # A box may carry a dead knob for the treatment primitive (TODO104 A4): the
+    # companion axes resolve their own specs, but the varied axis must ship only
+    # what its primitive accepts, or composition fails as "inactive".
+    accepted = _accepted_knobs(axis, primitive)
+    if accepted:
+        prefix = f"{axis}."
+        box = {
+            field: value
+            for field, value in box.items()
+            if not field.startswith(prefix) or field[len(prefix) :] in accepted
+        }
     return box
 
 
-async def _measure_async(coord: Any, run: Schedule) -> dict[str, Any]:
-    """Run _measure in a thread pool."""
-    return await asyncio.to_thread(_measure, coord, run)
+def resolve_semaphore(requested: int, devices: int | None = None) -> int:
+    """One CUDA device trains one cell at a time (TODO104 A1).
+
+    Concurrent settle on one GPU re-traces the compiled graphs per shape and
+    hits ``config.recompile_limit``; the resulting timeouts are infrastructure,
+    not mechanism verdicts. Only a multi-device host runs cells in parallel.
+    """
+    if requested <= 1:
+        return 1
+    if devices is None:
+        import torch
+
+        devices = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if devices <= 1:
+        return 1
+    return min(requested, devices)
+
+
+async def _measure_async(
+    coord: Any, run: Schedule, budget_s: float | None = None
+) -> dict[str, Any]:
+    """Run ``_measure`` in a thread with a cooperative cell budget.
+
+    The deadline stops the trainer mid-epoch, so a spent budget returns a
+    ``timeout`` cell instead of leaving a live thread holding the device
+    (TODO104 A3).
+    """
+    if budget_s is None:
+        budget_s = MEASURE_BUDGET_S or None
+    if budget_s is None:
+        return await asyncio.to_thread(_measure, coord, run)
+    return await asyncio.to_thread(_measure, coord, run, budget_s)
 
 
 async def run_rung1_ladder(
@@ -660,8 +725,12 @@ async def run_rung2_comparison(
     registration_path: Path,
     n_seeds: int = CLAIM_SEEDS,
     semaphore_limit: int = 2,
+    budget_s: float | None = None,
 ) -> tuple[list[PairedCell], dict[str, Any], str] | None:
-    """Run paired comparison: treatment (primitive at best) vs control (axis default)."""
+    """Run paired comparison: treatment (primitive at best) vs control (axis default).
+
+    ``budget_s`` is the cooperative per-cell training deadline (TODO104 A3).
+    """
     import asyncio
 
     knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
@@ -712,7 +781,7 @@ async def run_rung2_comparison(
 
     async def run_cell(arm: str, coord: Any, seed: int) -> PairedCell:
         async with semaphore:
-            measured = await _measure_async(coord, schedule)
+            measured = await _measure_async(coord, schedule, budget_s)
             return PairedCell(
                 arm=arm,
                 factor=1.0,

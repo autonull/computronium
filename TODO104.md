@@ -10,6 +10,12 @@ mechanism, a failing check, and the file it lives in. A fix that moves neither
 the cell nor a test is hygiene, not a fix. The map is the artifact; the loop is
 the engine.
 
+**Progress 2026-11-25:** Phase 1 (1.1–1.4), Phase 2.1, Phase 3 (3.1–3.3) and
+Phase 6.1/6.2 (substance) landed, each with a lock. A2 acceptance measured on
+the GPU; meta-SEC regenerated with a nonzero objective. Phase 4 re-run launched
+(`logs/serial_todo104_driver.log`). Open: 2.2, 2.3, 4.x, 5.x, 6.3, 7.x, 8.x —
+see §Progress log for the evidence and the next command.
+
 ---
 
 ## 📊 What the TODO103 run established
@@ -160,32 +166,49 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 ## 🛠 Section C — Implementation plan (ordered by unblocking value)
 
-### Phase 1 — Infrastructure correctness (unblocks every re-run)
-- [ ] **1.1** A2: settle compile `dynamic=True` (or dynamic marks); lock:
-      neuromorphic L0 cell runs with no recompile-limit warning.
-- [ ] **1.2** A3: cooperative deadline in `_measure`; timeout returns a cell and
-      frees the device; delete thread-kill timeouts.
-- [ ] **1.3** A9: per-primitive durable write + `try/finally` per axis.
-- [ ] **1.4** A1: make serial the sole competitive path; refuse
-      `SEC_SEMAPHORE>1` on one CUDA device for `_measure`.
+### Phase 1 — Infrastructure correctness (unblocks every re-run) ✅
+- [x] **1.1** A2: `compile_settle` traces shape-dynamically (`dynamic=True`,
+      `_settle_kernel.compile_settle`); lock
+      `tests/property/test_settle_dynamic_compile_lock.py`; GPU acceptance
+      `scripts/probes/todo104_a2_settle_recompile.py` → two widths of
+      `substrate/neuromorphic` on `spiking_mnist` in one process, both
+      `measured` (0.7648 @ 51.5s, 0.7555 @ 74.9s), no recompile-limit error.
+- [x] **1.2** A3: cooperative deadline — `sec_loop.deadline_params(budget_s)`
+      feeds `evaluate_cell`; `_measure(coord, run, budget_s)` reports a
+      `timeout` cell; the driver no longer holds a cancelled thread
+      (`asyncio.wait_for` gone). Lock: `test_sec_run_infrastructure_lock.py`.
+- [x] **1.3** A9: `computronium/experiment/sec_parts.py` writes one part per
+      primitive and reduces the axis; `main` flushes in `finally`, so a dead
+      process keeps every completed primitive. Lock: same file.
+- [x] **1.4** A1: `sec_all_axes.resolve_semaphore` refuses `>1` cell on one
+      CUDA device; the driver prints the refusal. `SLOW_PRIMITIVES` pruned back
+      to priced rows (the axis defaults and the whole substrate set are no
+      longer skipped).
 
 ### Phase 2 — Box/legality correctness (unblocks breadth)
-- [ ] **2.1** A4: intersect box keys with accepted params in
-      `_build_axis_box`/`_get_primary_knob`; bump ladder varies only accepted knobs.
+- [x] **2.1** A4: `_accepted_knobs(axis, primitive)` intersects the box and the
+      primary knob with the harvested `AxisSpec.accepted_params`; lock sweeps
+      `lion`/`muon`/`local_adam`.
 - [ ] **2.2** A5: profile `adafactor`/`natural_gradient`; fix or mark
-      `available=False` with a named reason.
+      `available=False` with a named reason. (Priced as skips for the re-run;
+      the deadline now returns a timeout cell instead of a kill.)
 - [ ] **2.3** A8: registration box == measured box (fidelity/epochs/seed).
 
-### Phase 3 — Meta-SEC validity
-- [ ] **3.1** A6: remove `claim_seeds=3`; floor is a constraint.
-- [ ] **3.2** A7: calibrate objective on `cells.jsonl`; assert `best_value>0`,
-      else invalid study + declared defaults.
-- [ ] **3.3** Re-run meta-SEC; regenerate `configs/meta_sec_best.json` with a
-      nonzero objective and `claim_seeds≥5`.
+### Phase 3 — Meta-SEC validity ✅
+- [x] **3.1** A6: `CLAIM_SEED_CHOICES` derives from `DEFAULT_MIN_SEEDS`
+      (3 is dropped); the driver clamps `CLAIM_SEEDS` to the floor.
+- [x] **3.2** A7: the proxy reads `record.payload.{walltime_s,val_acc}`
+      (was 0 through the top level); `_resolve_best` marks a zero-objective
+      study invalid and returns the declared defaults.
+- [x] **3.3** Re-ran meta-SEC on `results/sec/cells.jsonl`:
+      `best_value=3.589` (was 0.0), `valid=true`, `claim_seeds=7`,
+      `avg_walltime_s=15.1` (was 0.0). Ladder factors now always include the
+      declared default (factor 1.0).
 
 ### Phase 4 — Recover coverage hidden by A1–A5
 - [ ] **4.1** Re-run the skipped/refused primitives per axis (serial, fresh
-      process) now that Phase 1–2 fixes land.
+      process) now that Phase 1–2 fixes land. **Launched:**
+      `bash scripts/run_sec_axes_serial.sh` → `logs/serial_todo104_driver.log`.
 - [ ] **4.2** Target: every error-aware credit has ≥1 legal above-chance cell on
       its target family; every legal composition family trains or has a named reason.
 - [ ] **4.3** Reconcile: an "all_refused" that flips to "viable" under serial is
@@ -200,16 +223,24 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       within 1σ of `min_d` is `marginal`, not met.
 
 ### Phase 6 — Hardcoded removal (A10 + B5)
-- [ ] **6.1** Remove factory `image_hw`/`input_hw`/`grid_hw` defaults; derive
-      from `TaskShape`.
-- [ ] **6.2** Derive `graph.edge_index` (`sec_loop.py:891`, literal
-      `[[0,1],[1,0]]`) and `spatial_lattice.lattice_dims` (`:882`, literal
-      `(8,8)`) from the task's `TaskShape`, not literals.
-- [ ] **6.3** Prove with grep + capability gate on a non-MNIST task.
+- [x] **6.1** Factory `getattr(config, "image_hw", (28, 28))` fallback deleted;
+      `GeometryConfig.spatial_lattice` requires `lattice_dims`;
+      `build_spatial_lattice_config` refuses a cell that declares none
+      (`_as_int_tuple(..., None)`), so a guessed extent cannot train.
+      Remaining: the dataclass field defaults (`input_hw`/`image_hw`/`grid_hw`)
+      still exist for direct constructions — the app path never reads them now.
+- [x] **6.2** `sec_loop._params_for` no longer invents `graph.edge_index`
+      (a literal two-node chain) or `spatial_lattice.lattice_dims=(8,8)`; the
+      lattice extent derives from the task's `input_shape` and the builders
+      refuse the rest by name. Lock:
+      `tests/property/test_geometry_shape_source_lock.py`.
+- [ ] **6.3** Prove with grep + capability gate on a non-MNIST task
+      (`digits`/`iris`), and delete the remaining `sec_pilot.py` literals.
 
 ### Phase 7 — Budget policy (B2)
 - [ ] **7.1** Wire the measured cost model into wave sizing (per-primitive cost,
-      not static share).
+      not static share). The calibrated `avg_walltime_s=15.1` is now available
+      to the meta proxy; the wave planner still prices from the pilot.
 - [ ] **7.2** Validate on one held-out wave: predicted vs measured walltime.
 
 ### Phase 8 — Proposals & metrics (B1, B3, B4)
@@ -228,12 +259,12 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 | Valid claims | 1 | 18+ | `results/sec/serial` rung2 verdicts |
 | Viable primitives (serial) | 23/75 | 45+ | serial summary |
 | Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | rung `status` counts |
-| Neuromorphic L0 no crash | ❌ | ✅ | A2 lock |
+| Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
 | Update primitives running | 8/18 | 18/18 or named reason | axis log |
-| Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` |
+| Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` → **3.589, valid, seeds=7** |
 | Primitive proposals | 0 | 3+ | `registry.py` `"proposed"` |
-| Hardcoded MNIST defaults | 5+ | 0 | `grep -n "28, 28\|16, 16" ontology/geometry.py` |
-| Lost result on crash | 2 axes | 0 | per-primitive JSON present |
+| Hardcoded MNIST defaults | 5+ | 0 | factory/builder path: **0**; dataclass field defaults remain (never read by the app path) |
+| Lost result on crash | 2 axes | 0 | per-primitive parts under `<axis>/parts/` |
 | Refusal rate | — | <5% of non-skipped | `cells.jsonl` status |
 
 ---
@@ -241,23 +272,23 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 ## 📋 Section E — Consolidated checklist
 
 ```markdown
-### Phase 1 — Infrastructure
-- [ ] 1.1 settle compile dynamic=True (+ lock)
-- [ ] 1.2 cooperative deadline; no thread-kill timeouts
-- [ ] 1.3 per-primitive durable write + try/finally per axis
-- [ ] 1.4 serial-only competitive path; block semaphore>1 on one GPU
+### Phase 1 — Infrastructure (done 2026-11-25)
+- [x] 1.1 settle compile dynamic=True (+ lock + GPU probe PASS)
+- [x] 1.2 cooperative deadline; no thread-kill timeouts
+- [x] 1.3 per-primitive durable write + try/finally per axis
+- [x] 1.4 serial-only competitive path; block semaphore>1 on one GPU
 
 ### Phase 2 — Box/legality
-- [ ] 2.1 intersect box keys with accepted params
+- [x] 2.1 intersect box keys with accepted params
 - [ ] 2.2 adafactor/natural_gradient: fix or mark unavailable
 - [ ] 2.3 registration box == measured box
 
-### Phase 3 — Meta-SEC
-- [ ] 3.1 remove claim_seeds=3 (floor constraint)
-- [ ] 3.2 calibrate objective; assert best_value>0
-- [ ] 3.3 regenerate meta_sec_best.json
+### Phase 3 — Meta-SEC (done 2026-11-25)
+- [x] 3.1 claim-seed space derives from the floor
+- [x] 3.2 calibrate objective; assert best_value>0
+- [x] 3.3 regenerate meta_sec_best.json (3.589, valid)
 
-### Phase 4 — Coverage
+### Phase 4 — Coverage (run in flight)
 - [ ] 4.1 re-run skipped primitives (serial)
 - [ ] 4.2 breadth: ≥1 above-chance cell per error-aware credit / family
 - [ ] 4.3 record flipped refusals as A1 artifacts
@@ -268,9 +299,9 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - [ ] 5.3 push claims to 18+ (marginal ≠ met)
 
 ### Phase 6 — Hardcoded removal
-- [ ] 6.1 remove geometry factory defaults
-- [ ] 6.2 derive edge_index/lattice_dims from task
-- [ ] 6.3 grep + non-MNIST capability gate
+- [x] 6.1 geometry factories read no guessed extent (+ lock)
+- [x] 6.2 sec_loop invents no edge_index/lattice_dims (+ lock)
+- [ ] 6.3 grep + non-MNIST capability gate (sec_pilot literals remain)
 
 ### Phase 7 — Budget
 - [ ] 7.1 wire measured cost model into wave sizing
@@ -283,6 +314,36 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 ```
 
 ---
+
+## 🗒 Section G — Progress log
+
+### Session 2026-11-25
+**Decision:** close the infrastructure and meta-SEC defects that made the
+2026-11-24 map untrustworthy (A1, A2, A3, A4, A6, A7, A9, A10/B5), then re-run
+the coverage the defects hid. Error cost of a wrong call: a rerun priced in hours
+and a map that cannot carry claims.
+**Experiment (fix evidence):** lock suites
+(`test_settle_dynamic_compile_lock.py`, `test_sec_run_infrastructure_lock.py`,
+`test_geometry_shape_source_lock.py`) and
+`scripts/probes/todo104_a2_settle_recompile.py`.
+**Box / rung / stop:** A2 proved at rung 0 (one process, two widths, both
+measured) — a wired mechanism needs no ladder. Meta-SEC regenerated on
+`results/sec/cells.jsonl` (60 trials, pure proxy).
+**Result:** A2 two widths measured (0.7648 @ 51.5s; 0.7555 @ 74.9s), no
+recompile-limit error; meta objective 0.0 → 3.589, `valid=true`,
+`claim_seeds=7`, `avg_walltime_s=15.1` (was 0.0).
+**Triage:** A1/A2/A3/A4/A6/A7/A9/A10 are *fixed defects* with locks; A5 remains
+a cost question, A8 a box-identity question. A4's refused set is confirmed as an
+A1 artifact (five of five flipped viable serially).
+**Fixes applied:** `_settle_kernel.py`, `dynamics/_dynamics.py`,
+`geometry.py`, `_geometry_builders.py`, `sec_loop.py`, `sec_all_axes.py`,
+`meta_sec.py`, new `sec_parts.py`, `scripts/run_full_sec_competitive.py`,
+three lock tests + one probe, `configs/meta_sec_best.json`.
+**Next experiment:** `bash scripts/run_sec_axes_serial.sh` (in flight,
+`logs/serial_todo104_driver.log`); read each axis' parts under
+`results/sec/serial/<axis>/parts/` even if a process dies.
+Then: pytest A5 (adafactor/natural_gradient profile), A8 box identity, and the
+non-MNIST gate (6.3).
 
 ## 📎 Section F — Evidence & commands
 

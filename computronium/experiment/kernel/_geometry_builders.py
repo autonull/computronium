@@ -57,7 +57,10 @@ def _as_int_pair(value: object, default: tuple[int, int]) -> tuple[int, int]:
     return default
 
 
-def _as_int_tuple(value: object, default: tuple[int, int, int]) -> tuple[int, int, int]:
+def _as_int_tuple(
+    value: object, default: tuple[int, int, int] | None = None
+) -> tuple[int, int, int] | None:
+    """Read a 3-int extent, or the caller's declared fallback (None = absent)."""
     if isinstance(value, list | tuple) and all(
         isinstance(v, int | float) for v in value
     ):
@@ -564,7 +567,11 @@ def build_spatial_lattice_config(
     init_scale: float,
     geometry: dict[str, object],
 ) -> GeometryConfig:
-    lattice_dims = _as_int_tuple(geometry.get("lattice_dims"), (4, 4, 4))
+    lattice_dims = _as_int_tuple(geometry.get("lattice_dims"), None)
+    if lattice_dims is None:
+        raise ValueError(
+            "spatial_lattice topology requires lattice_dims: (depth, height, width)"
+        )
     constrained_hidden_dims = (hidden,) * depth
     if param_budget > 0:
         for _ in range(3):
@@ -732,7 +739,9 @@ def build_causal_transformer_config(
             seq_len=_as_int(geometry.get("seq_len"), 32),
             patch_size=patch_size,
             patch_embed_dim=_as_int(geometry.get("patch_embed_dim"), 0),
-            image_hw=tuple(image_hw) if isinstance(image_hw, (list, tuple)) else image_hw,
+            image_hw=tuple(image_hw)
+            if isinstance(image_hw, (list, tuple))
+            else image_hw,
             in_channels=int(in_channels),
         )
     else:
