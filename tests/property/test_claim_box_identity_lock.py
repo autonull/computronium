@@ -80,3 +80,21 @@ def test_undeclared_fields_keep_the_caller_value() -> None:
     assert resolved.epochs == 20
     assert resolved.fidelity == "L0"
     assert resolved.batch_limit == _LADDER.batch_limit
+
+
+def test_the_declared_min_d_wins() -> None:
+    """One authority for the threshold: the caller's, not a second table.
+
+    The SEC ladder resolved 0.916 for vision while the registration's own table
+    wrote 0.8 — two tables, one claim (TODO104 A25).
+    """
+    from computronium.validation.preregistration import EffectSizeRegistration
+
+    declared = EffectSizeRegistration.for_task_family(
+        claim="c", metric="val_acc", task_id="mnist", min_d=0.916
+    )
+    assert declared.min_d == 0.916
+    fallback = EffectSizeRegistration.for_task_family(
+        claim="c", metric="val_acc", task_id="mnist"
+    )
+    assert fallback.min_d > 0

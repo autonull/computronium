@@ -275,12 +275,26 @@ class EffectSizeRegistration:
 
     @classmethod
     def for_task_family(
-        cls, claim: str, metric: str, task_id: str, **kwargs
+        cls,
+        claim: str,
+        metric: str,
+        task_id: str,
+        *,
+        min_d: float | None = None,
+        **kwargs: object,
     ) -> EffectSizeRegistration:
-        """Create registration with family-appropriate minimum effect size."""
+        """Create a registration at the declared, or the family's, minimum d.
+
+        A caller that already resolved the minimum (the SEC ladder's declared
+        per-family table, TODO104 A25) passes it: the family table here is the
+        fallback for a caller that carries none, not a second authority. Two
+        tables disagreed 0.8 vs 0.916 on the same registration.
+        """
         family = _family_from_task(task_id)
-        min_d = MIN_EFFECT_SIZE_BY_FAMILY.get(family, 0.5)
-        return cls(claim=claim, metric=metric, min_d=min_d, **kwargs)
+        resolved = (
+            min_d if min_d is not None else MIN_EFFECT_SIZE_BY_FAMILY.get(family, 0.5)
+        )
+        return cls(claim=claim, metric=metric, min_d=resolved, **kwargs)
 
 
 @dataclass(frozen=True, slots=True)

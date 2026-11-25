@@ -147,6 +147,18 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A25. Two tables disagreed on the registered minimum d
+- **Evidence:** the committed registration
+  (`configs/preregistrations/sec_credit_random_projections.json`) carries
+  `min_d: 0.8` while the driver prints and names vision `0.916`.
+- **Mechanism:** `EffectSizeRegistration.for_task_family` computed `min_d` from
+  its own `MIN_EFFECT_SIZE_BY_FAMILY` and ignored the caller's resolved value,
+  so the file (0.8) and the claim text (0.916) disagreed — a second table
+  re-deriving one rule.
+- **Fix:** `for_task_family(min_d=...)` takes the caller's declared value;
+  the family table is the fallback for a caller that carries none. Lock:
+  `test_the_declared_min_d_wins`.
+
 ### A24. `mean_norm`'s declared default cannot train (7/7 control seeds at chance)
 - **Evidence:** the paired run at the mnist box: control arm (the declared
   default `update.step_size=0.001`) measured `[0.124, 0.101, 0.116, 0.101,
@@ -457,6 +469,14 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
   lower bound is 1.21 - 1.96/8 ≈ 0.965 (A22's arithmetic).
 - **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
   SEC_RUNG2=auto SEC_RUNG2_SEEDS=64 SEC_RESULTS_DIR=results/sec/claim64`.
+- **Result (05:34):** `n=64`, `mean_diff=+0.0259`, `d=+1.024`,
+  `p=1.0e-4`, `d-CI-lower=0.783` against the file's `min_d=0.8` →
+  **`coordinate`**, 0.017 short — `marginal`, not met (AGENTS: within 1σ of
+  the threshold is not a claim). The committed file declared 0.8 (A25), so
+  this run's bar is 0.8, not the 0.916 the plan named.
+- **Next:** a *fresh-seed* confirmatory run at n_max=100 (seeds 64..163),
+  pre-registered before its first seed; expected lower bound
+  `1.024 - 1.96/10 ≈ 0.828 > 0.8`.
 - [ ] **5.2** Pre-register paired comparisons (fixed `n_max≥5`, no peeking) and
       run to `n_max`; report `equivalent/superior/inferior/inconclusive`.
 - [ ] **5.3** Push claim count toward the 18+ target with valid boxes; a claim

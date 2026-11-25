@@ -1126,6 +1126,7 @@ async def create_registration(
             minimal_box[key] = base_box[key]
 
     registration = EffectSizeRegistration.for_task_family(
+        min_d=min_d,
         claim=(
             f"tuning {knob_key} on primitive.{axis}.{primitive} improves val_acc "
             f"with Cohen's d >= {min_d} at the {task_id} base"

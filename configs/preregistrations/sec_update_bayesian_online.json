@@ -1,0 +1,20 @@
+{
+  "claim": "tuning update.step_size on primitive.update.bayesian_online improves val_acc with Cohen's d >= 0.7093882770404301 at the sequential_mnist base",
+  "metric": "val_acc",
+  "min_d": 0.8,
+  "alpha": 0.05,
+  "min_seeds": 7,
+  "created": "2026-11-25",
+  "box": {
+    "update": "bayesian_online",
+    "update.step_size": 0.01,
+    "fidelity": "L0",
+    "seed": 0,
+    "n_seeds": 1,
+    "epochs": 1,
+    "batch_size": 32,
+    "task_id": "mnist",
+    "device": "cuda",
+    "precision": "fp32"
+  }
+}
