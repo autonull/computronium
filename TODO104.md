@@ -147,6 +147,19 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A24. `mean_norm`'s declared default cannot train (7/7 control seeds at chance)
+- **Evidence:** the paired run at the mnist box: control arm (the declared
+  default `update.step_size=0.001`) measured `[0.124, 0.101, 0.116, 0.101,
+  0.103, 0.103, 0.114]` — chance on all seven seeds — while the treatment
+  (1.5e-5) measured `[0.838, …, 0.845]`, `d=+54.43`.
+- **Mechanism:** `MeanNormUpdate` normalizes by the parameter norm, so a
+  0.001 step overshoots at the mnist box; a 66x smaller step trains. The
+  declared default is not a legal working point, so every control arm on this
+  row measures a broken cell.
+- **Fix (next):** declare a working default in the config classmethod (the
+  measured 1.5e-5 regime) and re-measure; a default that cannot train is a
+  defect, not a tuning result.
+
 ### A22. The claim threshold is unattainable at 7 pairs
 - **Evidence:** the first valid paired run (7 seeds × 2 arms) measured real
   effects — `random_projections` diff `+0.0297`, `d=+1.21`, `p=0.0004`;
@@ -414,6 +427,23 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       (`random_projections` d=+1.21 p=0.0004, `analog` d=+1.00,
       `optical` d=+0.92). A22 explains the gap (the CI lower bound on d vs
       `min_d`).
+
+### Measured paired effects (7 pairs, mnist base box, 2026-11-25)
+| Arm | mean_diff | Cohen's dz | verdict |
+|---|---|---|---|
+| `credit/random_projections` (`feedback_scale` 22.65x) | +0.0297 | +1.21 | coordinate |
+| `substrate/analog` | +0.0206 | +1.00 | coordinate |
+| `substrate/optical` | +0.0058 | +0.92 | coordinate |
+| `update/lion` | +0.0123 | +0.92 | coordinate |
+| `update/schedule_free` | +0.0218 | +0.46 | coordinate |
+| `update/spectral_constrained` | +0.0592 | +4.34 | coordinate |
+| `update/mean_norm` | +0.7268 | +54.43 | coordinate (control broken, A24) |
+| `geometry/conv`, `geometry/ntm`, `plasticity/temporal_psi` | ~0 | -0.38 | coordinate (A23) |
+| `geometry/tile_mesh` | — | — | defect |
+| `substrate/ternary`, `update/<default>` | — | — | no_power (best is the default) |
+
+Every one is a **coordinate**, and by A22 that is the correct verdict at
+n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 
 ### Pre-registration — `random_projections` at n_max=64 (2026-11-25 04:27)
 - **Claim:** tuning `credit.feedback_scale` to the ladder's best (22.653x of
