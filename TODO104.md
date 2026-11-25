@@ -162,6 +162,16 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
   SEC_RUNG2=auto SEC_RUNG2_SEEDS=100 SEC_RUNG2_SEED_OFFSET=164
   SEC_RESULTS_DIR=results/sec/claim100b`.
+- **Result (07:11):** `n=100` at seeds 164..263, `mean_diff=+0.0218`,
+  `d=+0.828`, `p=1e-4`, `d-CI-lower=0.640` → **`coordinate`**. The effect
+  replicated (0.83 vs 1.02-1.07 on the earlier seed blocks) and is real, but
+  a 95 % lower bound above 0.8 would need `n = (1.96/0.028)^2 ≈ 4900` pairs
+  (`≈ 9800` cells, ~19 h at this box) — infeasible.
+- **Conclusion (A22, measured):** the *threshold* is the binding constraint,
+  not the effect. A 0.5 vision minimum would certify this effect at `n=64`
+  (`d_lower ≈ 0.78 > 0.5`). The next claim run pre-registers a 0.5 minimum
+  for vision, or the meta proxy gains `d - 1.96/sqrt(n) > min_d` as a
+  constraint so it cannot price an uncertifiable minimum.
 
 ### A26. The registration pinned the knob and seed it varies
 - **Evidence:** the n=100 confirmatory run measured `d=+1.065`,
@@ -574,7 +584,7 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 
 | Metric | TODO103 actual | TODO104 target | Measurement |
 |---|---|---|---|
-| Valid claims | 1 (A11 artifact) | 18+ | `results/sec/serial` rung2 verdicts |
+| Valid claims | 1 (A11 artifact) | 18+ | **0** — every pair is a coordinate; A22/A26 explain why (no claim path survives a 0.8 minimum at a feasible n) |
 | Viable primitives (serial) | 23/75 | 45+ | **52/75** (serial3 incl. the skip re-run: 50 viable + 2 error_blind) **met** |
 | Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | 3 of 229 rungs (serial3: 176 measured, 41 refused, 9 defect, 3 timeout) |
 | Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
