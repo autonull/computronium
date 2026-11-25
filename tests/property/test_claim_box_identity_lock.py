@@ -13,7 +13,10 @@ import pytest
 
 from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_claims import claim_schedule
-from computronium.validation.preregistration import ThresholdRegistration
+from computronium.validation.preregistration import (
+    EffectSizeRegistration,
+    ThresholdRegistration,
+)
 
 _LADDER = Schedule(
     fidelity="L0",
@@ -98,3 +101,33 @@ def test_the_declared_min_d_wins() -> None:
         claim="c", metric="val_acc", task_id="mnist"
     )
     assert fallback.min_d > 0
+
+
+def test_the_varied_knob_is_not_a_box_field() -> None:
+    """The intervention is not part of the box identity (TODO104 A26).
+
+    A registration that pinned the knob refused every treatment: the n=100
+    claim measured d-CI-lower 0.876 against 0.8 and still returned
+    coordinate, because the box disagreed on the knob it varies.
+    """
+    registration = EffectSizeRegistration(
+        claim="tuning feedback_scale on random_projections",
+        metric="val_acc",
+        min_d=0.8,
+        box={
+            "credit": "random_projections",
+            "fidelity": "L0",
+            "epochs": 1,
+            "task_id": "mnist",
+        },
+    )
+    treatment = {
+        "credit": "random_projections",
+        "credit.feedback_scale": 0.2265,
+        "fidelity": "L0",
+        "seed": 64,
+        "n_seeds": 1,
+        "epochs": 1,
+        "task_id": "mnist",
+    }
+    assert registration.box_mismatch(treatment) is None

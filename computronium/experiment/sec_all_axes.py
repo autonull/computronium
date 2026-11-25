@@ -1108,15 +1108,17 @@ async def create_registration(
     # The box_mismatch check compares ALL fields, so we must limit to what the
     # treatment run will actually match (axis primitive + knob). The control arm
     # uses the axis default primitive, which has different structural params.
-    minimal_box = {
-        axis: primitive,
-        knob_key: base_box.get(knob_key),
-    }
+    # The varied knob is the intervention, not part of the box: a declared box
+    # that pins it refuses every treatment, which is the one cell the claim
+    # varies (TODO104 A26). The control arm still runs at the knob's declared
+    # default, read from the primitive's own config.
+    minimal_box = {axis: primitive}
     # Also include the base schedule params that are constant across runs
+    # A paired run varies the seed per pair and runs one seed per cell, so
+    # neither is a box field: the identity is the box the pair is measured at
+    # (TODO104 A26).
     for key in (
         "fidelity",
-        "seed",
-        "n_seeds",
         "epochs",
         "batch_size",
         "task_id",

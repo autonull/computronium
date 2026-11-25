@@ -147,6 +147,19 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A26. The registration pinned the knob and seed it varies
+- **Evidence:** the n=100 confirmatory run measured `d=+1.065`,
+  `d-CI-lower=0.876` against `min_d=0.8`, `p=1e-4` — a pass — and still
+  returned `coordinate`. The reason string was
+  `credit.feedback_scale: registered 0.01, run 0.2265`.
+- **Mechanism:** `create_registration` put the *varied knob* and the per-pair
+  `seed` into the declared box, so `box_mismatch` refused the one cell the
+  claim varies. The box identity must be the invariant part of the run.
+- **Fix:** the declared box is `{axis: primitive}` + `fidelity`, `epochs`,
+  `batch_size`, `task_id`, `device`, `precision`; the knob is the
+  intervention and the seed is the pair index. Lock:
+  `test_the_varied_knob_is_not_a_box_field`.
+
 ### A25. Two tables disagreed on the registered minimum d
 - **Evidence:** the committed registration
   (`configs/preregistrations/sec_credit_random_projections.json`) carries
@@ -469,7 +482,11 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
   lower bound is 1.21 - 1.96/8 ≈ 0.965 (A22's arithmetic).
 - **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
   SEC_RUNG2=auto SEC_RUNG2_SEEDS=64 SEC_RESULTS_DIR=results/sec/claim64`.
-- **Result (05:34):** `n=64`, `mean_diff=+0.0259`, `d=+1.024`,
+- **Result (06:25, seeds 64..163):** `n=100`, `mean_diff=+0.0266`,
+  `d=+1.065`, `d-CI-lower=0.876`, `p=1e-4` — a *pass* against 0.8, refused
+  by A26's box mismatch (the registration pinned the knob). The measurement
+  is the effect; the verdict was a box-check artifact.
+- **Result (05:34, seeds 0..63):** `n=64`, `mean_diff=+0.0259`, `d=+1.024`,
   `p=1.0e-4`, `d-CI-lower=0.783` against the file's `min_d=0.8` →
   **`coordinate`**, 0.017 short — `marginal`, not met (AGENTS: within 1σ of
   the threshold is not a claim). The committed file declared 0.8 (A25), so
