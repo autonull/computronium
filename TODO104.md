@@ -147,6 +147,19 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A18. `gradient` × hard routing gate = zero gradient (declared space gap)
+- **Evidence:** `geometry/routing` defected at every rung: `Training failed:
+  GradientCredit: no gradient reached target indicators`; the dry-run check in
+  `compose.py` names the same mechanism.
+- **Mechanism:** `routing_weights(..., surrogate=None)` selects the top-k with
+  a `scatter` over indices, so the gate logits receive no gradient. With
+  `surrogate="ste"` the same forward passes the soft gradient through.
+- **Fix (queued, needs a VOID row):** a `gradient` credit requires a gate the
+  gradient reaches — refuse `credit=gradient` on `geometry=routing` when
+  `top_k < num_experts` and `surrogate != "ste"`, by name, in the declared
+  space. The row is a schema edit, so it lands *after* the map run; the map
+  row stays a named defect, not a mechanism verdict.
+
 ### A15. `conv` died on the reproducibility box (deterministic backward)
 - **Evidence:** every `geometry/conv` rung — the vision geometry's own row —
   defected: `adaptive_avg_pool2d_backward_cuda does not have a deterministic
