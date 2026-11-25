@@ -148,7 +148,7 @@ SLOW_PRIMITIVES = {
 # Rung 2 uses each task family's declared base box (base_schedule) and the seed
 # budget its registration declares. One source: the registration's min_seeds is
 # CLAIM_SEEDS, so a claim runs exactly the budget it was registered at.
-RUNG2_SEEDS = CLAIM_SEEDS
+RUNG2_SEEDS = int(os.environ.get("SEC_RUNG2_SEEDS", str(CLAIM_SEEDS)))
 
 print(
     f"\n🎯 Rung 2 seeds: {RUNG2_SEEDS} (family base-box epochs, "
@@ -254,7 +254,7 @@ async def run_rung1_ladder_fixed(
     async def run_rung(factor: float, value: float) -> LadderRung:
         async with semaphore:
             box = dict(base_box)
-            box[knob_key] = round(value) if is_int_param else value
+            box[knob_key] = sec_all_axes.knob_point(axis, primitive, knob_name, value)
             # Use L0 fidelity for fast screening
             box["epochs"] = 1
             box["n_seeds"] = 1

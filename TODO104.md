@@ -147,6 +147,30 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A22. The claim threshold is unattainable at 7 pairs
+- **Evidence:** the first valid paired run (7 seeds × 2 arms) measured real
+  effects — `random_projections` diff `+0.0297`, `d=+1.21`, `p=0.0004`;
+  `analog` `d=+1.00`; `optical` `d=+0.92` — and every one returned
+  `coordinate`, because `passes_effect_size` requires the *CI lower bound* on
+  d to exceed `min_d` (vision `0.93`).
+- **Arithmetic:** at n pairs the lower bound is `d - 1.96/sqrt(n)`; clearing
+  0.93 with `d=1.21` needs `n >= 49`, with `d=1.0` needs `n > 300`. The
+  meta-SEC proxy priced a 0.93 minimum without pricing the seed budget, so no
+  feasible n certifies a typical effect.
+- **Fix (next):** size each claim from its measured effect — a pre-registered
+  `n_max` (64 for `random_projections`, 128 for `analog`) — and record the
+  required n beside the coordinate. The proxy gains the
+  `d - 1.96/sqrt(n) > min_d` constraint.
+
+### A23. A rounded integer knob left its declared domain
+- **Evidence:** `conv` and `ntm` paired `d=-0.38` with a CI at `~0`: the
+  ladder's best was `num_layers` 3 × 0.0152, which rounds to **0** layers — a
+  degenerate geometry compared against a 3-layer default.
+- **Fix:** `knob_point` rounds an integer knob *and* clamps it to the domain
+  the config class declares (1..12 for `num_layers`); both ladders and
+  `comparison_boxes` read it. Lock:
+  `test_a_ladder_point_stays_in_the_declared_domain`.
+
 ### A21. Rung 2 compared two *different* mechanisms (d = -61)
 - **Evidence:** the first claim run (2026-11-25 03:15) reported
   `d=-61.27` for `conv`, `-3.86` for `nca`, `-3.25` for `ntm` — a knob claim

@@ -25,6 +25,7 @@ from computronium.experiment.sec_all_axes import (
     _declared_reads,
     _get_primary_knob,
     comparison_boxes,
+    knob_point,
     ladder_verdict,
     pair_schedule,
     preferred_task_family,
@@ -302,3 +303,17 @@ def test_a_pair_is_one_primitive_two_knobs() -> None:
     assert difference == {knob_key}
     # An integer knob is rounded; the control is the declared default either way.
     assert control[knob_key] in {default_value, round(default_value)}
+
+
+def test_a_ladder_point_stays_in_the_declared_domain() -> None:
+    """A rounded int knob can leave its domain: clamp to the declared one.
+
+    ``num_layers`` 3 x 0.0152 rounds to 0 — a degenerate geometry — and the
+    claim compared it against a 3-layer default (TODO104 A23).
+    """
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    assert knob_point("geometry", "conv", "num_layers", 0.0456) == 1.0
+    assert knob_point("geometry", "conv", "num_layers", 100.0) == 12.0
+    assert knob_point("update", "adam", "step_size", 0.001 * 22.65) == (0.001 * 22.65)

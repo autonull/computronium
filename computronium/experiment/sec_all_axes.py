@@ -787,7 +787,7 @@ async def run_rung1_ladder(
         async with semaphore:
             box = dict(base_box)
             # Convert to int for integer params
-            box[knob_key] = round(value) if is_int_param else value
+            box[knob_key] = knob_point(axis, primitive, knob_name, value)
             coord = screen_coordinate(box, axis, primitive)
             measured = await _measure_async(coord, schedule)
             return LadderRung(
@@ -831,6 +831,46 @@ def pair_schedule(schedule: Schedule, seed: int) -> Schedule:
     return replace(schedule, seed=seed, n_seeds=1)
 
 
+def knob_bounds(axis: str, primitive: str, name: str) -> tuple[float, float] | None:
+    """The declared domain of a knob, or ``None`` when it declares none.
+
+    A rounded ladder point can leave the domain (``num_layers`` 3 x 0.0152
+    rounds to 0 — a degenerate geometry), so a point is clamped to the domain
+    the config class declares, never to an invented floor (TODO104 A23).
+    """
+    import importlib
+
+    from computronium.primitives.registry import _CONFIG_FACTORIES
+
+    prefix = _AXIS_REGISTRY_PREFIX.get(axis, axis)
+    factory_path = _CONFIG_FACTORIES.get(f"primitive.{prefix}.{primitive}")
+    if not factory_path:
+        return None
+    parts = factory_path.split(".")
+    module = importlib.import_module(".".join(parts[:-2]))
+    config_cls = getattr(module, parts[-2], None)
+    hyperparameters = getattr(config_cls, "hyperparameters", None)
+    if hyperparameters is None:
+        return None
+    spec = hyperparameters(primitive).get(name)
+    domain = (spec or {}).get("domain")
+    if isinstance(domain, tuple | list) and len(domain) >= 2:
+        low, high = float(domain[0]), float(domain[1])
+        if low < high:
+            return low, high
+    return None
+
+
+def knob_point(axis: str, primitive: str, name: str, value: float) -> float:
+    """One legal ladder point: rounded for an integer knob, clamped to domain."""
+    point = round(value) if name in INT_KNOBS else value
+    bounds = knob_bounds(axis, primitive, name)
+    if bounds is None:
+        return point
+    low, high = bounds
+    return min(max(point, low), high)
+
+
 def comparison_boxes(
     axis: str,
     primitive: str,
@@ -849,8 +889,8 @@ def comparison_boxes(
         raise ValueError(f"{axis}/{primitive} declares no knob to compare")
     knob_key = knob_info[0]
     name = knob_key.split(".", 1)[1]
-    control = round(default_value) if name in INT_KNOBS else default_value
-    treatment = round(best_value) if name in INT_KNOBS else best_value
+    control = knob_point(axis, primitive, name, default_value)
+    treatment = knob_point(axis, primitive, name, best_value)
     control_box = _build_axis_box(axis, primitive, task_id)
     control_box[knob_key] = control
     treatment_box = dict(control_box)
