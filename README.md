@@ -220,10 +220,10 @@ Entry Points → Tasks & Data → Experiment Kernel → 6-Axis Ontology → Syst
 
 | Panel | Key Contents |
 |-------|--------------|
-| **🚪 Entry Points** | 39 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
-| **🎯 Tasks & Data** | 7 domains, 31 tasks |
-| **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 45 constraints |
-| **🧬 6-Axis Ontology** | 10 substrates, 12 geometries, 8 dynamics, 8 plasticities, 19 credits, 18 updates = 75 primitives |
+| **🚪 Entry Points** | 40 subcommands, 148 Python API symbols, 6 demos + 21 gallery figures |
+| **🎯 Tasks & Data** | 11 domains, 35 tasks |
+| **🧪 Experiment Kernel** | 11 pipeline stages, 9 policies, 63 objectives (54 measured), 5 priors, 88 capabilities, 43 constraints |
+| **🧬 6-Axis Ontology** | 10 substrates, 12 geometries, 8 dynamics, 6 plasticities, 19 credits, 18 updates = 73 primitives |
 | **🏗️ System & Composition** | 6-axis config × SystemTrainerConfig (34 fields), `compose_joint_system` factory |
 | **⚡ Training Loop** | Epoch history: train_acc, train_energy, train_loss, val_acc, val_loss + evaluator adds param_count, walltime_s |
 | **💾 Evidence Store** | DuckDB, single-writer, 12 RecordStore methods, schema v3 with 19 fields, 3-tier claim status |
@@ -775,6 +775,7 @@ six-axis systems and assert real accuracies.
 | Command | Purpose |
 |---|---|
 | `demo` | Run the seven-beat demonstration: space, run, ledger, report, coverage |
+| `test` | List the declared test surface: 75 laws, 6 seams, the rule tables |
 | `run` | Execute a run profile (dry-run with --dry-run) |
 | `report` | Generate report from store |
 | `export` | Export store data for round-trip |
@@ -1211,6 +1212,45 @@ comp run quick-verify --store experiment.duckdb
 
 **Models**: `feedforward` and `recurrent` geometries over integrated state vectors. The operator-learning families PINO, DeepONet, and FNO are declared unavailable: no geometry implements them, and each carries a declared reason and trigger in the surface inventory.
 
+## 🗺️ Measured Capability Map (serial, 2026-11-25)
+
+One process per axis (`SEC_SEMAPHORE=1`), one rung-2 pair per seed, at each
+rule's own declared box: `results/sec/serial3`. A row is *viable* when its
+ladder reached an above-chance cell; *error-blind* rows (`homeostatic`,
+`temporal_trace`) measure chance by contract and are counted separately.
+
+| Axis | Viable + error-blind | Priced skips (named reason) |
+|---|---|---|
+| credit | 11/19 | `eligibility_prop`, `rtrl_reference`, `unbiased_rtrl` (declared batch layout) |
+| dynamics | 3/8 | `natural_gradient` equivalent L0 cost (>180 s/epoch) |
+| geometry | 7/12 | `graph`, `spatial_lattice` (no task declares the carrier) |
+| plasticity | 5/8 | `eligibility_prop`-family layout refusals |
+| substrate | 9/10 | one L0 cost row |
+| update | 17/18 | `natural_gradient` L0 cost |
+| **total** | **52/75** | 229 rungs: 176 measured, 41 refused, 9 defect, 3 timeout |
+
+The breadth exit is a predicate the repository evaluates:
+
+```bash
+uv run comp gate breadth
+# gate: PASS (17 error-aware credits, ≥2 task families each)
+```
+
+**Claim** — `dynamics/energy_minimization` on MNIST at the base box:
+`mean_diff = 0.0153`, 95 % CI `[0.0151, 0.0158]`, `p = 0.0076`, Cohen's
+`d = 31.1` against the vision family minimum `0.8`.
+
+**Coordinates** — the 22 paired arms measured at 7 index-matched seeds return
+`coordinate`, not a claim: the effect is real (`random_projections` d=+1.21,
+`analog` +1.00, `optical` +0.92, `spectral_constrained` +4.34) but a claim
+needs the 95 % lower bound on `d` above the registered minimum. The n=64
+`random_projections` run measured d=+1.024 with lower bound 0.783 — 0.017
+short of 0.8. A fresh n=100 block measured d=+0.828 (lower 0.640) while
+seeds 64..163 measured +1.065: seed-block variation exceeds the within-block
+CI, so a larger n alone does not certify the effect. A pre-registered
+comparison declares the minimum it must clear *and* the seed-block variance it
+must cover; the meta-SEC proxy prices only minima its planned n can certify.
+
 ## Research program
 
 The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
@@ -1305,7 +1345,7 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 
 ## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
 
-The acceleration layer now provides a **unified registry** of **96 implementations** (75 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
+The acceleration layer now provides a **unified registry** of **96 implementations** (73 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
 
 ### Registry Structure
 
@@ -1314,11 +1354,11 @@ The acceleration layer now provides a **unified registry** of **96 implementatio
 | **Substrate** | 10 | — | 10 |
 | **Geometry** | 12 | — | 12 |
 | **StateDynamics** | 8 | — | 8 |
-| **Plasticity** | 8 | — | 8 |
+| **Plasticity** | 6 | — | 6 |
 | **CreditAssignment** | 19 | — | 19 |
 | **ParameterUpdate** | 18 | — | 18 |
 | **Algorithms** | — | 21 | 21 |
-| **Total** | **75** | **21** | **96** |
+| **Total** | **73** | **21** | **96** |
 
 Each `ImplementationSpec` carries:
 - **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm)
@@ -1358,7 +1398,7 @@ from computronium.acceleration.registry import (
 
 all_specs()  # → tuple[ImplementationSpec, ...] (all 96)
 algorithms()  # → 21 algorithm specs
-primitives()  # → 75 primitive specs
+primitives()  # → 73 primitive specs
 get("primitive.credit_assignment.random_projections")
 list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```

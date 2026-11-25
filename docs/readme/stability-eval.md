@@ -108,3 +108,42 @@ comp run quick-verify --store experiment.duckdb
 **Tasks**: `pendulum_state`, `lorenz_state` (offline ODE integration, one-step state prediction); the PDE suites Heat/Wave/Burgers/Navier-Stokes are planned
 
 **Models**: `feedforward` and `recurrent` geometries over integrated state vectors. The operator-learning families PINO, DeepONet, and FNO are declared unavailable: no geometry implements them, and each carries a declared reason and trigger in the surface inventory.
+
+## 🗺️ Measured Capability Map (serial, 2026-11-25)
+
+One process per axis (`SEC_SEMAPHORE=1`), one rung-2 pair per seed, at each
+rule's own declared box: `results/sec/serial3`. A row is *viable* when its
+ladder reached an above-chance cell; *error-blind* rows (`homeostatic`,
+`temporal_trace`) measure chance by contract and are counted separately.
+
+| Axis | Viable + error-blind | Priced skips (named reason) |
+|---|---|---|
+| credit | 11/19 | `eligibility_prop`, `rtrl_reference`, `unbiased_rtrl` (declared batch layout) |
+| dynamics | 3/8 | `natural_gradient` equivalent L0 cost (>180 s/epoch) |
+| geometry | 7/12 | `graph`, `spatial_lattice` (no task declares the carrier) |
+| plasticity | 5/8 | `eligibility_prop`-family layout refusals |
+| substrate | 9/10 | one L0 cost row |
+| update | 17/18 | `natural_gradient` L0 cost |
+| **total** | **52/75** | 229 rungs: 176 measured, 41 refused, 9 defect, 3 timeout |
+
+The breadth exit is a predicate the repository evaluates:
+
+```bash
+uv run comp gate breadth
+# gate: PASS (17 error-aware credits, ≥2 task families each)
+```
+
+**Claim** — `dynamics/energy_minimization` on MNIST at the base box:
+`mean_diff = 0.0153`, 95 % CI `[0.0151, 0.0158]`, `p = 0.0076`, Cohen's
+`d = 31.1` against the vision family minimum `0.8`.
+
+**Coordinates** — the 22 paired arms measured at 7 index-matched seeds return
+`coordinate`, not a claim: the effect is real (`random_projections` d=+1.21,
+`analog` +1.00, `optical` +0.92, `spectral_constrained` +4.34) but a claim
+needs the 95 % lower bound on `d` above the registered minimum. The n=64
+`random_projections` run measured d=+1.024 with lower bound 0.783 — 0.017
+short of 0.8. A fresh n=100 block measured d=+0.828 (lower 0.640) while
+seeds 64..163 measured +1.065: seed-block variation exceeds the within-block
+CI, so a larger n alone does not certify the effect. A pre-registered
+comparison declares the minimum it must clear *and* the seed-block variance it
+must cover; the meta-SEC proxy prices only minima its planned n can certify.

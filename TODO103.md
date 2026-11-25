@@ -188,41 +188,31 @@ consolidated checklist in §E is historical, not the live queue.
 
 ---
 
-## 📋 Consolidated Checklist (Copy-Paste for Session)
+## 📋 Consolidated Checklist — regenerated 2026-11-25
 
-```markdown
-### Phase 1: Remove Factory Defaults
-- [ ] 1.1 GeometryConfig.causal_transformer: remove image_hw, in_channels defaults
-- [ ] 1.2 GeometryConfig.conv: remove in_channels, input_hw, pool_hw defaults
-- [ ] 1.3 GeometryConfig.nca: remove grid_hw default
-- [ ] 1.4 Update _geometry_builders.py to error if required params missing
-- [ ] 1.5 Capability gate: 75/75 pass
+`TODO104.md` §E is the live checklist; this regenerates TODO103's own items
+against the measured evidence, each row naming where its verdict lives.
 
-### Phase 2: Enrich BASE_BOXES
-- [ ] 2.1 vision base_coordinate: add input_hw, in_channels
-- [ ] 2.2 sequence/neuromorphic/photonic/quantum/scientific: add spatial params
-- [ ] 2.3 graph base_coordinate: add edge_index from TaskShape
-- [ ] 2.4 SEC screen: refusal rate <5%
+| TODO103 item | Verdict | Evidence |
+|---|---|---|
+| 1.1 `causal_transformer` factory defaults (`image_hw`, `in_channels`) | ✅ | the factory takes `image_hw=None`; a cell derives it from the task's shape (`_apply_task_spatial`, `sec_loop.py`) |
+| 1.2 `conv` factory defaults | ✅ | `in_channels`/`input_hw` are required; `_derive_conv_params` reads `channel_count`/`spatial_extent` |
+| 1.3 `nca` `grid_hw` default | ✅ | required; `_derive_nca_params` derives the grid from the task's shape |
+| 1.4 builders error on a missing structural fact | ✅ | `build_spatial_lattice_config`/`build_graph_config` raise by name; lock `test_geometry_shape_source_lock.py` |
+| 1.5 "75/75 pass" | ⚠️ restated | the map is 52/75 viable+blind (`results/sec/serial3`); `comp gate breadth` PASSes (17/17 error-aware credits on ≥2 families) |
+| 2.1 vision `base_coordinate` spatial params | ✅ | declared; a non-base task in the family now overrides them with its own shape (A10) |
+| 2.2 sequence/neuromorphic/photonic/quantum/scientific spatial params | ✅ | stale mnist extents removed from `sequence`/`scientific`; every other row derives from its task |
+| 2.3 graph `base_coordinate.edge_index` | ❌ rejected | connectivity is the task's data; `compose_configs` extracts it and the builder refuses a cell that declares none (B5) |
+| 2.4 refusal rate <5% | ❌ unmet | 41 refused of 229 serial rungs (17.9%), each with a named reason (`natural_gradient` L0 cost, void rules) |
+| 3.1–3.3 `screen_coordinate`/fallbacks thread the task's shape | ✅ | `_params_for`/`screen_coordinate` apply `_apply_task_spatial`; lock `test_params_for_reads_the_tasks_extent` |
+| 3.4 fallback-path test | ✅ | same lock; probe `scripts/probes/todo104_non_mnist_shape.py` trains usps/conv and digits/nca |
+| 4.1–4.4 Rung 3 claims from the TODO103 run | ❌ artifact | every 2026-11-24 rung-2 pair ran one seed (A11), so its 21 coordinates and 1 claim carry no power statement |
+| 5.1 gap→primitive pipeline | ✅ | `temporal_psi`/`causal_transformer`/`conv` are live primitives |
+| 5.2 cost model (`R²=0.29`, saved pkl) | ✅ replaced | the offline `configs/cost_model.pkl` had no reader and is deleted; the wave prices from the fidelity's measured cells and the positive control |
+| 6.1–6.3 meta-SEC + void rules | ✅ | `meta_sec_best.json` = 3.589, `valid=true`, `claim_seeds=7` (was 0.0) |
+| 6.4 serial competitive run | ✅ re-measured | `results/sec/serial3`: 52/75 viable+blind, 1 claim, 21 coordinates; the claim is `dynamics/energy_minimization` on MNIST |
 
-### Phase 3: Verify Fallback Paths
-- [ ] 3.1 screen_coordinate passes shape
-- [ ] 3.2 _fallback_coordinate passes shape
-- [ ] 3.3 _iter_legal_coordinates threads shape
-- [ ] 3.4 Test fallback path
-
-### Phase 4: Rung 3 Claims
-- [x] 4.1 Geometry Rung 3: 8 MNIST + 4 iris (muon on iris claims d>0.8) + local_goodness, random_projections (claim)
-- [x] 4.2 temporal_psi Rung 3 (coordinate)
-- [x] 4.3 Substrate Rung 3: spiking_mnist (neuromorphic), memristor_simulation (memristive) - both coordinates
-- [x] 4.4 Auto-register claims script (2 registrations created)
-
-### Phase 5: Track C Completion
-- [x] 5.1 C.3 Gap→primitive pipeline (temporal_psi ✅, causal_transformer ✅, conv ✅)
-- [x] 5.2 C.4 Budget policy from cost model (R²=0.29, model saved)
-
-### Phase 6: Meta-SEC Production
-- [x] 6.1 Meta-SEC 5 trials (1388 cells)
-- [x] 6.2 Apply best params (meta_sec_best.json)
-- [x] 6.3 Learned void rules (void_rules_learned.py)
-- [x] 6.4 Full competitive run (serial, authoritative): 23/75 viable, 1 claim, 21 coords
-```
+TODO103's success table (18+ claims, 12/12 MNIST geometries, claims/GPU-hour
+≥3) is superseded by TODO104 §D: the binding constraint is A22 — a claim needs
+`d - 1.96/√n > min_d`, and the declared vision minimum 0.916 needs n≈9800
+pairs at the measured effect — not the number of viable primitives.
