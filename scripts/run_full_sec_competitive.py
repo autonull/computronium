@@ -150,6 +150,9 @@ SLOW_PRIMITIVES = {
 # budget its registration declares. One source: the registration's min_seeds is
 # CLAIM_SEEDS, so a claim runs exactly the budget it was registered at.
 RUNG2_SEEDS = int(os.environ.get("SEC_RUNG2_SEEDS", str(CLAIM_SEEDS)))
+# A confirmatory run uses seeds the pilot never touched: the offset is part of
+# the pre-registration, so a rerun at a larger n is not a peeked repeat.
+RUNG2_SEED_OFFSET = int(os.environ.get("SEC_RUNG2_SEED_OFFSET", "0"))
 
 print(
     f"\n🎯 Rung 2 seeds: {RUNG2_SEEDS} (family base-box epochs, "
@@ -376,6 +379,7 @@ async def run_primitive_full_fixed(
                     n_seeds=RUNG2_SEEDS,
                     semaphore_limit=semaphore_limit,
                     budget_s=RUNG2_TIMEOUT,
+                    seed_offset=RUNG2_SEED_OFFSET,
                 )
                 if result:
                     rung2_cells, rung2_effect, rung2_verdict = result

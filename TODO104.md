@@ -477,6 +477,20 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 - **Next:** a *fresh-seed* confirmatory run at n_max=100 (seeds 64..163),
   pre-registered before its first seed; expected lower bound
   `1.024 - 1.96/10 ≈ 0.828 > 0.8`.
+
+### Pre-registration — `random_projections` n_max=100, seeds 64..163 (05:45)
+- **Claim (unchanged):** tuning `credit.feedback_scale` to 22.653x raises
+  val_acc on `credit/random_projections` at the mnist base box.
+- **Test:** 100 index-matched pairs at *fresh* seeds (64..163 — the n=64 pilot
+  used 0..63), fixed-n, no peeking, `alpha=0.05`; threshold = the committed
+  registration's `min_d=0.8` (A25: the file is the pre-registration).
+- **Decision rule:** `claim` iff the 95 % CI lower bound on d > 0.8 and
+  `p < 0.05`; otherwise `coordinate` with the boxed effect.
+- **Basis:** 64-pair pilot `d=+1.024`, `sd_diff≈0.0253`; at n=100 the lower
+  bound is `1.024 - 1.96/10 ≈ 0.828`.
+- **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
+  SEC_RUNG2=auto SEC_RUNG2_SEEDS=100 SEC_RUNG2_SEED_OFFSET=64
+  SEC_RESULTS_DIR=results/sec/claim100`.
 - [ ] **5.2** Pre-register paired comparisons (fixed `n_max≥5`, no peeking) and
       run to `n_max`; report `equivalent/superior/inferior/inconclusive`.
 - [ ] **5.3** Push claim count toward the 18+ target with valid boxes; a claim

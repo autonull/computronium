@@ -907,6 +907,7 @@ async def run_rung2_comparison(
     n_seeds: int = CLAIM_SEEDS,
     semaphore_limit: int = 2,
     budget_s: float | None = None,
+    seed_offset: int = 0,
 ) -> tuple[list[PairedCell], dict[str, Any], str] | None:
     """Run paired comparison: treatment (primitive at best) vs control (axis default).
 
@@ -981,7 +982,7 @@ async def run_rung2_comparison(
             )
 
     tasks = []
-    for seed in range(n_seeds):
+    for seed in range(seed_offset, seed_offset + n_seeds):
         tasks.append(run_cell("treatment", treatment_coord, seed))
         tasks.append(run_cell("control", control_coord, seed))
 
