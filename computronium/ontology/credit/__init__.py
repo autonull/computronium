@@ -3294,6 +3294,18 @@ class PepitaCredit:
 class GradientCredit:
     """Standard backprop credit (for comparison)."""
 
+    @classmethod
+    def reads(cls, config: CreditAssignmentConfig) -> frozenset[str] | None:
+        """Exact backprop reads no credit field: the knobs live on the update.
+
+        Measured 2026-11-25: sweeping ``credit.feedback_scale`` 0.015x..22.65x
+        returned val_acc 0.9172 at every rung, so the ladder measured one cell
+        four times. The declared empty set makes the screen measure the default
+        once instead.
+        """
+        del config  # the gradient is the loss gradient; no credit knob binds
+        return frozenset()
+
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     error_blind: ClassVar[bool] = False
     requires_autograd: ClassVar[bool] = True

@@ -126,6 +126,24 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   cannot beat 0, mark the study **invalid** and fall back to declared defaults
   rather than emitting a zero-value "best".
 
+### A12. The ladder swept a field the rule ignores (dead knob)
+- **Evidence:** 2026-11-25 coverage run — `credit/gradient` returned val_acc
+  0.9172 at every rung (0.015x..22.65x of `credit.feedback_scale`), and
+  `homeostatic`/`temporal_trace` returned one value at every rung.
+- **Mechanism:** the ladder's primary knob came from the table's first positive
+  candidate, not from the field the rule declares it reads. Four credit rules
+  already declare `reads(...)` (`thermodynamic_contrast`, `local_goodness`,
+  `target_inversion`, `zeroth_order`) but nothing consumed it.
+- **Fix:** `sec_all_axes._declared_reads` resolves the rule class and its
+  config, and `_get_primary_knob` keeps only declared fields: `zeroth_order`
+  now sweeps `credit.fd_step` (the S9e conclusion), `thermodynamic_contrast`
+  sweeps `credit.beta`, `GradientCredit.reads` is `frozenset()` (exact
+  backprop reads no credit field). A rule with an empty set gets one measured
+  default cell (`measure_declared_default`) instead of a dead sweep.
+- **Remaining:** the 15 rules without a `reads` declaration still fall back to
+  the table order (`homeostatic`, `temporal_trace`, ...), so their ladders may
+  still sweep an inert field. Declaring `reads` per rule is the queued work.
+
 ### A11. Rung 2 pairs all ran at one seed (`d=0.00` everywhere)
 - **Evidence:** the 2026-11-25 re-run logged `Rung 2: coordinate (d=0.00)` on
   every viable primitive; the paired difference was exactly 0.
@@ -374,6 +392,12 @@ three lock tests + one probe, `configs/meta_sec_best.json`.
 pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
 each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
 dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
+
+**Third finding (A12):** the ladder swept a field its rule ignores (four
+identical rungs). `reads(...)` already declared the fields each rule uses but
+nothing read it; `_declared_reads` now steers the knob, and a rule that
+declares none is measured once at its default. 15 rules still lack a `reads`
+declaration (queued work).
 
 **Second finding (A11):** the first re-run logged `d=0.00` on every rung 2 —
 `run_cell` recorded the seed but measured the base schedule, so both arms were

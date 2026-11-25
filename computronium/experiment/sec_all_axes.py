@@ -232,6 +232,42 @@ def _accepted_knobs(axis: str, primitive: str) -> frozenset[str]:
     return spec.accepted_params if spec is not None else frozenset()
 
 
+def _declared_reads(axis: str, primitive: str) -> frozenset[str] | None:
+    """The config fields a rule declares it reads (``reads``), or ``None``.
+
+    A rule that declares ``reads`` names the fields its own output depends on,
+    so the ladder must sweep one of them: sweeping a field the rule ignores
+    trained the identical cell at every rung (measured 2026-11-25 — ``gradient``
+    at 0.015x..22.65x of ``feedback_scale`` returned val_acc 0.9172 four
+    times). An empty set means the rule reads no axis knob at all: measure its
+    declared default once instead of sweeping a dead field.
+    """
+    import importlib
+
+    from computronium.primitives.registry import _CONFIG_FACTORIES, _ONTOLOGY_CLASSES
+
+    prefix = _AXIS_REGISTRY_PREFIX.get(axis, axis)
+    dotted = _ONTOLOGY_CLASSES.get(f"primitive.{prefix}.{primitive}")
+    factory_path = _CONFIG_FACTORIES.get(f"primitive.{prefix}.{primitive}")
+    if not dotted or not factory_path:
+        return None
+    module_name, _, class_name = dotted.rpartition(".")
+    module = importlib.import_module(module_name)
+    rule_class = getattr(module, class_name, None)
+    reads = getattr(rule_class, "reads", None)
+    if reads is None:
+        return None
+    parts = factory_path.split(".")
+    config_module = importlib.import_module(".".join(parts[:-2]))
+    config_cls = getattr(config_module, parts[-2])
+    try:
+        config = getattr(config_cls, parts[-1])()
+        declared = reads(config)
+    except Exception:
+        return None
+    return None if declared is None else frozenset(declared)
+
+
 def _get_primary_knob(
     axis: str, primitive: str, task_id: str | None = None
 ) -> tuple[str, float] | None:
@@ -262,6 +298,7 @@ def _get_primary_knob(
         "tiles_per_layer",
     }
     accepted = _accepted_knobs(axis, primitive)
+    declared_reads = _declared_reads(axis, primitive)
     for name in [
         "step_size",
         "max_steps",
@@ -282,6 +319,8 @@ def _get_primary_knob(
         "lr",
     ]:
         if accepted and name not in accepted:
+            continue
+        if declared_reads is not None and name not in declared_reads:
             continue
         key = f"{axis}.{name}"
         value = params.get(key)
@@ -627,6 +666,47 @@ async def _measure_async(
     return await asyncio.to_thread(_measure, coord, run, budget_s)
 
 
+async def measure_declared_default(
+    axis: str, primitive: str, task_id: str, budget_s: float | None = None
+) -> tuple[LadderRung, str]:
+    """One cell at the primitive's declared default box.
+
+    A rule that declares no live knob still has a capability to measure: the
+    single cell enters the map with its measured accuracy, and a claim stays
+    refused as "no power by construction" because the ladder moved no knob.
+    """
+    box = _build_axis_box(axis, primitive, task_id)
+    box["epochs"] = 1
+    box["fidelity"] = "L0"
+    coord = screen_coordinate(box, axis, primitive)
+    schedule = base_schedule(task_id, "auto")
+    measured = await _measure_async(coord, schedule, budget_s)
+    rung = LadderRung(
+        factor=1.0,
+        value=0.0,
+        status=measured["status"],
+        val_acc=measured["val_acc"],
+        walltime_s=measured["walltime_s"],
+        replay_hash=measured["replay_hash"],
+        box=measured["box"],
+        reason=measured["reason"],
+    )
+    verdict = _bar_verdict(task_id, rung)
+    return rung, verdict
+
+
+def _bar_verdict(task_id: str, rung: LadderRung) -> str:
+    """The ladder verdict for one measured rung against the task's bar."""
+    from computronium.experiment.sec_loop import _task_bar
+
+    if rung.status != "measured" or rung.val_acc is None:
+        return rung.status
+    bar = _task_bar(task_id)
+    if bar is not None and rung.val_acc <= bar.value:
+        return "below_bar"
+    return "viable"
+
+
 async def run_rung1_ladder(
     axis: str,
     primitive: str,
@@ -638,7 +718,8 @@ async def run_rung1_ladder(
 
     knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     if knob_info is None:
-        return [], None, "no_knob"
+        rung, verdict = await measure_declared_default(axis, primitive, task_id)
+        return [rung], (rung if verdict == "viable" else None), verdict
 
     knob_key, default_value = knob_info
     knob_name = knob_key.split(".", 1)[1]

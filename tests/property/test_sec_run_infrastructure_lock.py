@@ -21,6 +21,7 @@ from computronium.experiment.meta_sec import (
 )
 from computronium.experiment.sec_all_axes import (
     _build_axis_box,
+    _declared_reads,
     _get_primary_knob,
     pair_schedule,
     resolve_semaphore,
@@ -49,13 +50,31 @@ def test_deadline_is_cooperative() -> None:
     assert check() is False
 
 
+def _source(relative: str) -> str:
+    root = Path(__file__).resolve().parents[2]
+    return (root / relative).read_text(encoding="utf-8")
+
+
 def test_driver_kills_no_thread() -> None:
     """The driver waits on a cell record, never on a cancelled thread."""
-    root = Path(__file__).resolve().parents[2]
-    source = (root / "scripts/run_full_sec_competitive.py").read_text(
-        encoding="utf-8"
-    )
-    assert "asyncio.wait_for" not in source
+    assert "asyncio.wait_for" not in _source("scripts/run_full_sec_competitive.py")
+
+
+def test_the_mechanisms_are_wired() -> None:
+    """A helper that no call site uses locks nothing."""
+    driver = _source("scripts/run_full_sec_competitive.py")
+    assert "resolve_semaphore(" in driver
+    assert "write_part(RESULTS_DIR" in driver
+    assert "reduce_parts(RESULTS_DIR" in driver
+    assert "RUNG2_ENABLED" in driver
+
+    axes = _source("computronium/experiment/sec_all_axes.py")
+    assert "pair_schedule(schedule, seed)" in axes
+    assert "measure_declared_default(" in axes
+    assert "measure_declared_default(" in driver
+
+    loop = _source("computronium/experiment/sec_loop.py")
+    assert "params = deadline_params(budget_s)" in loop
 
 
 def test_each_pair_runs_its_own_seed() -> None:
@@ -166,3 +185,53 @@ def test_proxy_reads_the_measured_payload(tmp_path: Path) -> None:
     assert stats["avg_walltime_s"] == pytest.approx(10.0)
     assert stats["claims"] == 2
     assert stats["measured"] == 2
+
+
+def test_gradient_declares_no_credit_knob() -> None:
+    """Exact backprop reads no credit field: an empty set, not an omission."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    assert _declared_reads("credit", "gradient") == frozenset()
+    assert _get_primary_knob("credit", "gradient", task_id="mnist") is None
+
+
+def test_the_ladder_sweeps_a_declared_field() -> None:
+    """A swept knob is one the rule declares it reads (never an inert field)."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    checked = 0
+    for primitive in (
+        "gradient",
+        "local_goodness",
+        "target_inversion",
+        "zeroth_order",
+        "thermodynamic_contrast",
+        "random_projections",
+    ):
+        reads = _declared_reads("credit", primitive)
+        if reads is None:
+            continue
+        checked += 1
+        knob = _get_primary_knob("credit", primitive, task_id="mnist")
+        if not reads:
+            assert knob is None, primitive
+        elif knob is not None:
+            assert knob[0].split(".", 1)[1] in reads, primitive
+    assert checked >= 4
+
+
+def test_reads_steers_the_measured_knob() -> None:
+    """The declared field wins over the table's first positive candidate."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    # feedback_scale comes first in the candidate table; zeroth_order reads
+    # fd_step, and thermodynamic_contrast reads beta.
+    assert _get_primary_knob("credit", "zeroth_order", task_id="mnist")[0] == (
+        "credit.fd_step"
+    )
+    assert _get_primary_knob("credit", "thermodynamic_contrast", task_id="mnist")[
+        0
+    ] == ("credit.beta")

@@ -192,6 +192,12 @@ print(
 )
 
 # Results directory
+# A claim set is chosen, not "everything viable": SEC_PRIMITIVES restricts an
+# axis run to the arms a claim is pre-registered for.
+PRIMITIVES: set[str] = {
+    p.strip() for p in os.environ.get("SEC_PRIMITIVES", "").split(",") if p.strip()
+}
+
 RESULTS_DIR = Path(os.environ.get("SEC_RESULTS_DIR", "results/sec/full_competitive"))
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -205,7 +211,12 @@ async def run_rung1_ladder_fixed(
     """Run 3-point ladder for a primitive on its primary knob (L0 fidelity)."""
     knob_info = _get_primary_knob(axis, primitive, task_id=task_id)
     if knob_info is None:
-        return [], None, "no_knob"
+        # A rule that declares no live knob still has a capability: one cell at
+        # its declared default, never a sweep of a field it ignores.
+        rung, verdict = await sec_all_axes.measure_declared_default(
+            axis, primitive, task_id, RUNG_TIMEOUT
+        )
+        return [rung], (rung if verdict == "viable" else None), verdict
 
     knob_key, default_value = knob_info
     knob_name = knob_key.split(".", 1)[1]
@@ -400,6 +411,10 @@ async def run_axis_full(
 ) -> dict:
     """Run full SEC (Rung 1 + 2) for all primitives in an axis."""
     primitives = sec_all_axes._get_primitives_for_axis(axis)
+    # A claim set is chosen, not "everything viable": SEC_PRIMITIVES runs the
+    # coverage map on the arms a claim is pre-registered for.
+    if PRIMITIVES:
+        primitives = [p for p in primitives if p in PRIMITIVES]
 
     for primitive in primitives:
         task_families = _get_task_families_for_primitive(axis, primitive)
