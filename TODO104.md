@@ -602,7 +602,7 @@ n=7: the CI lower bound on d must clear `min_d` (vision 0.916).
 
 ## 🗒 Section G — Progress log
 
-### Session 2026-11-25
+### Session 2026-11-25 (continued: map + claims)
 **Decision:** close the infrastructure and meta-SEC defects that made the
 2026-11-24 map untrustworthy (A1, A2, A3, A4, A6, A7, A9, A10/B5), then re-run
 the coverage the defects hid. Error cost of a wrong call: a rerun priced in hours
@@ -624,9 +624,18 @@ A1 artifact (five of five flipped viable serially).
 `geometry.py`, `_geometry_builders.py`, `sec_loop.py`, `sec_all_axes.py`,
 `meta_sec.py`, new `sec_parts.py`, `scripts/run_full_sec_competitive.py`,
 three lock tests + one probe, `configs/meta_sec_best.json`.
-**Next experiment:** the final coverage re-run (`SEC_RUNG2=none`,
-`results/sec/serial3/<axis>`, `logs/serial3_*`) with every fix in it, then a
-pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
+**Map (serial3 + the skip re-run):** 52/75 viable+blind; 176+ measured rungs
+and 9 defects, each naming a mechanism (A18 routing×gradient, A19 ceiling
+classification, A20 sparse gradient, A24 mean_norm default).
+**Claims (claims2/claims3/claim64):** 7-pair effects are real
+(`random_projections` d=+1.21, `analog` +1.00, `optical` +0.92,
+`spectral_constrained` +4.34) and all are coordinates by A22; the n=64
+confirmatory run measured d=+1.024 with a 0.783 lower bound against the
+registered 0.8 — marginal. The n=100 fresh-seed run is pre-registered and in
+flight (`logs/claim100_*`).
+
+**Next experiment:** read the n=100 verdict; then fix A24 (mean_norm default),
+A18/A19/A20 declarations, and re-run rung 2 at each arm's sized n. Read
 each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
 dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
 
