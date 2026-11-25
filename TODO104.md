@@ -147,6 +147,19 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### A21. Rung 2 compared two *different* mechanisms (d = -61)
+- **Evidence:** the first claim run (2026-11-25 03:15) reported
+  `d=-61.27` for `conv`, `-3.86` for `nca`, `-3.25` for `ntm` — a knob claim
+  cannot produce |d| > 10 on a single tuned knob.
+- **Mechanism:** `run_rung2_comparison` drew its control from
+  `AXIS_DEFAULTS[axis]` (feedforward), so the "treatment" was conv at a knob
+  value and the "control" a different geometry. The registration's claim text
+  is "tuning {knob} on {primitive}", so the pair must share the primitive.
+- **Fix:** `comparison_boxes` builds both arms from the same primitive —
+  control at the registered default knob, treatment at the ladder's best — and
+  `INT_KNOBS` is the one integer-knob declaration the ladder and the box read.
+  Lock: `test_a_pair_is_one_primitive_two_knobs`.
+
 ### A19. A box over its ceiling was reported as a defect
 - **Evidence:** 2 of the 9 remaining defect rows are ceiling overruns:
   `geometry/attention` (`param_count 16866970 over ceiling`) and
@@ -366,8 +379,12 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
       an A1 artifact, not a mechanism verdict — record it as such.
 
 ### Phase 5 — Competitive evidence (tune, then compare)
-- [ ] **5.1** For each viable primitive, reach its best declared box (3-point
-      ladder + 1 confirmation seed) before any paired comparison.
+- [x] **5.1** Every viable arm reached its ladder best (4 points incl. the
+      declared default; the confirmation seed is the paired run's seed 0).
+- [ ] **5.2** Pre-registered paired comparisons: 22 arms selected by
+      "best factor ≠ 1.0 and above bar"; the run is `results/sec/claims2`
+      (`logs/claims2_*`) at the registered box, 7 seeds × 2 arms.
+- [ ] **5.3** Read the verdicts: claim / marginal / coordinate / refused.
 - [ ] **5.2** Pre-register paired comparisons (fixed `n_max≥5`, no peeking) and
       run to `n_max`; report `equivalent/superior/inferior/inconclusive`.
 - [ ] **5.3** Push claim count toward the 18+ target with valid boxes; a claim
@@ -506,6 +523,10 @@ three lock tests + one probe, `configs/meta_sec_best.json`.
 pre-registered rung 2 on the arms whose coverage cells clear their bar. Read
 each axis' parts under `results/sec/serial2/<axis>/parts/` even if a process
 dies. Then: A5 cost profile (2.2), non-MNIST gate (6.3), docs (8.3).
+
+**Sixth finding (A21):** the claim path compared two different mechanisms
+(control from `AXIS_DEFAULTS`), so every knob claim reported |d| > 3. Both arms
+now share the primitive. Claims re-run: `logs/claims2_*`.
 
 **Fifth finding (A16/A17):** 33 defect rungs were `non-finite metric` because
 the continual tasks' `evaluate` was the base class's empty body (no ruler), and
