@@ -320,9 +320,13 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 - [x] **2.1** A4: `_accepted_knobs(axis, primitive)` intersects the box and the
       primary knob with the harvested `AxisSpec.accepted_params`; lock sweeps
       `lion`/`muon`/`local_adam`.
-- [ ] **2.2** A5: profile `adafactor`/`natural_gradient`; fix or mark
-      `available=False` with a named reason. (Priced as skips for the re-run;
-      the deadline now returns a timeout cell instead of a kill.)
+- [x] **2.2** A5 priced with the cooperative deadline: `update/adafactor` is
+      **viable** (0.9128 at 0.587x, ~13 min for its 4-rung ladder) and stays
+      a priced skip, not a gap. `update/natural_gradient` times out at every
+      rung ("run deadline expired before the first epoch completed") — one L0
+      epoch exceeds the 180 s cell budget, so it is priced as a skip with that
+      measured reason. Declaring it a gap row needs the axis row's own
+      availability flag (the census refuses a gap on an available row).
 - [x] **2.3** A8: `sec_claims.claim_schedule(registration, fallback)` runs the
       claim at the registered box (fidelity/epochs/seeds), so a ladder cannot
       decide a box it never measured; lock `test_claim_box_identity_lock.py`.
@@ -340,10 +344,12 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 
 ### Phase 4 — Recover coverage hidden by A1–A5
 - [x] **4.1** Re-ran all six axes serially (`SEC_RUNG2=none`):
-      `results/sec/serial3`. Final map **49/75 viable+blind** (credit 11,
-      dynamics 2, geometry 6, plasticity 5, substrate 9, update 16) from
-      176 measured / 41 refused / 9 defect / 3 timeout rungs. The priced skip
-      rows (8) re-run under `SEC_INCLUDE_SLOW=1` (`logs/slow_*`).
+      `results/sec/serial3`. Final map **52/75 viable+blind** (credit 11,
+      dynamics 3, geometry 7, plasticity 5, substrate 9, update 17). The eight
+      priced skip rows re-ran under `SEC_INCLUDE_SLOW=1`: `dynamics/lazy`
+      (0.9362), `geometry/nca` (0.8963) and `update/adafactor` (0.9128) are
+      viable — the skip list was hiding them; the rest refuse by name (void
+      constraint or L0 cost).
 - [x] **4.2** Breadth read: every axis has a working default
       (`instantaneous` 0.9172, `feedforward` 0.9134, `null` 0.92,
       `digital` 0.9172, `adam`/`euclidean` 16/18 update rows viable).
@@ -413,10 +419,10 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
 | Metric | TODO103 actual | TODO104 target | Measurement |
 |---|---|---|---|
 | Valid claims | 1 (A11 artifact) | 18+ | `results/sec/serial` rung2 verdicts |
-| Viable primitives (serial) | 23/75 | 45+ | **49/75** (serial3: 47 viable + 2 error_blind) **met** |
+| Viable primitives (serial) | 23/75 | 45+ | **52/75** (serial3 incl. the skip re-run: 50 viable + 2 error_blind) **met** |
 | Rung timeouts | 0 (serial) / 133 (concurrent) | 0 | 3 of 229 rungs (serial3: 176 measured, 41 refused, 9 defect, 3 timeout) |
 | Neuromorphic L0 no crash | ❌ | ✅ **met** (two widths, one process) | A2 lock + probe |
-| Update primitives running | 8/18 | 18/18 or named reason | **16/18 viable**, 2 priced skips (adafactor, natural_gradient) re-running |
+| Update primitives running | 8/18 | 18/18 or named reason | **17/18 viable**; `natural_gradient` = named L0 cost |
 | Meta-SEC objective | 0.0 (invalid) | >0, `claim_seeds≥5` | `meta_sec_best.json` → **3.589, valid, seeds=7** |
 | Primitive proposals | 0 | 3+ | `registry.py` `"proposed"` |
 | Hardcoded MNIST defaults | 5+ | 0 | factory/builder path: **0**; dataclass field defaults remain (never read by the app path) |
