@@ -87,7 +87,6 @@ from computronium.experiment.sec_all_axes import (
     create_registration,
     screen_coordinate,
 )
-from computronium.experiment.sec_loop import _task_bar
 from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_all_axes import LadderRung, PairedCell, RungResult
 from computronium.validation.preregistration import (
@@ -326,13 +325,7 @@ async def run_rung1_ladder_fixed(
         return rungs, None, "all_refused"
 
     best = max(measured_rungs, key=lambda r: r.val_acc or 0.0)
-
-    # Check if best clears the bar
-    bar = _task_bar(task_id)
-    if bar is not None and (best.val_acc or 0.0) <= bar.value:
-        return rungs, best, "below_bar"
-
-    return rungs, best, "viable"
+    return rungs, best, sec_all_axes.ladder_verdict(axis, primitive, task_id, best)
 
 
 async def run_primitive_full_fixed(

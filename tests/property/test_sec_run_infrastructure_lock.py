@@ -20,9 +20,11 @@ from computronium.experiment.meta_sec import (
     analyze_cells_jsonl,
 )
 from computronium.experiment.sec_all_axes import (
+    LadderRung,
     _build_axis_box,
     _declared_reads,
     _get_primary_knob,
+    ladder_verdict,
     pair_schedule,
     resolve_semaphore,
 )
@@ -235,3 +237,37 @@ def test_reads_steers_the_measured_knob() -> None:
     assert _get_primary_knob("credit", "thermodynamic_contrast", task_id="mnist")[
         0
     ] == ("credit.beta")
+
+
+def _rung(val_acc: float | None, status: str = "measured") -> LadderRung:
+    return LadderRung(
+        factor=1.0,
+        value=0.0,
+        status=status,
+        val_acc=val_acc,
+        walltime_s=1.0,
+        replay_hash=None,
+        box={},
+    )
+
+
+def test_error_blind_credit_is_not_a_bar_verdict() -> None:
+    """Chance accuracy is an error-blind credit's contract, not a failure."""
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    assert ladder_verdict("credit", "homeostatic", "mnist", _rung(0.0646)) == (
+        "error_blind"
+    )
+    assert ladder_verdict("credit", "temporal_trace", "mnist", _rung(0.1028)) == (
+        "error_blind"
+    )
+    assert ladder_verdict("credit", "random_projections", "mnist", _rung(0.0646)) == (
+        "below_bar"
+    )
+    assert ladder_verdict("credit", "random_projections", "mnist", _rung(0.9)) == (
+        "viable"
+    )
+    assert ladder_verdict("credit", "random_projections", "mnist", _rung(None)) == (
+        "measured"
+    )

@@ -691,16 +691,31 @@ async def measure_declared_default(
         box=measured["box"],
         reason=measured["reason"],
     )
-    verdict = _bar_verdict(task_id, rung)
+    verdict = ladder_verdict(axis, primitive, task_id, rung)
     return rung, verdict
 
 
-def _bar_verdict(task_id: str, rung: LadderRung) -> str:
-    """The ladder verdict for one measured rung against the task's bar."""
+def ladder_verdict(
+    axis: str, primitive: str, task_id: str, rung: LadderRung | None
+) -> str:
+    """The ladder verdict for the best rung (TODO104 A13).
+
+    An error-blind credit reads no target, so chance accuracy is its contract,
+    not a failure: the bar does not decide it. Such a row is reported as
+    ``error_blind`` and counted apart, so it never inflates or deflates the
+    error-aware breadth count.
+    """
     from computronium.experiment.sec_loop import _task_bar
 
+    if rung is None:
+        return "no_cell"
     if rung.status != "measured" or rung.val_acc is None:
         return rung.status
+    if axis == "credit":
+        from computronium.core.system_trainer.spec import error_blind_credit
+
+        if error_blind_credit(primitive):
+            return "error_blind"
     bar = _task_bar(task_id)
     if bar is not None and rung.val_acc <= bar.value:
         return "below_bar"
@@ -787,15 +802,7 @@ async def run_rung1_ladder(
         return rungs, None, "all_refused"
 
     best = max(measured_rungs, key=lambda r: r.val_acc or 0.0)
-
-    # Check if best clears the bar
-    from computronium.experiment.sec_loop import _task_bar
-
-    bar = _task_bar(task_id)
-    if bar is not None and (best.val_acc or 0.0) <= bar.value:
-        return rungs, best, "below_bar"
-
-    return rungs, best, "viable"
+    return rungs, best, ladder_verdict(axis, primitive, task_id, best)
 
 
 def pair_schedule(schedule: Schedule, seed: int) -> Schedule:

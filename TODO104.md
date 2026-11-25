@@ -126,6 +126,30 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   cannot beat 0, mark the study **invalid** and fall back to declared defaults
   rather than emitting a zero-value "best".
 
+### A13. Error-blind credits were judged by the accuracy bar
+- **Evidence:** `credit/temporal_trace` at 0.1028 (chance 0.10) was reported
+  `viable`, and `credit/homeostatic` at 0.0646 `below_bar` — both read no
+  label, so chance is their contract (they must be triaged on a non-zero
+  update, never on val_acc).
+- **Fix:** `sec_all_axes.ladder_verdict` returns `error_blind` for a credit
+  whose rule declares `error_blind=True` (`core/system_trainer/spec.py` is the
+  single source); the row is counted apart so the error-aware breadth count
+  is not moved by a credit that never reads a target. Lock:
+  `test_error_blind_credit_is_not_a_bar_verdict`.
+- **Remaining:** the cell does not yet record a parameter-update norm, so the
+  error-blind *viability* criterion (non-zero update) is still unmeasured.
+
+### A14. The dynamics axis default cannot be created (`split_mnist`)
+- **Evidence:** `dynamics/instantaneous` — the axis default — defects at every
+  rung: `ValueError: SplitMNIST requires a task_id to be set`.
+- **Mechanism:** `FAMILY_TO_TASK["continual"] = "split_mnist"` and the domain
+  factory constructs `SplitMNIST(task_id=None)`, which raises on first use. A
+  registry task must be creatable from its id alone.
+- **Fix (next):** either declare which split a bare `split_mnist` means in the
+  domain row (one source: the task's default), or refuse the family by name
+  and prefer a constructible family for an axis-orthogonal rule. Note the axis
+  default failing is a control-arm defect: every dynamics comparison needs it.
+
 ### A12. The ladder swept a field the rule ignores (dead knob)
 - **Evidence:** 2026-11-25 coverage run — `credit/gradient` returned val_acc
   0.9172 at every rung (0.015x..22.65x of `credit.feedback_scale`), and
