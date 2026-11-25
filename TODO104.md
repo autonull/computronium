@@ -147,6 +147,22 @@ axis, `SEC_SEMAPHORE=1`, `SEC_RUNG_TIMEOUT=180`. Logs: `logs/serial_20261124_*`.
   the map measures on `vision` when declared, else the first. Lock:
   `test_the_map_measures_the_common_family`.
 
+### Pre-registration — `random_projections` n_max=100, seeds 164..263 (06:35)
+- **Claim (unchanged):** tuning `credit.feedback_scale` to 22.653x raises
+  val_acc on `credit/random_projections` at the mnist base box.
+- **Test:** 100 index-matched pairs at seeds 164..263 (the 0..63 pilot and the
+  64..163 run are untouched by this one), fixed-n, no peeking, `alpha=0.05`.
+  The registration is re-created with the A26 box (axis primitive, fidelity,
+  epochs, batch_size, task_id, device, precision — the knob and seed are not
+  box fields) and `min_d` from the declared per-family table.
+- **Decision rule:** `claim` iff the 95 % CI lower bound on d > `min_d` and
+  `p < 0.05`; otherwise `coordinate` with the boxed effect.
+- **Basis:** the 64..163 run measured `d=+1.065`, `sd_diff≈0.025`,
+  `d-CI-lower=0.876`; at n=100 the expected lower bound is ~0.87.
+- **Command:** `SEC_AXES=credit SEC_PRIMITIVES=random_projections
+  SEC_RUNG2=auto SEC_RUNG2_SEEDS=100 SEC_RUNG2_SEED_OFFSET=164
+  SEC_RESULTS_DIR=results/sec/claim100b`.
+
 ### A26. The registration pinned the knob and seed it varies
 - **Evidence:** the n=100 confirmatory run measured `d=+1.065`,
   `d-CI-lower=0.876` against `min_d=0.8`, `p=1e-4` — a pass — and still
