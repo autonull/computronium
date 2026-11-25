@@ -8,8 +8,10 @@ primitive, so a re-run of a subset keeps the outcomes it did not re-measure.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 __all__ = ["PART_STATUSES", "parts_dir", "reduce_parts", "write_part"]
 

@@ -22,8 +22,6 @@ import sys
 import time
 from pathlib import Path
 
-import torch
-
 sys.path.insert(0, "/home/me/computronium")
 
 # Apply learned void rules BEFORE importing other modules that use DEFECT_REGISTRY
