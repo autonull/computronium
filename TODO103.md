@@ -1,6 +1,6 @@
 # TODO103 — Self-Improving System: Rung 3 Claims, Hardcoded Removal & Competitive Runs
 
-**Status:** 2026-11-24. Phases 1-3 complete (Phases 1-3: Factory defaults removed, BASE_BOXES enriched, fallback paths verified). Conv, NCA, causal_transformer capability tests pass. Next: Phase 4 Rung 3 claims, Phase 5 Track C completion, Phase 6 Meta-SEC production.
+**Status:** 2026-11-24. Phase 6.4 (serial full competitive run) complete: 23/75 viable, 1 claim, 21 coordinates. **Defects it exposed are now tracked in [`TODO104.md`](TODO104.md)** (settle recompile crash, timeout thread leak, meta-SEC invalid objective/seed floor, registration box mismatch, lost-result durability, remaining hardcoded defaults).
 
 **Principle:** The system improves itself. Every hardcoded default removed widens capability. Every Rung 3 claim is a reproducible capability. The map is the artifact; the loop is the engine.
 
