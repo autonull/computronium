@@ -251,6 +251,10 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             backend.bind_system(self)
             object.__setattr__(self, "_kernel_backend", backend)
 
+        def detach_kernel_backend(self) -> None:
+            """Drop the attached rung; ``train_step`` returns to the reference."""
+            object.__setattr__(self, "_kernel_backend", None)
+
         def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
             return build_system_context(
@@ -338,6 +342,10 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 """
                 backend.bind_system(self)
                 self._kernel_backend = backend
+
+            def detach_kernel_backend(self) -> None:
+                """Drop the attached rung; ``train_step`` returns to the reference."""
+                self._kernel_backend = None
 
             def train_step(
                 self, x: Tensor, y: Tensor, **graph_kwargs

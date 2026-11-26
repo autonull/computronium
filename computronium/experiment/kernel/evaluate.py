@@ -71,16 +71,29 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record, Status
 
 
-def _attach_algorithm_kernel_backend(system: Any, coordinate: Any) -> None:
+def _attach_algorithm_kernel_backend(
+    system: Any,
+    coordinate: Any,
+    task: Any = None,
+    device: str = "cuda",
+) -> None:
     """Attach an algorithm kernel backend to the system if a match exists.
 
     This enables GPU acceleration for SEC evaluations by using the algorithm-level
     Triton/CUDA kernels when the coordinate's primitive combination matches a
     known algorithm implementation with a kernel.
 
+    The rung is kept only when it reproduces the composed system's own forward
+    on one training batch: a kernel with another activation or architecture
+    moves the system's weights through a different network, so its training
+    accuracy rises while the system's forward stays at chance.
+
     Args:
         system: The composed system to potentially attach a kernel backend to.
         coordinate: The coordinate with its six axis selections.
+        task: The task whose training batch is the parity probe; ``None`` keeps
+            the rung without a check.
+        device: The device the probe batch is moved to.
     """
     from computronium.acceleration.dispatch import finish_with_backend
     from computronium.acceleration.registry import find_algorithm_for_coordinate
@@ -97,6 +110,44 @@ def _attach_algorithm_kernel_backend(system: Any, coordinate: Any) -> None:
     # Use the dispatch system to attach the kernel backend
     # "auto" will select the highest promoted rung (kernel if available)
     finish_with_backend(system, alg_spec, "auto")
+    backend = getattr(system, "_kernel_backend", None)
+    if backend is None or task is None:
+        return
+    probe_input = _parity_probe(system, task, device)
+    if probe_input is None:
+        return
+    if not _kernel_matches_reference(system, backend, alg_spec, probe_input):
+        system.detach_kernel_backend()
+
+
+def _parity_probe(system: Any, task: Any, device: str) -> torch.Tensor | None:
+    """One training batch on ``device``, kept whole for a sequence geometry."""
+    from computronium.ontology.geometry import is_sequence_geometry
+
+    probe_input, _ = _sample_inputs(
+        task, device, time_major=is_sequence_geometry(system.geometry)
+    )
+    return probe_input
+
+
+def _kernel_matches_reference(
+    system: Any, backend: Any, alg_spec: Any, probe_input: torch.Tensor
+) -> bool:
+    """Whether the attached rung reproduces the composed system's forward."""
+    from computronium.acceleration.parity import assert_parity
+
+    try:
+        reference = system.forward(probe_input)
+        kernel_logits, _ = backend.forward(probe_input)
+        assert_parity(reference, kernel_logits, alg_spec.parity)
+    except Exception as exc:  # ruff: ignore[blind-except] - any mismatch keeps the reference
+        reason = f"{type(exc).__name__}: {exc}"
+        logger.warning(
+            "keeping the reference rung",
+            extra={"algorithm": alg_spec.id, "reason": reason},
+        )
+        return False
+    return True
 
 
 __all__ = [
@@ -372,7 +423,9 @@ def _evaluate_cell(
 
     if resolved_device == "cuda":
         try:
-            _attach_algorithm_kernel_backend(cell.system, coordinate)
+            _attach_algorithm_kernel_backend(
+                cell.system, coordinate, task, resolved_device
+            )
         except Exception:
             # Kernel attachment failed; fall back to reference implementation
             pass

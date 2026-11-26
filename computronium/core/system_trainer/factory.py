@@ -159,6 +159,10 @@ def compose_system[  # ruff: ignore[complex-structure]
             backend.bind_system(self)
             self._kernel_backend = backend
 
+        def detach_kernel_backend(self) -> None:
+            """Drop the attached rung; ``train_step`` returns to the reference."""
+            self._kernel_backend = None
+
         def to_spec(self) -> dict:
             """Serialize the System to a specification dictionary.
 

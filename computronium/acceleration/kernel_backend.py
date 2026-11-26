@@ -472,9 +472,8 @@ class LinearView:
     A view is not a copy. It is built around the geometry's own tensor, so an
     in-place update on either side is visible to the other and
     ``system.forward()`` reflects what the kernel learned. ``requires_grad`` is
-    cleared because a kernel rung does not backprop, and autograd's version
-    counter does not follow a write made through a second tensor object; the
-    reference rung, which does backprop, never sees these views.
+    inherited from that tensor, never cleared: the view shares the parameter's
+    storage, so clearing the flag here would also freeze the reference rung.
 
     Attributes:
         weight: the geometry's weight tensor, shared.
@@ -521,9 +520,9 @@ def linear_views(geometry: object) -> list[LinearView]:
     These are views, not copies. Each ``nn.Linear`` is constructed around the
     geometry's own tensor, so an in-place update on either side is visible to the
     other and ``system.forward()`` reflects what the kernel learned. The views
-    carry ``requires_grad=False`` because a kernel rung does not backprop, and
-    autograd's version counter does not follow a write through a second tensor
-    object; the reference rung, which does backprop, never sees these views.
+    leave ``requires_grad`` untouched: they share storage with the geometry's
+    parameters, so clearing it here would freeze the reference rung too — a rung
+    that does backprop and must stay differentiable.
 
     Args:
         geometry: an axis geometry, or anything else exposing ``params``.
@@ -550,8 +549,8 @@ def linear_views(geometry: object) -> list[LinearView]:
         bias = roles.get("bias")
         views.append(
             LinearView(
-                weight=weight.requires_grad_(False),
-                bias=bias.requires_grad_(False) if bias is not None else None,
+                weight=weight,
+                bias=bias,
                 source=(f"{prefix}.weight", f"{prefix}.bias"),
             )
         )

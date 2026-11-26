@@ -309,7 +309,10 @@ class EqPropKernelBackend:
 
         return {
             "loss": metrics.get("loss", 0.0),
-            "accuracy": metrics.get("accuracy", 0.0),
+            # The kernel's ``accuracy`` is measured on the free-phase logits,
+            # so it is the pipeline's ``free_accuracy``; a backend that omits
+            # this key makes the trainer's ``train_acc`` a fabricated 0.0.
+            "free_accuracy": metrics.get("accuracy", 0.0),
         }
 
     def predict(self, x: Tensor) -> Tensor:
