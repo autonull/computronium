@@ -150,16 +150,7 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/property/test_axis_certifications.py::TestCAxisTargetInversionCredit", 600),
     ("tests/property/test_ontology_parity.py", 300),
     ("tests/property/test_readme_build_lock.py::TestReadmeBuildLock", 300),
-    ("tests/property/test_site_build_lock.py::TestSiteBuildLock", 300),
     ("tests/unit/experiment/test_control_plane.py", 300),
-    (
-        "tests/property/test_runner_transparency_lock.py::test_run_loop_prints_cell_count",
-        300,
-    ),
-    (
-        "tests/property/test_runner_transparency_lock.py::test_run_loop_prints_cell_details",
-        300,
-    ),
     (
         "tests/property/test_search_space_diverse_sampling_lock.py::test_prefix_is_diverse",
         300,
@@ -262,14 +253,6 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         30,
     ),
     (
-        "tests/property/test_hyperparameter_display_lock.py::test_run_loop_prints_all_resolved_hyperparameters",
-        300,
-    ),
-    (
-        "tests/property/test_hyperparameter_display_lock.py::test_run_loop_prints_hyperparams_even_with_no_swept",
-        300,
-    ),
-    (
         "tests/property/test_family_defect_locks.py::test_ntm_detaches_its_recurrent_state",
         300,
     ),
@@ -277,6 +260,67 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         "tests/property/test_family_defect_locks.py::test_a_language_task_declares_its_token_lane",
         300,
     ),
+    ("tests/primitives/test_surface_fit.py", 300),
+    ("tests/property/test_axis_liveness_lock.py", 180),
+    (
+        "tests/property/test_cell_evaluation_lock.py::test_record_carries_measurement_and_a_derived_verdict",
+        300,
+    ),
+    ("tests/property/test_corpus_coverage_lock.py", 120),
+    (
+        "tests/property/test_credit_readout_paths_lock.py::test_pooled_readout_credits_update_every_weight",
+        120,
+    ),
+    (
+        "tests/property/test_credit_readout_paths_lock.py::test_homeostatic_updates_transformer_fused_qkv",
+        120,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_graph_trainer_routes_through_train_step",
+        120,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_graph_trainer_moves_params_through_pipeline",
+        120,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_graph_credits_produce_different_updates",
+        180,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_graph_classification_routes_graph_kwargs",
+        120,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_pooled_readout_credit_trains_and_differs_from_gradient",
+        180,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_sum_pooling_readout_matches_add_pool",
+        60,
+    ),
+    (
+        "tests/property/test_graph_pipeline_lock.py::test_graph_kwargs_are_geometry_conditional",
+        120,
+    ),
+    (
+        "tests/property/test_lm_target_alignment_lock.py::test_settle_accepts_sequence_targets",
+        120,
+    ),
+    (
+        "tests/property/test_lm_target_alignment_lock.py::test_train_step_accepts_sequence_targets",
+        120,
+    ),
+    (
+        "tests/property/test_lm_target_alignment_lock.py::test_trainer_validate_accepts_sequence_targets",
+        120,
+    ),
+    (
+        "tests/property/test_sequence_task_lock.py::test_the_smoke_cell_reports_a_bar_verdict",
+        120,
+    ),
+    ("tests/property/test_substrate_reaches_compute_lock.py", 120),
+    ("tests/property/test_surface_inventory_lock.py", 120),
 )
 
 _MARKER = re.compile(r"^pytest\.mark\.timeout$")

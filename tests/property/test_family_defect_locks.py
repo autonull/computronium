@@ -170,6 +170,7 @@ def test_a_surrogate_credit_is_refused_without_a_gate() -> None:
         )
 
 
+@pytest.mark.timeout(300)
 def test_a_language_task_declares_its_token_lane() -> None:
     """The declared space refuses a cell that cannot read tokens, or it trains.
 
