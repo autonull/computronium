@@ -426,6 +426,37 @@ against its own algorithm case (tanh), not against a composed feedforward cell
 needs one activation contract for both rungs (or a kernel that reproduces the
 composed forward); the guard makes the gap visible instead of silent.
 
+## F. Performance pass (2026-11-26)
+
+Ruler: cProfile call counts and cumulative CPU, **not** walltime — this host
+runs other processes, so a pytest duration is an outcome, not a measurement.
+
+**F1. One Jacobian per cell, not three.** `_compute_stability_metrics` called
+`jacobian_spectral_metrics` (which built J), `spectral_radius_from_jacobian_tensor`
+(which rebuilt J), and `drift_metrics` (which rebuilt J). The stability package
+now exposes `jacobian_tensor`; both metric functions accept `jacobian=`, and
+`_metrics.py` builds it once. Profile of one ledger lock: 3 J/cell → 1; profiled
+CPU 62.0 s → 43.6 s; the two-policy lock 231 s → 76 s. Verify: 131 stability
+tests, 40 metric/cell tests.
+
+**F2. Test work reduced to the minimum the lock needs** (assertions unchanged):
+
+| Lock | Was | Now | Evidence |
+|---|---|---|---|
+| ledger space | 60 candidates | 40 | resume/relaunch coverage still > 2 rounds |
+| resume rounds | 1 → 3 | 1 → 2 | resume adds coverage |
+| replay-hash runs | 2 rounds | 1 round | hash written at finish |
+| two-policy helper | 5 startup / 2 rounds | same (minimum that diverges) | 9 passed, 207 s total (was ~760 s) |
+| hyperparameter box | 378 cells | 48 | full declared box still covered |
+| every-knob window | 50 cells | 10 | `dynamics.beta` first appears at index 9 |
+| representative knobs | 20 | 8 | 8 passed, 136 s (was 286 s) |
+| sampler trials | 24 | 8 (4 early/4 late) | 24.7 s (was 151 s) |
+| stream page | 1000 | 8 | 0.5 s (was 125 s) |
+| census rows | — | 2 markers (600, 60) | 122 passed |
+
+No current failure remains: each edited lock was rerun by its own node or file.
+
+
 ---
 
 ## Notes
