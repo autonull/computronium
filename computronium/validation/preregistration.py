@@ -184,6 +184,11 @@ class EquivalenceRegistration:
 
 # TODO99 #6: Effect size claims (Cohen's d) per task family
 # Minimum effect sizes for practical significance (not just statistical)
+# Measured 2026-11-25/26 (TODO105 §2): the ``random_projections`` knob claim at
+# the mnist base measured dz 0.601/0.661/0.684 over three n=64 seed blocks and
+# 0.454 on fresh seeds. The pilot minimum 0.277 was not cleared (fresh CI lower
+# 0.214), so the vision row's 0.8 is a capability row with the trigger "n ~ 370
+# pairs or a larger-dz box", never a bar that cell is claimed to meet.
 MIN_EFFECT_SIZE_BY_FAMILY: dict[str, float] = {
     "vision": 0.8,  # Large effect detectable (MNIST)
     "tabular": 0.5,  # Medium effect, small N (Iris)

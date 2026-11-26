@@ -32,6 +32,7 @@ from computronium.experiment.sec_loop import (
 from computronium.experiment.sec_pilot import BASE_BOXES, base_family, own_knob_params
 from computronium.validation.preregistration import (
     DEFAULT_ALPHA,
+    MIN_EFFECT_SIZE_BY_FAMILY,
     EffectSizeRegistration,
     ThresholdRegistration,
     paired_comparison,
@@ -63,20 +64,8 @@ SEC_DEVICE: Final[str] = os.environ.get("SEC_DEVICE", "auto")
 MEASURE_BUDGET_S: float = float(os.environ.get("SEC_MEASURE_BUDGET_S", "0") or 0.0)
 # Paired seeds per arm
 CLAIM_SEEDS: Final[int] = 5
-# Minimum effect size per task family (Cohen's d)
-MIN_EFFECT_SIZE_BY_FAMILY: dict[str, float] = {
-    "vision": 0.8,
-    "tabular": 0.5,
-    "graph": 0.5,
-    "sequence": 0.8,
-    "continual": 0.8,
-    "rl": 0.8,
-    "scientific": 0.5,
-    "lm": 0.5,
-    "neuromorphic": 0.8,
-    "quantum": 0.8,
-    "photonic": 0.8,
-}
+# The family minimum is declared once, in ``validation.preregistration``; a
+# second table here disagreed with it before (0.8 vs 0.916 on one registration).
 
 # Primary knob per primitive per axis (from TODO100 Rung 1 results or config defaults)
 # These will be populated from config factories at runtime
