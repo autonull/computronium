@@ -58,6 +58,10 @@ Re-baselined 2026-11-26 from 580 to the measured 659 with ruff 0.17.5. The
 same rule set under the newer ruff reports 79 more findings on unchanged code;
 the TODO106 repair added no new findings (the changed files lint clean apart
 from the legacy geometry module). The count must now trend down from 659.
+
+Lowered 2026-11-26 from 659 to the measured 640 (ruff unchanged at 0.17.5) by
+fixing the legacy ``geometry.py`` findings: ambiguous ``l`` names, out-of-place
+adds, ``_apply_stack`` complexity, and two ``assert`` guards.
 """
 
 from __future__ import annotations
@@ -66,7 +70,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 659
+BASELINE = 640
 RUFF_VERSION = "0.17.5"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
