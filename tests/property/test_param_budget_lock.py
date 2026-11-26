@@ -135,9 +135,11 @@ def test_a_ceiling_bounds_every_trainable_geometry(topology: str) -> None:
         if topology == "causal_transformer"
         else task_shape("digits")
     )
+    # The lattice factory refuses to invent an extent; the fixture names it.
+    geometry = {"lattice_dims": (4, 4, 4)} if topology == "spatial_lattice" else {}
     cell = compose_cell_system(
         coordinate=_coordinate(topology),
-        geometry={},
+        geometry=geometry,
         input_shape=shape.input_shape,
         output_dim=shape.output_dim,
         param_budget=MEASURED_PARAM_BUDGET,

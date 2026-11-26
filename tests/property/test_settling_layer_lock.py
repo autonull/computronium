@@ -47,7 +47,7 @@ _GEOMETRIES = {
         input_dim=16, output_dim=4, num_layers=2
     ),
     "spatial_lattice": lambda: GeometryConfig.spatial_lattice(
-        input_dim=16, output_dim=4
+        input_dim=16, output_dim=4, lattice_dims=(4, 4, 4)
     ),
     "nca": lambda: GeometryConfig.nca(
         channels=1, hidden=8, grid_hw=(4, 4), output_dim=4
