@@ -111,7 +111,26 @@ The 6 fixtures no longer name dead signatures.
 |--------|--------|-------|
 | Serial map | graph/cora and spatial_lattice/mnist recorded in `serial4` | ✅ |
 | Claim | one pre-registered comparison at the family minimum every block clears | ✅ `coordinate` (pre-registered 0.277 not cleared; effect real) |
-| Fixtures | 127/127 property locks pass | ✅ (49/49 in scope) |
+| Fixtures | 127/127 property locks pass | ⚠️ 49/49 in scope pass; repo-wide shard is **192 failed / 2722 passed**, all pre-existing drift |
+
+### Round-close shard (`tests/property`, 22m47s)
+The three items' own locks pass. The repo-wide shard is red from legacy drift
+that predates this work — every named cause is in a file last touched
+2026-11-23 or earlier, and none is in the SEC claim path:
+
+| Cause | Failing rows | File |
+|---|---|---|
+| generated tests call `cases.make_case`, which does not exist (`build_case` does) | ~120 | `computronium/primitives/cases.py`, `tests/property/generated/` |
+| `env_sha256` recorded under a different environment (driver 620.70 → 620.73) | 21 | `tests/property/test_gallery_provenance_lock.py` |
+| `existing_void_rules` is undefined | 2 | `computronium/experiment/legality/void_rules_learned.py:31` |
+| `docs/PROOF.md` carries banned claim phrases | 2 | `docs/PROOF.md` |
+| `SimpleNamespace` has no `geometry` in the wave cost model | 2 | `computronium/experiment/wave.py:1491` |
+| assorted lock text/box drift | rest | `tests/property/` |
+
+These are the hygiene pass' queue (Register C), not regressions from TODO105.
+The ladder for closing them is: regenerate the invariant tests against
+`build_case`, fix the undefined name, remove the banned phrases, repair the wave
+cost path, then re-pin the gallery manifest once in a clean environment.
 
 ---
 
@@ -121,3 +140,7 @@ wall-clock". The device is one declared value (`SEC_DEVICE`), never a per-run
 patch. The claim closes when the confirmatory run reports its verdict against the
 registered `min_d`; a `coordinate` verdict at that point is a coordinate result
 with the block variance recorded, not a mechanism verdict.
+
+TODO105's three items are closed. "Production-ready" is true for the map and the
+claim path; the repo-wide property shard still carries pre-existing drift, which
+is hygiene work with its own triggers (table above), not a TODO105 remainder.
