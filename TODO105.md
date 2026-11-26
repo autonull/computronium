@@ -132,6 +132,12 @@ The ladder for closing them is: regenerate the invariant tests against
 `build_case`, fix the undefined name, remove the banned phrases, repair the wave
 cost path, then re-pin the gallery manifest once in a clean environment.
 
+**Continues in `TODO106.md`** — the repair of this shard, per-category cause and
+fix, is filed there. Landed there so far: the invariant generator now emits the
+real case protocol (`build_case`/`step(spec, case)`), `cases.py` reads the
+runtime axis segment, and the case falls back to the family task's shape; the
+generated shard went 192 failed → 6 failed / 186 passed.
+
 ---
 
 ## Process Note
