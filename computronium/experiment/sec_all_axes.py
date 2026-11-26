@@ -54,6 +54,9 @@ __all__ = [
 
 # Ladder factors: 0.1x, 1.0x, 10.0x of declared default
 LADDER_FACTORS: Final[tuple[float, ...]] = (0.1, 1.0, 10.0)
+# Device for a screen or a paired cell. The GPU is shared: a contended device
+# fails a cell with a launch error, so a pilot may pin this to ``cpu``.
+SEC_DEVICE: Final[str] = os.environ.get("SEC_DEVICE", "auto")
 # Cooperative per-cell training budget in seconds (TODO104 A3). A cancelled
 # ``asyncio.to_thread`` keeps its thread and the GPU; a deadline passed into the
 # trainer stops the cell itself and returns a record. 0 disables the deadline.
@@ -510,7 +513,7 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
     base_coord = base_box.base_coordinate
     schedule_task_id = base_box.task_id
 
-    schedule = base_schedule(schedule_task_id, "auto")
+    schedule = base_schedule(schedule_task_id, SEC_DEVICE)
     if schedule is None:
         raise ValueError(
             f"Base task {schedule_task_id} for family {family} declares no base box"
@@ -518,7 +521,7 @@ def _build_axis_box(axis: str, primitive: str, task_id: str) -> dict[str, Any]:
 
     # Start with base schedule
     box = schedule.to_dict()
-    box["device"] = "cuda"
+    box["device"] = SEC_DEVICE
     box["task"] = task_id  # Keep original task_id for the run
 
     # Structural axes that come from base_coordinate (not hyperparameters)
@@ -726,7 +729,7 @@ async def measure_declared_default(
     box["epochs"] = 1
     box["fidelity"] = "L0"
     coord = screen_coordinate(box, axis, primitive)
-    schedule = base_schedule(task_id, "auto")
+    schedule = base_schedule(task_id, SEC_DEVICE)
     measured = await _measure_async(coord, schedule, budget_s)
     rung = LadderRung(
         factor=1.0,
@@ -789,7 +792,7 @@ async def run_rung1_ladder(
     is_int_param = knob_name in INT_KNOBS
 
     base_box = _build_axis_box(axis, primitive, task_id)
-    schedule = base_schedule(task_id, "auto")
+    schedule = base_schedule(task_id, SEC_DEVICE)
 
     rungs: list[LadderRung] = []
     semaphore = asyncio.Semaphore(semaphore_limit)
@@ -932,9 +935,9 @@ async def run_rung2_comparison(
     knob_key = knob_info[0]
 
     # Load registration
-    temp_schedule = base_schedule(task_id, "auto")
+    temp_schedule = base_schedule(task_id, SEC_DEVICE)
     temp_box = temp_schedule.to_dict()
-    temp_box["device"] = "cuda"
+    temp_box["device"] = SEC_DEVICE
     temp_box["task"] = task_id
     registration = None
     try:
@@ -967,7 +970,7 @@ async def run_rung2_comparison(
                     treatment_box[key] = value
     treatment_coord = screen_coordinate(treatment_box, axis, primitive)
 
-    schedule = base_schedule(task_id, "auto")
+    schedule = base_schedule(task_id, SEC_DEVICE)
 
     cells: list[PairedCell] = []
     semaphore = asyncio.Semaphore(semaphore_limit)

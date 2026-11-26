@@ -270,7 +270,7 @@ async def run_rung1_ladder_fixed(
                 budget_id=f"rung1-{axis}-{primitive}-{task_id}",
                 task_id=task_id,
                 param_budget=box.get("param_budget", 150000),
-                device=box.get("device", "cuda"),
+                device=box.get("device", "auto"),
                 deterministic=True,
                 num_workers=0,
                 precision="fp32",

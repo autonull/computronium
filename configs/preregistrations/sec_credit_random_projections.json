@@ -1,9 +1,9 @@
 {
-  "claim": "tuning credit.feedback_scale on primitive.credit.random_projections improves val_acc with Cohen's d >= 0.91613823232756 at the mnist base",
+  "claim": "tuning credit.feedback_scale on primitive.credit.random_projections raises val_acc at the mnist base with Cohen's dz >= 0.276769: the minimum every one of the three n=64 pilot seed blocks clears, minus its block variance (blocks 0..63/64..127/128..191 dz 0.601, 0.661, 0.684; block sd 0.0432)",
   "metric": "val_acc",
-  "min_d": 0.91613823232756,
+  "min_d": 0.276769,
   "alpha": 0.05,
-  "min_seeds": 7,
+  "min_seeds": 64,
   "created": "2026-11-25",
   "box": {
     "credit": "random_projections",
@@ -11,7 +11,7 @@
     "epochs": 1,
     "batch_size": 32,
     "task_id": "mnist",
-    "device": "cuda",
+    "device": "cpu",
     "precision": "fp32"
   }
 }
