@@ -321,6 +321,14 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ),
     ("tests/property/test_substrate_reaches_compute_lock.py", 120),
     ("tests/property/test_surface_inventory_lock.py", 120),
+    (
+        "tests/property/test_hyperparameter_effect_lock.py::test_geometry_width_reaches_every_cell_it_can_size",
+        600,
+    ),
+    (
+        "tests/property/test_hyperparameter_effect_lock.py::test_pipeline_stages_timed",
+        60,
+    ),
 )
 
 _MARKER = re.compile(r"^pytest\.mark\.timeout$")

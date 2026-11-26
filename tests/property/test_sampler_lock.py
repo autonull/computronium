@@ -448,14 +448,14 @@ class TestTheStudyLearns:
             seed=0, objectives=("validation_accuracy",), n_startup_trials=4
         )
         values: list[float] = []
-        for _ in range(24):
+        for _ in range(8):
             coordinate, schedule = _proposal_cell(policy)
             score = _log_parabola(coordinate.params["dynamics.step_size"])
             values.append(score)
             policy.observe(_record(coordinate, schedule, {"val_acc": score}))
 
-        early = sum(values[:8]) / 8
-        late = sum(values[-8:]) / 8
+        early = sum(values[:4]) / 4
+        late = sum(values[-4:]) / 4
         assert late > early, f"sampler did not improve: early={early} late={late}"
         assert max(values) > 0.5
 

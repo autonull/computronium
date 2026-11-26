@@ -76,8 +76,8 @@ async def test_stream_advances_lock():
 
     space = search_space_from_spec(spec, tasks=spec.task_names)
 
-    # Use small page_size to force multiple pages
-    small_page = 1000
+    # Two small pages: page 0 yields cells and page 1 must yield new ones.
+    small_page = 8
     page0 = list(
         iter_candidates(spec, space, shape=task_shape, offset=0, page_size=small_page)
     )

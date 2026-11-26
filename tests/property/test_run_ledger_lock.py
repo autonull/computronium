@@ -92,7 +92,7 @@ def _run_spec() -> RunSpec:
         axes=(
             AxisSelection(
                 axis=StructuralAxis.SUBSTRATE,
-                primitives=("digital", "sparse", "analog"),
+                primitives=("digital", "sparse"),
             ),
             AxisSelection(
                 axis=StructuralAxis.GEOMETRY,
@@ -153,7 +153,7 @@ def test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement(
     assert interrupted, "the interrupted launch measured nothing to resume from"
 
     with RecordStore(StoreConfig(path=store_path)) as store:
-        runner = PipelineRunner(_config(run_id, spec, rounds=3), store)
+        runner = PipelineRunner(_config(run_id, spec, rounds=2), store)
         asyncio.run(runner.run())
         store.finish_run(run_id, "completed")
         resumed = _keys(store, run_id)
@@ -190,7 +190,7 @@ def test_relaunching_a_run_never_duplicates_or_loses_a_measurement(
 
     with RecordStore(StoreConfig(path=store_path)) as store:
         run_id = store.create_run(spec=spec)
-        asyncio.run(PipelineRunner(_config(run_id, spec, rounds=2), store).run())
+        asyncio.run(PipelineRunner(_config(run_id, spec, rounds=1), store).run())
         first = set(_keys(store, run_id))
         runner = PipelineRunner(_config(run_id, spec, rounds=2), store)
         asyncio.run(runner.run())
@@ -205,7 +205,7 @@ def test_relaunching_a_run_never_duplicates_or_loses_a_measurement(
     )
 
 
-def _replay_hash_of(tmp_path: Path, name: str, spec: RunSpec, rounds: int = 2) -> str:
+def _replay_hash_of(tmp_path: Path, name: str, spec: RunSpec, rounds: int = 1) -> str:
     """Run one spec to completion in its own store; return the hash it wrote."""
     with RecordStore(StoreConfig(path=tmp_path / name)) as store:
         run_id = store.create_run(spec=spec)

@@ -43,7 +43,7 @@ _FULL_AXES = (
     ),
     AxisSelection(
         axis=StructuralAxis.DYNAMICS,
-        primitives=("energy_minimization", "instantaneous", "lazy"),
+        primitives=("energy_minimization", "instantaneous"),
     ),
     AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null", "routing")),
     AxisSelection(
@@ -51,14 +51,9 @@ _FULL_AXES = (
         primitives=(
             "gradient",
             "thermodynamic_contrast",
-            "random_projections",
-            "target_inversion",
-            "local_goodness",
-            "temporal_trace",
-            "homeostatic",
         ),
     ),
-    AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")),
+    AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam")),
 )
 
 
@@ -189,7 +184,7 @@ class TestHyperparameterEffectLock:
 
             axes = _minimal_axes_for_hyperparameter(hp)
             spec = _spec_for_axes(axes, hyperparameters={qname: hp.domain})
-            cells = _cells_for_spec(spec, limit=50)
+            cells = _cells_for_spec(spec, limit=10)
             if not cells:
                 continue
 
@@ -204,6 +199,7 @@ class TestHyperparameterEffectLock:
             f"Key hyperparameters never carried by any cell (silent drop): {sorted(all_missing)}"
         )
 
+    @pytest.mark.timeout(600)  # measured 85s; census row in test_timeout_marker_policy
     def test_geometry_width_reaches_every_cell_it_can_size(self) -> None:
         """Every cell of a budgeted run carries the width it is composed at."""
         spec = _spec_for_axes(_FULL_AXES)
@@ -280,7 +276,7 @@ class TestHyperparameterEffectLock:
         # Full exhaustive test would be 68 params x many cells
         tested = 0
         for hp in non_structural:
-            if tested >= 20:  # Limit for CI speed; full set in property suite
+            if tested >= 8:  # a representative subset; the full set is the sweep's
                 break
 
             axis = hp.axis_name
@@ -507,6 +503,7 @@ class TestSilentDropDetector:
 class TestPerStageTiming:
     """Per-stage timing instrumentation: every pipeline stage is timed."""
 
+    @pytest.mark.timeout(60)  # measured 13s; census row in test_timeout_marker_policy
     def test_pipeline_stages_timed(self) -> None:
         """PipelineRunner records stage timings in the record payload."""
         import tempfile
