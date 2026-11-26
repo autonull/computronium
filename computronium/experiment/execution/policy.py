@@ -486,21 +486,23 @@ class RoundRobinGridPolicy:
         self._cursor = 0
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
-        """Propose the next ``ctx.n_propose`` cells of the stream, in order."""
-        pool = list(ctx.cells(limit=_TRAVERSAL_LIMIT))
-        if not pool:
-            return
-        start = self._cursor % len(pool)
+        """Propose the next ``ctx.n_propose`` cells of the stream, in order.
+
+        The stream is walked lazily: materializing its traversal bound would
+        compose the whole page to yield five cells, which is minutes of work
+        that looks exactly like a hang in the policy lock.
+        """
         proposed = 0
-        for offset in range(len(pool)):
-            coord, sched = pool[(start + offset) % len(pool)]
+        for coord, sched in islice(
+            ctx.cells(limit=_TRAVERSAL_LIMIT), self._cursor, None
+        ):
             if not ctx.legal(coord, sched):
                 continue
             yield Proposal(coord, sched, self._name)
             proposed += 1
             if proposed >= ctx.n_propose:
                 break
-        self._cursor = start + proposed
+        self._cursor += proposed
 
     def observe(self, record: Record) -> None:
         """Round-robin grid doesn't learn from observations."""

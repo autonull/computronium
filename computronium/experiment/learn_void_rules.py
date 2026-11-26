@@ -165,17 +165,14 @@ def learn_void_rules(
 def generate_void_rules_file(
     candidates: list[VoidRuleCandidate],
     output_path: Path,
-    existing_void_rules: dict[tuple[str, str, str, str], str] | None = None,
 ) -> None:
     """Generate a Python file with learned void rules.
 
     Args:
         candidates: List of VoidRuleCandidate from learn_void_rules
         output_path: Path to write the generated file
-        existing_void_rules: Optional dict of existing rules to preserve
     """
-    existing_void_rules = existing_void_rules or {}
-
+    adds = [c for c in candidates if c.action == "add"]
     lines = [
         '"""Learned void rules from cells.jsonl analysis."""',
         "",
@@ -184,8 +181,7 @@ def generate_void_rules_file(
         "",
         "from computronium.experiment.legality.classify import (",
         "    DEFECT_REGISTRY,",
-        "    DefectClass,",
-        "    VoidReason,",
+        *(["    DefectClass,", "    VoidReason,"] if adds else []),
         ")",
         "",
         "",
@@ -193,15 +189,14 @@ def generate_void_rules_file(
         "ADD_RULES = [",
     ]
 
-    for c in candidates:
-        if c.action == "add":
-            # Map to defect class and void reason
-            defect_class, void_reason = _map_to_defect(c.axis_a, c.axis_b)
-            lines.append(
-                f'    ("{c.axis_a}", "{c.value_a}", "{c.axis_b}", "{c.value_b}", '
-                f"DefectClass.{defect_class}, VoidReason.{void_reason}),  # "
-                f"refused_rate={c.refused_rate:.2f}, measured={c.measured_count}"
-            )
+    for c in adds:
+        # Map to defect class and void reason
+        defect_class, void_reason = _map_to_defect(c.axis_a, c.axis_b)
+        lines.append(
+            f'    ("{c.axis_a}", "{c.value_a}", "{c.axis_b}", "{c.value_b}", '
+            f"DefectClass.{defect_class}, VoidReason.{void_reason}),  # "
+            f"refused_rate={c.refused_rate:.2f}, measured={c.measured_count}"
+        )
 
     lines.append("]")
     lines.append("")
@@ -219,19 +214,21 @@ def generate_void_rules_file(
     lines.append("")
     lines.append("def apply_learned_rules() -> None:")
     lines.append('    """Apply learned void rules to the defect registry."""')
+    lines.append("    existing = DEFECT_REGISTRY.registered_patterns()")
     lines.append("    for rule in ADD_RULES:")
     lines.append("        a1, v1, a2, v2, defect_class, void_reason = rule")
     lines.append("        key = (a1, v1, a2, v2)")
-    lines.append("        if key not in existing_void_rules:")
+    lines.append("        if key not in existing:")
     lines.append("            DEFECT_REGISTRY.register_void_pattern(")
     lines.append("                a1, v1, a2, v2, defect_class, void_reason")
     lines.append("            )")
+    lines.append("            existing.add(key)")
     lines.append(
         "    # Note: REMOVE_RULES requires registry modification not supported yet"
     )
     lines.append("    # Manual review needed for removal")
 
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _map_to_defect(axis_a: str, axis_b: str) -> tuple[str, str]:

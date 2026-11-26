@@ -442,9 +442,11 @@ def _payload(  # ruff: ignore[too-many-locals]
                 "batch": (x, prediction),
             }
         case "plasticity":
+            from computronium.harness import seeded_rng
             from computronium.state import CompositeState
 
-            plasticity = _plasticity(cell.plasticity)
+            with seeded_rng(seed):
+                plasticity = _plasticity(cell.plasticity)
             psi = plasticity.initial_psi(None, MICRO_BATCH)
             width = MICRO_INPUT_SHAPE[0]
             state, hidden = (
@@ -464,6 +466,7 @@ def _payload(  # ruff: ignore[too-many-locals]
                 substrate={},
             )
             return {
+                "plasticity": plasticity,
                 "psi": psi,
                 "state": joint,
                 "batch": (state, targets),
@@ -544,13 +547,15 @@ def step(spec: PrimitiveSpec, case: PrimitiveCase) -> StepResult:  # ruff: ignor
 
 def _geometry_step(case: PrimitiveCase) -> StepResult:
     """Forward the case's input through its geometry."""
+    from computronium.harness import seeded_rng
     from computronium.ontology.substrate import DigitalSubstrate
 
-    geometry = case.extra["geometry"]
-    x = case.extra["state"]
-    substrate = DigitalSubstrate()
-    logits = _forward(geometry, x, substrate)
-    acts = geometry.forward_with_intermediates(x, substrate)
+    with seeded_rng(case.seed):
+        geometry = case.extra["geometry"]
+        x = case.extra["state"]
+        substrate = DigitalSubstrate()
+        logits = _forward(geometry, x, substrate)
+        acts = geometry.forward_with_intermediates(x, substrate)
     return StepResult(
         weights=list(geometry.parameters()),
         activations=list(acts),
@@ -655,7 +660,7 @@ def _plasticity_step(cell: SystemConfig, case: PrimitiveCase) -> StepResult:
     """
     from computronium.harness import seeded_rng
 
-    plasticity = _plasticity(cell.plasticity)
+    plasticity = case.extra["plasticity"]
     state = case.extra["state"]
     context = _CaseContext(device=state.activity["x"].device)
     activations: list[torch.Tensor] = []

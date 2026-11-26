@@ -118,6 +118,8 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "precision_bits",
     # Plasticity objectives (P0)
     "psi_capacity",
+    # Quantum objectives
+    "fidelity",
     "consolidation_cost",
     "rewrite_rate",
     # Energy clamping flag

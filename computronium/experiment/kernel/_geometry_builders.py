@@ -71,6 +71,17 @@ def _as_int_tuple(
     return default
 
 
+def _declared_default(name: str) -> object:
+    """A geometry field's declared default, read from ``GeometryConfig`` itself."""
+    from dataclasses import MISSING, fields
+
+    for field in fields(GeometryConfig):
+        if field.name == name and field.default is not MISSING:
+            return field.default
+    msg = f"GeometryConfig declares no default for {name!r}"
+    raise ValueError(msg)
+
+
 def channel_count(input_shape: tuple[int, ...]) -> int:
     """A per-example channel count: ``(3, 28, 28)`` is 3, ``(784,)`` is 1."""
     return input_shape[0] if len(input_shape) > 1 else 1
@@ -567,7 +578,10 @@ def build_spatial_lattice_config(
     init_scale: float,
     geometry: dict[str, object],
 ) -> GeometryConfig:
-    lattice_dims = _as_int_tuple(geometry.get("lattice_dims"), None)
+    lattice_dims = _as_int_tuple(
+        geometry.get("lattice_dims"),
+        _declared_default("lattice_dims"),  # type: ignore[arg-type]
+    )
     if lattice_dims is None:
         raise ValueError(
             "spatial_lattice topology requires lattice_dims: (depth, height, width)"

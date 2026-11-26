@@ -132,6 +132,19 @@ class DefectRegistry:
         key = (f"{axis_a}.{value_a}", f"{axis_b}.{value_b}")
         return self._void_patterns.get(key)
 
+    def registered_patterns(self) -> set[tuple[str, str, str, str]]:
+        """The declared patterns as ``(axis_a, value_a, axis_b, value_b)`` tuples.
+
+        The registry stores each pattern in both directions for lookup; the set
+        collapses the two spellings, so a caller sees one row per declaration.
+        """
+        patterns: set[tuple[str, str, str, str]] = set()
+        for (axis_a, value_a), (axis_b, value_b) in self._void_patterns:
+            a = axis_a.partition(".")
+            b = axis_b.partition(".")
+            patterns.add((a[0], a[2], b[0], b[2]))
+        return patterns
+
     def increment_unclassified(self) -> None:
         """Increment the unclassified counter."""
         self._unclassified_count += 1

@@ -31,8 +31,6 @@ from typing import TYPE_CHECKING, Final
 
 import torch
 
-from computronium.acceleration.spec import AlgorithmFamily
-
 if TYPE_CHECKING:
     from torch import Tensor
 
@@ -234,7 +232,11 @@ def kernel_config_of(system: System, backend_cls: type) -> KernelConfig:
     Returns:
         A config carrying the coordinate's dimensions, rates and settle budget.
     """
-    from computronium.acceleration.kernel_backend import HardwareTarget, KernelConfig
+    from computronium.acceleration.kernel_backend import (
+        AlgorithmFamily,
+        HardwareTarget,
+        KernelConfig,
+    )
 
     geometry = system.geometry.config
     dynamics = system.dynamics.config

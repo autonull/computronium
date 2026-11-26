@@ -629,7 +629,7 @@ class GeometryConfig:
         *,
         input_dim: int,
         output_dim: int,
-        lattice_dims: tuple[int, int, int],
+        lattice_dims: tuple[int, int, int] = (4, 4, 4),
         hidden_dims: tuple[int, ...] = (32, 32),
         connectivity_radius: int = 1,
         init_scale: float = 0.1,
