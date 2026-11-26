@@ -91,6 +91,25 @@ def _classes(shape: tuple[int, ...], seed: int, device: str) -> torch.Tensor:
     )
 
 
+def _geometry_params(topology: str) -> dict[str, object]:
+    """Geometry params a synthetic case must name from the config's declaration.
+
+    The lattice factory refuses to invent an extent and no task declares a 3-D
+    grid, so the case passes the extent ``GeometryConfig`` declares as its
+    field default. The factory stays explicit; the field is the one source.
+    """
+    if topology != "spatial_lattice":
+        return {}
+    from dataclasses import fields
+
+    from computronium.ontology.geometry import GeometryConfig
+
+    for field in fields(GeometryConfig):
+        if field.name == "lattice_dims":
+            return {"lattice_dims": field.default}
+    return {}
+
+
 def _compose_at(
     axes: dict[str, str],
     task: str,
@@ -107,7 +126,7 @@ def _compose_at(
     try:
         return compose_configs(
             coordinate=_coordinate(axes),
-            geometry={},
+            geometry=_geometry_params(axes["geometry"]),
             input_shape=shape,
             output_dim=output_dim,
             task=instance,

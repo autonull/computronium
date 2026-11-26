@@ -104,11 +104,11 @@ class ActivationLayout:
 
     def sample_mode_layers(self) -> tuple[LayerLayout, ...]:
         """Layers with standard per-sample batch dimension."""
-        return tuple(l for l in self.layers if l.batch_mode == "sample")
+        return tuple(layer for layer in self.layers if layer.batch_mode == "sample")
 
     def cell_mode_layers(self) -> tuple[LayerLayout, ...]:
         """Layers with per-cell batch dimension (B*H*W)."""
-        return tuple(l for l in self.layers if l.batch_mode == "cell")
+        return tuple(layer for layer in self.layers if layer.batch_mode == "cell")
 
     def readout_layer(self) -> LayerLayout | None:
         """The final readout/logits layer."""
@@ -133,7 +133,7 @@ def _substrate_linear(
         substrate = DigitalSubstrate()
     out = substrate.get_forward_operator()(x, layer.weight)
     if layer.bias is not None:
-        out = out + layer.bias
+        out = torch.add(out, layer.bias)
     return out
 
 
@@ -629,7 +629,7 @@ class GeometryConfig:
         *,
         input_dim: int,
         output_dim: int,
-        lattice_dims: tuple[int, int, int] = (4, 4, 4),
+        lattice_dims: tuple[int, int, int],
         hidden_dims: tuple[int, ...] = (32, 32),
         connectivity_radius: int = 1,
         init_scale: float = 0.1,
@@ -1174,7 +1174,7 @@ class FeedforwardGeometry(nn.Module):
             if layer.bias is not None:
                 # Out-of-place add: in-place adds on grad-tracking tensors
                 # pin the whole downstream settle graph (CUDA leak)
-                branch = branch + layer.bias
+                branch = torch.add(branch, layer.bias)
             return branch, h_in
         return layer(h), h_in
 
@@ -1341,7 +1341,7 @@ def routing_weights(
     k = min(max(top_k, 1), logits.shape[-1])
     top = scaled.topk(k, dim=-1).indices
     hard = torch.zeros_like(soft).scatter_(-1, top, 1.0)
-    hard = hard / hard.sum(dim=-1, keepdim=True)
+    hard = torch.div(hard, hard.sum(dim=-1, keepdim=True))
     match surrogate:
         case "soft":
             return soft
@@ -1612,65 +1612,9 @@ class TransformerGeometry(nn.Module):
         op = substrate.get_forward_operator()
 
         if self.patch_size > 0:
-            # Vision mode: x is [B, C, H, W] or flattened [B, C*H*W]
-            if x.dim() == 2:
-                # Flattened input: reshape to [B, C, H, W]
-                b, flat_dim = x.shape
-                expected_dim = self.in_channels * self.image_hw[0] * self.image_hw[1]
-                if flat_dim != expected_dim:
-                    raise ValueError(
-                        f"Flattened input dim {flat_dim} != expected {expected_dim} "
-                        f"(in_channels={self.in_channels}, image_hw={self.image_hw})"
-                    )
-                x = x.view(b, self.in_channels, self.image_hw[0], self.image_hw[1])
-            # Now x is [B, C, H, W]
-            b, c, h, w = x.shape
-            assert c == self.in_channels, (
-                f"Expected {self.in_channels} channels, got {c}"
-            )
-            assert h == self.image_hw[0] and w == self.image_hw[1], (
-                f"Expected {self.image_hw}, got ({h}, {w})"
-            )
-
-            # Rearrange patches: [B, C, H, W] -> [B, N_patches, C * patch_size^2]
-            # Using einops-like rearrange manually
-            ph, pw = self.patch_size, self.patch_size
-            nh, nw = h // ph, w // pw
-            x_patches = x.view(b, c, nh, ph, nw, pw)
-            x_patches = x_patches.permute(0, 2, 4, 1, 3, 5)  # [B, nh, nw, C, ph, pw]
-            x_patches = x_patches.reshape(
-                b, nh * nw, c * ph * pw
-            )  # [B, N_patches, patch_dim]
-
-            # Project patches to embedding dim
-            if intermediates is not None:
-                intermediates.append(x_patches.reshape(b * nh * nw, -1))
-            h = op(x_patches, self.patch_embed.weight)  # [B, N_patches, embed_dim]
-
-            # Project to d_model if needed
-            if self.patch_proj is not None:
-                if intermediates is not None:
-                    intermediates.append(h.reshape(b * nh * nw, -1))
-                h = op(h, self.patch_proj.weight)  # [B, N_patches, d_model]
-
-            # Add positional encoding
-            t = nh * nw
-            h = h + self.pe[:t].unsqueeze(0)
-            h = h.reshape(b * t, self.d_model)
+            h, b, t = self._patch_embed(x, op, intermediates)
         else:
-            # Standard LM mode: x is token ids [B, T]
-            b, t = x.shape
-            dtype = self.embed.weight.dtype
-            # Ensure token IDs are long for one_hot
-            x_long = x.long() if x.dtype != torch.long else x
-            onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(
-                dtype
-            )
-            flat = onehot.view(b * t, -1)
-            if intermediates is not None:
-                intermediates.append(flat)
-            h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
-            h = h.reshape(b * t, self.d_model)
+            h, b, t = self._token_embed(x, op, intermediates)
 
         for block in self.blocks:
             h = self._apply_block(
@@ -1686,6 +1630,62 @@ class TransformerGeometry(nn.Module):
         if intermediates is not None:
             intermediates.append(logits)
         return logits
+
+    def _patch_embed(
+        self,
+        x: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+        intermediates: list[Tensor] | None,
+    ) -> tuple[Tensor, int, int]:
+        """Patchify an image to token activations; returns ``(h, b, t)``."""
+        if x.dim() == 2:
+            b, flat_dim = x.shape
+            expected_dim = self.in_channels * self.image_hw[0] * self.image_hw[1]
+            if flat_dim != expected_dim:
+                raise ValueError(
+                    f"Flattened input dim {flat_dim} != expected {expected_dim} "
+                    f"(in_channels={self.in_channels}, image_hw={self.image_hw})"
+                )
+            x = x.view(b, self.in_channels, *self.image_hw)
+        b, c, h, w = x.shape
+        if c != self.in_channels:
+            raise ValueError(f"Expected {self.in_channels} channels, got {c}")
+        if h != self.image_hw[0] or w != self.image_hw[1]:
+            raise ValueError(f"Expected {self.image_hw}, got ({h}, {w})")
+
+        ph, pw = self.patch_size, self.patch_size
+        nh, nw = h // ph, w // pw
+        t = nh * nw
+        patches = x.view(b, c, nh, ph, nw, pw)
+        patches = patches.permute(0, 2, 4, 1, 3, 5).reshape(b, t, c * ph * pw)
+        if intermediates is not None:
+            intermediates.append(patches.reshape(b * t, -1))
+        embedded = op(patches, self.patch_embed.weight)
+        if self.patch_proj is not None:
+            if intermediates is not None:
+                intermediates.append(embedded.reshape(b * t, -1))
+            embedded = op(embedded, self.patch_proj.weight)
+        h = torch.add(embedded, self.pe[:t].unsqueeze(0))
+        return h.reshape(b * t, self.d_model), b, t
+
+    def _token_embed(
+        self,
+        x: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+        intermediates: list[Tensor] | None,
+    ) -> tuple[Tensor, int, int]:
+        """One-hot a token batch to activations; returns ``(h, b, t)``."""
+        b, t = x.shape
+        x_long = x.long() if x.dtype != torch.long else x
+        onehot = torch.nn.functional.one_hot(x_long, self.config.input_dim).to(
+            self.embed.weight.dtype
+        )
+        flat = onehot.view(b * t, -1)
+        if intermediates is not None:
+            intermediates.append(flat)
+        embedded = op(flat, self.embed.weight).view(b, t, self.d_model)
+        h = torch.add(embedded, self.pe[:t]).reshape(b * t, self.d_model)
+        return h, b, t
 
     def _apply_block(
         self,
@@ -1959,14 +1959,14 @@ class RecurrentGeometry(nn.Module):
         for step in range(time):
             pre = op(x[step], linear_in.weight)
             if linear_in.bias is not None:
-                pre = pre + linear_in.bias
-            pre = pre + op(h, recurrent)
+                pre = torch.add(pre, linear_in.bias)
+            pre = torch.add(pre, op(h, recurrent))
             h = torch.tanh(pre)
             states.append(h)
         hidden = torch.stack(states)
         logits = op(hidden, linear_out.weight)
         if linear_out.bias is not None:
-            logits = logits + linear_out.bias
+            logits = torch.add(logits, linear_out.bias)
         return hidden, logits
 
     def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
