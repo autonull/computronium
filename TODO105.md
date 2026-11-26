@@ -4,8 +4,9 @@
 The capability map is evidence-based (52/75 viable+blind, breadth PASS, box-keyed
 cost model). Three items remain, each with a trigger and a measured box.
 
-Progress: **2 of 3 closed.** The claim (item 2) has its pilot harness working and
-its three seed blocks scheduled; the family minimum is not yet registered.
+Progress: **3 of 3 decided.** The claim design ran to its pre-registered
+verdict (`coordinate`): the effect is real, the registered minimum was not
+cleared, and the trigger that closes it is recorded.
 
 ---
 
@@ -14,7 +15,7 @@ its three seed blocks scheduled; the family minimum is not yet registered.
 | # | Item | State | Evidence |
 |---|------|-------|----------|
 | 1 | Geometry re-run — two carriers | ✅ done | `results/sec/serial4/geometry_results.json` |
-| 2 | 5.3 Claim — pre-registered minimum | 🔄 pilot | three n=64 blocks running |
+| 2 | 5.3 Claim — pre-registered minimum | ✅ decided | `coordinate`; registered 0.277 not cleared (fresh dz 0.454, CI [0.214, 0.693]) |
 | 3 | Hygiene queue — 6 stale fixtures | ✅ done | 49/49 property locks pass |
 
 ---
@@ -41,43 +42,56 @@ row is now recorded, which is what A30 needed.)
 
 ---
 
-## 2. 5.3 Claim — pre-register a certifiable minimum 🔄 IN PROGRESS
+## 2. 5.3 Claim — pre-register a certifiable minimum ✅ DECIDED
 **What:** the n=64 run missed 0.8 by 0.017; seed-block d varies 0.83–1.07
 (> within-block CI). A claim needs a pre-registered family minimum that **every
 seed block clears**, plus a block-variance estimate.
-**Design (locked, do not revise mid-run):**
-- Pilot: three seed blocks (0..63, 64..127, 128..191), each n=64, measure d and
-  its block sd.
-- Pre-register: `min_d = min(block_lower_bounds) - 1.96 * block_sd`, so every
-  block's 95% CI lower bound exceeds it.
+**Design (locked before the confirmatory seeds ran):**
+- Pilot: three seed blocks (0..63, 64..127, 128..191), each n=64.
+- `min_d = min(block_lower_bounds) - 1.96 * block_sd`.
 - Fresh seeds for the confirmatory run at that `min_d`.
-**Target:** `credit/random_projections` at the mnist base box (measured ~6 s/cell
-on CPU). 128 cells ≈ 13 min per block.
 
-**Commands (running):**
+**Pilot + confirmatory (all n=64, box device cpu):**
+
+| Block (seeds) | dz | d 95% CI | p |
+|---|---|---|---|
+| 0..63 | 0.601 | [0.361, 0.842] | 1e-4 |
+| 64..127 | 0.661 | [0.417, 0.894] | 1e-4 |
+| 128..191 | 0.684 | [0.445, 0.937] | 1e-4 |
+| **192..255 (fresh)** | **0.454** | **[0.214, 0.693]** | **4e-4** |
+
+Pilot `block_sd = 0.043` → registered `min_d = 0.276769` (`min_seeds` 64), in
+`configs/preregistrations/sec_credit_random_projections.json`, committed before
+the fresh seeds ran.
+
+**Verdict: `coordinate`.** The fresh block's d CI lower bound (0.214) does not
+clear the registered 0.277, so the pre-registered minimum was **not** cleared.
+
+**Triage:** coordinate result, not a defect — the effect is real (dz 0.454,
+p 4e-4) and not a claim (the registered minimum is not demonstrated). The
+pilot's `block_sd` understated the seed-block variance: with the fresh block the
+four-block sd is 0.104 and the re-derived minimum is 0.010, so the pilot's 0.043
+was an underestimate of block noise, not a defect in the run.
+
+**Capability gap (the trigger a claim needs):** at this box the d CI half-width
+is ~0.24 at n=64, so resolving a 0.10 margin needs n ≈ 370 pairs (~4x the
+budget: 740 cells ≈ 75 min at ~6 s/cell), pre-registered at that `n_max`; or a
+box whose measured dz is larger. The declared `vision` minimum 0.916 stays a
+declared row with that trigger, not a second bar for this cell.
+
+**Commands (landed):**
 ```bash
+# pilot blocks, offsets 0/64/128
 SEC_DEVICE=cpu SEC_AXES=credit SEC_PRIMITIVES=random_projections \
 SEC_RUNG2_SEEDS=64 SEC_RUNG2_SEED_OFFSET=$off SEC_RUNG2=auto \
 SEC_RUNG_TIMEOUT=60 SEC_RESULTS_DIR=results/sec/pilot_rp_block$off \
-uv run python -u scripts/run_full_sec_competitive.py   # off = 0, 64, 128
+uv run python -u scripts/run_full_sec_competitive.py
+# confirmatory, fresh seeds
+SEC_DEVICE=cpu SEC_AXES=credit SEC_PRIMITIVES=random_projections \
+SEC_RUNG2_SEEDS=64 SEC_RUNG2_SEED_OFFSET=192 SEC_RUNG2=auto \
+SEC_RUNG_TIMEOUT=60 SEC_RESULTS_DIR=results/sec/confirm_rp_192 \
+uv run python -u scripts/run_full_sec_competitive.py
 ```
-
-**Why `SEC_DEVICE=cpu`:** the shared GPU fails a cell with a launch error under
-contention (`CUSOLVER_STATUS_EXECUTION_FAILED`). The device is now one declared
-value (`sec_all_axes.SEC_DEVICE`, default `auto`); the pilot pins it to `cpu`.
-
-**Remaining steps:**
-1. Read the three blocks' `rung2_effect` (cohens_dz, ci_lower) from
-   `results/sec/pilot_rp_block{0,64,128}/credit_results.json`.
-2. Compute `block_sd` over the three `cohens_dz` values and
-   `min_d = min(ci_lower) - 1.96 * block_sd`.
-3. Write `configs/preregistrations/sec_credit_random_projections_pilot.json`
-   with that `min_d`, the box, and `min_seeds = 64` — **before** the
-   confirmatory seeds run.
-4. Run the confirmatory comparison at fresh seeds
-   (`SEC_RUNG2_SEED_OFFSET=192`), and record `claim` / `coordinate`.
-
----
 
 ## 3. Hygiene queue — fix 6 stale fixtures ✅ DONE
 **What:** API drift only (no new mechanisms):
@@ -96,7 +110,7 @@ The 6 fixtures no longer name dead signatures.
 | Metric | Target | State |
 |--------|--------|-------|
 | Serial map | graph/cora and spatial_lattice/mnist recorded in `serial4` | ✅ |
-| Claim | one pre-registered comparison at the family minimum every block clears | 🔄 |
+| Claim | one pre-registered comparison at the family minimum every block clears | ✅ `coordinate` (pre-registered 0.277 not cleared; effect real) |
 | Fixtures | 127/127 property locks pass | ✅ (49/49 in scope) |
 
 ---
