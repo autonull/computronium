@@ -105,6 +105,31 @@ static ratchet, property, primitives, algorithms + acceleration, unit,
 integration demo, acceptance, audit, build. The release calls that one
 script; no per-session command list.
 
+**D12 — Pre-commit runs fast gates only.** The hook currently runs the whole
+property suite on every commit, which contradicts the AGENTS rule and costs
+the shard's full walltime per commit. Replace it with the fast static locks
+(ratchet, marker census, workflows-disabled, the changed-file smoke) and
+move the property shard to `run_local_gates.sh`. A hook that costs minutes
+is a hook people disable.
+
+**D13 — Stability telemetry is lazy.** After the one-Jacobian fix, the
+Jacobian is still ~28% of a cell's profiled CPU. It is only needed when a
+run's objectives or report name a stability metric. Gate it on the declared
+objectives/report: a cell with `validation_accuracy` only must not compute
+it; a cell with a stability objective must. Lock both directions.
+
+**D14 — Compile reuse is measured before it is adopted.**
+The settle graph recompiles per shape; the profile names
+`torch._dynamo.convert_frame` warnings. Try `dynamic=True` (or a shape
+bucket) on the settle kernel and count recompiles and steady-state cost.
+Adopt only if it removes recompiles without slowing the steady state.
+
+**D15 — A campaign smoke, coverage, and repro are part of readiness.**
+One cell is a smoke, not a campaign. Run a 2-task × 2-credit × 2-seed
+campaign, `comp coverage`, and `comp repro --device cpu` on its store. The
+claim/limitation path must render; the 0.277 seed block is re-measured with
+a pre-registered `n_max` (fixed-n CI, no peeking) before it is called a gap.
+
 ## Verification rules
 
 1. One run per unresolved question; a green suite is evidence, not a rerun.
@@ -120,12 +145,12 @@ script; no per-session command list.
 
 | # | One shell block | Decides | Budget |
 |---|---|---|---|
-| 0 | format 13; fix stream async; add the pyright ratchet; write `scripts/run_local_gates.sh`; record ruff/pyright counts | static baseline and the release command exist | <15 min |
-| 1 | parity-probe cache + Jacobian count lock + eqprop detach lock; targeted stability/cell/acceleration files | runtime guard is cheap and locked | <15 min |
+| 0 | format 13; fix stream async; add the pyright ratchet; edit `.pre-commit-config.yaml` to drop the full property suite; write `scripts/run_local_gates.sh`; record ruff/pyright counts | static baseline and the fast hook exist | <15 min |
+| 1 | parity-probe cache + Jacobian count lock + eqprop detach lock; probe lazy stability telemetry and `dynamic=True` settle compile; targeted stability/cell/acceleration files | runtime guard is cheap and locked; the next runtime win is measured | <30 min |
 | 2 | `pytest tests/property tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line > logs/property_release.log`; then profile the top test and try the claim fixture at 3 and 2 epochs on one seed | property is one green artifact; the top cost and the bar-clearing claim box are named | measured ×1 |
 | 3 | `pytest tests/primitives`, then `tests/algorithms tests/acceleration`, then `tests/unit`, each once | the remaining P0 shards are green | measured ×1 each |
 | 4 | `pytest tests/integration -m demo`; then `pytest tests/acceptance` | demo and acceptance are green | measured ×1 each |
-| 5 | SEC smoke: one `survey_cli` cell + `comp demo`; profile the cell | experiments are ready; runtime top cost is named | measured ×1 |
+| 5 | SEC smoke: one `survey_cli` cell + `comp demo`; then a 2×2×2 campaign, `comp coverage`, and `comp repro --device cpu` on its store; profile the cell | experiments are ready; the runtime top cost and the claim gap are named | measured ×1 |
 | 6 | release: `scripts/run_local_gates.sh`, `pip-audit`, `python -m build`, docs check | one local green artifact | one pass |
 
 Batch 0 commands:
@@ -159,21 +184,26 @@ uv run comp demo
 
 | # | Rung | Symptom | Cause | Fix | Verify |
 |---|---|---|---|---|---|
-| D1 | 0 | GitHub Actions is disabled | the repository does not use CI | workflows archived; a lock keeps the active path empty | lock passed |
-| D2 | 0 | format fails on 13 files | legacy files predate ruff | format once (Batch 0) | format check |
-| D3 | 1 | `ruff check .` exits 1 at 640 | legacy findings | ratchet as the gate; lower the count each hygiene pass | ratchet 2 passed |
-| D4 | 1 | `pyright .` exits 1 at 3269/525 | legacy type debt | add a pyright count ratchet; touched modules clean | new ratchet |
-| D5 | 1 | property is not one artifact | the last full run predates the size edits | Batch 2 once | log |
-| D6 | 1 | demo is partial | `test_demo_ntm_local` under two workers | serial run; record | demo gate |
-| D7 | 1 | primitives/algorithms/unit unverified | the Jacobian change touches every cell | Batch 3 | logs |
-| D8 | 1 | acceptance unverified | not run after the repairs | Batch 4 | log |
-| D9 | 1 | eqprop kernel never attaches on a composed cell | tanh vs relu; guard detaches | declare reference-only in the matrix/card; lock the detach | parity + cell |
-| D10 | 1 | parity probe costs one forward per cell | decision per cell, probe per seed | cache by cell key; count lock | new lock |
-| D11 | 1 | a second Jacobian can return unnoticed | no count lock | add `test_jacobian_call_count_lock` | new lock |
-| D12 | 0 | stream test is `async` with no await | sync body | make it sync | ruff finding gone |
-| D13 | 2 | claim fixture trains 5 epochs | the bar-clearing minimum is unmeasured | 5→3→2 ladder, one seed; keep the smallest | val_acc clears bar |
-| D14 | 2 | the top property/one-cell cost is unnamed | no profile after the size edits | cProfile the shard and one SEC cell | top 5 named |
-| D15 | 0 | `docs/generated/` may be stale | gitignored artifact | `generate_docs.py --all --check` in release | check |
+| W1 | 0 | GitHub Actions is disabled | the repository does not use CI | workflows archived; a lock keeps the active path empty | lock passed |
+| W2 | 0 | format fails on 13 files | legacy files predate ruff | format once (Batch 0) | format check |
+| W3 | 1 | `ruff check .` exits 1 at 640 | legacy findings | ratchet as the gate; lower the count each hygiene pass | ratchet 2 passed |
+| W4 | 1 | `pyright .` exits 1 at 3269/525 | legacy type debt | add a pyright count ratchet; touched modules clean | new ratchet |
+| W5 | 1 | property is not one artifact | the last full run predates the size edits | Batch 2 once | log |
+| W6 | 1 | demo is partial | `test_demo_ntm_local` under two workers | serial run; record | demo gate |
+| W7 | 1 | primitives/algorithms/unit unverified | the Jacobian change touches every cell | Batch 3 | logs |
+| W8 | 1 | acceptance unverified | not run after the repairs | Batch 4 | log |
+| W9 | 1 | eqprop kernel never attaches on a composed cell | tanh vs relu; guard detaches | declare reference-only in the matrix/card; lock the detach | parity + cell |
+| W10 | 1 | parity probe costs one forward per cell | decision per cell, probe per seed | cache by cell key; count lock | new lock |
+| W11 | 1 | a second Jacobian can return unnoticed | no count lock | add `test_jacobian_call_count_lock` | new lock |
+| W12 | 0 | stream test is `async` with no await | sync body | make it sync | ruff finding gone |
+| W13 | 2 | claim fixture trains 5 epochs | the bar-clearing minimum is unmeasured | 5→3→2 ladder, one seed; keep the smallest | val_acc clears bar |
+| W14 | 2 | the top property/one-cell cost is unnamed | no profile after the size edits | cProfile the shard and one SEC cell | top 5 named |
+| W15 | 0 | `docs/generated/` may be stale | gitignored artifact | `generate_docs.py --all --check` in release | check |
+| W16 | 2 | every commit pays the full property suite | the pre-commit hook runs `tests/property/` | drop it; keep fast static locks; the suite belongs to the release script | hook <30 s |
+| W17 | 2 | the Jacobian is ~28% of cell CPU even when no objective needs it | `_post_training_metrics` computes stability unconditionally | gate on the declared objectives/report; a test for both directions | new lock |
+| W18 | 2 | the settle graph recompiles per shape | `torch.compile` without a dynamic/shape policy | probe `dynamic=True`/shape bucket; count recompiles; adopt only if steady state holds | probe |
+| W19 | 2 | the 0.277 seed block is called a claim gap without error control | n is too small to decide | re-measure with a pre-registered `n_max` and fixed-n CI; file the mechanism if it still fails | claim or gap |
+| W20 | 1 | a changed-file pyright hook blocks on legacy errors | 26 errors in the touched modules | fix them, or per-line ignore with a reason; then the hook is honest | changed-file hook |
 
 ## Efficiency rules
 
@@ -194,6 +224,13 @@ uv run comp demo
 - [ ] Format green; ruff ratchet green and lowered; pyright ratchet exists
       and the TODO106-touched modules are clean.
 - [ ] The Jacobian, parity-probe, and detach locks are green.
+- [ ] Lazy stability telemetry is locked in both directions; the
+      `dynamic=True` compile probe is measured and either adopted or rejected.
+- [ ] Pre-commit runs the fast locks only (<30 s), and the full property
+      suite is in `run_local_gates.sh`.
+- [ ] The 2×2×2 campaign writes claims/limitations; `comp coverage` and
+      `comp repro --device cpu` pass; the 0.277 block has a pre-registered
+      `n_max` verdict.
 - [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green.
 - [ ] The eqprop gap is declared in the matrix/card with a failing-today
