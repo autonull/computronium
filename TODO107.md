@@ -1,140 +1,132 @@
-# TODO107 — Release closure: CI, capability, and experiment readiness
+# TODO107 — Local release closure: tests, SEC readiness, acceleration
 
 ## Scope
 
-TODO106 closed the property-shard repair and accelerated its slow locks.
-TODO107 makes the repository **CI-green and experiment-ready**: every gate
-in `.github/workflows/ci.yml` either runs a command that exists and passes,
-or is removed with a reason; the SEC loop runs one real cell and one real
-campaign smoke; and the performance wins the profiler found are locked.
+GitHub Actions is disabled: the five workflows are in
+`.github/workflows.disabled/`, and
+`tests/unit/test_github_workflows_disabled.py` fails if a YAML file returns
+to `.github/workflows/`. The release target is therefore
+`scripts/run_local_gates.sh`, a local sequence, not a CI workflow.
 
-The release target is one `scripts/run_ci_gates.sh` run in the `ci.yml`
-order, not a per-session survey.
+The goal, in this order:
 
-## CI gate map (measured 2026-11-26)
+1. **P0 — every pytest shard green:** property + figure lock, primitives,
+   algorithms + acceleration, unit, integration demo, acceptance.
+2. **P1 — experiment-ready:** one real SEC cell writes a record, `comp demo`
+   completes, breadth stays PASS.
+3. **P2 — performance and test acceleration:** the profiled wins are locked;
+   the next named cost is measured, not guessed.
+4. **P3 — static hygiene:** format green; ruff and pyright are ratchets with
+   a direction, not release blockers.
 
-| # | CI step | Actual command | State |
-|---|---|---|---|
-| 1 | Install | `uv sync --dev` (CI) | **DRIFT**: AGENTS requires `--dev --all-extras` |
-| 2 | Format | `ruff format --check .` | **FAIL**: 13 files |
-| 3 | Lint | `ruff check .` | **FAIL**: 640 findings; ratchet 640 (2 passed) |
-| 4 | Types | `pyright .` | **FAIL**: 3269 errors, 525 warnings |
-| 5 | Property | `pytest tests/property/ -q` | **UNVERIFIED** after the size edits; locks green |
-| 6 | Demo | `pytest tests/integration/ -m demo -q` | **PARTIAL**: `test_demo_ntm_local` 131 s serial |
-| 7 | Vertical slice | `tests/integration/test_vertical_slice_gate.py` | **MISSING FILE**; replacements named below |
-| 8 | Version | `tests/unit/test_version_consistency.py` | **PASS** (5 passed with drift) |
-| 9 | Drift | README snippets + root exports | **PASS** (same 5) |
-| 10 | Presets | inline `_build_system_from_flat_config` loop | **UNVERIFIED** |
-| 11 | Registry audit | `comp audit --metadata` | **MISSING COMMAND** (`comp` has no `audit`) |
-| 12 | Composition | `scripts/validate_composition.py` | **MISSING FILE** (only `scripts/archive/`) |
-| 13 | Repro | `comp repro --device cpu` | **UNVERIFIED** |
-| 14 | Audit | `pip-audit` | **PASS** |
-| 15 | Parity | `tests/acceleration/test_all_implementations.py` | **PASS** (150 passed, 75 skipped) |
-| 16 | Primitives | `pytest tests/primitives/ -q` | **UNVERIFIED** after the Jacobian change |
-| 17 | Algorithms | `pytest tests/algorithms/ -q` | **UNVERIFIED** |
-| 18 | Matrix | `python -m computronium.acceleration.matrix` | **PASS** (JSON written) |
-| 19 | Microbench | `... microbench --all` with `|| true` | **NOT A GATE**; make it a smoke |
-| 20 | Rocq | `make -C rocq all` | **FAIL**: `Utils.vo` version 90299 vs expected 90300; real target is `rocq/Makefile` |
-| 21 | Build | `python -m build` | **PASS** (sdist + wheel) |
-| 22 | Acceptance | not in CI | **UNVERIFIED** |
+## State at handoff (2026-11-26)
 
-`comp gate breadth` **PASS** (17 error-aware credits). The one-Jacobian
-change is committed (`20dc2daa`); the test-size reductions are committed
-(`8eb31717`).
+| Gate | Command | State |
+|---|---|---|
+| GitHub | `ls .github/workflows` | **DISABLED** (moved; lock passes) |
+| format | `ruff format --check .` | **FAIL**: 13 files |
+| lint | `ruff check .` | 640 findings; ratchet 640 (2 passed) |
+| types | `pyright .` | 3269 errors, 525 warnings (hygiene, not a release gate) |
+| property | `pytest tests/property` | per-file locks green; one artifact not run since the size edits |
+| primitives | `pytest tests/primitives` | **UNVERIFIED** |
+| algorithms | `pytest tests/algorithms` | **UNVERIFIED** |
+| acceleration | `pytest tests/acceleration` | parity 150 passed / 75 skipped (targeted) |
+| unit | `pytest tests/unit` | **UNVERIFIED** |
+| demo | `pytest tests/integration -m demo` | **PARTIAL**: `test_demo_ntm_local` 131 s serial |
+| acceptance | `pytest tests/acceptance` | **UNVERIFIED** |
+| breadth | `comp gate breadth` | **PASS** (17 error-aware credits) |
+| build | `python -m build` | **PASS** (sdist + wheel) |
+| audit | `pip-audit` | **PASS** (local packages skipped) |
+| Rocq | `make -C rocq all` | **OUT OF SCOPE**: 90299/90300 version skew; GitHub-only job |
+
+The one-Jacobian fix (`20dc2daa`) and the test-size reductions
+(`8eb31717`) are committed. The workflow move is `bfc553d4`.
 
 ## Decisions
 
-**D1 — First fix CI itself; a gate that names a missing file is not a gate.**
-Four CI steps cannot run (rows 7, 11, 12, 20). Replace or remove each with
-a real command, and add `tests/test_ci_references_lock.py`: it parses
-`.github/workflows/ci.yml`, then asserts every `pytest` path exists, every
-`python` script/module exists, and every `comp <command>` exists in
-`comp --help-all`. Batch 0 also writes `scripts/run_ci_gates.sh` with
-`set -e` in the corrected CI order; CI and the local release run that one
-script. Error cost of not doing it: every release spends a session
-rediscovering that CI is fiction.
+**D1 — The local gate is the release.** GitHub is disabled; do not spend a
+session repairing a CI that does not run. Re-enabling GitHub is a deliberate
+move with its own ticket. The workflows archive is the record, not a queue.
 
-**D2 — Format is a gate; lint and types are count ratchets.**
-Format the 13 files once. Lint stays at the ruff ratchet; types get a new
-pyright count ratchet (`BASELINE=3269`, `WARNINGS=525`), with both counts
-lowered in every hygiene pass. The raw `ruff check .`/`pyright .` steps
-become reported counts, not pass/fail, until the counts reach zero. This
-is the only honest option that does not mix 3,900 legacy findings with a
-release; the ratchet is a direction with a deadline, not a waiver.
+**D2 — Consolidate the plan around four priorities.** The old plan treated
+22 CI steps as equal. This ticket orders by what makes an experiment
+possible: tests, SEC readiness, performance, static hygiene. A gate that
+does not block an experiment moves to P3 or out.
 
-**D3 — The eqprop kernel is reference-only on a composed relu cell.**
+**D3 — P0 is the whole pytest surface, once.** Each suite runs once, in one
+sequence, with its own log. A green suite is not rerun. The property shard
+is the largest, so it runs first in the test batch; a failure stops the
+release before the cheaper suites re-pay its cost.
+
+**D4 — Format is a gate; lint and types are ratchets.**
+Format the 13 files once. `ruff check .` stays at the ratchet; pyright gets
+a count ratchet (`3269 errors, 525 warnings`) and is **not** a release gate
+while the count is legacy. The ratchet is a direction with a deadline, not a
+waiver; new modules stay strict.
+
+**D5 — The eqprop kernel is reference-only on a composed relu cell.**
 The tanh kernel cannot reproduce a relu geometry; the attach guard detaches
-to the reference, and that is correct. Declare it in the acceleration
-matrix and capability card, and lock the detach. Closing the gap needs one
-activation contract for both rungs; that is a capability ticket, and its
-runtime value is measured before it is scheduled (D9).
+to the reference, and that is correct. Declare it in the acceleration matrix
+and capability card, and lock the detach. Closing it needs one activation
+contract for both rungs; its runtime value is measured before scheduling.
 
-**D4 — Cache the attach parity probe per composed cell.**
-The guard runs one forward + one kernel equilibrium per `evaluate_cell`;
-the decision depends on the cell, not the seed. Cache it by
-`(algorithm id, coordinate.cell_key(), geometry params)`. This is the
-largest avoidable runtime cost the repair added. Verify with a call-count
-lock: one probe per unique cell, never per seed.
+**D6 — Cache the attach parity probe per composed cell.**
+The guard currently runs one forward + one kernel equilibrium per
+`evaluate_cell`; the decision depends on the cell, not the seed. Cache it by
+`(algorithm id, coordinate.cell_key(), geometry params)`. This is the largest
+avoidable runtime cost the repair added. Lock: one probe per unique cell.
 
-**D5 — One Jacobian per cell is a permanent lock.**
-The 3→1 change is a correctness-neutral runtime win. A count test must
-fail if a second `_full_jacobian_tensor` returns per
-`compute_stability_metrics`.
+**D7 — One Jacobian per cell is a permanent lock.**
+The 3→1 change is correctness-neutral. A count test must fail if a second
+`_full_jacobian_tensor` returns per `compute_stability_metrics`.
 
-**D6 — Walltime is an outcome; counts and profiles are the ruler.**
+**D8 — Walltime is an outcome; counts and profiles are the ruler.**
 This host runs other processes. cProfile call counts (Jacobians, probes,
 cells, proposals) decide; a pytest duration is recorded, not compared.
 
-**D7 — Test acceleration is measured, not guessed.**
-The final property shard is profiled once after the size edits. Apply only
-the top named cost:
-- persistent `TORCHINDUCTOR_CACHE_DIR` in CI (the compiled settle graphs
-  repeat across jobs);
-- the claim fixture's 5-epoch regime lowered to the smallest epoch count
-  that still clears the digits bar (a 3-point ladder, one seed each);
+**D9 — Test acceleration is measured, not guessed.**
+Profile the final property shard once. Apply only the top named cost:
+- persistent `TORCHINDUCTOR_CACHE_DIR` in the local gate (compiled settle
+  graphs repeat);
+- the claim fixture's 5-epoch regime tried at 3 and 2 epochs on one seed;
+  keep the smallest that clears the digits bar (the assertion stays);
 - `cell_config` composition profiled in the generated suite; cache a second
   composition only if the profile names it.
-No test is weakened; the assertion stays, the box shrinks.
+No assertion is weakened; the box shrinks.
 
-**D8 — Test-passing includes experiments, not only pytest.**
-A release runs one real SEC cell and one campaign smoke:
-`survey_cli` L0, one task, one seed, one axis; then `comp demo`. A record
-must reach the store and a claim/limitation report must render. Breadth is
-already PASS.
+**D10 — Experiment readiness is a smoke, not a claim.**
+One `survey_cli` cell at L0, one task, one seed, one axis, plus
+`comp demo`. A record must reach the store; breadth is already PASS. The
+claim path stays locked by `test_claim_report_lock`.
 
-**D9 — Quantify the eqprop gap before scheduling the fix.**
-Benchmark the eqprop kernel on its own case vs the composed-cell reference.
-If the kernel is materially faster, closing D3 is a high-value capability
-ticket; if not, the gap is a declaration, not a priority.
-
-**D10 — One release command.**
-`scripts/run_ci_gates.sh` runs the `ci.yml` order with `set -e`: static
-first, then Python gates, then audit. CI and the local release call the
-same script; a second order cannot drift.
+**D11 — One local release command.**
+`scripts/run_local_gates.sh` runs the corrected order with `set -e`:
+static ratchet, property, primitives, algorithms + acceleration, unit,
+integration demo, acceptance, audit, build. The release calls that one
+script; no per-session command list.
 
 ## Verification rules
 
-1. One run per unresolved question; a green gate is evidence, not a rerun.
-2. Select by symbol; a `testpaths` shard is a round-close artifact.
+1. One run per unresolved question; a green suite is evidence, not a rerun.
+2. Select by symbol; a `testpaths` shard is a release artifact.
 3. A cached failure is not a verdict; collect with `--co` first.
 4. Long runs use `nohup ... > logs/<name>.log 2>&1 &`, `-rf --tb=line`,
    and ≤2-minute polling. Never two pytest suites concurrently.
 5. A long test gets a marker and a `KNOWN_LONG` row together.
-6. Every number carries its ruler: cells/proposals/Jacobians for work,
-   walltime only as an outcome.
+6. Every number carries its ruler: work counts for the decision, walltime
+   as the outcome.
 
 ## Work batches
 
-| # | One command / block | Decides | Budget |
+| # | One shell block | Decides | Budget |
 |---|---|---|---|
-| 0 | format 13; fix stream async; fix/remove stale CI steps; add CI reference lock; write `scripts/run_ci_gates.sh`; record ruff/pyright counts | CI is runnable and its static baseline is recorded | <10 min |
-| 1 | add the pyright ratchet + lower the ruff count; fix the pyright errors owned by the TODO106-touched modules (per-line ignore only where a fix is disproportionate) | static debt is measured and the touched modules are clean | one pass, then ratchet |
-| 2 | parity-probe cache + Jacobian count lock + eqprop detach lock; targeted stability/cell/acceleration tests | runtime guard is cheap and locked | <15 min |
-| 3 | `pytest tests/property tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line -n 2 > logs/property_release.log` | one green property artifact; profile top cost | measured ×1 |
-| 4 | `run_ci_gates.sh`: parity, primitives, algorithms, demo, presets, registry, composition, repro, version/drift | CI Python gates are green | measured ×1 each |
-| 5 | `pytest tests/acceptance -q -rf --tb=line > logs/acceptance_release.log` | acceptance is green | measured ×1 |
-| 6 | SEC smoke: one `survey_cli` cell + `comp demo`; profile the cell | experiments are ready; runtime top cost is named | measured ×1 |
-| 7 | release: `run_ci_gates.sh`, `pip-audit`, `make -C rocq all`, docs check | the release is one green artifact | one pass |
+| 0 | format 13; fix stream async; add the pyright ratchet; write `scripts/run_local_gates.sh`; record ruff/pyright counts | static baseline and the release command exist | <15 min |
+| 1 | parity-probe cache + Jacobian count lock + eqprop detach lock; targeted stability/cell/acceleration files | runtime guard is cheap and locked | <15 min |
+| 2 | `pytest tests/property tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line > logs/property_release.log`; then profile the top test and try the claim fixture at 3 and 2 epochs on one seed | property is one green artifact; the top cost and the bar-clearing claim box are named | measured ×1 |
+| 3 | `pytest tests/primitives`, then `tests/algorithms tests/acceleration`, then `tests/unit`, each once | the remaining P0 shards are green | measured ×1 each |
+| 4 | `pytest tests/integration -m demo`; then `pytest tests/acceptance` | demo and acceptance are green | measured ×1 each |
+| 5 | SEC smoke: one `survey_cli` cell + `comp demo`; profile the cell | experiments are ready; runtime top cost is named | measured ×1 |
+| 6 | release: `scripts/run_local_gates.sh`, `pip-audit`, `python -m build`, docs check | one local green artifact | one pass |
 
 Batch 0 commands:
 
@@ -153,7 +145,7 @@ uv run pyright .
 uv run python -m pytest tests/test_timeout_marker_policy.py -q
 ```
 
-Batch 6 SEC smoke (fill the axis list to one cell):
+Batch 5 SEC smoke:
 
 ```bash
 uv run python -m computronium.experiment.survey_cli 0.1 --mode learn \
@@ -167,61 +159,56 @@ uv run comp demo
 
 | # | Rung | Symptom | Cause | Fix | Verify |
 |---|---|---|---|---|---|
-| D1 | 0 | 4 CI steps name missing files/commands | CI predates the archive/move | replace with real tests; add the CI reference lock | new lock |
-| D2 | 0 | format fails on 13 files | legacy files predate ruff | format once | format check |
-| D3 | 1 | `ruff check .` exits 1 at 640 | legacy findings | ratchet as the gate; lower the count in D2 hygiene | ratchet 2 passed |
-| D4 | 1 | `pyright .` exits 1 at 3269/525 | legacy type debt | add a pyright count ratchet; fix the TODO106-touched modules | new ratchet |
-| D5 | 1 | property shard not one artifact | last full run predates the size edits | Batch 3 once | log |
-| D6 | 1 | demo gate partial | `test_demo_ntm_local` under two workers | serial run; record | demo gate |
-| D7 | 2 | eqprop kernel never attaches on a composed cell | tanh vs relu; guard detaches | declare reference-only in the matrix/card; add the detach lock; measure the gap | parity + cell |
-| D8 | 2 | parity probe costs one forward per cell | the decision is per cell, probe per seed | cache by cell key; count lock | new lock |
-| D9 | 1 | a second Jacobian can return unnoticed | no count lock | `test_jacobian_call_count_lock` | new lock |
-| D10 | 0 | `comp audit` missing | command was removed | replace with the real metadata test(s) or `comp test` | CI |
-| D11 | 0 | `validate_composition.py` missing | moved to archive | replace with `tests/property/joint/test_composability.py` | CI |
-| D12 | 0 | `test_vertical_slice_gate.py` missing | no such test | replace with `tests/integration/test_energy_invariants.py` + `tests/property/joint/test_lifecycle_locks.py` | CI |
-| D13 | 0 | `make -C rocq all` fails at `Utils.vo` | version skew 90299 vs 90300; stale artifact | clean generated `.vo` and recompile under the pinned Rocq; if the toolchain is the cause, pin it in CI | `make -C rocq all` |
-| D14 | 0 | `uv sync --dev` strips extras | CI predates AGENTS | `uv sync --dev --all-extras` | CI |
-| D15 | 0 | acceptance is not in CI | workflow only lists the slice | add `pytest tests/acceptance -q` | CI |
-| D16 | 0 | microbench step is `|| true` | it cannot fail | make the smoke fail on a broken import | CI |
-| D17 | 0 | `docs/generated/` may be stale | gitignored artifact | `generate_docs.py --all --check` in release | check |
+| D1 | 0 | GitHub Actions is disabled | the repository does not use CI | workflows archived; a lock keeps the active path empty | lock passed |
+| D2 | 0 | format fails on 13 files | legacy files predate ruff | format once (Batch 0) | format check |
+| D3 | 1 | `ruff check .` exits 1 at 640 | legacy findings | ratchet as the gate; lower the count each hygiene pass | ratchet 2 passed |
+| D4 | 1 | `pyright .` exits 1 at 3269/525 | legacy type debt | add a pyright count ratchet; touched modules clean | new ratchet |
+| D5 | 1 | property is not one artifact | the last full run predates the size edits | Batch 2 once | log |
+| D6 | 1 | demo is partial | `test_demo_ntm_local` under two workers | serial run; record | demo gate |
+| D7 | 1 | primitives/algorithms/unit unverified | the Jacobian change touches every cell | Batch 3 | logs |
+| D8 | 1 | acceptance unverified | not run after the repairs | Batch 4 | log |
+| D9 | 1 | eqprop kernel never attaches on a composed cell | tanh vs relu; guard detaches | declare reference-only in the matrix/card; lock the detach | parity + cell |
+| D10 | 1 | parity probe costs one forward per cell | decision per cell, probe per seed | cache by cell key; count lock | new lock |
+| D11 | 1 | a second Jacobian can return unnoticed | no count lock | add `test_jacobian_call_count_lock` | new lock |
+| D12 | 0 | stream test is `async` with no await | sync body | make it sync | ruff finding gone |
+| D13 | 2 | claim fixture trains 5 epochs | the bar-clearing minimum is unmeasured | 5→3→2 ladder, one seed; keep the smallest | val_acc clears bar |
+| D14 | 2 | the top property/one-cell cost is unnamed | no profile after the size edits | cProfile the shard and one SEC cell | top 5 named |
+| D15 | 0 | `docs/generated/` may be stale | gitignored artifact | `generate_docs.py --all --check` in release | check |
 
 ## Efficiency rules
 
-- Fail fast: format, lint count, pyright count, then tests; a missing file
-  is found before a 25-minute shard.
-- One artifact per suite: the property shard once, the demo gate once, the
-  acceptance suite once. Never rerun a green suite "to confirm".
-- Workers: keep `-n 4` from `addopts`; never launch two suites concurrently.
-- Cache: `TORCHINDUCTOR_CACHE_DIR` and `UV_LINK_MODE=copy` in CI; a build
-  cache keyed by `uv.lock`.
-- The release script is the only order; per-session command lists are
-  forbidden.
+- Fail fast: format and ratchets before the 8–10 minute property shard;
+  property before the cheaper shards so a failure stops the release early.
+- One artifact per suite; never rerun a green suite "to confirm".
+- Keep `-n 4` from `addopts`; never launch two suites concurrently. A
+  release script runs the sequence, not a parallel fan-out.
+- Cache: persistent `TORCHINDUCTOR_CACHE_DIR`; `UV_LINK_MODE=copy`.
+- The local script is the only order; ad-hoc command lists are not evidence.
 
 ## Closure criteria
 
-- [ ] `run_ci_gates.sh` exits 0, and `tests/test_ci_references_lock.py`
-      proves every CI path/command exists.
+- [ ] `scripts/run_local_gates.sh` exits 0.
+- [ ] Property + figure lock, primitives, algorithms + acceleration, unit,
+      demo, acceptance are each green once.
+- [ ] `comp demo` and the one-cell SEC run write a record; breadth PASS.
 - [ ] Format green; ruff ratchet green and lowered; pyright ratchet exists
-      and the TODO106-touched modules are at 0 errors.
-- [ ] Property + figure lock is one green artifact.
-- [ ] Parity, primitives, algorithms, Demo, presets, registry, composition,
-      repro, version/drift, vertical-slice replacements, and matrix are
-      green in one pass; `comp demo` and the one-cell SEC run write a
-      record and a claim/limitation.
-- [ ] Acceptance green; `pip-audit` clean; `make -C rocq all` green.
+      and the TODO106-touched modules are clean.
 - [ ] The Jacobian, parity-probe, and detach locks are green.
-- [ ] `generate_docs.py --all --check` green.
+- [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
+      are green.
 - [ ] The eqprop gap is declared in the matrix/card with a failing-today
       lock, and its runtime value is measured.
+- [ ] The GitHub-disabled lock is green.
 
 ## Notes
 
-- Commit per group (CI / static / perf / tests / docs), never one mega-commit;
+- Commit per group (static / perf / tests / docs), never one mega-commit;
   each group's lock is the evidence in its message. Nothing is pushed.
 - A ratchet is a direction: every hygiene pass lowers both counts; a pass
   that only moves files without lowering a count is not a closure.
 - `docs/figures/manifest.json` is written only by the demo gate.
+- Rocq and GitHub are out of the local release scope; they are separate
+  toolchain tickets, and the version-skew failure is recorded here so it is
+  not rediscovered.
 - The one-cell SEC run is a readiness smoke, not a claim; the claim path is
-  already locked by `test_claim_report_lock` and breadth is PASS.
-- The eqprop gap is a capability ticket, not a release blocker: the guard
-  already prevents a wrong measurement.
+  already locked.
