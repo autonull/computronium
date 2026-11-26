@@ -44,9 +44,9 @@ repos:
         language: system
         pass_filenames: false
         files: ^(docs/slides/|docs/slides\.html|docs/readme/build_readme\.py|docs/generated/IMPLEMENTATION_MATRIX\.md|docs/IDENTITY_CARDS\.md|docs/CORRECTIONS\.md|docs/FAIRNESS_CONTRACT\.md|computronium/experiment/schema/|computronium/acceleration/registry\.py)
-      - id: pytest-fast
-        name: pytest (property tests)
-        entry: uv run python -m pytest tests/property/ -q
+      - id: gates-fast
+        name: gates (static locks only; the property suite is the release script)
+        entry: uv run python -m pytest tests/test_timeout_marker_policy.py tests/unit/test_github_workflows_disabled.py tests/property/test_lint_count_ratchet.py -q
         language: system
         pass_filenames: false
         always_run: true
