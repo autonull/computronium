@@ -60,6 +60,47 @@ already passed is not re-run to confirm it.
 5. **A long test gets a marker, never a skip.** Add
    `@pytest.mark.timeout(N)` and the matching `KNOWN_LONG` row together.
 
+### Execution batches (fewest turns, no overlap)
+
+Run **one batch at a time**. The OOM came from two suites sharing the two
+workers; never launch two pytest suites concurrently.
+
+| # | One command / block | Decides | Budget |
+|---|---|---|---|
+| 0 | collect ids once + intersect cache (§Verification rule 4) | which cached nodes still exist | ~1 min, no test code |
+| 1 | `pytest $(cat /tmp/triage_run.txt) -q --tb=line -n 2` | every current cached failure, all dirs | 2–4 min |
+| 2 | `pytest tests/property tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line -n 2 > logs/property_<date>.log` | the three unnamed property failures, final shard, and the manifest lock in one process | 5–8 min |
+| 3 | only if the figure lock fails: `... surface.cli gallery --output docs/figures`, then re-run **only** that lock | manifest re-pin | 1–2 min |
+| 4 | fix the 14 ruff findings, then `pytest tests/property/test_lint_count_ratchet.py -q` | lint debt + baseline | <1 min |
+
+Batch 0 and 1 are one shell block:
+
+```bash
+for d in property primitives acceleration integration unit acceptance; do
+  uv run python -m pytest tests/$d --co -q > /tmp/ids_$d.txt 2>/dev/null
+done
+python3 - <<'PY'
+import json, pathlib
+cache = json.loads(pathlib.Path('.pytest_cache/v/cache/lastfailed').read_text())
+live = set()
+for path in pathlib.Path('/tmp').glob('ids_*.txt'):
+    live |= {line.strip() for line in path.read_text().splitlines()]
+run = sorted(k for k in cache if k in live)
+pathlib.Path('/tmp/triage_run.txt').write_text('\n'.join(run) + '\n')
+print(len(run), 'cached nodes still collect')
+# module-level rows that no longer collect are collection errors, not verdicts
+print('uncollected:', sorted(k for k in cache if k not in live)[:20])
+PY
+uv run python -m pytest $(cat /tmp/triage_run.txt) -q --tb=line -n 2 \
+  > /tmp/triage.log 2>&1; grep -E "^(FAILED|[0-9]+ (passed|failed))" /tmp/triage.log
+```
+
+Batches 2–4 then run once each, in order. Do not re-run a batch that is
+green; each batch's summary is the ticket evidence. If Batch 1 finds a
+current failure outside `tests/property`, add it to §D before Batch 2; do not
+start a second triage run. A GPU row that cannot run on this host is a declared
+skip (`@pytest.mark.gpu`), not a defect.
+
 ---
 
 ## A. Landed before this session (do not redo)
@@ -213,7 +254,7 @@ ran while the demo gate held both workers, so contention timeouts are the
 first hypothesis; pytest writes its `lastfailed` at session end, and the kill
 skipped that write, so the cache cannot name them.
 
-**Name them with exactly one authorized round-close shard**, run alone:
+**Name them with exactly one authorized round-close shard (Batch 2)**, run alone:
 `uv run python -m pytest tests/property -q -rf --tb=line > logs/property_<date>.log 2>&1`.
 That is the final verification, not a per-commit gate; do not run it again
 after it is green, and do not run a directory shard to answer any other
@@ -276,24 +317,26 @@ not re-run the whole gate. `test_demo_geometry_swap` is fixed and verified.
 ### C4. `test_figure_lock` / manifest
 
 The re-emitted records changed only `provenance`; `d8`'s data is byte-identical
-to the committed record, so the manifest data layer did not move. Run only
-`tests/integration/test_gallery_lock.py::test_figure_lock` (10 s). If it fails,
-re-render only the gallery (`uv run python -m computronium.experiment.surface.cli
-gallery --output docs/figures`) and re-run the one lock.
+to the committed record, so the manifest data layer did not move. Batch 2
+runs the figure lock in the same process as the property shard. If it fails,
+Batch 3 re-renders only the gallery (`uv run python -m
+computronium.experiment.surface.cli gallery --output docs/figures`) and
+re-runs only that lock.
 
 ### C5. Legacy ruff findings (14, `computronium/ontology/geometry.py`)
 
 Lines 107/111 ambiguous `l`; 136/1177/1344/1658/1962/1963/1969
 non-augmented assignment; 1602 complexity/branches/locals; 1628/1631 `assert`.
-Fix in the hygiene pass, then **lower** `BASELINE` to the new measured count in
-the same commit. The ratchet baseline is 659 today and permits these.
+Fix in Batch 4, then **lower** `BASELINE` to the new measured count in the
+same commit. The ratchet baseline is 659 today and permits these.
 
 ### C6. Repo-wide cache — 349 entries, candidates only
 
 `acceleration` 154, `primitives` 105, `property` 54, `integration` 17,
-`unit` 4, `acceptance` 2, `packages` 2, root 7. These are not verdicts; use
-rule 4 per directory. A current failure goes to §D; a row whose test no longer
-collects is deleted from the cache.
+`unit` 4, `acceptance` 2, `packages` 2, root 7. These are not verdicts; Batch 0
+intersects them with the live tree once, and Batch 1 runs only the survivors.
+A current failure goes to §D; a row whose test no longer collects is deleted
+from the cache.
 
 ---
 
