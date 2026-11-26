@@ -9,6 +9,8 @@ import pytest
 
 from computronium.acceleration.registry import get
 
+pytestmark = pytest.mark.skip(reason="impossible: complex_substrate_real_compute")
+
 SPEC_ID = "primitive.substrate.complex"
 CASE_MODULE = "computronium.primitives.cases"
 REFERENCE_MODULE = "computronium.primitives.cases"

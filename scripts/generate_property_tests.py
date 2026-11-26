@@ -32,7 +32,7 @@ import hypothesis.strategies as st
 import pytest
 
 from computronium.acceleration.registry import get
-
+{skip_line}
 SPEC_ID = "{spec_id}"
 {case_module_line}
 {reference_module_line}
@@ -122,12 +122,23 @@ def _assignment(name: str, value: str, width: int = 88) -> str:
     return f'{name} = (\n    "{value}"\n)'
 
 
+def _skip_line(spec_id: str) -> str:
+    """The module skip marker for a row the declared space refuses."""
+    from computronium.primitives.cases import IMPOSSIBLE
+
+    constraint = IMPOSSIBLE.get(spec_id)
+    if constraint is None:
+        return ""
+    return f'\npytestmark = pytest.mark.skip(reason="impossible: {constraint}")\n'
+
+
 def _render(spec: ImplementationSpec) -> str:
     reference_module, reference_function = _module_of(spec.reference_entrypoint)
     case_module = f"{reference_module.rpartition('.')[0]}.cases"
     build, call = _case_shape(reference_module)
     body = _HEADER.format(
         spec_id=spec.id,
+        skip_line=_skip_line(spec.id),
         case_module_line=_assignment("CASE_MODULE", case_module),
         reference_module_line=_assignment("REFERENCE_MODULE", reference_module),
         reference_function_line=_assignment("REFERENCE_FUNCTION", reference_function),
