@@ -3,7 +3,7 @@
 <div class="research-grid">
   <a class="research-card" href="#/research/proof-research" data-research="proof">
     <span class="research-icon">📐</span>
-    <h3>Formal Proof Research</h3>
+    <h3>Proof Research</h3>
     <p>Rocq-verified theorems for Computronium's ontology, plasticity mechanisms, and Z3-inspired universality. Machine-checked computational guarantees.</p>
   </a>
 

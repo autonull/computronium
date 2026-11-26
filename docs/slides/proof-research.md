@@ -1,8 +1,8 @@
-# Formal Proof Research
+# Proof Research
 
 <div class="research-header">
   <span class="research-badge">📐 Formal Verification</span>
-  <h2>Machine-checked theorems for Computronium's architecture</h2>
+  <h2>Machine-checked results for Computronium's architecture</h2>
   <p class="research-lead">Rocq proof assistant · Computational theory · Architecture and plasticity</p>
 </div>
 

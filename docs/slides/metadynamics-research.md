@@ -80,7 +80,7 @@ This research path covers the **plasticity axis (P)** and **credit axis (C)** of
 
 | Path | Connection |
 |------|------------|
-| **Formal Proof** | F7–F10, F12: Formal semantics, theorems, guarantees |
+| **Proof** | F7–F10, F12: Formal semantics, theorems, guarantees |
 | **Z3 Research** | RuleStatePlasticity expressiveness (F7.4), universality (F5) |
 | **Substrate** | Substrate-coupled plasticity, noise robustness (F12.6, F13) |
 | **Learning Theory** | Online adaptation (F11), plasticity vs. no-plasticity (F11.5) |

@@ -1,14 +1,14 @@
-# Computronium: Formal Proof Research Specification
+# Computronium: Proof Research Specification
 
 Research plan · Rocq proof assistant · Computational theory · Architecture and plasticity
 
 ## 1. Research objective
 
-The objective is to identify and carry out the formal proof research that can establish whether Computronium's architectural ideas have genuine mathematical substance, particularly its plasticity axis, its Z3-inspired separation between persistent machinery and changing computational state, and the possibility of using those ideas to construct more capable learning and computing systems.
+The objective is to identify and carry out the proof research that can establish whether Computronium's architectural ideas have genuine mathematical substance, particularly its plasticity axis, its Z3-inspired separation between persistent machinery and changing computational state, and the possibility of using those ideas to construct more capable learning and computing systems.
 
 The goal is not merely to demonstrate that a system can execute a computation. It is to establish precisely what its architecture permits, what constraints it imposes, what capabilities follow mathematically, and which properties might distinguish it from existing approaches.
 
-The research should produce machine-checked theorems in Rocq wherever practical, with explicit assumptions and executable counterexamples where a proposed claim is false.
+The research should produce machine-checked results in Rocq wherever practical, with explicit assumptions and executable counterexamples where a proposed claim is false.
 
 There are several distinct research questions:
 
@@ -80,7 +80,7 @@ For Computronium, therefore, we should prove a theorem about a precisely specifi
 
 The following specification is designed to be usable as a standalone research document and implementation plan. It separates proof projects that can be attempted immediately from deeper projects whose success depends on what the formal model reveals.
 
-# Computronium Formal Proof Research Program
+# Computronium Proof Research Program
 
 **Version:** 1.0\
 **Date:** October 17, 2026\
@@ -803,7 +803,7 @@ A theorem about an online predictor does not automatically transfer to a reinfor
 
 **Priority:** P1\
 **Difficulty:** Moderate to high\
-**Expected result:** Analytical or machine-checked theorems for selected state-dynamics implementations.
+**Expected result:** Analytical or machine-checked results for selected state-dynamics implementations.
 
 The repository includes energy-minimization and predictive-settling dynamics, along with stability analysis. The formal objective is to turn specific claims into mathematical statements with explicit conditions.
 

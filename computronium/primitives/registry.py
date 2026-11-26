@@ -1578,7 +1578,7 @@ _INVARIANTS = {
     "primitive.credit_assignment.local_goodness": (
         "layerwise loss decreases monotonically",
         "deterministic under fixed seed",
-        "no weight transport",
+        "no backward weight transport",
     ),
     "primitive.credit_assignment.temporal_trace": (
         "trace accumulates eligibility over time",
@@ -2024,7 +2024,7 @@ _CAPABILITY_CARDS = {
     "primitive.credit_assignment.homeostatic": "Error-blind homeostasis; maintains activity without label access",
     "primitive.credit_assignment.pepita": "PEPITA learned feedback; transport-free reconstruction",
     "primitive.credit_assignment.gradient": "Exact backprop; upper bound for all local credits",
-    "primitive.credit_assignment.local_contrastive": "Local contrastive targets; no weight transport",
+    "primitive.credit_assignment.local_contrastive": "Local contrastive targets; no backward weight transport",
     "primitive.credit_assignment.hybrid": "Hybrid trunk + exact head; partial weight transport",
     "primitive.credit_assignment.forward_tangent": "Forward-mode autograd; no backward pass",
     "primitive.credit_assignment.score_function": "Score function estimator; works on discrete outputs",

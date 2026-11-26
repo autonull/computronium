@@ -57,7 +57,7 @@ All learning guarantees must specify:
 
 | Path | Connection |
 |------|------------|
-| **Formal Proof** | F10–F11: Machine-checked update correctness, learning guarantees |
+| **Proof** | F10–F11: Machine-checked update correctness, learning guarantees |
 | **Metadynamics** | F7–F9: Expressiveness hierarchy informs what can be learned; lifecycle guarantees enable retention analysis |
 | **Z3 Research** | F5/F15: Does RuleStatePlasticity's universality translate to learnability advantages? |
 | **Substrate** | F13: Finite-precision and noise effects on learning guarantees |

@@ -87,7 +87,7 @@ How do the plasticity primitives compare under the same resource constraints?
 
 | Path | Connection |
 |------|------------|
-| **Formal Proof** | F3–F6: Z3 formalization, RuleStatePlasticity semantics, universality theorem |
+| **Proof** | F3–F6: Z3 formalization, RuleStatePlasticity semantics, universality theorem |
 | **Metadynamics** | Plasticity expressiveness hierarchy (F7), lifecycle guarantees (F8) |
 | **Substrate** | Precision/noise refinement (F13), hardware deployment |
 | **Learning Theory** | Online adaptation guarantees (F11), plasticity vs. no-plasticity separation |

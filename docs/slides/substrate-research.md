@@ -72,7 +72,7 @@ The **substrate axis (S)** defines the physical state space: precision, noise, s
 
 | Path | Connection |
 |------|------------|
-| **Formal Proof** | F13: Refinement theorems, error bounds, resource-aware complexity |
+| **Proof** | F13: Refinement theorems, error bounds, resource-aware complexity |
 | **Z3 Research** | Finite-precision universality (F5 variant 4), hardware Z3 benchmark |
 | **Metadynamics** | Substrate-coupled plasticity, noise robustness (F12.5, F12.6) |
 | **Learning Theory** | Quantization-aware adaptation, noisy credit guarantees |
