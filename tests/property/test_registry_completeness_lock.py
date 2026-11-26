@@ -214,6 +214,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
             "conv_channels": (8,),
             "in_channels": 1,
             "input_hw": (8, 8),
+            "pool_hw": (2, 2),
         },
         "attention": {
             "input_dim": 10,
@@ -230,7 +231,7 @@ def test_geometry_primitives_have_ontology_classes() -> None:
         },
         "graph": {"input_dim": 10, "output_dim": 5, "edge_index": [[0, 1], [1, 0]]},
         "ntm": {"input_dim": 10, "output_dim": 5, "hidden": 8},
-        "nca": {"channels": 8, "hidden": 8},
+        "nca": {"channels": 8, "hidden": 8, "grid_hw": (4, 4)},
         "spatial_lattice": {
             "input_dim": 10,
             "output_dim": 5,

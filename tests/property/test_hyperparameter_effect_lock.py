@@ -224,10 +224,26 @@ class TestHyperparameterEffectLock:
                 else 50_000,
             )
             width = int(float(coordinate.params["geometry.hidden_dim"]))
-            # Only check if geometry has hidden_dims
-            if hasattr(cell.geometry, "hidden_dims") and cell.geometry.hidden_dims:
-                assert cell.geometry.hidden_dims[0] == width, (
+            # The ceiling may narrow a width that does not fit, so the reach
+            # check is the unbudgeted build; the budgeted build must never
+            # grow the requested width.
+            unbudgeted = compose_configs(
+                coordinate=coordinate,
+                geometry={},
+                input_shape=shape.input_shape,
+                output_dim=shape.output_dim,
+                param_budget=0,
+            )
+            if (
+                hasattr(unbudgeted.geometry, "hidden_dims")
+                and unbudgeted.geometry.hidden_dims
+            ):
+                assert unbudgeted.geometry.hidden_dims[0] == width, (
                     "composition ignored the swept width"
+                )
+            if hasattr(cell.geometry, "hidden_dims") and cell.geometry.hidden_dims:
+                assert cell.geometry.hidden_dims[0] <= width, (
+                    "composition grew a swept width"
                 )
 
     def test_geometry_knob_dropped_for_incompatible_topology(self) -> None:

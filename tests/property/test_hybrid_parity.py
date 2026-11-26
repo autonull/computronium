@@ -445,6 +445,7 @@ def _peak_mb(geometry, x, y, *, store_all: bool) -> float:
 @_GPU
 def test_the_hybrid_trunk_peak_is_flat_in_depth() -> None:
     """L=4 → L=32 costs no more than the two chains' working set."""
+    torch.manual_seed(0)
     peaks = {}
     for depth in _DEPTHS:
         geometry = _deep_geometry(depth)
@@ -459,6 +460,7 @@ def test_the_hybrid_trunk_peak_is_flat_in_depth() -> None:
 @_GPU
 def test_retaining_the_trunk_stream_bends_the_peak() -> None:
     """Negative control: the store-all hybrid is the mechanism the lockstep removes."""
+    torch.manual_seed(0)
     depth = _DEPTHS[-1]
     geometry = _deep_geometry(depth)
     x = torch.randn(_PILOT_BATCH, _WIDTH, device="cuda")
@@ -488,6 +490,7 @@ def _direction_credit(
 
 def test_the_orthogonal_direction_keeps_the_registered_draws_norm() -> None:
     """The rotation is the knob: it changes direction, never the draw's scale."""
+    torch.manual_seed(0)
     delta = torch.randn(_BATCH, _HIDDEN)
     x = torch.randn(_BATCH, _IN)
     draw = _direction_credit()._feedback_matrix(delta, x)

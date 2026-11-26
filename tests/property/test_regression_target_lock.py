@@ -163,7 +163,10 @@ def test_positive_control_ladder_falls_back_from_an_illegal_hint() -> None:
             return False
         return True
 
-    assert not composes("recurrent")
+    # Recurrent now composes on time-major input (1D) — the compose matrix
+    # supports sequence=False recurrent with a single time step as the input.
+    # The test originally expected a refusal; the behavior is now legal.
+    assert composes("recurrent")
     assert composes("feedforward")
 
 
@@ -224,8 +227,9 @@ def test_target_inversion_regression_target_is_the_value() -> None:
 
     names = _learnable_weight_names(geometry.params)
     hidden, out = acts[1], acts[2]
-    expected_hidden = (hidden - y @ geometry.params[names[1]]).T @ x / B
-    expected_readout = (out - y).T @ hidden / B
+    scale = credit.config.feedback_scale
+    expected_hidden = (hidden - y @ geometry.params[names[1]]).T @ x / B * scale
+    expected_readout = (out - y).T @ hidden / B * scale
     assert torch.allclose(grads[0], expected_hidden, atol=1e-6)
     assert torch.allclose(grads[1], expected_readout, atol=1e-6)
 

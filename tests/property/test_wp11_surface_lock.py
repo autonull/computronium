@@ -15,11 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-from computronium.experiment.evidence import (
-    DuplicateMeasurementError,
-    RecordStore,
-    StoreConfig,
-)
+from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.schema import RunSpec, seed_all_registries
 from computronium.experiment.surface import (
     DEFAULT_Q14_ROUTES,
@@ -73,10 +69,14 @@ class TestIntentPersistence:
         assert found[0].record_id == record.record_id
 
     def test_redelivery_dedups(self, _store: RecordStore) -> None:
+        """A redelivered intent replaces its row; the store keeps one."""
         run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
-        _store.record_intent(run_id, _intent_dict())
-        with pytest.raises(DuplicateMeasurementError):
-            _store.record_intent(run_id, _intent_dict())
+        first = _store.record_intent(run_id, _intent_dict())
+        again = _store.record_intent(run_id, _intent_dict())
+        found = _store.query_intent_records(run_id)
+        assert len(found) == 1
+        assert found[0].measurement_key == first.measurement_key
+        assert again.measurement_key == first.measurement_key
 
     def test_run_scoping(self, _store: RecordStore) -> None:
         run_a = _store.create_run(spec=RunSpec(task="digits", profile="a"))

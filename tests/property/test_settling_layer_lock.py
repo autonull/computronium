@@ -31,7 +31,14 @@ _GEOMETRIES = {
     "recurrent": lambda: GeometryConfig.recurrent(
         input_dim=16, output_dim=4, hidden_dims=(8,)
     ),
-    "conv": lambda: GeometryConfig.conv(input_dim=64, output_dim=4, input_hw=(8, 8)),
+    "conv": lambda: GeometryConfig.conv(
+        input_dim=64,
+        output_dim=4,
+        conv_channels=(8,),
+        in_channels=1,
+        input_hw=(8, 8),
+        pool_hw=(2, 2),
+    ),
     "attention": lambda: GeometryConfig.attention(
         input_dim=16, output_dim=4, hidden_dim=8, num_layers=1, num_heads=2
     ),

@@ -48,7 +48,19 @@ GEOMETRY_ARMS = (
             GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(5,)),
         ),
     ),
-    ("conv", lambda: ConvGeometry(GeometryConfig.conv(input_dim=784, output_dim=10))),
+    (
+        "conv",
+        lambda: ConvGeometry(
+            GeometryConfig.conv(
+                input_dim=784,
+                output_dim=10,
+                conv_channels=(8, 16),
+                in_channels=1,
+                input_hw=(28, 28),
+                pool_hw=(4, 4),
+            )
+        ),
+    ),
 )
 
 

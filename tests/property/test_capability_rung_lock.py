@@ -88,8 +88,9 @@ def test_a_refused_row_is_refused_by_name_before_it_trains() -> None:
     )
     assert rung.coordinate is None
     assert rung.reason is not None
-    assert "the row is refused" in rung.reason
-    assert "the declared shape refuses it" in rung.reason
+    assert rung.reason.startswith("refused by name: ")
+    assert "geometry=graph" in rung.reason
+    assert "cannot read" in rung.reason
 
 
 def test_a_measured_box_the_declared_space_refuses_is_not_trained() -> None:

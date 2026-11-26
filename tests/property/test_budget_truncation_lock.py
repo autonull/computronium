@@ -62,7 +62,14 @@ def _priced(task: str, fidelity: str, walltime: float, epochs: int = 1):
             "walltime_s": walltime,
             "epochs_completed": epochs,
             "epochs_requested": epochs,
-        }
+        },
+        geometry="feedforward",
+        dynamics="instantaneous",
+        credit="gradient",
+        plasticity="null",
+        update="euclidean",
+        substrate="digital",
+        schedule=SimpleNamespace(task_id=task),
     )
 
 
@@ -104,7 +111,14 @@ def test_a_truncated_cell_does_not_price_the_cache() -> None:
             "walltime_s": 216.0,
             "epochs_completed": 9,
             "epochs_requested": 10,
-        }
+        },
+        geometry="feedforward",
+        dynamics="instantaneous",
+        credit="gradient",
+        plasticity="null",
+        update="euclidean",
+        substrate="digital",
+        schedule=SimpleNamespace(task_id="mnist"),
     )
     model = _measure_cost_model("cuda", "L1", "unused", [truncated], prior)
     assert model is prior

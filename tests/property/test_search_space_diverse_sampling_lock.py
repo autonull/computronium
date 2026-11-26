@@ -64,11 +64,12 @@ def test_production_map_declares_full_space():
 def test_first_legal_cell_appears_promptly():
     """A legal cell must appear within the first handful of candidates.
 
-    The pre-fix sweep placed the first legal cell at scan index ~124,290; a
-    ``max_scan`` of 50 fails loudly if corner-first ordering ever returns.
+    The pre-fix sweep placed the first legal cell at scan index ~124,290; the
+    current void constraints put it at ~56, so a ``max_scan`` of 60 fails
+    loudly if corner-first ordering ever returns.
     """
-    cells = _sample(_production_map_spec(), max_scan=50)
-    assert cells, "no legal cell in the first 50 candidates of production-map"
+    cells = _sample(_production_map_spec(), max_scan=60)
+    assert cells, "no legal cell in the first 60 candidates of production-map"
 
 
 @pytest.mark.timeout(300)

@@ -29,6 +29,7 @@ def test_config_lr_reaches_every_credit_arm() -> None:
 
 
 def test_local_arm_trains_through_the_continual_step() -> None:
+    torch.manual_seed(0)
     model = create_local_arm(64, 16, 10, "cpu", lr=0.05)
     before = {
         name: tensor.clone()

@@ -55,6 +55,7 @@ def test_recurrent_instantaneous_gradient_is_declared_legal() -> None:
 
 @pytest.mark.parametrize("depth", [1, 2])
 def test_the_recurrent_weight_receives_gradient_at_every_depth(depth: int) -> None:
+    torch.manual_seed(0)
     system = _system(depth)
     recurrent = system.geometry._recurrent_weight
     before = recurrent.detach().clone()

@@ -106,6 +106,7 @@ def test_the_surrogate_settles_only_the_free_phase() -> None:
 
 def test_the_geometry_selects_exactly_top_k_and_sums_to_one() -> None:
     """Hard selection: ``top_k`` non-zero weights per sample, summing to 1."""
+    torch.manual_seed(0)
     geometry = _routing()
     x = torch.randn(32, 8)
     weights = geometry.selection_weights(geometry._gate(geometry._trunk(x)))
