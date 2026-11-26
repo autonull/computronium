@@ -44,13 +44,13 @@ def spec():
     return get(SPEC_ID)
 
 
-def _run(seed: int):
+def _run(spec, seed: int):
     """One reference call on a case built from ``seed``."""
     from importlib import import_module
 
     cases = import_module(CASE_MODULE)
     reference = import_module(REFERENCE_MODULE)
-    case = cases.make_case(seed=seed)
+{build}
     call = getattr(reference, REFERENCE_FUNCTION)
 {call}
 
@@ -61,7 +61,7 @@ def test_deterministic_under_fixed_seed(spec, seed):
     """Two calls under one seed produce the same output."""
     from computronium.acceleration.parity import digest
 
-    assert digest(_run(seed)) == digest(_run(seed))
+    assert digest(_run(spec, seed)) == digest(_run(spec, seed))
 '''
 
 _FINITE_TEST = '''
@@ -87,11 +87,12 @@ def test_state_remains_finite(spec, seed):
                 if not key.startswith("_"):
                     _check(item, f"{path}.{key}")
 
-    _check(_run(seed))
+    _check(_run(spec, seed))
 '''
 
-#: Reference entrypoints that take the case's own spec instead of the case.
-_TAKES_SPEC = {"make_substrate"}
+#: A primitive's case is built from its spec and stepped with it; an
+#: algorithm's case is built from the seed alone and stepped with the case.
+_PRIMITIVE_CASES = "computronium.primitives.cases"
 
 
 def _module_of(entrypoint: str) -> tuple[str, str]:
@@ -99,10 +100,14 @@ def _module_of(entrypoint: str) -> tuple[str, str]:
     return module, function
 
 
-def _call_body(reference_function: str) -> str:
-    if reference_function in _TAKES_SPEC:
-        return "    return call(case.spec)"
-    return "    return call(case)"
+def _case_shape(reference_module: str) -> tuple[str, str]:
+    """The build and call lines for a reference module's case protocol."""
+    if reference_module == _PRIMITIVE_CASES:
+        return (
+            "    case = cases.build_case(spec, seed=seed)",
+            "    return call(spec, case)",
+        )
+    return ("    case = cases.make_case(seed=seed)", "    return call(case)")
 
 
 def _slug(spec: ImplementationSpec) -> str:
@@ -120,16 +125,16 @@ def _assignment(name: str, value: str, width: int = 88) -> str:
 def _render(spec: ImplementationSpec) -> str:
     reference_module, reference_function = _module_of(spec.reference_entrypoint)
     case_module = f"{reference_module.rpartition('.')[0]}.cases"
+    build, call = _case_shape(reference_module)
     body = _HEADER.format(
         spec_id=spec.id,
         case_module_line=_assignment("CASE_MODULE", case_module),
         reference_module_line=_assignment("REFERENCE_MODULE", reference_module),
         reference_function_line=_assignment("REFERENCE_FUNCTION", reference_function),
-        call=_call_body(reference_function),
+        build=build,
+        call=call,
     )
-    if reference_function not in _TAKES_SPEC:
-        body += _FINITE_TEST
-    return body
+    return body + _FINITE_TEST
 
 
 def _targets() -> dict[Path, str]:

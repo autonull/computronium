@@ -20,15 +20,15 @@ def spec():
     return get(SPEC_ID)
 
 
-def _run(seed: int):
+def _run(spec, seed: int):
     """One reference call on a case built from ``seed``."""
     from importlib import import_module
 
     cases = import_module(CASE_MODULE)
     reference = import_module(REFERENCE_MODULE)
-    case = cases.make_case(seed=seed)
+    case = cases.build_case(spec, seed=seed)
     call = getattr(reference, REFERENCE_FUNCTION)
-    return call(case)
+    return call(spec, case)
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
@@ -37,7 +37,7 @@ def test_deterministic_under_fixed_seed(spec, seed):
     """Two calls under one seed produce the same output."""
     from computronium.acceleration.parity import digest
 
-    assert digest(_run(seed)) == digest(_run(seed))
+    assert digest(_run(spec, seed)) == digest(_run(spec, seed))
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
@@ -61,4 +61,4 @@ def test_state_remains_finite(spec, seed):
                 if not key.startswith("_"):
                     _check(item, f"{path}.{key}")
 
-    _check(_run(seed))
+    _check(_run(spec, seed))

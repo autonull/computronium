@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from computronium.acceleration.spec import axis_segment
 from computronium.primitives.protocol import PrimitiveCase, PrimitiveSpec, StepResult
 
 if TYPE_CHECKING:
@@ -90,6 +91,77 @@ def _classes(shape: tuple[int, ...], seed: int, device: str) -> torch.Tensor:
     )
 
 
+def _compose_at(
+    axes: dict[str, str],
+    task: str,
+    shape: tuple[int, ...],
+    output_dim: int,
+    instance: Any,
+) -> Any:
+    """Compose the pinned cell at one task shape, or ``None`` when it cannot."""
+    from computronium.experiment.kernel.compose import compose_configs
+    from computronium.experiment.sec_loop import _coordinate
+
+    if _declared_legal(axes, task) is not None:
+        return None
+    try:
+        return compose_configs(
+            coordinate=_coordinate(axes),
+            geometry={},
+            input_shape=shape,
+            output_dim=output_dim,
+            task=instance,
+        )
+    except ValueError, RuntimeError:
+        return None
+
+
+def _attempt_at(
+    axes: dict[str, str],
+    axis: str,
+    task: str,
+    shape: tuple[int, ...],
+    output_dim: int,
+    instance: Any,
+) -> Any:
+    """The pinned cell at one shape, then its one- and two-axis repairs."""
+    from computronium.experiment.sec_loop import _axis_values
+
+    config = _compose_at(axes, task, shape, output_dim, instance)
+    if config is not None:
+        return config
+    companions = [name for name in AXES if name != axis]
+    values = {name: _axis_values(name) for name in companions}
+    for size in (1, 2):
+        config = _repair(
+            axes,
+            companions,
+            values,
+            size,
+            lambda trial: _compose_at(trial, task, shape, output_dim, instance),
+        )
+        if config is not None:
+            return config
+    return None
+
+
+def _family_shape(task: str) -> tuple[tuple[int, ...], int, Any] | None:
+    """The family task's own shape, for a law a micro vector cannot carry.
+
+    A geometry whose law reads a spatial grid (a lattice, a graph's edges)
+    cannot exist on a four-wide vector; the task the primitive is filed under
+    can exist, so that task's shape is the fallback box. Computed on demand:
+    most laws never need it.
+    """
+    from computronium.experiment.kernel.evaluate import task_instance, task_shape
+
+    try:
+        shape = task_shape(task, "cpu")
+        return shape.input_shape, shape.output_dim, task_instance(task, "cpu")
+    except Exception:  # ruff: ignore[blind-except] - a task-less fallback is the micro case
+        return None
+
+
 @cache
 def cell_config(spec: PrimitiveSpec, task_id: str = "mnist") -> SystemConfig:
     """The composed config of a cell the primitive's law can run in.
@@ -111,40 +183,22 @@ def cell_config(spec: PrimitiveSpec, task_id: str = "mnist") -> SystemConfig:
             value, so no cell can run it.
         RuntimeError: No companion combination composes for this primitive.
     """
-    from computronium.experiment.kernel.compose import compose_configs
-    from computronium.experiment.sec_loop import (
-        _AXIS_DEFAULTS,
-        _axis_values,
-        _coordinate,
-    )
-
-    def compose(axes: dict[str, str]) -> SystemConfig | None:
-        if _declared_legal(axes, _family_task(spec, task_id)) is not None:
-            return None
-        try:
-            return compose_configs(
-                coordinate=_coordinate(axes),
-                geometry={},
-                input_shape=MICRO_INPUT_SHAPE,
-                output_dim=MICRO_OUTPUT_DIM,
-            )
-        except ValueError:
-            return None
+    from computronium.experiment.sec_loop import _AXIS_DEFAULTS
 
     task = _family_task(spec, task_id)
+    axis = axis_segment(spec.axis)
     axes = dict(_AXIS_DEFAULTS)
-    axes[spec.axis] = _name(spec)
-    refusal = _declared_legal(axes, task)
-    config = compose(axes)
+    axes[axis] = _name(spec)
+
+    config = _attempt_at(axes, axis, task, MICRO_INPUT_SHAPE, MICRO_OUTPUT_DIM, None)
+    if config is None:
+        fallback = _family_shape(task)
+        if fallback is not None:
+            config = _attempt_at(axes, axis, task, *fallback)
     if config is not None:
         return config
 
-    companions = [axis for axis in AXES if axis != spec.axis]
-    values = {axis: _axis_values(axis) for axis in companions}
-    for size in (1, 2):
-        config = _repair(axes, companions, values, size, compose)
-        if config is not None:
-            return config
+    refusal = _declared_legal(axes, task)
     if refusal is not None:
         raise PrimitiveImpossibleError(spec.id, refusal)
     msg = f"{spec.id}: no companion combination composes a micro-cell"
@@ -329,7 +383,7 @@ def build_case(
         The case, with its typed config, its seeded payload, and its companions.
     """
     cell = cell_config(spec, task_id) if cell is None else cell
-    axis_config = getattr(cell, spec.axis)
+    axis_config = getattr(cell, axis_segment(spec.axis))
     config = {**asdict(axis_config), "seed": seed}
     extra = {**_payload(spec, cell, seed, device), "cell": cell}
     batch = extra.get("batch")
@@ -347,7 +401,7 @@ def _payload(  # ruff: ignore[too-many-locals]
     spec: PrimitiveSpec, cell: SystemConfig, seed: int, device: str
 ) -> dict[str, Any]:
     """The axis-specific companions and payload a case carries."""
-    match spec.axis:
+    match axis_segment(spec.axis):
         case "geometry":
             geometry = _geometry(cell.geometry, seed)
             x = _geometry_input(cell.geometry, seed).to(device)
@@ -470,7 +524,7 @@ def step(spec: PrimitiveSpec, case: PrimitiveCase) -> StepResult:  # ruff: ignor
     Returns:
         The step's weights, activations, metrics, and named state.
     """
-    match spec.axis:
+    match axis_segment(spec.axis):
         case "geometry":
             return _geometry_step(case)
         case "credit":
@@ -688,10 +742,10 @@ def invariant(  # ruff: ignore[too-many-return-statements]
     if not tensors:
         # A plasticity law whose case declares no plastic state has nothing to
         # move: the empty step is its declared state, not a failed invariant.
-        return spec.axis == "plasticity" and not case.extra.get("psi")
+        return axis_segment(spec.axis) == "plasticity" and not case.extra.get("psi")
     if not all(tensor.isfinite().all() for tensor in tensors):
         return False
-    match spec.axis:
+    match axis_segment(spec.axis):
         case "geometry":
             return bool(result.activations) and result.activations[-1].shape[-1] > 0
         case "credit":
