@@ -91,12 +91,18 @@ print(len(run), 'cached nodes still collect')
 # module-level rows that no longer collect are collection errors, not verdicts
 print('uncollected:', sorted(k for k in cache if k not in live)[:20])
 PY
+test -s /tmp/triage_run.txt || { echo "no cached node still collects"; exit 0; }
 uv run python -m pytest $(cat /tmp/triage_run.txt) -q --tb=line -n 2 \
   > /tmp/triage.log 2>&1; grep -E "^(FAILED|[0-9]+ (passed|failed))" /tmp/triage.log
 ```
 
-Batches 2–4 then run once each, in order. Do not re-run a batch that is
-green; each batch's summary is the ticket evidence. If Batch 1 finds a
+The `test -s` guard matters: a bare `pytest` with no node ids falls back to
+`testpaths` and runs the whole suite, which is the opposite of this plan.
+
+Batch 2 is over the 5-minute foreground cap: launch it with
+`nohup ... &` and poll at ≤2-minute intervals, not every few seconds. Batches
+2–4 then run once each, in order. Do not re-run a batch that is green; each
+batch's summary is the ticket evidence. If Batch 1 finds a
 current failure outside `tests/property`, add it to §D before Batch 2; do not
 start a second triage run. A GPU row that cannot run on this host is a declared
 skip (`@pytest.mark.gpu`), not a defect.
