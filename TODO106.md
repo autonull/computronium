@@ -6,9 +6,10 @@
 (22m47s). This session rebuilt the invariant-test generator on the real case
 builder; `tests/property/generated` is now **190 passed / 2 skipped**.
 The 48 property failures enumerated below are **resolved and verified
-individually**; the remaining current failures are enumerated in §C.
+individually**; the 11 failures the round-close shard named are closed in
+§C1 and §D.
 
-**State at hand-off**
+**State at round close (2026-11-26)**
 
 | Area | Before | Now |
 |---|---|---|
@@ -17,12 +18,14 @@ individually**; the remaining current failures are enumerated in §C.
 | single-file locks | 19 failed | verified green individually |
 | **total enumerated** | **48** | **0** |
 | timeout-marker census (root) | not measured | **120 passed** |
-| full `tests/property` shard | 192 failed | 3 unnamed failures at 38–40% (interrupted) |
+| full `tests/property` + figure lock | 192 failed | **2932 passed, 2 fixture drifts** (24m02s); both fixed, 23 passed |
+| repo-wide ruff findings | 659 | **640** (ratchet lowered) |
 
-The full shard was not run to completion after the repairs: concurrent demo
-and property runs competed for the same workers and the machine restarted
-(OOM). Each repaired lock is green on its own; the full-shard run is the
-round-close artifact that remains.
+The round-close shard named **11** current failures across two runs: 9 in
+the first (7 lock rows + the lint ratchet + the docs labels) and 2 fixture
+drifts exposed when the lattice default was reverted. Every one is repaired
+and verified by its own command in §C1; the shard is not rerun for a file
+that changed after it ran.
 
 **Never rerun a working test.** The table above is the evidence for every
 green row. A directory shard is not a verification command; a lock that has
@@ -106,6 +109,14 @@ batch's summary is the ticket evidence. If Batch 1 finds a
 current failure outside `tests/property`, add it to §D before Batch 2; do not
 start a second triage run. A GPU row that cannot run on this host is a declared
 skip (`@pytest.mark.gpu`), not a defect.
+
+**Batch ledger (2026-11-26):** Batch 2 ran twice, alone:
+`logs/property_2026-11-26.log` (9 named) and
+`logs/property_2026-11-26_verify.log` (2 fixture drifts, after the lattice
+default was reverted). Batch 3 was not needed: `test_figure_lock` passed in
+both runs. Batch 4 fixed the 14 legacy `geometry.py` findings and lowered
+the ratchet to the measured 640.
+
 
 ---
 
@@ -249,28 +260,62 @@ Five files asserted numeric values without seeding:
 | `test_hyperparameter_effect_lock:229` | the parameter ceiling deliberately narrows an explicit width that overruns. The reach check now uses the unbudgeted build and asserts the budgeted build never grows the request | 1 passed |
 | `test_lint_count_ratchet:118` | ruff moved 0.17.4 → 0.17.5 and reports 659 findings on unchanged code; re-baselined `BASELINE=659`, `RUFF_VERSION="0.17.5"` with the reason in the docstring | 2 passed |
 
+### B6. Round-close repairs (2026-11-26, after the shard)
+
+**B6.1 The lattice extent is named by the caller, not the factory.** B1.2
+defaulted `lattice_dims` in `build_spatial_lattice_config` and in the
+classmethod, which satisfied two fixtures but violated the shape-source lock.
+Both defaults are reverted: `cases._geometry_params` supplies the extent the
+`GeometryConfig` field declares, and the two fixtures name it.
+
+**B6.2 The eqprop kernel reports free-phase accuracy.** Its `train_step`
+returned `accuracy`, a key the trainer never reads, so `train_acc` was a
+fabricated 0.0 on every CUDA cell (the kernel's accuracy is measured on the
+free-phase logits).
+
+**B6.3 The reference stays differentiable and a rung must match it.**
+`linear_views` cleared `requires_grad` in place on the geometry's own tensors,
+so any attach froze the reference rung. The views now inherit the flag. Attach
+also probes one training batch: a kernel whose forward differs from the
+composed system (tanh vs relu) is detached, and the reference trains.
+
+**B6.4 Verification labels.** PROOF.md and six research slides were reworded;
+the `local_goodness` invariant is now "no backward weight transport"; the
+generated primitive docs were re-emitted.
+
+**B6.5 Lint ratchet.** The 14 legacy `geometry.py` findings are fixed and
+`BASELINE` is 640.
+
+Commits: `98ae719f`, `89275d9c`, `1661cbf1`, `ffec8e1d`, `2dcf25d9`.
+
+
 ---
 
 ## C. Known current failures (not cached guesses)
 
-### C1. `tests/property` — three unnamed failures at 38–40%
+### C1. `tests/property` — the round-close shard named them (closed)
 
-The 2026-11-26 full run was interrupted at 61% after three failures. They
-ran while the demo gate held both workers, so contention timeouts are the
-first hypothesis; pytest writes its `lastfailed` at session end, and the kill
-skipped that write, so the cache cannot name them.
+Two runs: the first named 9, the second named 2 after the lattice fix was
+corrected. All 11 are repaired and each row is green by its own command.
 
-**Name them with exactly one authorized round-close shard (Batch 2)**, run alone:
-`uv run python -m pytest tests/property -q -rf --tb=line > logs/property_<date>.log 2>&1`.
-That is the final verification, not a per-commit gate; do not run it again
-after it is green, and do not run a directory shard to answer any other
-question. Each named node is one of:
-* **stale cache row** — its test no longer collects; delete the cache entry;
-* **already repaired by §B** — record the green command and stop;
-* **current defect** — add a row to §D with its cause and fix.
+| Node | Cause | Fix / verify |
+|---|---|---|
+| `test_cell_evaluation_lock::test_cell_trains_and_reports_measured_accuracy` | CUDA attaches the eqprop kernel; its `train_step` returned `accuracy`, which the trainer never reads, so `train_acc` was a fabricated 0.0 | the backend reports its free-phase accuracy as `free_accuracy`; 1 passed |
+| `...::test_record_carries_measurement_and_a_derived_verdict` | same fabricated 0.0 | same; 1 passed |
+| `test_claim_report_lock::TestClaimDerivation::test_measured_records_produce_a_claim` | the kernel rung moved the system's weights through its own tanh network, so no cell reached its bar | attach keeps a rung only when its forward matches the composed system; the reference is kept (val 0.79); 3 passed |
+| `...::test_a_cell_short_of_its_declared_seeds_makes_no_claim` | same | same; 3 passed |
+| `test_claim_report_lock::TestReport::test_claim_eligibility_is_decided_per_cell_not_per_record` | same | same; 3 passed |
+| `test_geometry_shape_source_lock::test_spatial_lattice_requires_an_extent` | B1.2 defaulted the extent in the builder | reverted: the case names the extent; 8 passed |
+| `...::test_spatial_lattice_factory_has_no_default_extent` | same | same; 8 passed |
+| `test_lint_count_ratchet::test_the_baseline_is_not_stale` | the run imported the old 659 while Batch 4 was landing | the baseline is 640; 2 passed |
+| `test_verification_labels::test_no_banned_phrases_in_markdown_docs` | PROOF.md/slides said "formal proof"/"machine-checked theorem"; `local_goodness` said "no weight transport" | docs reworded, the registry invariant reworded, generated docs re-emitted; 4 passed |
+| `test_param_budget_lock::test_a_ceiling_bounds_every_trainable_geometry[spatial_lattice]` | the fixture composed a lattice with no extent | the fixture names the extent; 23 passed with the settling lock |
+| `test_settling_layer_lock::test_every_admitted_settling_cell_reaches_the_settle_kernel` | the fixture called `GeometryConfig.spatial_lattice` without the now-required extent | same; 23 passed |
 
-If the round-close shard is green, the three were contention timeouts; record
-that and close §C1 without a code change.
+The two `spatial_lattice` rows conflict with the shape-source lock by
+construction: a factory default satisfies the fixtures and violates the
+"cannot invent an extent" lock. The factory keeps no default; callers name
+the extent the `GeometryConfig` field declares.
 
 ### C2. Timeout-marker census — 7 failures, **fixed and verified**
 
@@ -323,18 +368,17 @@ not re-run the whole gate. `test_demo_geometry_swap` is fixed and verified.
 ### C4. `test_figure_lock` / manifest
 
 The re-emitted records changed only `provenance`; `d8`'s data is byte-identical
-to the committed record, so the manifest data layer did not move. Batch 2
-runs the figure lock in the same process as the property shard. If it fails,
-Batch 3 re-renders only the gallery (`uv run python -m
-computronium.experiment.surface.cli gallery --output docs/figures`) and
-re-runs only that lock.
+to the committed record, so the manifest data layer did not move. The lock ran
+with the shard in both round-close runs and **passed**; Batch 3 (gallery
+re-render) was not needed.
 
 ### C5. Legacy ruff findings (14, `computronium/ontology/geometry.py`)
 
 Lines 107/111 ambiguous `l`; 136/1177/1344/1658/1962/1963/1969
 non-augmented assignment; 1602 complexity/branches/locals; 1628/1631 `assert`.
-Fix in Batch 4, then **lower** `BASELINE` to the new measured count in the
-same commit. The ratchet baseline is 659 today and permits these.
+Fixed in Batch 4 (out-of-place adds are now `torch.add`, `_apply_stack` is
+split into `_patch_embed`/`_token_embed`, asserts are `ValueError`), and
+`BASELINE` is **640**.
 
 ### C6. Repo-wide cache — 349 entries, candidates only
 
@@ -346,18 +390,41 @@ from the cache.
 
 ---
 
-## D. Defect queue (one row per current failure)
+## D. Defect queue (closed at round close)
 
-Fill from the exact-node triage. A row without a named cause is not a defect
-yet; a row without a fix is not a plan.
+A row without a named cause is not a defect; a row without a fix is not a
+plan. Every row below has both, and the verify column names the command.
 
-| Test | Rung | Symptom | Cause | Fix | Verify |
+| # | Rung | Symptom | Cause | Fix | Verify |
 |---|---|---|---|---|---|
-| three unnamed property nodes (§C1) | 1 | fail at 38–40% in the interrupted shard | triage | fill after triage | exact node only |
-| `test_timeout_marker_policy` 7 rows (§C2) | 0 | census vs tree drift | stale rows / missing rows / missing marker | done: stale rows removed, marker added, 19 rows recorded | **120 passed** |
-| `test_demo_ntm_local` | 2 | 131 s > two-worker budget | contention, not code | serial run or declared 900 s marker | already passed |
-| `test_figure_lock` | 2 | not run | manifest vs records | one lock; re-render only on failure | one lock |
-| 14 legacy ruff findings (§C5) | 1 | baseline permits them | legacy `geometry.py` | hygiene pass, then lower baseline | ratchet only |
+| D27 | 1 | `train_acc` exactly 0.0 on a CUDA cell | the eqprop backend returned `accuracy`; the trainer reads `free_accuracy`/`nudged_fit_accuracy` | the backend maps its free-phase accuracy to `free_accuracy` | cell locks 2 passed |
+| D28 | 1 | the kernel rung trained a different network | attach accepted a tanh kernel for a relu geometry; `linear_views` also cleared `requires_grad` in place on the geometry's tensors | attach probes one batch and detaches on mismatch; views inherit the flag; both systems gain `detach_kernel_backend` | acceleration 47 passed; claim locks 3 passed |
+| D29 | 0 | a lattice composed without an extent | B1.2 defaulted it in the builder to satisfy two fixtures | the factory/classmethod require it; the case and the fixtures name the field default | shape lock 8, ceiling+settling 23 |
+| D30 | 0 | proof notes overclaim | "formal proof", "machine-checked theorem", "no weight transport" in non-archive docs | reworded at the source; generated docs re-emitted | labels 4 passed |
+| — | 0 | timeout census drift (§C2) | stale rows / missing rows / missing marker | done: stale rows removed, marker added, 19 rows recorded | **120 passed** |
+| — | 2 | `test_demo_ntm_local` 131 s > two-worker budget | contention, not code | serial run or declared 900 s marker | already passed |
+| — | 2 | `test_figure_lock` | manifest vs records | the lock ran with the shard | passed in both runs |
+| — | 1 | 14 legacy ruff findings (§C5) | legacy `geometry.py` | fixed; baseline lowered to 640 | ratchet 2 passed |
+
+---
+
+## E. Remaining work
+
+None for TODO106: the 48 enumerated failures and the 11 shard-named rows are
+repaired and verified. Deferred by design:
+
+- do not rerun the property shard to "confirm" a green row; its two logs are
+  the artifact;
+- the demo gate's `test_demo_ntm_local` stays verified standalone; run it
+  serially if the gate is needed as one artifact;
+- `docs/generated/` is gitignored; rebuild it with
+  `uv run python scripts/generate_docs.py --all` after an invariant change.
+
+**Capability gap (not a TODO106 closure):** the eqprop kernel is parity-verified
+against its own algorithm case (tanh), not against a composed feedforward cell
+(relu), so the attach guard keeps the reference on every such cell. Closing it
+needs one activation contract for both rungs (or a kernel that reproduces the
+composed forward); the guard makes the gap visible instead of silent.
 
 ---
 
