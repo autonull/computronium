@@ -264,11 +264,18 @@ def _compute_jacobian_metrics(
     metrics: dict[str, float],
 ) -> None:
     """Compute Jacobian-based stability metrics using the stability package."""
-    from computronium.stability import drift_metrics, jacobian_spectral_metrics
+    from computronium.stability import (
+        drift_metrics,
+        jacobian_spectral_metrics,
+        jacobian_tensor,
+    )
 
     # Define step function for stability package
     def step_fn(h: torch.Tensor) -> torch.Tensor:
         return step(h)
+
+    # One Jacobian, shared by the spectral and drift metrics.
+    jacobian = jacobian_tensor(step_fn, settled_hidden)
 
     # Use canonical stability package for spectral metrics
     spectral = jacobian_spectral_metrics(
@@ -276,13 +283,14 @@ def _compute_jacobian_metrics(
         settled_hidden,
         compute_min_singular=True,
         use_lowrank_for_large=True,
+        jacobian=jacobian,
     )
     metrics.update(spectral)
 
     # Drift metrics
     step_size = float(getattr(system.dynamics.config, "step_size", 0.0))
     if step_size > 0:
-        drift = drift_metrics(step_fn, settled_hidden, step_size)
+        drift = drift_metrics(step_fn, settled_hidden, step_size, jacobian=jacobian)
         metrics.update(drift)
 
 

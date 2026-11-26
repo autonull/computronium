@@ -33,6 +33,21 @@ def _full_jacobian_tensor(
     return jac
 
 
+def jacobian_tensor(
+    step_fn: Callable[[Tensor], Tensor],
+    x: Tensor,
+) -> Tensor:
+    """The exact Jacobian at ``x``, computed once and shared by the metrics."""
+    return _full_jacobian_tensor(step_fn, x)
+
+
+def _spectral_radius_from_jacobian(jac: Tensor) -> float:
+    """ρ(J) = max |λ_i(J)| from an already-computed Jacobian."""
+    if not torch.isfinite(jac).all():
+        return float("nan")
+    return float(torch.linalg.eigvals(jac).abs().max().item())
+
+
 def spectral_radius_from_jacobian_tensor(
     step_fn: Callable[[Tensor], Tensor],
     x: Tensor,
@@ -49,13 +64,7 @@ def spectral_radius_from_jacobian_tensor(
     Returns:
         Spectral radius ρ(J)
     """
-    jac = _full_jacobian_tensor(step_fn, x)
-
-    # Guard against non-finite values in Jacobian
-    if not torch.isfinite(jac).all():
-        return float("nan")
-
-    return float(torch.linalg.eigvals(jac).abs().max().item())
+    return _spectral_radius_from_jacobian(_full_jacobian_tensor(step_fn, x))
 
 
 def dominant_singular_value_tensor(
@@ -91,6 +100,7 @@ def jacobian_spectral_metrics(
     use_lowrank_for_large: bool = True,
     lowrank_k: int = 16,
     lowrank_niter: int = 2,
+    jacobian: Tensor | None = None,
 ) -> dict[str, float]:
     """Compute full spectral metrics from a step function and point.
 
@@ -111,13 +121,15 @@ def jacobian_spectral_metrics(
         use_lowrank_for_large: Use svd_lowrank for large matrices
         lowrank_k: Number of singular values for lowrank SVD
         lowrank_niter: Iterations for lowrank SVD
+        jacobian: An already-computed Jacobian at ``x``; computed once here
+            otherwise, and reused for the spectral radius.
 
     Returns:
         Dictionary of spectral metrics
     """
     metrics: dict[str, float] = {}
 
-    jac = _full_jacobian_tensor(step_fn, x)
+    jac = jacobian if jacobian is not None else _full_jacobian_tensor(step_fn, x)
 
     # Guard against non-finite values in Jacobian
     if not torch.isfinite(jac).all():
@@ -140,7 +152,7 @@ def jacobian_spectral_metrics(
 
     sigma_max = float(singular.max().item())
     sigma_min = float(singular.min().item()) if compute_min_singular else 0.0
-    radius = spectral_radius_from_jacobian_tensor(step_fn, x)
+    radius = _spectral_radius_from_jacobian(jac)
 
     metrics["spectral_radius"] = radius
     metrics["max_singular_value"] = sigma_max
@@ -156,6 +168,8 @@ def drift_metrics(
     step_fn: Callable[[Tensor], Tensor],
     x: Tensor,
     step_size: float,
+    *,
+    jacobian: Tensor | None = None,
 ) -> dict[str, float]:
     """Compute drift operator metrics: D = (J - I) / η.
 
@@ -174,7 +188,7 @@ def drift_metrics(
     if step_size <= 0:
         return {}
 
-    jac = _full_jacobian_tensor(step_fn, x)
+    jac = jacobian if jacobian is not None else _full_jacobian_tensor(step_fn, x)
 
     # Guard against non-finite values in Jacobian
     if not torch.isfinite(jac).all():
@@ -206,5 +220,6 @@ __all__ = [
     "dominant_singular_value_tensor",
     "drift_metrics",
     "jacobian_spectral_metrics",
+    "jacobian_tensor",
     "spectral_radius_from_jacobian_tensor",
 ]

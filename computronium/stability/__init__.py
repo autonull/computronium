@@ -23,6 +23,7 @@ from stability import (  # ruff: ignore[unused-import]  # adapter re-exports
     harvest_bad_statistics,
     harvest_good_statistics,
     jacobian_spectral_metrics,
+    jacobian_tensor,
     measure_guard_overhead,
     probe_interval_for_overhead,
     quantify_proxy_disagreement,

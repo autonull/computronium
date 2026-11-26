@@ -82,6 +82,7 @@ from stability.jacobian import (
     dominant_singular_value_tensor,
     drift_metrics,
     jacobian_spectral_metrics,
+    jacobian_tensor,
     spectral_radius_from_jacobian_tensor,
 )
 from stability.lyapunov import (
@@ -137,6 +138,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Spectral radius (low-level tensor API)
     "dominant_singular_value_tensor",
     "jacobian_spectral_metrics",
+    "jacobian_tensor",
     "spectral_radius_from_jacobian_tensor",
     "drift_metrics",
     # Lyapunov
