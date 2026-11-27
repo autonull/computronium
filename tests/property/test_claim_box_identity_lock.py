@@ -131,3 +131,49 @@ def test_the_varied_knob_is_not_a_box_field() -> None:
         "task_id": "mnist",
     }
     assert registration.box_mismatch(treatment) is None
+
+
+def test_a_claim_below_the_registered_seed_floor_is_refused() -> None:
+    """The registration's min_seeds gates the claim, not only its CI (W41).
+
+    The n=64 confirmatory block cleared the d CI lower bound, but the
+    registration is the n=205 rung; below its floor the comparison is not the
+    registered test.
+    """
+    from computronium.validation.preregistration import PairedComparison
+
+    box = {
+        "credit": "random_projections",
+        "fidelity": "L0",
+        "epochs": 1,
+        "batch_size": 32,
+        "task_id": "mnist",
+    }
+    registration = EffectSizeRegistration(
+        claim="tuning feedback_scale on random_projections",
+        metric="val_acc",
+        min_d=0.276769,
+        min_seeds=205,
+        box=dict(box),
+    )
+    pilot = PairedComparison(
+        n=64,
+        mean_diff=0.011976,
+        ci_lower=0.005642,
+        ci_upper=0.018305,
+        p_value=4e-4,
+        cohens_dz=0.453624,
+    )
+    assert not pilot.passes_effect_size(registration, box=box)
+
+    # The same effect at the registered n clears the CI gate: the floor is the
+    # only reason the n=64 comparison was refused.
+    at_n_max = PairedComparison(
+        n=205,
+        mean_diff=0.011976,
+        ci_lower=0.008360,
+        ci_upper=0.015592,
+        p_value=4e-4,
+        cohens_dz=0.453624,
+    )
+    assert at_n_max.passes_effect_size(registration, box=box)

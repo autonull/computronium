@@ -363,9 +363,14 @@ class PairedComparison:
         """Confirm against an effect size registration: CI on Cohen's d excludes min_d.
 
         Uses the paired Cohen's dz and its bootstrap CI (converted from mean_diff CI).
-        A registration that declares a box decides only a run at that box.
+        A registration that declares a box decides only a run at that box. The
+        registration's ``min_seeds`` is the seed floor it was pre-registered at:
+        a comparison below it is not the registered test, however narrow its CI
+        (W41).
         """
         if registration.box and (box is None or registration.box_mismatch(box)):
+            return False
+        if self.n < registration.min_seeds:
             return False
         # For paired design, Cohen's dz CI can be derived from mean_diff CI / SD_diff
         # But we have cohens_dz point estimate; need CI on it.
@@ -375,7 +380,6 @@ class PairedComparison:
             return False
         sd_diff = self.mean_diff / self.cohens_dz
         d_ci_lower = self.ci_lower / sd_diff if sd_diff != 0 else -float("inf")
-        d_ci_upper = self.ci_upper / sd_diff if sd_diff != 0 else float("inf")
         return d_ci_lower > registration.min_d and self.p_value < registration.alpha
 
 

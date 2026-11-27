@@ -1,0 +1,17 @@
+{
+  "claim": "tuning credit.feedback_scale on primitive.credit.random_projections raises val_acc at the mnist base with Cohen's dz >= 0.276769 at the pre-registered n_max=205 pairs (fresh seeds 256..460; power 0.8 at the pilot's min_d, alpha 0.05), with a fixed-n CI and no peeking",
+  "metric": "val_acc",
+  "min_d": 0.276769,
+  "alpha": 0.05,
+  "min_seeds": 205,
+  "created": "2026-11-27",
+  "box": {
+    "credit": "random_projections",
+    "fidelity": "L0",
+    "epochs": 1,
+    "batch_size": 32,
+    "task_id": "mnist",
+    "device": "cpu",
+    "precision": "fp32"
+  }
+}
