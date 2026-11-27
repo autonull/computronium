@@ -1,5 +1,38 @@
 # TODO107 — Local release closure: tests, SEC readiness, acceleration
 
+## Progress 2026-11-27 (session 5)
+
+**W41 opened and closed: an effect-size claim ignored its registered seed
+floor.** `PairedComparison.passes_equivalence` enforced
+`registration.min_seeds`, but `passes_effect_size` did not, so a comparison
+at n=64 could claim a registration pre-registered for 205 seeds — an
+optional-stopping hole on the claim path. The floor now gates the claim, and
+`test_claim_box_identity_lock.py` locks both directions: the n=64 block is
+refused and the same effect at n=205 is accepted. Measured **9 passed**.
+
+**The 0.277 block: n_max=205, pre-registered before the fresh seeds.** The
+n=64 confirm block measured dz 0.454 with mean-diff CI [0.00564, 0.01830] and
+p=4e-4. At the registered min_d 0.276769, power 0.8, alpha 0.05,
+`required_sample_size` is **205 pairs**, so n_max is 205.
+`configs/preregistrations/sec_credit_random_projections_n205.json` fixes the
+box (mnist, L0, 1 epoch, batch 32, cpu, fp32, credit=random_projections)
+and `probe_claim_n205.py` runs the fixed-n comparison on fresh seeds
+256..460 with no peeking. Cost: 64 pairs took 1316 s, so 205 pairs is
+~70 min; the watchdog is 140 min (2x the measured cost).
+
+**Verdict: `claim`.** 410 cells measured, no defects; n=205, mean diff
+0.01919, CI [0.01551, 0.02302], p=1e-4, dz **0.7121**, d 95% CI
+**[0.575, 0.854]** — the registered 0.276769 is cleared. Walltime
+**3543.86 s (59.1 min)** against the 8430.6 s watchdog. The 0.277 block is
+no longer a capability gap: the claim path carries a claim at its
+pre-registered n_max, fixed-n, no peeking.
+
+Provenance: the registration file and the driver were written before the
+launch (their mtimes are earlier than `started.json`) and committed in
+`d14968e5`; neither was edited after the first seed ran. The next rung
+should commit the registration before the launch so the commit order proves
+it too.
+
 ## Progress 2026-11-27 (session 4)
 
 **W39 closed: the acceptance test compared a lowercase `StrEnum` to uppercase
@@ -411,7 +444,7 @@ uv run comp demo
 | W16 | 2 | every commit pays the full property suite | the pre-commit hook runs `tests/property/` | drop it; keep fast static locks; the suite belongs to the release script | hook <30 s |
 | W17 | 2 | the Jacobian is ~28% of cell CPU even when no objective needs it | `_post_training_metrics` computes stability unconditionally | gate on the declared objectives/report; a test for both directions | new lock |
 | W18 | 2 | the settle graph recompiles per shape | `torch.compile` without a dynamic/shape policy | probe `dynamic=True`/shape bucket; count recompiles; adopt only if steady state holds | probe |
-| W19 | 2 | the 0.277 seed block is called a claim gap without error control | n is too small to decide | re-measure with a pre-registered `n_max` and fixed-n CI; file the mechanism if it still fails | claim or gap |
+| W19 | 2 | the 0.277 seed block is called a claim gap without error control | n is too small to decide | re-measured at a pre-registered `n_max`=205 on fresh seeds 256..460 with a fixed-n CI, no peeking | **claim**: dz 0.7121, d 95% CI [0.575, 0.854] > 0.276769, p=1e-4, 410 cells, 3543.86 s |
 | W20 | 1 | a changed-file pyright hook blocks on legacy errors | 26 errors in the touched modules | fix them, or per-line ignore with a reason; then the hook is honest | changed-file hook |
 | W21 | 1 | `pytest tests/algorithms` collected 0 tests | TODO97 deleted the directory but `testpaths` and the release plan kept it | remove it from `pyproject.toml` and `run_local_gates.sh` | collect |
 | W22 | 1 | the figure lock did not run in the property shard | `-m 'not demo'` deselects the demo-marked lock even with an explicit node id | run it in the demo gate; re-pin the stale manifest | `-m demo` green |
@@ -474,12 +507,13 @@ uv run comp demo
 - [x] Pre-commit runs the fast locks only, and the full property suite is in
       `run_local_gates.sh`.
 - [x] The campaign writes claims/limitations; `comp coverage` and
-      `comp repro --device cpu` pass; the 0.277 block has its pre-registered
-      verdict (`coordinate`, not cleared at the registered n=64; trigger
-      n≈370 pairs, TODO105). Measured: 450 records in 279 s (session 2);
-      fresh 40-record `2×2×2` campaign `0a816b34` with coverage exit 0
-      (9 PASS cells) and `comp repro` 40 cells/0 mismatches; the report
-      renders claims + limitations.
+      `comp repro --device cpu` pass; the 0.277 block's pre-registered
+      verdict is **`claim`**: n_max=205 on fresh seeds 256..460, dz 0.7121,
+      d 95% CI [0.575, 0.854] > the registered 0.276769, p=1e-4, 410 cells
+      measured, 3543.86 s. Measured campaign: 450 records in 279 s
+      (session 2); fresh 40-record `2×2×2` campaign `0a816b34` with coverage
+      exit 0 (9 PASS cells) and `comp repro` 40 cells/0 mismatches; the
+      report renders claims + limitations.
 - [x] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green (the final pass: audit clean, wheel + sdist built, docs check
       exit 0).
@@ -489,16 +523,13 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-The release is closed: `scripts/run_local_gates.sh` prints `local gates: PASS`
-on this tree. The two rows below are recorded work, not release blockers.
+The release is closed, and the 0.277 block is a claim at its pre-registered
+n_max. One recorded row remains; it is not a release blocker.
 
-1. **The 0.277 claim trigger** (capability gap, not a defect). TODO105's fresh
-   block reports dz 0.454, CI [0.214, 0.693], below the registered 0.277. A
-   claim needs n≈370 pairs (~4x the budget, ~75 min at ~6 s/cell); the trigger
-   is registered in TODO105, and the readiness campaign above does not
-   substitute for it (2 seeds cannot meet the CI-width gate).
-2. **Hygiene (Register C, not a release gate).** The repo-wide pyright count
+1. **Hygiene (Register C, not a release gate).** The repo-wide pyright count
    is a ratchet at its measured baseline; legacy type findings stay queued.
+   The W41 change's affected set (static locks + property shard) is the gate
+   for that change, not a second release pass.
 
 ## Notes
 
@@ -510,5 +541,5 @@ on this tree. The two rows below are recorded work, not release blockers.
 - Rocq and GitHub are out of the local release scope; they are separate
   toolchain tickets, and the version-skew failure is recorded here so it is
   not rediscovered.
-- The one-cell SEC run is a readiness smoke, not a claim; the claim path is
-  already locked.
+- The one-cell SEC run is a readiness smoke, not a claim; the claim path
+  carries a claim at n_max=205 (session 5).
