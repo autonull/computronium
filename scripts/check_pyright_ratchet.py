@@ -13,6 +13,7 @@ import argparse
 import json
 import subprocess  # ruff: ignore[suspicious-subprocess-import] - pyright is the local tool
 import sys
+from datetime import date
 from pathlib import Path
 
 BASELINE = Path("configs/pyright_ratchet.json")
@@ -40,6 +41,7 @@ def _measured() -> dict[str, int | str]:
         "pyright_version": payload["version"],
         "errors": int(summary["errorCount"]),
         "warnings": int(summary["warningCount"]),
+        "measured": date.today().isoformat(),
     }
 
 

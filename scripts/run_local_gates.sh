@@ -7,7 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export UV_LINK_MODE=copy
-export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-$PWD/.cache/torchinductor}"
+# The compile cache outlives a run, so it lives outside the tree: inside it,
+# `ruff check .` lints the cache and the lint ratchet counts it (W36).
+export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/computronium/torchinductor}"
 mkdir -p "$TORCHINDUCTOR_CACHE_DIR"
 
 run() {
@@ -31,7 +33,16 @@ run uv run python -m pytest tests/primitives -q -rf --tb=line
 run uv run python -m pytest tests/acceleration -q -rf --tb=line
 run uv run python -m pytest tests/unit -q -rf --tb=line
 run uv run python -m pytest tests/integration -m demo -q -rf --tb=line
-run uv run python -m pytest tests/acceptance -q -rf --tb=line
+# The campaign fixtures build one 450-record campaign that four gates read.
+# In a four-way shard the host is the ruler: a loaded host cuts cells before
+# their first epoch, the store keeps the artifact, and all fifteen gates fail
+# on it (W38). They run serially on their own store, as the plan's step 5 does;
+# the shard runs the gates that do not read it.
+run uv run python -m pytest tests/acceptance/test_campaign_lock.py \
+    tests/acceptance/test_campaign_evidence_lock.py -q -rf --tb=line -n 1
+run uv run python -m pytest tests/acceptance -q -rf --tb=line \
+    --ignore=tests/acceptance/test_campaign_lock.py \
+    --ignore=tests/acceptance/test_campaign_evidence_lock.py
 
 run uv run pip-audit
 run uv run python -m build
