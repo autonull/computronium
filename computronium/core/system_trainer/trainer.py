@@ -291,9 +291,13 @@ class SystemTrainer:
             if use_async:
                 if pending is None:
                     break
-                current = torch.cuda.current_stream()
-                current.wait_stream(load_stream)
-                current.wait_stream(compute_stream)
+                # The compute stream reads the copy, so it is the one that must
+                # wait for the load stream. Waiting on the default stream here
+                # orders a stream the step never runs on: the first batch was
+                # read mid-copy (measured: 100% of its elements mismatched,
+                # intermittent — the copy usually finished in time) because
+                # `train_step` runs under `with torch.cuda.stream(compute_stream)`.
+                compute_stream.wait_stream(load_stream)
                 x, y = pending
                 x.record_stream(compute_stream)
                 y.record_stream(compute_stream)
