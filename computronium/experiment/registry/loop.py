@@ -843,14 +843,21 @@ class LoopDriver:
         self, hyp: HypothesisSpec, all_records: list[Record]
     ) -> list[Record]:
         if hyp.domain is None:
-            return all_records
-        task_registry = get_task_registry()
-        domain_tasks = {
-            t
-            for t in self._config.task_schedule
-            if task_registry.get(t).domain == hyp.domain
-        }
-        return [r for r in all_records if r.schedule.task_id in domain_tasks]
+            records = all_records
+        else:
+            task_registry = get_task_registry()
+            domain_tasks = {
+                t
+                for t in self._config.task_schedule
+                if task_registry.get(t).domain == hyp.domain
+            }
+            records = [r for r in all_records if r.schedule.task_id in domain_tasks]
+        if hyp.grouping_factor and hyp.comparison_values:
+            arms = set(hyp.comparison_values)
+            records = [
+                r for r in records if getattr(r, hyp.grouping_factor, None) in arms
+            ]
+        return records
 
     def _calculate_power_achieved(
         self,
@@ -1078,12 +1085,48 @@ class LoopDriver:
         with store:
             return self._exploit_axes(store, task)
 
+    def _governed_axis_values(self) -> dict[StructuralAxis, tuple[str, ...]]:
+        """Axis values a declared hypothesis must compare.
+
+        A governed claim is decidable only on its pre-registered arms. The loop
+        therefore fixes the axis each hypothesis groups by to that hypothesis's
+        ``comparison_values``: sampling the whole space would test whatever
+        credits happened to be drawn, not the declared contrast.
+        """
+        governed: dict[StructuralAxis, tuple[str, ...]] = {}
+        for hyp_id in self._config.hypothesis_ids:
+            hyp = self._hypothesis_registry.get(hyp_id)
+            if hyp is None or not hyp.grouping_factor or not hyp.comparison_values:
+                continue
+            try:
+                axis = StructuralAxis(hyp.grouping_factor)
+            except ValueError:
+                logger.warning(
+                    "Hypothesis %s groups by unknown axis %r",
+                    hyp_id,
+                    hyp.grouping_factor,
+                )
+                continue
+            governed[axis] = tuple(
+                dict.fromkeys((*governed.get(axis, ()), *hyp.comparison_values))
+            )
+        return governed
+
     def _explore_axes(self) -> tuple[AxisSelection, ...]:
+        governed = self._governed_axis_values()
         selections = []
         for axis in StructuralAxis:
             primitives = sorted(
                 name for name, spec in AXES_REGISTRIES[axis].items() if spec.available
             )
+            required = governed.get(axis)
+            if required:
+                primitives = [name for name in primitives if name in required]
+                if not primitives:
+                    logger.warning(
+                        "No available arm of %s for the declared hypothesis",
+                        axis.value,
+                    )
             if primitives:
                 selections.append(
                     AxisSelection(axis=axis, primitives=tuple(primitives))
@@ -1146,6 +1189,12 @@ class LoopDriver:
             ):
                 if value:
                     union[axis].add(value)
+
+        governed = self._governed_axis_values()
+        for axis, required in governed.items():
+            arms = union[axis] & set(required)
+            union[axis] = arms or set(required)
+
         selections = [
             AxisSelection(axis=axis, primitives=tuple(sorted(values)))
             for axis, values in union.items()

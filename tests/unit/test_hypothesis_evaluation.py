@@ -364,5 +364,19 @@ class TestHypothesisEvaluation:
         assert stat_result.n_samples == 6
 
 
+def test_declared_hypothesis_restricts_the_explore_axes():
+    """A governed claim samples only its pre-registered comparison arms.
+
+    The loop's explore space spans every credit, but H1 compares gradient with
+    thermodynamic_contrast. Without the restriction the hypothesis is tested
+    on whichever credits were drawn, and an acceptance run had none of its arms.
+    """
+    from computronium.experiment.schema.axis import StructuralAxis
+
+    driver = _make_driver()
+    axes = {sel.axis: sel.primitives for sel in driver._explore_axes()}
+    assert axes[StructuralAxis.CREDIT] == ("gradient", "thermodynamic_contrast")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

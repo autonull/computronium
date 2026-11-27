@@ -21,6 +21,7 @@ from ._execution import _open_store
 if TYPE_CHECKING:
     import argparse
 
+    from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import (
         RunSpec,
     )
@@ -53,6 +54,16 @@ def _comparable_metrics(payload: dict) -> list[str]:
         for k, v in payload.items()
         if isinstance(v, int | float) and k not in _HOST_METRICS
     ]
+
+
+def _measurement_identity(record: Record) -> tuple[str, str, int]:
+    """The replay's comparison key: the same cell, task, and seed.
+
+    A ``cell_key`` collapses seeds *and* tasks, and one run's schedule may
+    span several tasks. The replay's changed device/determinism stay out: they
+    change the ``measurement_key``, not the measurement.
+    """
+    return (record.cell_key, record.schedule.task_id, record.schedule.seed)
 
 
 def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
@@ -173,15 +184,11 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                     run_id=repro_run_id
                 )
 
-            # A cell_key collapses seeds; a measurement_key carries the
-            # replay's changed device/determinism. Compare the same cell and
-            # seed, not the schedule's environment flags.
-            orig_by_measurement = {
-                (r.cell_key, r.schedule.seed): r for r in orig_records
-            }
-            repro_by_measurement = {
-                (r.cell_key, r.schedule.seed): r for r in repro_records
-            }
+            # A cell_key collapses seeds and tasks; a measurement_key carries
+            # the replay's changed device/determinism. Compare the same cell,
+            # task, and seed, not the schedule's environment flags.
+            orig_by_measurement = {_measurement_identity(r): r for r in orig_records}
+            repro_by_measurement = {_measurement_identity(r): r for r in repro_records}
 
             common_measurements = set(orig_by_measurement) & set(repro_by_measurement)
             if not common_measurements:
@@ -213,6 +220,7 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                         if diff > args.tolerance:
                             mismatches.append({
                                 "measurement_key": orig_r.measurement_key,
+                                "task": orig_r.schedule.task_id,
                                 "metric": metric,
                                 "original": orig_val,
                                 "reproduction": repro_val,
@@ -351,14 +359,14 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                         run_id=repro_run_id
                     )
 
-                # A cell_key collapses seeds; a measurement_key carries the
-                # replay's changed device/determinism. Compare the same cell
-                # and seed, not the schedule's environment flags.
+                # A cell_key collapses seeds and tasks; a measurement_key carries
+                # the replay's changed device/determinism. Compare the same cell,
+                # task, and seed, not the schedule's environment flags.
                 orig_by_measurement = {
-                    (r.cell_key, r.schedule.seed): r for r in orig_records
+                    _measurement_identity(r): r for r in orig_records
                 }
                 repro_by_measurement = {
-                    (r.cell_key, r.schedule.seed): r for r in repro_records
+                    _measurement_identity(r): r for r in repro_records
                 }
 
                 common_measurements = set(orig_by_measurement) & set(
@@ -397,6 +405,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                             if diff > args.tolerance:
                                 mismatches.append({
                                     "measurement_key": orig_r.measurement_key,
+                                    "task": orig_r.schedule.task_id,
                                     "metric": metric,
                                     "original": orig_val,
                                     "reproduction": repro_val,

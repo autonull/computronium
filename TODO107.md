@@ -1,5 +1,32 @@
 # TODO107 — Local release closure: tests, SEC readiness, acceleration
 
+## Progress 2026-11-26 (session 2)
+
+**W30 closed: a governed claim restricts the loop's arms.** The loop's explore
+space spanned every credit, so `TestFirstGovernedClaim` was evaluated on credits
+it never declared (forward_tangent, hybrid, ...), and `test_cross_domain_evaluation`
+failed. `LoopDriver._governed_axis_values()` now fixes the axis each declared
+hypothesis groups by to its `comparison_values`; `_explore_axes`/`_exploit_axes`
+restrict to those arms (exploit keeps them when the frontier has none), and
+`_filter_records_for_hypothesis` keeps only the declared arms. Probe
+`scripts/probes/probe_governed_axes.py`: one cycle writes 10 gradient + 10
+thermodynamic_contrast records. Acceptance
+`TestFirstGovernedClaim` **5 passed in 284.94 s** (`logs/first_claim_serial2.log`).
+
+**W31 diagnosed, not closed.** The replay index now carries the task
+(`_measurement_identity` = cell, task, seed), so `comp repro` compared **8 real
+cells** instead of 4 mispaired ones (56 mismatches, was 74). A faithful replay
+(no `deterministic=True` flip) reproduces the work exactly — `epochs_run` and
+`flops` 45/45 and 4/4 — but `gradient` cells diverge in metrics (iris 42
+val_acc 0.333 → 0.467); `random_projections` on iris is exact only because both
+seeds converge. Root cause (W32): `DataLoader(shuffle=True)` in
+`domains/tabular.py:180` has no seeded generator, so every concurrent cell draws
+its shuffle permutation from the process RNG; model init has the same race
+between `_set_seeds` and `_compose_cell` in `evaluate.py:461`. The measurement
+class (`COMPUTATIONALLY_REPRODUCIBLE`) is therefore false for the survey run.
+No heavy run is repeated in this session (host OOM rebooted); `comp repro` is the
+failing gate.
+
 ## Scope
 
 GitHub Actions is disabled: the five workflows are in
@@ -33,7 +60,7 @@ The goal, in this order:
 | acceleration | `pytest tests/acceleration` | parity 150 passed / 75 skipped (targeted) |
 | unit | `pytest tests/unit` | **UNVERIFIED** |
 | demo | `pytest tests/integration -m demo` | **PARTIAL**: `test_demo_ntm_local` 131 s serial |
-| acceptance | `pytest tests/acceptance` | **UNVERIFIED** |
+| acceptance | `pytest tests/acceptance` | todo63 `TestFirstGovernedClaim` **5/5** (targeted); other failures W30-fixed, full shard not rerun |
 | breadth | `comp gate breadth` | **PASS** (17 error-aware credits) |
 | build | `python -m build` | **PASS** (sdist + wheel) |
 | audit | `pip-audit` | **PASS** (local packages skipped) |
@@ -237,8 +264,9 @@ uv run comp demo
 | W27 | 1 | the loop did not write `defect_constraints.json` on a clean run | `DefectRegistry` persisted only when a failure was recorded | persist the empty list at construction | acceptance green |
 | W28 | 1 | unified-kernel tests expected schedule fidelity L0 after promotion | promotion may raise a single-seed schedule to L1 | assert `{"L0","L1"}`; the schema is the lock | acceptance green |
 | W29 | 1 | S10 proposed no promotions | the 120 s run ceiling was spent in round 1; the allocator skipped | raise the test's budget to 600 s (a ceiling, not a duration) | acceptance green |
-| W30 | 1 | todo63 loop fixtures timed out at 600 s | `hours=1.0` plus 0.1 h per stage ran one task for the whole mark | per-stage budget from the total, 900 s watchdog, one loop worker; serial run removed the libtorch segfault | 4/5 first-claim tests green; cross-domain still one task |
-| W31 | 1 | `comp repro` compared different seeds and host metrics | it matched by `cell_key` (no seed) and checked RSS/latency/device energy; `deterministic=True` also changes the measurement key | match `(cell_key, seed)`, exclude host metrics from the default diff; `--metrics` opts in | still 74 mismatches on a CPU survey: `epochs_run`/`flops` differ, so replay composes another cell |
+| W30 | 1 | todo63 loop fixtures timed out at 600 s | `hours=1.0` plus 0.1 h per stage ran one task for the whole mark | per-stage budget from the total (done); the credit space was then ungoverned | acceptance green; governed axes restrict to the declared arms (`probe_governed_axes.py`) | **5 passed** (284.94 s) |
+| W31 | 1 | `comp repro` compared different tasks and then different numbers | `(cell_key, seed)` collapses tasks; metrics diverge run-to-run | **FIXED key**: `_measurement_identity` = (cell, task, seed); compare 8 real cells | still 56 metric mismatches: see W32 |
+| W32 | 2 | `gradient` cells do not reproduce numerically on the same seed | `DataLoader(shuffle=True)` has no seeded generator (`domains/tabular.py:180`); concurrent cells share the process RNG, and `_set_seeds`→`_compose_cell` races between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; hold the seed→compose window under one lock; no dropout in feedforward, so training then follows from init + order | a 2-cell survey run replayed twice passes `comp repro` |
 
 ## Efficiency rules
 
@@ -254,7 +282,8 @@ uv run comp demo
 
 - [ ] `scripts/run_local_gates.sh` exits 0.
 - [ ] Property + figure lock, primitives, algorithms + acceleration, unit,
-      demo, acceptance are each green once.
+      demo, acceptance are each green once. Acceptance: todo63
+      `TestFirstGovernedClaim` 5/5 (targeted); full shard not rerun.
 - [ ] `comp demo` and the one-cell SEC run write a record; breadth PASS.
 - [x] Format green; ruff ratchet green and lowered (659 → 551); pyright
       ratchet exists (`3260/525`) and the TODO106-touched test errors are
@@ -269,7 +298,8 @@ uv run comp demo
       `run_local_gates.sh`.
 - [ ] The campaign writes claims/limitations; `comp coverage` and
       `comp repro --device cpu` pass; the 0.277 block has a pre-registered
-      `n_max` verdict. Measured campaign: 450 records in 279 s.
+      `n_max` verdict. Measured campaign: 450 records in 279 s. Coverage
+      passes; `comp repro` is blocked by W32 (shared shuffle RNG).
 - [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green.
 - [x] The eqprop reference-only condition is declared in its generated spec
@@ -278,29 +308,27 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-1. **Acceptance / todo63 (W30).** The `TestFromScratchTest` and
-   `TestFirstGovernedClaim` class fixtures are wall-clock loops. Under
-   `-n 4` they lose throughput and fail their domain/frontier assertions; a
-   serial run segfaulted in `libtorch_cpu.so` with two loop workers, which
-   `cell_workers=1` removed. `TestFirstGovernedClaim` is now 4/5; the
-   remaining failure is `test_cross_domain_evaluation` (the loop still
-   records one task). Decide one: replace the loop's wall-clock budget with
-   a deterministic cell count, or move the two classes to the `slow` tier
-   with a measured watchdog. The failing command is
-   `uv run python -m pytest tests/acceptance/test_todo63_scientific_validation.py -n 0 -q -rf --tb=line`.
-2. **Replay (W31).** `comp repro` still mismatches a CPU survey: matched by
-   `(cell_key, seed)` and host metrics excluded, the replay's `epochs_run`
-   and `flops` differ, so it composes another cell. Find the schedule or
-   spec field that differs between the original and replay before the
-   readiness claim. Command:
+1. **Replay (W32, next).** `comp repro` still mismatches a CPU survey. The
+   comparison key is correct (cell, task, seed; 8 real cells), and a faithful
+   replay reproduces `epochs_run`/`flops` exactly, so the remaining difference
+   is the shared process RNG: `DataLoader(shuffle=True)` in
+   `domains/tabular.py:180` and the `_set_seeds`→`_compose_cell` window in
+   `evaluate.py:461` race between concurrent cells. Fix: give the train sampler
+   a per-cell `torch.Generator(seed)` and hold the seed→compose window under
+   one module lock; feedforward has no dropout, so init + batch order then
+   determine the cell. Verify on a fresh 2-cell survey run (run twice), then
+   `comp repro` on the new store; do not rerun the 450-record campaign
+   (host OOM rebooted the session).
+   Command:
    `uv run comp repro --store experiments/readiness_cpu.duckdb --run-id 08d5c47e --device cpu`.
-3. **Batch 5 readiness (done except replay).** `comp demo`, the one-cell
-   survey (`experiments/one_cell_smoke.duckdb`, run `dd49fb82`), and
-   `comp coverage report` all pass; only W31 (replay) remains.
-4. **Release.** `scripts/run_local_gates.sh` once, with
-   `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance and replay are the only
-   open gates; the other shards have their measured logs above.
-5. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
+2. **Fresh readiness campaign (after W32).** One 3-task × 2-credit × 2-seed
+   campaign with the fixed RNG, then `comp coverage report` and
+   `comp repro --device cpu` on its store. The 450-record campaign above stays
+   the readiness smoke; it predates the RNG fix.
+3. **Release.** `scripts/run_local_gates.sh` once, with
+   `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance is green; replay (W32) and
+   the fresh campaign are the only open gates.
+4. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
    shape bucket/padding only if it removes them without slowing the steady
    state. Record the measured number beside `compile_settle`.
 
