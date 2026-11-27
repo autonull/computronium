@@ -128,6 +128,11 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
         # Run reproduction in Docker container
         repro_store_path = "/workspace/repro.duckdb"
         repro_spec_path = "/workspace/repro_spec.json"
+        workers = (
+            ["--max-workers", str(args.max_workers)]
+            if args.max_workers is not None
+            else []
+        )
 
         run_result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
             [  # ruff: ignore[start-process-with-partial-path]
@@ -147,6 +152,7 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                 repro_spec_path,
                 "--store",
                 repro_store_path,
+                *workers,
             ],
             capture_output=True,
             text=True,
@@ -297,6 +303,14 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
             repro_store = Path(tmpdir) / "repro.duckdb"
             repro_spec_file = Path(tmpdir) / "repro_spec.json"
             repro_spec_file.write_text(json.dumps(repro_spec.to_dict(), indent=2))
+            # Concurrency is part of the environment: a replay must use the
+            # original run's cell ceiling, or shared process state makes the
+            # same cell read differently (TODO107 W32).
+            workers = (
+                ["--max-workers", str(args.max_workers)]
+                if args.max_workers is not None
+                else []
+            )
 
             # Execute the spec
             result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
@@ -309,6 +323,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     str(repro_spec_file),
                     "--store",
                     str(repro_store),
+                    *workers,
                     "--dry-run",  # Just validate the spec first
                 ],
                 capture_output=True,
@@ -330,6 +345,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     str(repro_spec_file),
                     "--store",
                     str(repro_store),
+                    *workers,
                 ],
                 capture_output=True,
                 text=True,

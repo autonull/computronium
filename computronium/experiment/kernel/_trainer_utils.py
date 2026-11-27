@@ -133,7 +133,7 @@ def _create_trainer(
     else:
         batch_size = config.batch_size
         train_data = _create_data_provider(
-            task, "train", batch_size, config.limit_train_batches
+            task, "train", batch_size, config.limit_train_batches, seed=config.seed
         )
         val_data = _create_data_provider(
             task, "val", batch_size, config.limit_val_batches
@@ -168,6 +168,7 @@ def _run_training(
     config: SystemTrainerConfig,
     resume_checkpoint_path: str | None,
     checkpoint_callback: Callable | None,
+    setup_lock: Any = None,
 ) -> tuple[SystemTrainer, list[dict[str, float]]]:
     """Run training, optionally resuming from checkpoint.
 
@@ -176,9 +177,27 @@ def _run_training(
     """
     from computronium.experiment.kernel.evaluate import EvaluationError
 
-    trainer = _create_trainer(
-        trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
-    )
+    if setup_lock is None:
+        trainer = _create_trainer(
+            trainer_class,
+            cell,
+            task,
+            config,
+            resume_checkpoint_path,
+            checkpoint_callback,
+        )
+    else:
+        # Seed and construct under one lock: the trainer re-seeds the process
+        # RNG, and an unlocked re-seed would clobber another cell's init.
+        with setup_lock:
+            trainer = _create_trainer(
+                trainer_class,
+                cell,
+                task,
+                config,
+                resume_checkpoint_path,
+                checkpoint_callback,
+            )
     try:
         history = trainer.fit()
     except EvaluationError:
@@ -314,17 +333,56 @@ def _sample_inputs(
     return flat, flat.shape[0]
 
 
-def _create_data_provider(task: Any, split: str, batch_size: int, limit: int | None):
+def _seeded_shuffle(loader: Any, seed: int) -> Any:
+    """Clone a shuffled loader with a generator the cell's seed owns.
+
+    ``DataLoader(shuffle=True)`` draws its permutation from the process RNG.
+    Concurrent cells then race for that stream, so the same cell and seed walk
+    different batches. The clone keeps its own generator: the shared task
+    loader is not mutated.
+    """
+    from torch.utils.data import BatchSampler, DataLoader, RandomSampler
+
+    sampler = loader.sampler
+    if not isinstance(sampler, RandomSampler) or loader.batch_size is None:
+        return loader
+    generator = torch.Generator().manual_seed(seed)
+    return DataLoader(
+        loader.dataset,
+        batch_sampler=BatchSampler(
+            RandomSampler(loader.dataset, generator=generator),
+            loader.batch_size,
+            loader.drop_last,
+        ),
+        num_workers=loader.num_workers,
+        collate_fn=loader.collate_fn,
+        pin_memory=loader.pin_memory,
+        timeout=loader.timeout,
+        worker_init_fn=loader.worker_init_fn,
+        persistent_workers=loader.persistent_workers,
+    )
+
+
+def _create_data_provider(
+    task: Any,
+    split: str,
+    batch_size: int,
+    limit: int | None,
+    seed: int | None = None,
+):
     """Create an iterable data provider for a task.
 
     Handles both standard DataLoader tasks and get_batch-based tasks
     (graph, RL, etc.). The provider is re-iterable: the trainer walks
-    it once per epoch.
+    it once per epoch. A training provider gets its own shuffle generator
+    from ``seed``, so the cell's batch order does not depend on other cells.
     """
     # Try DataLoader first
     try:
         loader = task.get_dataloader(split)
         if loader is not None:
+            if split == "train" and seed is not None:
+                loader = _seeded_shuffle(loader, seed)
             return _bounded_batches(loader, limit) if limit else loader
     except TypeError, StopIteration, NotImplementedError, AttributeError:
         pass

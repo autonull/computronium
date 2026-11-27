@@ -13,19 +13,19 @@ restrict to those arms (exploit keeps them when the frontier has none), and
 thermodynamic_contrast records. Acceptance
 `TestFirstGovernedClaim` **5 passed in 284.94 s** (`logs/first_claim_serial2.log`).
 
-**W31 diagnosed, not closed.** The replay index now carries the task
-(`_measurement_identity` = cell, task, seed), so `comp repro` compared **8 real
-cells** instead of 4 mispaired ones (56 mismatches, was 74). A faithful replay
-(no `deterministic=True` flip) reproduces the work exactly — `epochs_run` and
-`flops` 45/45 and 4/4 — but `gradient` cells diverge in metrics (iris 42
-val_acc 0.333 → 0.467); `random_projections` on iris is exact only because both
-seeds converge. Root cause (W32): `DataLoader(shuffle=True)` in
-`domains/tabular.py:180` has no seeded generator, so every concurrent cell draws
-its shuffle permutation from the process RNG; model init has the same race
-between `_set_seeds` and `_compose_cell` in `evaluate.py:461`. The measurement
-class (`COMPUTATIONALLY_REPRODUCIBLE`) is therefore false for the survey run.
-No heavy run is repeated in this session (host OOM rebooted); `comp repro` is the
-failing gate.
+**W31/W32 closed: a replay reproduces a serial run bitwise.** The index now
+carries the task (`_measurement_identity` = cell, task, seed), so `comp repro`
+compared **8 real cells** instead of 4 mispaired ones (56 mismatches, was 74).
+The remaining numeric drift came from shared process state, not the schedule:
+`DataLoader(shuffle=True)` in `domains/tabular.py:180` drew its permutation
+from the process RNG, and `_set_seeds`→`_compose_cell` raced between workers.
+Fix: a per-cell `torch.Generator(seed)` for the train sampler (the shared task
+loader is not mutated) and one `_RNG_LOCK` around seed→compose→trainer
+construction. `comp repro` also gained `--max-workers`, because the cell
+ceiling is part of the environment. Measured: a fresh 8-cell serial run
+(`/tmp/w32_store.duckdb`, run `0545aed7`) passes `comp repro --max-workers 1`
+with **8 cells, 0 mismatches**; four concurrent cells still differ in the
+Jacobian metrics, so a bitwise claim needs `cell_workers=1`.
 
 ## Scope
 
@@ -265,8 +265,8 @@ uv run comp demo
 | W28 | 1 | unified-kernel tests expected schedule fidelity L0 after promotion | promotion may raise a single-seed schedule to L1 | assert `{"L0","L1"}`; the schema is the lock | acceptance green |
 | W29 | 1 | S10 proposed no promotions | the 120 s run ceiling was spent in round 1; the allocator skipped | raise the test's budget to 600 s (a ceiling, not a duration) | acceptance green |
 | W30 | 1 | todo63 loop fixtures timed out at 600 s | `hours=1.0` plus 0.1 h per stage ran one task for the whole mark | per-stage budget from the total (done); the credit space was then ungoverned | acceptance green; governed axes restrict to the declared arms (`probe_governed_axes.py`) | **5 passed** (284.94 s) |
-| W31 | 1 | `comp repro` compared different tasks and then different numbers | `(cell_key, seed)` collapses tasks; metrics diverge run-to-run | **FIXED key**: `_measurement_identity` = (cell, task, seed); compare 8 real cells | still 56 metric mismatches: see W32 |
-| W32 | 2 | `gradient` cells do not reproduce numerically on the same seed | `DataLoader(shuffle=True)` has no seeded generator (`domains/tabular.py:180`); concurrent cells share the process RNG, and `_set_seeds`→`_compose_cell` races between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; hold the seed→compose window under one lock; no dropout in feedforward, so training then follows from init + order | a 2-cell survey run replayed twice passes `comp repro` |
+| W31 | 1 | `comp repro` compared different tasks and then different numbers | `(cell_key, seed)` collapses tasks; metrics diverge run-to-run | key = `_measurement_identity` (cell, task, seed); compare 8 real cells | **8 cells, 0 mismatches** with W32 fixed and `--max-workers 1` |
+| W32 | 2 | `gradient` cells did not reproduce numerically on the same seed | `DataLoader(shuffle=True)` had no seeded generator (`domains/tabular.py:180`); `_set_seeds`→`_compose_cell` raced between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; one `_RNG_LOCK` around seed→compose→trainer construction; `comp repro --max-workers` | **PASS**: 8 cells, 0 mismatches (serial); 4 concurrent cells still drift |
 
 ## Efficiency rules
 
@@ -288,7 +288,8 @@ uv run comp demo
 - [x] Format green; ruff ratchet green and lowered (659 → 551); pyright
       ratchet exists (`3260/525`) and the TODO106-touched test errors are
       clean. The remaining `evaluate.py` type findings are legacy.
-- [x] The Jacobian, parity-probe, and detach locks are green.
+- [x] The Jacobian, parity-probe, and detach locks are green; the train
+      shuffle is seeded per cell (`test_seeded_shuffle`).
 - [x] Lazy stability telemetry is locked in both directions.
 - [ ] The `dynamic=True` compile probe is measured and either adopted or
       rejected. It is adopted and the TODO104 A2 probe exists, but the
@@ -299,7 +300,8 @@ uv run comp demo
 - [ ] The campaign writes claims/limitations; `comp coverage` and
       `comp repro --device cpu` pass; the 0.277 block has a pre-registered
       `n_max` verdict. Measured campaign: 450 records in 279 s. Coverage
-      passes; `comp repro` is blocked by W32 (shared shuffle RNG).
+      passes; `comp repro` passes on an 8-cell serial survey store, and needs
+      `--max-workers 1` (W32). A fresh serial campaign is still open.
 - [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green.
 - [x] The eqprop reference-only condition is declared in its generated spec
@@ -308,26 +310,18 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-1. **Replay (W32, next).** `comp repro` still mismatches a CPU survey. The
-   comparison key is correct (cell, task, seed; 8 real cells), and a faithful
-   replay reproduces `epochs_run`/`flops` exactly, so the remaining difference
-   is the shared process RNG: `DataLoader(shuffle=True)` in
-   `domains/tabular.py:180` and the `_set_seeds`→`_compose_cell` window in
-   `evaluate.py:461` race between concurrent cells. Fix: give the train sampler
-   a per-cell `torch.Generator(seed)` and hold the seed→compose window under
-   one module lock; feedforward has no dropout, so init + batch order then
-   determine the cell. Verify on a fresh 2-cell survey run (run twice), then
-   `comp repro` on the new store; do not rerun the 450-record campaign
-   (host OOM rebooted the session).
-   Command:
-   `uv run comp repro --store experiments/readiness_cpu.duckdb --run-id 08d5c47e --device cpu`.
-2. **Fresh readiness campaign (after W32).** One 3-task × 2-credit × 2-seed
-   campaign with the fixed RNG, then `comp coverage report` and
-   `comp repro --device cpu` on its store. The 450-record campaign above stays
-   the readiness smoke; it predates the RNG fix.
+1. **Fresh serial readiness campaign.** One 3-task × 2-credit × 2-seed
+   campaign with `--max-workers 1`, then `comp coverage report` and
+   `comp repro --max-workers 1` on its store. The 450-record concurrent campaign
+   stays the readiness smoke; it predates the RNG fix and cannot be replayed
+   bitwise. The 8-cell serial run (`/tmp/w32_store.duckdb`) already passes
+   repro; this repeats it at campaign scale.
+2. **Record the cell ceiling in the run spec (W33).** `cell_workers` is part
+   of the environment a replay must match, but it lives only in the CLI. Add it
+   to `RunSpec` and have `comp repro` read it instead of `--max-workers`.
 3. **Release.** `scripts/run_local_gates.sh` once, with
-   `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance is green; replay (W32) and
-   the fresh campaign are the only open gates.
+   `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance and the serial replay are
+   green; the fresh serial campaign and the W33 spec field remain.
 4. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
    shape bucket/padding only if it removes them without slowing the steady
    state. Record the measured number beside `compile_settle`.

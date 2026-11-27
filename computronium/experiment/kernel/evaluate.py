@@ -217,6 +217,10 @@ _MAX_JACOBIAN_WIDTH: Final[int] = 1536
 
 logger = get_logger(__name__)
 
+# Seed and compose one cell at a time: torch's RNG is process-global, so
+# concurrent cells would otherwise draw each other's initialization.
+_RNG_LOCK = threading.Lock()
+
 # Tasks are reused within a process: setup costs ~1s, and a campaign evaluates
 # hundreds of cells against a handful of tasks. The lock is required under
 # free-threaded CPython — several workers ask for the same task at once.
@@ -458,34 +462,35 @@ def _evaluate_cell(
     params: Mapping[str, Any] | None = None,
 ) -> CellEvaluation:
     resolved_device = _resolve_device(schedule.device)
-    _set_seeds(schedule.seed, schedule.deterministic)
+    with _RNG_LOCK:
+        _set_seeds(schedule.seed, schedule.deterministic)
 
-    task = _task(schedule.task_id, schedule.device, schedule.num_workers)
-    shape = _task_shape(task)
-    cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
+        task = _task(schedule.task_id, schedule.device, schedule.num_workers)
+        shape = _task_shape(task)
+        cell = _compose_cell(coordinate, geometry, shape, schedule.param_budget, task)
 
-    # GPU Kernel Cache for SEC (TODO99 #8): Attach algorithm kernel backend when on CUDA
-    # Move system to target device first so kernel config uses correct device
-    if resolved_device == "cuda":
-        cell.system.to("cuda")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
-    elif resolved_device == "cpu":
-        cell.system.to("cpu")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
+        # GPU Kernel Cache for SEC (TODO99 #8): Attach algorithm kernel backend when on CUDA
+        # Move system to target device first so kernel config uses correct device
+        if resolved_device == "cuda":
+            cell.system.to("cuda")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
+        elif resolved_device == "cpu":
+            cell.system.to("cpu")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
 
-    if resolved_device == "cuda":
-        try:
-            _attach_algorithm_kernel_backend(
-                cell.system, coordinate, task, resolved_device, geometry
-            )
-        except Exception:
-            # Kernel attachment failed; fall back to reference implementation
-            pass
+        if resolved_device == "cuda":
+            try:
+                _attach_algorithm_kernel_backend(
+                    cell.system, coordinate, task, resolved_device, geometry
+                )
+            except Exception:
+                # Kernel attachment failed; fall back to reference implementation
+                pass
 
-    config = _create_trainer_config(schedule, resolved_device, params)
-    trainer_class = _choose_trainer_class(schedule, task)
+        config = _create_trainer_config(schedule, resolved_device, params)
+        trainer_class = _choose_trainer_class(schedule, task)
 
-    temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
-        schedule, checkpoint_dir, config
-    )
+        temp_dir, checkpoint_path_ref, checkpoint_callback = _setup_checkpointing(
+            schedule, checkpoint_dir, config
+        )
 
     start = time.monotonic()
     trainer, history = _run_training(
@@ -495,6 +500,7 @@ def _evaluate_cell(
         config,
         resume_checkpoint_path,
         checkpoint_callback,
+        setup_lock=_RNG_LOCK,
     )
     walltime_s = time.monotonic() - start
 
