@@ -94,13 +94,30 @@ Measured: pyright **3257 → 3240**, **0 new diagnostics**, warnings held at
 `task.input_dim` into an `int` go through `flat_input_dim` (the capability,
 RL-lane, tabular-split and task-surface locks, plus the pendulum probe).
 
-**Gates run (the change's affected set).** Property shard: **2959 passed,
-53 skipped, 30 xfailed, 4 xpassed in 326.05 s** (`logs/w42_property_shard.log`).
-Unit shard: **955 passed, 1 xfailed in 209.35 s** (`logs/w42_unit.log`).
-Pyright ratchet: held, **3257/15**. Ruff ratchet: **499**, held.
-`generate_docs.py --all --check`: exit 0. Primitives and acceleration are
-not in this change's affected set: the new blocks are `TYPE_CHECKING`-only
-and never execute.
+**Gates run (the change's affected set).** The full release pass on this
+tree, `scripts/run_local_gates.sh`, is **`local gates: PASS`** (exit 0,
+`logs/local_gates_w44.log`; the stages sum to ~65.7 min). Measured: format
+green 1710 files; pyright ratchet held **3240/15**; fast locks **126 passed
+in 5.46 s**; property + figure lock **2959 passed, 53 skipped, 30 xfailed,
+4 xpassed in 544.86 s**; primitives **780 passed, 135 skipped in 935.10 s**;
+acceleration **440 passed, 75 skipped in 25.93 s**; unit **955 passed,
+1 xfailed in 207.71 s**; demo **25 passed in 726.32 s**; serial
+`TestFromScratchTest` **3 passed in 512.18 s**; campaign gates **18 passed
+in 250.33 s**; the acceptance shard **30 passed in 735.12 s**; `pip-audit`
+clean, wheel + sdist built, docs check exit 0.
+
+**Functional smoke on the same tree (the plan's P1).** The one-cell SEC
+survey (digits, L0, 1 epoch, 1 seed, `gradient`/digital/feedforward/
+instantaneous/null/euclidean, cpu) wrote its record: **1 record in 8.5 s**,
+exit 0. `comp demo` completed all seven beats in **40.2 s**, exit 0. The
+fresh `2 tasks × 2 credits × 2 seeds × 5 sweep points` readiness campaign
+(`/tmp/opencode/readiness.duckdb`) wrote **40 records in 2.9 s** with replay
+hash **`2b9f6485745cc040`** — the same hash and count as session 4's run, so
+the record is reproducible across the interface change. `comp coverage
+report` exits 0 with **9 PASS cells**; `comp repro --device cpu` compares
+**40 cells, 0 mismatches, passed=true in 29.5 s**; `comp report` renders the
+claims section (none: 2 seeds cannot be claim-eligible) and the limitations
+section (31 quarantined records), so it states no claim it cannot derive.
 
 ## Progress 2026-11-27 (session 5)
 
@@ -586,9 +603,9 @@ uv run comp demo
 ## Closure criteria
 
 - [x] `scripts/run_local_gates.sh` exits 0. Measured: **`local gates: PASS`**
-      on the final tree (`logs/local_gates_w40.log`); the earlier pass failed
-      only `TestFromScratchTest` in the four-way shard (W39's ruler + W40's
-      host load), and the serial step is the fix.
+      on the final tree (`logs/local_gates_w44.log`, session 6); the earlier
+      pass failed only `TestFromScratchTest` in the four-way shard (W39's
+      ruler + W40's host load), and the serial step is the fix.
 - [x] Property + figure lock, primitives, acceleration, unit, demo and the
       campaign gates are each green once; acceptance measured 30 passed plus
       the serial `TestFromScratchTest` 3 passed (W39/W40).
@@ -620,7 +637,11 @@ uv run comp demo
       measured, 3543.86 s. Measured campaign: 450 records in 279 s
       (session 2); fresh 40-record `2×2×2` campaign `0a816b34` with coverage
       exit 0 (9 PASS cells) and `comp repro` 40 cells/0 mismatches; the
-      report renders claims + limitations.
+      report renders claims + limitations. Re-measured on the session-6 tree:
+      campaign `1e8a2ed5` wrote 40 records in 2.9 s with the **same replay
+      hash** `2b9f6485745cc040`, coverage 9 PASS cells, repro 40 cells/
+      0 mismatches in 29.5 s, and the report states 0 claim-eligible cells
+      (2 seeds) plus 31 quarantined records.
 - [x] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green (the final pass: audit clean, wheel + sdist built, docs check
       exit 0).
@@ -631,8 +652,9 @@ uv run comp demo
 ## Remaining work (in order)
 
 The release is closed, the 0.277 block is a claim at its pre-registered
-n_max, and the hygiene pass lowered both ratchets. What remains is queued
-legacy, not a blocker.
+n_max, and the hygiene pass lowered both ratchets. The release pass and the
+SEC smoke were repeated on the session-6 tree (W42-W44), so the functional
+claims hold on this tree. What remains is queued legacy, not a blocker.
 
 1. **Ruff ratchet — 499 findings.** The next groups are E402 56, RUF105 43,
    C901 36, PLW0717 36, PLR0914 30, F841 22 and PLW1514 21. A pass names the
