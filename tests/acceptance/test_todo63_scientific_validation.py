@@ -26,6 +26,7 @@ from computronium.experiment.design.hypothesis import (
 from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.registry.loop import LoopConfig, LoopDriver
 from computronium.experiment.schema import seed_all_registries
+from computronium.experiment.schema.record import Maturity
 
 # The two class fixtures run a real loop over three tasks; measured 366 s
 # each. The 600 s mark left only 1.6x, and the xdist acceptance shard
@@ -173,7 +174,7 @@ class TestFromScratchTest:
                 promoted = [
                     r
                     for r in records
-                    if r.status.maturity.value in {"L1", "L2"}
+                    if r.status.maturity in {Maturity.L1, Maturity.L2}
                     and not r.status.quarantine
                 ]
                 if not promoted:

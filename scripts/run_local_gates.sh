@@ -38,11 +38,20 @@ run uv run python -m pytest tests/integration -m demo -q -rf --tb=line
 # their first epoch, the store keeps the artifact, and all fifteen gates fail
 # on it (W38). They run serially on their own store, as the plan's step 5 does;
 # the shard runs the gates that do not read it.
+#
+# The from-scratch loop fixture is the same class (W40): its 54 s stage budget
+# is a wall clock, a four-way shard cuts cells before their second seed, and
+# the credits that promote change (serial: thermodynamic_contrast,
+# forward_tangent; shard: homeostatic, zeroth_order). It runs serially too.
+run uv run python -m pytest \
+    tests/acceptance/test_todo63_scientific_validation.py::TestFromScratchTest \
+    -q -rf --tb=line -n 1
 run uv run python -m pytest tests/acceptance/test_campaign_lock.py \
     tests/acceptance/test_campaign_evidence_lock.py -q -rf --tb=line -n 1
 run uv run python -m pytest tests/acceptance -q -rf --tb=line \
     --ignore=tests/acceptance/test_campaign_lock.py \
-    --ignore=tests/acceptance/test_campaign_evidence_lock.py
+    --ignore=tests/acceptance/test_campaign_evidence_lock.py \
+    --deselect=tests/acceptance/test_todo63_scientific_validation.py::TestFromScratchTest
 
 run uv run pip-audit
 run uv run python -m build

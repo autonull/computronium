@@ -1,0 +1,39 @@
+# TODO107 item 4: the readiness campaign, smallest declaration that still
+# varies task, credit and seed: 2 tasks x 2 credits x 2 seeds x 5 sweep
+# points = 40 records at L0, one epoch, five batches.
+#
+#   comp run --spec configs/readiness_campaign.yaml \
+#       --store /tmp/readiness.duckdb --device cpu --max-workers 1
+#   comp coverage report --store /tmp/readiness.duckdb
+#   comp repro --store /tmp/readiness.duckdb --run-id <id> --device cpu
+version: 2
+profile: campaign
+
+task: digits
+tasks: [iris]
+
+objectives: [validation_accuracy, walltime_total, param_count]
+
+fidelity: L0
+n_seeds: 2
+epochs: 1
+batch_limit: 5
+seed: 0
+param_budget: 10000
+budget_seconds: 600
+policy: round_robin_grid
+device: cpu
+
+axes:
+  - axis: substrate
+    primitives: [digital]
+  - axis: geometry
+    primitives: [feedforward]
+  - axis: dynamics
+    primitives: [instantaneous]
+  - axis: plasticity
+    primitives: ["null"]
+  - axis: update
+    primitives: [euclidean]
+  - axis: credit
+    primitives: [gradient, random_projections]
