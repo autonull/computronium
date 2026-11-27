@@ -343,14 +343,19 @@ def _seeded_shuffle(loader: Any, seed: int) -> Any:
     """
     from torch.utils.data import BatchSampler, DataLoader, RandomSampler
 
+    if not isinstance(loader, DataLoader):
+        return loader
     sampler = loader.sampler
     if not isinstance(sampler, RandomSampler) or loader.batch_size is None:
         return loader
+    # The stub types the loader's dataset as a dataset *or* a bare iterable;
+    # the clone re-shuffles it, which needs the indexed one.
+    dataset: Any = loader.dataset
     generator = torch.Generator().manual_seed(seed)
     return DataLoader(
-        loader.dataset,
+        dataset,
         batch_sampler=BatchSampler(
-            RandomSampler(loader.dataset, generator=generator),
+            RandomSampler(dataset, generator=generator),
             loader.batch_size,
             loader.drop_last,
         ),
