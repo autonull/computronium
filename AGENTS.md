@@ -11,7 +11,6 @@
 - Backwards compatibility: NONE
 - Few comments: rely on self-documenting code.
 - Purpose: professional, not explanatory/educational
-- Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.
 - Prefer use of GPU over CPU where appropriate.
 - Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. 
 
@@ -20,7 +19,7 @@
 *   **uv**: For dependency management, virtualenvs, and task running (`uv run`, `uv add`). Single lockfile (`uv.lock`); no `requirements.txt`.
 *   **Ruff**: For formatting, linting, and import sorting. All config in `pyproject.toml`. Format always (cheap). Lint **changed files only** during development — findings in legacy modules are queued work (Register C / hygiene pass), never commit blockers.
 *   **Pyright** (or mypy): **Strict on new/rewritten modules.** Repo-wide checking stays basic until the dedicated hygiene pass closes; type fixes in legacy modules ride that pass, not feature work.
-*   **pre-commit**: Runs ruff format + lint on changed files only. No test suite in the hook.
+*   **pre-commit**: Runs ruff format + lint on changed files only.
 *   **Line Length**: Ruff default (88). Relax per-line with `# noqa: <code>` and a reason, never globally.
 *   Rules are enforced by tooling — if a rule can be a config or pre-commit hook, it is one.
 
@@ -61,8 +60,6 @@
 *   **Resources**: Use context managers (`with` / `async with`) for all resource lifecycles.
 
 ## Environment (binding)
-*   **Test invocation**: always `uv run python -m pytest` — never bare `pytest`
-    (user-site pytest shadowing breaks collection on protobuf gencode skew).
 *   **Env restore**: `uv sync --dev --all-extras` — bare `uv sync` strips dev
     extras and produces `ModuleNotFoundError` mid-landing.
 *   **Dev-env smoke** (run before any gate): `uv run python -c "import optuna, scipy, torchvision, pytest"` —
@@ -77,38 +74,10 @@
     ≤2-min intervals with a pre-registered kill time.
 
 ## Testing
-*   **pytest + pytest-cov**: Coverage is opt-in (`--cov`); no floor until the API stabilizes.
-*   **Test execution tiers** — run the cheapest tier that can catch your change; always show output + walltime (never truncate failures):
-    1. **Targeted** (default): only tests touching changed modules (`uv run python -m pytest tests/<path> -k <signature> -q`).
-    2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -m demo -q`) + drift locks + property suite.
-    3. **Directory shards**: one `testpaths` directory (`primitives` 14 s, `algorithms`+`acceleration` 88 s, `unit` 117 s, `property` 166 s under `-n 4`) — round close.
-    4. **All shards + `tests/acceptance/`**: ~10 min — release candidate.
-*   **Never `pytest tests/`.** It bypasses `testpaths` and pulls in every demo;
-  two attempts hard-killed at test 873/3699 with no traceback (TODO45 §12.1).
-*   **`-n 4` is already in `addopts`**; do not add `-n` by hand, and do not
-  override it downward for small selections without reason (worker startup costs
-  ~10 s, which exceeds some shards' entire runtime).
-*   **Demos are artifact producers, not checks.** The `demo` marker is stamped in
-  `tests/conftest.py` by filename; `pytest -m demo` is the only way to run them.
-*   **Select tests by symbol, not by directory.** `grep -rn <symbol> tests/
-  --include=*.py`, then run the 2-4 files it names. A whole `testpaths`
-  directory is a round-close artifact, never a feature gate: it costs ~5x, is
-  the only tier that gets hard-killed, and its cost is quoted stale.
-*   **A run that may be interrupted writes `-rf --tb=line` to a log.** pytest
-  writes its summary at session end, so a hard kill takes the run's only
-  artifact — and recovering it means re-running it.
-*   **A killed run yields no verdict: collect, do not re-run.**
-  `pytest <dir> --co -q > ids.txt` runs no test code (~40 s) and locates a
-  failure from the progress line. **Never `--lf`/`--ff` here**:
-  `.pytest_cache/v/cache/lastfailed` holds 520 entries, most with node ids that
-  no longer collect.
-*   **A lock's fixture must contain the case the lock exists for.** If removing
-  the mechanism cannot fail the fixture, the lock is a comment (TODO46 D25).
-*   **One shard run per round close, never per commit** — and never a re-run of
-  a shard already green "to confirm".
-*   **hypothesis**: Use for property-based tests on pure logic.
-*   **Mocking**: Prefer Dependency Injection over `unittest.mock`. Use `pytest-mock` when strictly required.
-*   **Fixtures**: Use fixtures over setup/teardown; `@pytest.mark.parametrize` over duplicated tests.
+
+Everything about testing — the tiers, the per-commit and round-close
+duties, the coverage ratchet, the test-writing rules and the primitive
+testing requirements — lives in [`AGENTS.testing.md`](AGENTS.testing.md).
 
 ## Security & Project Structure
 *   **Dependency Scanning**: Run `pip-audit` in CI.
@@ -121,11 +90,9 @@
 - [ ] Dev-env smoke (see Environment): `uv run python -c "import optuna, scipy, torchvision, pytest"`
 - [ ] `ruff format` && `ruff check --fix` on changed files
 - [ ] `pyright` on changed files (strict for new modules)
-- [ ] Targeted tests for touched modules — output + walltime visible
 
 **Deferred — hygiene pass / round close (never per-commit):**
 - [ ] Repo-wide `ruff check` / `pyright` (Register C scope)
-- [ ] Full `pytest` run; `--cov`; `pip-audit`
 
 ## Checklist: Adding a New Ontology Primitive
 
@@ -158,50 +125,6 @@
 8. **Probe conventions** — throwaway probe scripts live in `scripts/probes/`
    with their measured-regime numbers and a docstring citing the demo they
    informed.
-
-## Primitive Testing Requirements
-
-**Every primitive must have passing unit tests before SEC optimization runs.**
-
-### 1. Minimum Capability Tests (Rung 0–1)
-- **One-step wiring (Rung 0)**: `compute_pseudo_gradient` produces finite, non-zero gradients for error-aware credits; `settle` converges for non-instantaneous dynamics
-- **1 epoch / 1 seed on minimum viable task (Rung 1)**: above chance (error-aware) or non-zero update (error-blind)
-- **Fast task selection**: `digits` (1797×64) before `mnist` (70000×784), `iris` (150×4) before larger tabular, `cora` for graph, `cartpole` for RL
-- **Run time target**: ≤30 seconds per primitive at minimum config
-
-### 2. Error-Blind vs Error-Aware Criteria
-| Credit Type | Pass Criterion | Examples |
-|---|---|---|
-| Error-aware (reads label) | `val_acc > bar` (task's primary pass bar) | `gradient`, `target_inversion`, `pc_alm`, `random_projections` |
-| Error-blind (no label) | Non-zero parameter update, finite loss | `homeostatic`, `temporal_trace` |
-
-### 3. No "Capability Gaps" Without a Failing Test
-- If a primitive doesn't train, it's a **defect** (fixable) until proven otherwise
-- A "gap" requires a NEW primitive/feature that doesn't exist yet
-- Document defects with a test that **fails today, passes when fixed**
-- NEVER skip a test with "gap" — fix the primitive or file the defect with test
-
-### 4. Per-Axis Contract Tests (Already in `tests/primitives/`)
-- `test_primitive_contract.py`: case determinism, seed variation, device placement, reference follows seed
-- `test_<axis>_contract.py`: axis-specific output contracts (pseudo-gradient count/shape, settle convergence, etc.)
-- `test_primitive_capability.py`: end-to-end 1-epoch capability on declared families
-
-### 5. SEC Only Runs After Rungs 0–2 Pass
-- **No SEC screen on a primitive that hasn't cleared its unit tests**
-- SEC = Rungs 2–4 (ladder, paired CI, competitiveness)
-- Unit tests = Rungs 0–1 (wiring, 1-epoch viability)
-- A primitive with no unit test coverage is "not wired" — SEC refuses it
-
-### 6. Task Family Coverage
-- Test at least **one declared family** per primitive in CI
-- Full family matrix runs in SEC (S5 Screens), not unit tests
-- Refused families (per `task_families` declaration) are skipped with reason
-
-### 7. The Test Is The Ultimate Authority
-- If a test fails, the primitive is broken — period
-- "It works in literature" is not a defense; the test reveals the defect
-- Fix the code until the test passes; never weaken the test
-- Every "gap" claimed without a failing test is an assumption, not evidence
 
 ## Documentation
 - Don't edit README.md directly; in `docs/readme/*`, edit individual sections or the generator script
