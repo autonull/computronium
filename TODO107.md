@@ -25,7 +25,10 @@ construction. `comp repro` also gained `--max-workers`, because the cell
 ceiling is part of the environment. Measured: a fresh 8-cell serial run
 (`/tmp/w32_store.duckdb`, run `0545aed7`) passes `comp repro --max-workers 1`
 with **8 cells, 0 mismatches**; four concurrent cells still differ in the
-Jacobian metrics, so a bitwise claim needs `cell_workers=1`.
+Jacobian metrics, so a bitwise claim needs `cell_workers=1`. A fresh 12-cell
+serial run (`experiments/readiness_serial.duckdb`, run `284251f8`, 3 tasks x
+2 credits x 2 seeds) then passed `comp coverage report` and
+`comp repro --max-workers 1`: **REPRO PASSED, 12 cells within 1e-06**.
 
 ## Scope
 
@@ -266,7 +269,7 @@ uv run comp demo
 | W29 | 1 | S10 proposed no promotions | the 120 s run ceiling was spent in round 1; the allocator skipped | raise the test's budget to 600 s (a ceiling, not a duration) | acceptance green |
 | W30 | 1 | todo63 loop fixtures timed out at 600 s | `hours=1.0` plus 0.1 h per stage ran one task for the whole mark | per-stage budget from the total (done); the credit space was then ungoverned | acceptance green; governed axes restrict to the declared arms (`probe_governed_axes.py`) | **5 passed** (284.94 s) |
 | W31 | 1 | `comp repro` compared different tasks and then different numbers | `(cell_key, seed)` collapses tasks; metrics diverge run-to-run | key = `_measurement_identity` (cell, task, seed); compare 8 real cells | **8 cells, 0 mismatches** with W32 fixed and `--max-workers 1` |
-| W32 | 2 | `gradient` cells did not reproduce numerically on the same seed | `DataLoader(shuffle=True)` had no seeded generator (`domains/tabular.py:180`); `_set_seeds`→`_compose_cell` raced between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; one `_RNG_LOCK` around seed→compose→trainer construction; `comp repro --max-workers` | **PASS**: 8 cells, 0 mismatches (serial); 4 concurrent cells still drift |
+| W32 | 2 | `gradient` cells did not reproduce numerically on the same seed | `DataLoader(shuffle=True)` had no seeded generator (`domains/tabular.py:180`); `_set_seeds`→`_compose_cell` raced between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; one `_RNG_LOCK` around seed→compose→trainer construction; `comp repro --max-workers` | **PASS**: 8 and 12 cells, 0 mismatches (serial); 4 concurrent cells still drift |
 
 ## Efficiency rules
 
@@ -310,19 +313,13 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-1. **Fresh serial readiness campaign.** One 3-task × 2-credit × 2-seed
-   campaign with `--max-workers 1`, then `comp coverage report` and
-   `comp repro --max-workers 1` on its store. The 450-record concurrent campaign
-   stays the readiness smoke; it predates the RNG fix and cannot be replayed
-   bitwise. The 8-cell serial run (`/tmp/w32_store.duckdb`) already passes
-   repro; this repeats it at campaign scale.
-2. **Record the cell ceiling in the run spec (W33).** `cell_workers` is part
+1. **Record the cell ceiling in the run spec (W33).** `cell_workers` is part
    of the environment a replay must match, but it lives only in the CLI. Add it
    to `RunSpec` and have `comp repro` read it instead of `--max-workers`.
-3. **Release.** `scripts/run_local_gates.sh` once, with
+2. **Release.** `scripts/run_local_gates.sh` once, with
    `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance and the serial replay are
-   green; the fresh serial campaign and the W33 spec field remain.
-4. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
+   green; the W33 spec field remains.
+3. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
    shape bucket/padding only if it removes them without slowing the steady
    state. Record the measured number beside `compile_settle`.
 
