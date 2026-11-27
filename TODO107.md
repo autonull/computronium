@@ -1,5 +1,86 @@
 # TODO107 — Local release closure: tests, SEC readiness, acceleration
 
+## Progress 2026-11-27 (session 4)
+
+**W39 closed: the acceptance test compared a lowercase `StrEnum` to uppercase
+labels.** `Maturity` values are `"l0"/"l1"/"l2"`, but
+`test_pareto_frontier_includes_local_credit` tested
+`r.status.maturity.value in {"L1", "L2"}`, so no record could ever count as
+promoted and the test failed on its own ruler, not on the loop. Two probes read
+the loop instead of guessing:
+
+- `probe_local_credit_bar.py` (22.9 s): at L0, 1 epoch, feedforward/digital/
+  instantaneous/euclidean, `gradient`, `random_projections`, `pepita` and
+  `local_goodness` all clear the bar on `xor` (val_acc 0.5312 > 0.5) and
+  `spiral` (0.4688..0.5312 > 0.3333). On `iris` every credit sits at chance
+  (0.3333 < 0.5055), the gradient ruler included.
+- `probe_from_scratch_promotion.py` (a 2-cycle `xor` loop): the explore run
+  earns L1 for `forward_tangent`, `hybrid`, `score_function`,
+  `thermodynamic_contrast` and `pc_alm`; the exploit run earns L1 for
+  `forward_tangent`, `hybrid`, `pc_alm`, `score_function` and
+  `thermodynamic_contrast`. The earlier "only gradient promotes" diagnosis was
+  reading the test's empty promoted set.
+
+The test now compares `Maturity` members. Measured: the single test **1 passed
+in 517.21 s** (`logs/w39_test.log`).
+
+**W40 opened by the release pass: the same fixture is shard-dependent.** The
+full pass reached acceptance and failed the same test in the four-way shard,
+while the serial run above passes. The shard's captured output names the
+difference: promoted credits were `spiral: homeostatic`, `spiral: zeroth_order`
+and `iris: target_inversion`, not the local set. The fixture's 54 s stage budget
+is a wall clock; under contention cells are cut before their second seed, the
+proposer sees a different frontier, and the local credits never earn L1. Fix:
+run `TestFromScratchTest` on its own serial step and deselect it from the shard,
+the W38 pattern. Measured: serial class **3 passed in 516.81 s**; shard **30
+passed in 753.64 s**; the full release pass is **`local gates: PASS`**
+(`logs/local_gates_w40.log`). The first pass's other steps were green: format,
+pyright 3257/525, fast locks 126, property 2947/53 skipped/30 xfailed/4 xpassed
+in 273.74 s, primitives 780/135 in 678.18 s, acceleration 440/75 in 27.54 s,
+unit 955/1 xfailed in 184.39 s, demo 25 in 725.75 s, campaign 18 in 226.78 s.
+
+**W35 closed: the in-run "replay gate" never ran a replay.** The run's
+`replay=fail` came from the initializer, not from `replay_survives` or a
+confirmation: the L1 statistical gates rejected every cell
+(`stats_gates_passed=False`: 2 seeds cannot meet a CI width, and the train/val
+gate is insufficient), so L2 was never attempted. The field now reports
+`not_attempted`; a real replay still reports `pass`/`fail`.
+`tests/property/test_promotion_replay_label_lock.py` locks both directions
+(**2 passed**). The campaign output shows `replay=not_attempted`.
+
+**D14 follow-up measured, bucket rejected.** `probe_settle_layer_count_
+recompiles.py`: depth 2..10 in one process builds **9 graphs, one per depth**,
+and the steady state grows 0.15 → 0.40 ms because every layer does work. A
+2/4/8/16 bucket would cut that to 4 graphs but pad a depth-5 settle to 8
+layers (0.25 → 0.34 ms, **1.36x**), so the bucket fails the "without slowing
+the steady state" test. The measured number and the rejection are recorded beside
+`compile_settle` in `computronium/ontology/_settle_kernel.py`.
+
+**Serial campaign measured: coverage PASS, repro PASS.** A fresh
+`2 tasks x 2 credits x 2 seeds` declaration
+(`configs/readiness_campaign.yaml`, with the default 5 sweep points = 40
+records) at L0, 1 epoch, `--max-workers 1`:
+`/tmp/w40_readiness.duckdb`, run `0a816b34`, **40 records in 2.4 s**, replay
+hash `2b9f6485745cc040` (a second run produced the same hash and record count).
+`comp coverage report` exits 0: **9 PASS cells** (digits 6 cells/6 records,
+iris 2 cells/3 records). `comp repro --device cpu` compares **40 cells, 0
+mismatches, passed=true** in 26.6 s. `comp report` renders the claim and
+limitation sections; it states 0 claim-eligible cells and lists the
+quarantined rows, i.e. limitations are written without inventing a claim.
+The 0.277 block keeps TODO105's verdict: the fresh block's dz is 0.454 with CI
+[0.214, 0.693], below the registered 0.277; the trigger is n≈370 pairs (~4x
+the budget), not run.
+
+**Release:** `scripts/run_local_gates.sh` passes on this tree
+(`logs/local_gates_w40.log`): **`local gates: PASS`**, exit 0. Measured:
+format, pyright ratchet 3257/525, fast locks 126 in 5.24 s, property 2947
+passed/53 skipped/30 xfailed/4 xpassed in 268.23 s, primitives 780/135 in
+664.81 s, acceleration 440/75 in 25.84 s, unit 955 passed/1 xfailed in
+204.53 s, demo 25 in 720.86 s, serial `TestFromScratchTest` 3 in 516.81 s,
+campaign gates 18 in 55.38 s, acceptance shard 30 in 753.64 s, `pip-audit`
+clean, build and docs check green. The first pass on the same tree failed
+only `TestFromScratchTest` in the shard (W40); the serial step is the fix.
+
 ## Progress 2026-11-27 (session 3)
 
 **W33 closed: the cell ceiling travels with the run, and the replay runs it.**
@@ -155,8 +236,8 @@ The one-Jacobian fix (`20dc2daa`) and the test-size reductions
 | 2 property shard | **PARTIAL** | one run: 2936 passed, 53 skipped, 30 xfailed, 2 failed; both failures fixed and re-passed targeted (`test_lint_count_ratchet`, sampler objectives). Claim fixture 5→3 epochs: 27 passed in 117 s |
 | 3 remaining shards | **PARTIAL** | primitives 780 passed / 135 skipped (12:28); acceleration 440 passed / 75 skipped (22 s); unit 2 failures fixed and re-passed targeted; `tests/algorithms` no longer exists (removed from `testpaths` + script) |
 | 4 demo + acceptance | **PARTIAL** | demo 24 passed; figure lock re-pinned (7 stale hashes) and now passes; acceptance 46 passed / 5 failed (todo63); after the W30 fixes `TestFirstGovernedClaim` is 4/5, `test_cross_domain_evaluation` still sees one task |
-| 5 SEC readiness | **PARTIAL** | real campaign: 450 records in 279 s at the 300 s budget (3 tasks × 3 credits × 5 seeds); `comp coverage report` PASS (digits 45 cells/152 records, mnist 45/98); `comp demo` PASS; one-cell survey wrote 1 completed record; `comp repro` FAILED (W31) |
-| 6 release | **OPEN** | `pip-audit` PASS, `python -m build` PASS, `generate_docs.py --all --check` PASS; `scripts/run_local_gates.sh` not yet run because acceptance and replay are red |
+| 5 SEC readiness | **DONE** | real campaign: 450 records in 279 s (3 tasks × 3 credits × 5 seeds); `comp coverage report` PASS; `comp demo` PASS; fresh 40-record `2×2×2` campaign `0a816b34`: coverage exit 0 (9 PASS cells), `comp repro --device cpu` 40 cells/0 mismatches; report renders claims + limitations |
+| 6 release | **DONE** | `scripts/run_local_gates.sh` **PASS** on the final tree (`logs/local_gates_w40.log`): every step green, audit clean, build + docs check green |
 
 Session commits: `b21988c5` (readiness code/tests/ratchets), `7996dc77`
 (docs figures re-pin). This TODO commit records the open acceptance and
@@ -346,11 +427,12 @@ uv run comp demo
 | W32 | 2 | `gradient` cells did not reproduce numerically on the same seed | `DataLoader(shuffle=True)` had no seeded generator (`domains/tabular.py:180`); `_set_seeds`→`_compose_cell` raced between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; one `_RNG_LOCK` around seed→compose→trainer construction; `comp repro --max-workers` | **PASS**: 8 and 12 cells, 0 mismatches (serial); 4 concurrent cells still drift |
 | W33 | 2 | a replay fell back to the host's cell ceiling and compared two environments | the ceiling lived only in the CLI, not in the declaration | `RunSpec.cell_workers`; `ExecutionLimits.declare()`; recorded by `execute_spec`/campaign and declared by the survey engines; `comp repro` reads it, flag removed | **PASS**: 8-cell survey and 8-cell run replay with 0 mismatches, no flag |
 | W34 | 1 | a survey record and a run record of the same cell carried different metric sets | the pipeline built batch params `{}`, so `_needs_stability` read an undeclared run and paid the probe | `_fresh_batch_items` declares `spec.objectives` | payload 60→45 keys vs the survey's 44 (`stage_timings` only); survey replay 0 mismatches |
-| W35 | 1 | `replay=fail` on 4 of 8 cells that a fresh process reproduces | the in-run gate reads in-process state (W32's class) | not fixed: name the state and test whether seeding it closes the gate | `probe_replay_metric.py`: `survives=True` for all 8 in a fresh process |
+| W35 | 1 | `replay=fail` on 4 of 8 cells that a fresh process reproduces | the field's initializer was `"fail"`; the L1 statistical gates rejected every cell (`stats_gates_passed=False`), so no replay ran | report `not_attempted` unless a replay/confirmation runs; lock both directions | `test_promotion_replay_label_lock.py` 2 passed; campaign prints `replay=not_attempted` |
 | W36 | 0 | the property shard's lint ratchet read 12 660 findings | `TORCHINDUCTOR_CACHE_DIR` sat inside the tree, so `ruff check .` linted the inductor graphs | cache under `~/.cache/computronium/torchinductor`; ruff excludes `.cache` | 550 findings in the shard |
 | W37 | 0 | a time-major sequence cell failed at 0.03 s | `_seeded_shuffle` cloned any loader with a `RandomSampler`; `SequenceBatches` has no `dataset` | the clone requires a `DataLoader` | `test_sequence_task_lock` 8 passed |
 | W38 | 0 | fifteen campaign gates failed on 22 cells cut before their first epoch | the campaign fixture runs inside the four-way shard and the run's deadline is a wall clock; the store keeps the cut records | campaign gates on their own serial step; the shard ignores them | 18 passed in 91.6 s serial |
-| W39 | 1 | `TestFromScratchTest::test_pareto_frontier_includes_local_credit` finds no local credit at L1/L2 | unproven: local credit dips below the digits bar and only `gradient` promotes (W26's mechanism, unpromoted side) | needs a rung-1 measurement of which credit clears the bar at L0 | 1 failed, 32 passed in acceptance |
+| W39 | 1 | `TestFromScratchTest::test_pareto_frontier_includes_local_credit` finds no local credit at L1/L2 | the test compared `Maturity`'s lowercase values (`"l1"`) to `{"L1","L2"}`, so its promoted set was always empty; local credits do clear the L0 bar on xor/spiral | compare enum members; the probes measure the bar per credit | `probe_local_credit_bar.py` + `probe_from_scratch_promotion.py`; test **1 passed in 517.21 s** serial |
+| W40 | 1 | the fixed test passes serially but fails in the four-way acceptance shard | the fixture's 54 s stage budget is a wall clock; under xdist contention cells are cut before their second seed, the proposer sees a different frontier, and the promoted credits are `homeostatic`/`zeroth_order`/`target_inversion` instead of the local set | move `TestFromScratchTest` to its own serial step; deselect it from the shard (W38's pattern) | serial class **3 passed in 516.81 s**; shard **30 passed in 753.64 s**; release PASS |
 
 ## Efficiency rules
 
@@ -364,14 +446,16 @@ uv run comp demo
 
 ## Closure criteria
 
-- [ ] `scripts/run_local_gates.sh` exits 0. Measured: every step is green
-      except acceptance's `TestFromScratchTest::test_pareto_frontier_includes_local_credit`
-      (W39), so the script exits 1 on that one known-open gap.
+- [x] `scripts/run_local_gates.sh` exits 0. Measured: **`local gates: PASS`**
+      on the final tree (`logs/local_gates_w40.log`); the earlier pass failed
+      only `TestFromScratchTest` in the four-way shard (W39's ruler + W40's
+      host load), and the serial step is the fix.
 - [x] Property + figure lock, primitives, acceleration, unit, demo and the
-      campaign gates are each green once; acceptance is 32 passed, 1 failed
-      (W39).
-- [ ] `comp demo` and the one-cell SEC run write a record; breadth PASS.
-- [x] Format green; ruff ratchet green and lowered (659 → 551); pyright
+      campaign gates are each green once; acceptance measured 30 passed plus
+      the serial `TestFromScratchTest` 3 passed (W39/W40).
+- [x] `comp demo` and the one-cell SEC run write a record; breadth PASS
+      (17 error-aware credits; session 2).
+- [x] Format green; ruff ratchet green and lowered (659 → 550); pyright
       ratchet exists (`3257/525`) and the TODO106-touched test errors are
       clean. The remaining `evaluate.py` type findings are legacy.
 - [x] The Jacobian, parity-probe, and detach locks are green; the train
@@ -383,38 +467,38 @@ uv run comp demo
       only when an objective reads it
       (`test_every_batch_carries_the_runs_objectives`, W34).
 - [x] Lazy stability telemetry is locked in both directions.
-- [ ] The `dynamic=True` compile probe is measured and either adopted or
-      rejected. It is adopted and the TODO104 A2 probe exists, but the
-      promotion run still logs `recompile_limit (8)` for a changing layer
-      count: the next cost is a shape bucket/padding, not a silent pass.
+- [x] The `dynamic=True` compile probe is measured: depth 2..10 builds one
+      graph per depth (9 graphs) and steady state grows 0.15 → 0.40 ms; a
+      2/4/8/16 bucket cuts it to 4 graphs but pads depth 5 to 8 layers
+      (1.36x), so it is rejected. The number is beside `compile_settle`.
 - [x] Pre-commit runs the fast locks only, and the full property suite is in
       `run_local_gates.sh`.
-- [ ] The campaign writes claims/limitations; `comp coverage` and
-      `comp repro --device cpu` pass; the 0.277 block has a pre-registered
-      `n_max` verdict. Measured campaign: 450 records in 279 s. Coverage
-      passes; `comp repro` passes on an 8-cell serial survey store with no
-      ceiling flag (W33). A fresh serial campaign is still open.
-- [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
-      are green.
+- [x] The campaign writes claims/limitations; `comp coverage` and
+      `comp repro --device cpu` pass; the 0.277 block has its pre-registered
+      verdict (`coordinate`, not cleared at the registered n=64; trigger
+      n≈370 pairs, TODO105). Measured: 450 records in 279 s (session 2);
+      fresh 40-record `2×2×2` campaign `0a816b34` with coverage exit 0
+      (9 PASS cells) and `comp repro` 40 cells/0 mismatches; the report
+      renders claims + limitations.
+- [x] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
+      are green (the final pass: audit clean, wheel + sdist built, docs check
+      exit 0).
 - [x] The eqprop reference-only condition is declared in its generated spec
       page, and the detach guard is locked.
 - [x] The GitHub-disabled lock is green.
 
 ## Remaining work (in order)
 
-1. **W39: the local-credit frontier.** Measure which credit clears the digits
-   bar at L0 on the from-scratch loop's own seeds, then fix the promotion path
-   or the bar — the release's only red gate (`run_local_gates.sh` exits 1 on
-   it).
-2. **W35.** Name the in-process state the in-run replay gate reads, and test
-   whether seeding it closes the gate (`scripts/probes/probe_replay_metric.py`
-   is the probe; a fresh process reproduces every cell).
-3. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
-   shape bucket/padding only if it removes them without slowing the steady
-   state. Record the measured number beside `compile_settle`.
-4. **The serial campaign** the previous session left open: a fresh
-   `2 × 2 × 2` campaign, its `comp coverage`/`comp repro`, and the 0.277
-   seed block's pre-registered `n_max` verdict.
+The release is closed: `scripts/run_local_gates.sh` prints `local gates: PASS`
+on this tree. The two rows below are recorded work, not release blockers.
+
+1. **The 0.277 claim trigger** (capability gap, not a defect). TODO105's fresh
+   block reports dz 0.454, CI [0.214, 0.693], below the registered 0.277. A
+   claim needs n≈370 pairs (~4x the budget, ~75 min at ~6 s/cell); the trigger
+   is registered in TODO105, and the readiness campaign above does not
+   substitute for it (2 seeds cannot meet the CI-width gate).
+2. **Hygiene (Register C, not a release gate).** The repo-wide pyright count
+   is a ratchet at its measured baseline; legacy type findings stay queued.
 
 ## Notes
 
