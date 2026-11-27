@@ -127,18 +127,18 @@ justified them. Now:
   drift, and the measured capability boundaries (deep settle, vision transpose
   feedback, JVP scale, ternary substrate, tile-mesh ceiling).
 
-**Gates run (the change's affected set).** The full release pass on this
-tree, `scripts/run_local_gates.sh`, is **`local gates: PASS`** (exit 0,
-`logs/local_gates_w44.log`; the stages sum to ~65.7 min). Measured: format
-green 1710 files; pyright ratchet held **3240/15**; fast locks **126 passed
-in 5.46 s**; property + figure lock **2963 passed, 37 skipped, 30 xfailed,
-0 xpassed in 304.77 s**, plus the seven experiment invariants **7 passed in
-11.27 s** against the 40-record readiness store built in **3.1 s**; primitives **780 passed, 135 skipped in 935.10 s**;
-acceleration **440 passed, 75 skipped in 25.93 s**; unit **955 passed,
-1 xfailed in 207.71 s**; demo **25 passed in 726.32 s**; serial
-`TestFromScratchTest` **3 passed in 512.18 s**; campaign gates **18 passed
-in 250.33 s**; the acceptance shard **30 passed in 735.12 s**; `pip-audit`
-clean, wheel + sdist built, docs check exit 0.
+**Gates run (the change's affected set).** The full release pass on the
+final tree, `scripts/run_local_gates.sh`, is **`local gates: PASS`** (exit 0,
+`logs/local_gates_w45.log`). Measured: format green; pyright ratchet held
+**3240/15**; fast locks **126 passed**; property + figure lock **2963
+passed, 37 skipped, 30 xfailed, 0 xpassed in 349.14 s**, plus the seven
+experiment invariants **7 passed in 13.28 s** against the 40-record
+readiness store the script builds in **2.5 s**; primitives **780 passed,
+135 skipped in 863.39 s**; acceleration **440 passed, 75 skipped in
+26.00 s**; unit **955 passed, 1 xfailed in 245.16 s**; demo **25 passed in
+777.29 s**; serial `TestFromScratchTest` **3 passed in 518.12 s**; campaign
+gates **18 passed in 52.92 s**; the acceptance shard **30 passed in
+671.58 s**; `pip-audit` clean, wheel + sdist built, docs check exit 0.
 
 **Functional smoke on the same tree (the plan's P1).** The one-cell SEC
 survey (digits, L0, 1 epoch, 1 seed, `gradient`/digital/feedforward/
@@ -638,7 +638,7 @@ uv run comp demo
 ## Closure criteria
 
 - [x] `scripts/run_local_gates.sh` exits 0. Measured: **`local gates: PASS`**
-      on the final tree (`logs/local_gates_w44.log`, session 6); the earlier
+      on the final tree (`logs/local_gates_w45.log`, session 6); the earlier
       pass failed only `TestFromScratchTest` in the four-way shard (W39's
       ruler + W40's host load), and the serial step is the fix.
 - [x] Property + figure lock, primitives, acceleration, unit, demo and the
