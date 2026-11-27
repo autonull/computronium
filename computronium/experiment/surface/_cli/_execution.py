@@ -202,7 +202,7 @@ def spec_from_profile(
     )
 
 
-def _resolve_spec(args: argparse.Namespace) -> RunSpec:
+def _resolve_spec(args: argparse.Namespace, *, dry_run: bool = False) -> RunSpec:
     """The run's declaration: the spec file's, or a profile's.
 
     A file is the whole declaration, so the profile-shaped flags that would
@@ -230,7 +230,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
     profile = _apply_overrides(
         RUN_PROFILES[args.profile], _load_overrides(args.overrides)
     )
-    logger.info(f"Executing profile: {profile.name}")
+    logger.info("Run profile: %s%s", profile.name, " (dry run)" if dry_run else "")
     logger.info(f"  Task: {profile.task}, Stages: {profile.stages}")
     logger.info(
         f"  Fidelity: {profile.fidelity}, n_seeds: {profile.n_seeds},"

@@ -278,7 +278,7 @@ class _LifecycleMixin(_PipelineBase):
         logger.info(
             "Starting pipeline run %s with stages: %s",
             self._config.run_id,
-            self._stages,
+            ", ".join(stage.value for stage in self._stages),
         )
 
         # Start heartbeat task

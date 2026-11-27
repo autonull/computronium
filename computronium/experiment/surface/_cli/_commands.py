@@ -38,7 +38,7 @@ logger = get_logger()
 
 def _cmd_run(args: argparse.Namespace) -> int:
     """Execute a run from a spec file or a named profile."""
-    spec = _resolve_spec(args)
+    spec = _resolve_spec(args, dry_run=args.dry_run)
 
     # A dry run writes nothing: not a store, not a run row, not a checkpoint.
     if args.dry_run:
