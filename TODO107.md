@@ -695,7 +695,9 @@ uv run comp demo
 The release is closed, the 0.277 block is a claim at its pre-registered
 n_max, and the hygiene pass lowered both ratchets. The release pass and the
 SEC smoke were repeated on the session-6 tree (W42-W44), so the functional
-claims hold on this tree. What remains is queued legacy, not a blocker.
+claims hold on this tree. What remains is queued legacy, not a blocker. The
+named queue is **`TODO108.md`** (W46-W59): the 30 xfails, the two population
+locks, the static groups, and the two decisions.
 
 1. **Ruff ratchet — 499 findings.** The next groups are E402 56, RUF105 43,
    C901 36, PLW0717 36, PLR0914 30, F841 22 and PLW1514 21. A pass names the
