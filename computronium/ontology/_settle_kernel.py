@@ -27,6 +27,14 @@ def compile_settle[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     ``dynamic=False`` graph and hit ``config.recompile_limit``, killing the cell
     (TODO104 A2). Dynamic tracing reuses one graph across shapes, which is what
     a settle loop sees across tasks and ladder points.
+
+    A layer-count change is a Python loop bound, not a tensor shape: measured
+    with ``scripts/probes/probe_settle_layer_count_recompiles.py``, depth 2..10
+    builds one graph per depth (9 graphs) and the steady state grows from 0.15
+    to 0.40 ms because every layer does work. A bucket/padding to 2/4/8/16
+    would cut that to 4 graphs but pad a depth-5 settle to 8 layers (0.25 →
+    0.34 ms, 1.36x), so it is rejected; the limit log is the cost of the loop
+    bound, not a wrong number.
     """
     return torch.compile(fn, dynamic=True)
 
