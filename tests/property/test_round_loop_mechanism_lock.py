@@ -101,7 +101,6 @@ def _launches(
     spec = spec or mechanism_spec()
     with RecordStore(StoreConfig(path=tmp_path / f"{name}.duckdb")) as store:
         run_id = store.create_run(spec=spec)
-        runner: PipelineRunner | None = None
         for launch in range(launches):
             runner = PipelineRunner(
                 _config(
@@ -117,7 +116,6 @@ def _launches(
             store.finish_run(
                 run_id, "interrupted" if launch < launches - 1 else "completed"
             )
-        assert runner is not None
         yield (
             [r.measurement_key for r in store.query_records(run_id=run_id)],
             runner,
@@ -256,3 +254,28 @@ def test_the_fake_tier_and_a_real_backend_store_the_same_measurements(
         f"fake-only: {sorted(set(fake_keys) - set(real_keys))}; "
         f"real-only: {sorted(set(real_keys) - set(fake_keys))}"
     )
+
+
+def test_every_batch_carries_the_runs_objectives(tmp_path: Path) -> None:
+    """A cell's probe is paid for the objectives its run declares (W34).
+
+    The post-training probe reads the declaration to decide whether anything
+    wants the free-settle telemetry, and an *absent* declaration is read as
+    "wants it". So a run that declares only ``validation_accuracy`` may not
+    hand the evaluator no objectives: every cell then pays the Jacobian probe
+    D13 removed, and a survey record of the same cell carries 16 metrics the
+    run's does not, so the two never replay each other.
+
+    Falsifiable by dropping ``objectives`` from the batch params.
+    """
+    with _launches(tmp_path, "objectives") as (_keys, runner, _store):
+        backend = runner._config.backend
+        assert isinstance(backend, FakeBackend)
+        assert backend.declarations, "no batch reached the backend"
+        expected = tuple(runner._config.run_spec.objectives)
+        for declaration in backend.declarations:
+            declared = declaration.get("objectives")
+            assert isinstance(declared, tuple), "the batch declared no objectives"
+            assert declared == expected, (
+                f"the batch declared {declared}, not {expected}"
+            )

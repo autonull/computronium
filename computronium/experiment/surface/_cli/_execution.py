@@ -271,6 +271,9 @@ def execute_spec(
     if limits is None:
         limits = ExecutionLimits.from_cli()
     limits.apply_torch_settings()
+    # The record declares the ceiling it ran under, so a replay runs the same
+    # one instead of a hardware default (TODO107 W33).
+    spec = limits.declare(spec)
 
     policy_name = spec.policy or "round_robin_grid"
 
@@ -504,10 +507,13 @@ def _resolve_baselines(
     except Exception as exc:  # ruff: ignore[blind-except] - fingerprint is best-effort
         logger.warning("Hardware fingerprint unavailable: %s", exc)
         return None
+    # ``n_seeds=None`` means "the fidelity ladder decides", and the registry
+    # takes a count: the run measured at least one seed per cell.
+    n_seeds = spec.n_seeds or 1
     baseline = registry.get_baseline(
-        spec.task_names[0], fingerprint, spec.budget_seconds, spec.n_seeds
+        spec.task_names[0], fingerprint, spec.budget_seconds, n_seeds
     )
     if baseline is None:
         return None
-    keys = eligible_cells(store.query_records(run_id=run_id), spec.n_seeds).keys()
+    keys = eligible_cells(store.query_records(run_id=run_id), n_seeds).keys()
     return dict.fromkeys(keys, baseline)

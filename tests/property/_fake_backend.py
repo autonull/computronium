@@ -146,6 +146,7 @@ class FakeBackend:
         self._rejects = rejects
         self._walltime_s = walltime_s
         self.submitted: list[str] = []
+        self.declarations: list[dict[str, object]] = []
         self._shutdown = False
         self._max_workers = 1
 
@@ -158,7 +159,8 @@ class FakeBackend:
         store: RecordStore,
     ) -> list[Record]:
         """One record per planned seed, unless this cell is declared a failure."""
-        _ = (params, store)
+        _ = store
+        self.declarations.append(dict(params))
         message = None if self._rejects is None else self._rejects(coordinate, schedule)
         if message is not None:
             msg = message

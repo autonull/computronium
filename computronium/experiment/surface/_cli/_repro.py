@@ -66,6 +66,22 @@ def _measurement_identity(record: Record) -> tuple[str, str, int]:
     return (record.cell_key, record.schedule.task_id, record.schedule.seed)
 
 
+def _replay_spec(spec: RunSpec, *, seeds: int | None, device: str) -> RunSpec:
+    """The declaration a replay runs: the original's, with determinism forced.
+
+    ``cell_workers`` is not an argument: it is the environment the record
+    declares, and a replay at another ceiling compares two environments
+    (TODO107 W33).
+    """
+    return spec.model_copy(
+        update={
+            "deterministic": True,
+            **({"n_seeds": seeds} if seeds is not None else {}),
+            **({"device": device} if device != "auto" else {}),
+        }
+    )
+
+
 def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     store: RecordStore,
     run_id: str,
@@ -128,11 +144,6 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
         # Run reproduction in Docker container
         repro_store_path = "/workspace/repro.duckdb"
         repro_spec_path = "/workspace/repro_spec.json"
-        workers = (
-            ["--max-workers", str(args.max_workers)]
-            if args.max_workers is not None
-            else []
-        )
 
         run_result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
             [  # ruff: ignore[start-process-with-partial-path]
@@ -152,7 +163,6 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                 repro_spec_path,
                 "--store",
                 repro_store_path,
-                *workers,
             ],
             capture_output=True,
             text=True,
@@ -286,14 +296,15 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
             logger.error(f"Run {args.run_id} has no spec")
             return 1
 
-        # Create a modified spec for reproduction
-        repro_spec = spec.model_copy(
-            update={
-                "deterministic": True,
-                **({"n_seeds": args.seeds} if args.seeds is not None else {}),
-                **({"device": args.device} if args.device != "auto" else {}),
-            }
-        )
+        # The replay's environment is the record's, not this host's: the cell
+        # ceiling is part of it (TODO107 W33).
+        if spec.cell_workers is None:
+            logger.warning(
+                "Run %s declares no cell ceiling; the replay uses this host's "
+                "default and may not reproduce",
+                args.run_id,
+            )
+        repro_spec = _replay_spec(spec, seeds=args.seeds, device=args.device)
 
         if args.docker:
             return _cmd_repro_docker(store, args.run_id, repro_spec, args)
@@ -303,14 +314,8 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
             repro_store = Path(tmpdir) / "repro.duckdb"
             repro_spec_file = Path(tmpdir) / "repro_spec.json"
             repro_spec_file.write_text(json.dumps(repro_spec.to_dict(), indent=2))
-            # Concurrency is part of the environment: a replay must use the
-            # original run's cell ceiling, or shared process state makes the
-            # same cell read differently (TODO107 W32).
-            workers = (
-                ["--max-workers", str(args.max_workers)]
-                if args.max_workers is not None
-                else []
-            )
+            # Concurrency is part of the environment, and the spec file
+            # declares it: the replay runs the record's ceiling (TODO107 W33).
 
             # Execute the spec
             result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
@@ -323,7 +328,6 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     str(repro_spec_file),
                     "--store",
                     str(repro_store),
-                    *workers,
                     "--dry-run",  # Just validate the spec first
                 ],
                 capture_output=True,
@@ -345,7 +349,6 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     str(repro_spec_file),
                     "--store",
                     str(repro_store),
-                    *workers,
                 ],
                 capture_output=True,
                 text=True,

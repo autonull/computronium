@@ -394,6 +394,10 @@ class _StageMixin(_PipelineBase):
         skipped = 0
         rejected_this_batch = 0
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
+        # The run's declaration is the cell's: without it the post-training
+        # probe cannot tell an undeclared objective from a declared one that
+        # reads no stability, so every cell pays the probe (TODO107 W34).
+        params: dict[str, Any] = {"objectives": tuple(self._config.run_spec.objectives)}
 
         for proposal in proposals:
             item_provenance = _provenance_for(provenance, proposal)
@@ -418,7 +422,12 @@ class _StageMixin(_PipelineBase):
                     continue
 
                 seen.add(key)
-                items.append((proposal.coordinate, schedule, item_provenance, {}))
+                items.append((
+                    proposal.coordinate,
+                    schedule,
+                    item_provenance,
+                    dict(params),
+                ))
 
         self._log_batch_filtering(skipped, rejected_this_batch)
         return items

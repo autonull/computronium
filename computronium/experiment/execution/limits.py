@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 try:
     import psutil
@@ -14,6 +15,9 @@ try:
     import torch
 except ImportError:
     torch = None
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.run_spec import RunSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +82,22 @@ class ExecutionLimits:
             if queue_max_memory_gb is not None
             else mem_gb * 0.8,
         )
+
+    def declare(self, spec: RunSpec) -> RunSpec:
+        """The spec with this process's cell ceiling recorded on it.
+
+        A run's records are only reproducible if the declaration says the
+        environment they were measured in, and the ceiling is part of it: the
+        same cells at another ceiling read differently through shared process
+        state (TODO107 W33).
+
+        Args:
+            spec: The run declaration, whose ceiling may still be undeclared.
+
+        Returns:
+            The declaration, carrying this process's cell ceiling.
+        """
+        return spec.model_copy(update={"cell_workers": self.cell_workers})
 
     def apply_torch_settings(self) -> None:
         """Apply CPU/GPU thread settings to the current process."""

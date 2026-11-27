@@ -178,6 +178,9 @@ class CampaignRunner:
         one this launch runs under, and the seeds the store already holds are
         skipped seed by seed, so the launch measures only what is left.
         """
+        # The run row declares the ceiling the cells trained under, so a replay
+        # runs the same one (TODO107 W33).
+        spec = self.limits.declare(spec)
         policy_name = spec.policy or "round_robin_grid"
 
         with RecordStore(

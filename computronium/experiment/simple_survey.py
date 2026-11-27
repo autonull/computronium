@@ -194,6 +194,7 @@ def run_simple_survey(  # ruff: ignore[too-many-arguments, too-many-positional-a
         axes=axes,
         hyperparameters=hyperparameters,
         objectives=objectives,
+        max_workers=max_workers,
     )
     spec = _build_spec(params)
     budget_seconds = int(spec.budget_seconds or 0)

@@ -113,7 +113,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     limits = ExecutionLimits.from_cli(
-        cell_workers=args.max_workers,
+        cell_workers=spec.cell_workers
+        if args.max_workers is None
+        else args.max_workers,
         cpu_threads_per_cell=args.cpu_threads,
         gpu_memory_fraction=args.gpu_memory_fraction,
         queue_max_concurrent=args.queue_max_concurrent,

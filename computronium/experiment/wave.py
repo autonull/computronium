@@ -1978,6 +1978,7 @@ class _SpecParams:
     hyperparameters: dict[str, Any] | None
     objectives: tuple[str, ...]
     axis_objectives: dict[str, tuple[str, ...]] | None = None
+    max_workers: int | None = None
 
 
 def _build_spec(params: _SpecParams) -> RunSpec:
@@ -2015,6 +2016,7 @@ def _build_spec(params: _SpecParams) -> RunSpec:
         axes=tuple(axis_selections),
         hyperparameters=params.hyperparameters or {},
         axis_objectives=params.axis_objectives or {},
+        cell_workers=params.max_workers,
     )
     return spec
 

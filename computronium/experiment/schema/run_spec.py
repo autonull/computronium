@@ -181,6 +181,10 @@ class RunSpec(BaseModel):
     deterministic: bool = False
     # DataLoader num_workers (0 for single-threaded determinism)
     num_workers: int = 0
+    # Concurrent cells in flight; None is the host's hardware-derived default.
+    # It travels on the declaration because the ceiling is part of a run's
+    # environment: a replay at another ceiling compares two environments.
+    cell_workers: _POSITIVE | None = None
     # Numerical precision: "fp32", "fp16", "bf16"
     precision: str = "fp32"
     # Save checkpoint every N epochs (0 = disabled)

@@ -138,6 +138,7 @@ def run_learning_survey(  # ruff: ignore[too-many-branches, too-many-arguments, 
         hyperparameters=hyperparameters,
         objectives=objectives,
         axis_objectives=axis_objectives,
+        max_workers=max_workers,
     )
     spec = _build_spec(params)
     budget_seconds = int(spec.budget_seconds or 0)

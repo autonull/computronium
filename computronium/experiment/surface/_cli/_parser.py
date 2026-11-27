@@ -1041,12 +1041,6 @@ def _build_parser(  # ruff: ignore[too-many-statements, too-many-locals]
     p_repro.add_argument(
         "--docker", action="store_true", help="Run reproduction in Docker container"
     )
-    p_repro.add_argument(
-        "--max-workers",
-        type=int,
-        default=None,
-        help="Concurrent cells for the replay (must match the original run)",
-    )
 
     # Power analysis command - experiment design helper
     p_power = sub.add_parser(
