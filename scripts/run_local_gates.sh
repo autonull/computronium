@@ -27,7 +27,20 @@ run uv run python -m pytest \
 # The property shard runs once, first among the test suites: it is the
 # largest, so a failure stops the release before the cheaper suites re-pay it.
 run uv run python -m pytest tests/property \
-    tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line
+    tests/integration/test_gallery_lock.py::test_figure_lock -q -rf --tb=line \
+    --ignore=tests/property/test_experiment_invariants.py
+
+# The experiment-invariant class reads a real campaign store, and the
+# property shard has none: fifteen tests used to skip on a flag the release
+# never passed, and eight of them were `pytest.skip` stubs with no body
+# (W45). The 40-record readiness campaign is the store, and building it
+# costs 11 s.
+READINESS_STORE="${TMPDIR:-/tmp}/computronium_release_readiness.duckdb"
+rm -f "$READINESS_STORE"
+run uv run comp run --spec configs/readiness_campaign.yaml \
+    --store "$READINESS_STORE" --device cpu --max-workers 1
+run uv run python -m pytest tests/property/test_experiment_invariants.py \
+    --experiment-db "$READINESS_STORE" -q -rf --tb=line
 
 run uv run python -m pytest tests/primitives -q -rf --tb=line
 run uv run python -m pytest tests/acceleration -q -rf --tb=line

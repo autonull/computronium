@@ -1,11 +1,10 @@
-"""Params-moved learning locks (imp-26): every README-table factory either
-demonstrates parameter movement through ``train_step`` or is pinned as a
-documented non-learner via strict xfail (a fix flips xpass and forces
-promotion to the movers list).
+"""Params-moved learning locks (imp-26): every README-table factory
+demonstrates parameter movement through ``train_step``.
 
 Ground truth measured 2026-09-03 at HEAD (tiny dims, 2 train_steps, lr=0.01):
 movers = backprop, eqprop, fa, ff, tile, pepita, tp, pc, hebbian, snn; non-movers = none.
-Non-mover reasons live in ``_NON_MOVERS`` and the TODO11 register.
+Every factory moves today, so there is no pinned non-learner to exclude: the
+empty-set lock that documented the class ran no case and is deleted (W45).
 """
 
 from __future__ import annotations
@@ -49,7 +48,6 @@ _MOVERS = (
     "hebbian",
     "snn",
 )
-_NON_MOVERS = {}
 
 _BUILDERS: dict[str, Callable[[], System]] = {
     "backprop": lambda: create_backprop_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
@@ -98,11 +96,3 @@ class TestParamsMovedLocks:
         moved, total, max_delta = _params_moved(_BUILDERS[name]())
         assert moved > 0, f"{name}: 0/{total} params moved (max_delta={max_delta:.2e})"
         assert max_delta > 0.0
-
-    @pytest.mark.parametrize("name", sorted(_NON_MOVERS))
-    @pytest.mark.xfail(reason="pinned non-learner", strict=True)
-    def test_pinned_non_learners(self, name: str) -> None:
-        """Documented non-learners: xfail(strict) so a fix self-flags xpass."""
-        torch.manual_seed(0)
-        moved, total, _ = _params_moved(_BUILDERS[name]())
-        assert moved > 0, f"{name}: still 0/{total} params moved ({_NON_MOVERS[name]})"

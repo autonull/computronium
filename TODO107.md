@@ -94,12 +94,46 @@ Measured: pyright **3257 → 3240**, **0 new diagnostics**, warnings held at
 `task.input_dim` into an `int` go through `flat_input_dim` (the capability,
 RL-lane, tabular-split and task-surface locks, plus the pendulum probe).
 
+**W45: the property shard's skips, xfails and xpasses audited.** The summary
+carried `53 skipped / 30 xfailed / 4 xpassed` for three sessions and nothing
+justified them. Now:
+
+- **4 xpasses were stale markers.** `test_native_diffusion_eqprop_smoke` was
+  marked for a `DiffusionDynamics` gradient bug it does not exercise (it
+  checks forward + `train_step` shapes), and the three
+  `test_backprop_memory_grows_with_depth` depths were marked for a CUDA
+  measurement bug they now pass. Both markers are removed: a regression now
+  fails instead of xpassing. The same DiffusionDynamics reason still xfails
+  in `test_ontology_parity`, where the assertion is the buggy one.
+- **15 skips in `test_experiment_invariants.py`.** Eight were
+  `pytest.skip`-only stubs with no body (five names duplicated the class
+  tests); deleted. The seven real invariants never ran because the release
+  passed no `--experiment-db`; the release now builds the 40-record readiness
+  campaign and runs them: **7 passed in 11.27 s** against a store built in
+  3.1 s.
+- **31 skips in the composer registry lock** are declared: those configs
+  need task args, and the composition path (780 primitives + 25 demo cells)
+  builds them with a real task shape. Recorded, not changed.
+- **4 skips in the legality boundary lock**: the engine registers no DECLARED
+  constraints, so the four tests have an empty population. A coordinate
+  result: they stay for the day one is registered.
+- **2 skips** are `complex_substrate_real_compute`, declared infeasible.
+- **1 skip** was the pinned-non-learner parametrization over an empty set (no
+  factory is a non-learner today); the dict and its test are deleted.
+- **30 xfails name 20 blockers**: adapter bugs
+  (`EnergyToInstantaneousAdapter` modifies a frozen config, `_newton_schulz`
+  vs `_orthogonalize`, `consolidate` signature, `compute_stdp_window` ignoring
+  spike times), a missing API (`PlasticityConfig.initial_psi`), GATE-0 EqProp
+  drift, and the measured capability boundaries (deep settle, vision transpose
+  feedback, JVP scale, ternary substrate, tile-mesh ceiling).
+
 **Gates run (the change's affected set).** The full release pass on this
 tree, `scripts/run_local_gates.sh`, is **`local gates: PASS`** (exit 0,
 `logs/local_gates_w44.log`; the stages sum to ~65.7 min). Measured: format
 green 1710 files; pyright ratchet held **3240/15**; fast locks **126 passed
-in 5.46 s**; property + figure lock **2959 passed, 53 skipped, 30 xfailed,
-4 xpassed in 544.86 s**; primitives **780 passed, 135 skipped in 935.10 s**;
+in 5.46 s**; property + figure lock **2963 passed, 37 skipped, 30 xfailed,
+0 xpassed in 304.77 s**, plus the seven experiment invariants **7 passed in
+11.27 s** against the 40-record readiness store built in **3.1 s**; primitives **780 passed, 135 skipped in 935.10 s**;
 acceleration **440 passed, 75 skipped in 25.93 s**; unit **955 passed,
 1 xfailed in 207.71 s**; demo **25 passed in 726.32 s**; serial
 `TestFromScratchTest` **3 passed in 512.18 s**; campaign gates **18 passed
@@ -589,6 +623,7 @@ uv run comp demo
 | W42 | 0 | 510 `reportUnsupportedDunderAll` warnings, and 3 dashboard names that never bound | a lazy `__all__` is invisible to the analyzer; `dashboard/__init__` omitted its shim, so the name raised on import | declare the names under `TYPE_CHECKING`; dashboard gets the `_LAZY` shim; lock the surface | `test_lazy_export_surface_lock.py` **11 passed**; pyright warnings **525 → 15**; errors held 3257 |
 | W43 | 0 | the `slides-build` pre-commit hook fails on a commit touching `experiment/schema` | its script and `docs/slides.html` were deleted in `5a8ae9d4` (the site builder replaced them) and the hook stayed behind | drop the hook: a gitignored artifact is not a commit gate | `pre-commit run --from-ref HEAD~1 --to-ref HEAD`: every hook passes; `docs/build_site.py --check` exit 0 |
 | W44 | 1 | the changed-file pyright hook failed on `domains/neuromorphic.py` | `input_dim` was typed `int` although four domains store a shape; the loaders returned `DataLoader | None`; `hasattr` does not narrow a protocol | widen the base and `TaskProtocol` to `int | tuple`; one `flat_input_dim` in `domains/base`; `_built` for the loaders; `_CustomLoss` for the trainer | pyright **3257 → 3240**, 0 new; the five modules clean; property/unit shards and the capability slice pass |
+| W45 | 1 | 4 xpassed and 15 of the 53 property skips were not tests at all | non-strict xfail markers outlived the bugs they named; eight `pytest.skip`-only stub bodies; the release passed no `--experiment-db` | remove the four stale markers; delete the eight stubs and the empty pinned-non-learner set; build the 40-record readiness campaign in the release and run the seven invariants against it | **0 xpassed**; the four files 55 passed / 3 xfailed; the invariants **7 passed in 11.27 s**; the shard **2963 passed / 37 skipped / 30 xfailed**, 0 xpassed |
 
 ## Efficiency rules
 
@@ -611,6 +646,12 @@ uv run comp demo
       the serial `TestFromScratchTest` 3 passed (W39/W40).
 - [x] `comp demo` and the one-cell SEC run write a record; breadth PASS
       (17 error-aware credits; session 2).
+- [x] The property shard's skips, xfails and xpasses are classified, not just
+      counted (W45): **37 skips** are declared (31 task-arg configs covered by
+      the composition path, 4 empty DECLARED population, 2 declared-infeasible),
+      **30 xfails** name 20 blockers, and **0 xpass** remains: the four stale
+      markers are removed and the seven experiment invariants run against a
+      real campaign store in the release.
 - [x] Format green; ruff ratchet green and lowered (659 → 550 → 499);
       pyright ratchet exists and was lowered to `3240/15` (session 6); the
       TODO106-touched test errors are clean. The remaining `evaluate.py`

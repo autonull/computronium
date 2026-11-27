@@ -104,7 +104,6 @@ def test_native_eqprop_mlp_smoke():
     assert "nudged_fit_accuracy" in result
 
 
-@pytest.mark.xfail(reason="DiffusionDynamics has gradient computation bug")
 def test_native_diffusion_eqprop_smoke():
     """native_diffusion_eqprop: forward + train_step."""
     model = create_native_diffusion_eqprop(

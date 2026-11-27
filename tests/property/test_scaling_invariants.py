@@ -184,9 +184,6 @@ class TestMemoryScalingO1:
     @pytest.mark.skipif(
         not torch.cuda.is_available(), reason="CUDA required for memory measurement"
     )
-    @pytest.mark.xfail(
-        reason="CUDA memory measurement not capturing activation memory correctly in train_step"
-    )
     def test_backprop_memory_grows_with_depth(self, depth, data):
         """Backprop activation memory should grow with depth."""
         torch.manual_seed(0)

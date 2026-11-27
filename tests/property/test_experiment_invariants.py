@@ -3,7 +3,13 @@
 These tests validate invariants on experiment databases, ensuring regression safety
 by checking that measured cells satisfy expected properties.
 
-Run with: pytest tests/property/test_experiment_invariants.py -v
+They need a store to read: the caller passes one, and the file's own tests skip
+without it. ``scripts/run_local_gates.sh`` builds the 40-record readiness
+campaign and passes it, so the invariants run once in the release instead of
+skipping (W45).
+
+Run with: pytest tests/property/test_experiment_invariants.py \
+    --experiment-db /tmp/readiness.duckdb
 """
 
 from __future__ import annotations
@@ -14,82 +20,6 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 
 
-@pytest.fixture
-def experiment_db(tmp_path):
-    """Fixture to provide a test database path."""
-    db_path = tmp_path / "test_experiment.db"
-    return str(db_path)
-
-
-@pytest.fixture
-def populated_store(experiment_db):
-    """Fixture to create a store with some test records."""
-    store = RecordStore(StoreConfig(path=experiment_db))
-    with store:
-        # Create a test run
-        run_id = store.create_run(
-            run_id="test_run",
-            spec=None,
-        )
-        # Note: In real usage, records would be appended via pipeline
-        # This fixture provides the store for tests that create their own records
-        yield store
-
-
-def test_all_measured_cells_satisfy_width_contract(experiment_db):
-    """All measured cells should satisfy the width contract (param budget).
-
-    This test requires a real experiment database. It's marked as experiment
-    to be run against actual experiment databases.
-    """
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_no_critical_failures_in_measured_cells(experiment_db):
-    """No measured cells should have critical failures.
-
-    Critical failures in measured cells indicate a bug in the validation pipeline.
-    """
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_coverage_targets_met(experiment_db):
-    """At least one measured cell per geometry/update/credit axis.
-
-    This ensures the experiment covers the declared search space.
-    """
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_measured_cells_have_valid_metrics(experiment_db):
-    """All measured cells should have valid (non-NaN, non-inf) metrics."""
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_seed_consistency(experiment_db):
-    """Cells with same coordinate but different seeds should have similar metrics.
-
-    The variance across seeds should be within acceptable bounds.
-    """
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_monotonic_improvement_over_time(experiment_db):
-    """For cells with convergence curves, metrics should generally improve."""
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_no_regression_from_baseline(experiment_db):
-    """Replay runs should not show regression beyond tolerance."""
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-def test_pareto_frontier_monotonic(experiment_db):
-    """Pareto frontier should be monotonic (no dominated points on frontier)."""
-    pytest.skip("Requires actual experiment database - run with --experiment-db")
-
-
-# Integration tests that can run with a real database
 @pytest.mark.experiment
 class TestExperimentInvariants:
     """Property tests that run against a real experiment database.
