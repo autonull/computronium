@@ -58,6 +58,9 @@ export function createControlPanelBody(): string {
       .control-panel table.kv td, .control-panel table.list td { color: var(--text-primary); padding: 2px 6px 2px 0; vertical-align: top; }
       .control-panel .note { color: var(--text-secondary); margin: 4px 0 8px; line-height: 1.4; font-size: 11px; }
       .control-panel .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+      .control-panel .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; margin: 6px 0; }
+      .control-panel .field-grid label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; letter-spacing: 0.04em; color: var(--text-secondary); text-transform: uppercase; }
+      .control-panel .field-grid input, .control-panel .field-grid select { width: 100%; }
       .control-panel input, .control-panel select { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; padding: 2px 4px; min-width: 0; }
       .control-panel button.mini { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 2px 8px; cursor: pointer; }
       .control-panel button.action { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 11px; padding: 6px 12px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; }
@@ -106,15 +109,17 @@ export function createControlPanelBody(): string {
         </select>
       </div>
       <div class="note profile-note"></div>
-      <div class="row">
-        <label>seeds</label><input class="seeds" type="number" min="1" />
-        <label>epochs</label><input class="epochs" type="number" min="1" />
-        <label>budget (s)</label><input class="budget" type="number" min="1" />
-        <select class="fidelity">
-          <option value="L0">L0</option>
-          <option value="L1">L1</option>
-          <option value="L2">L2</option>
-        </select>
+      <div class="field-grid">
+        <label>Seeds<input class="seeds" type="number" min="1" /></label>
+        <label>Epochs<input class="epochs" type="number" min="1" /></label>
+        <label>Budget (s)<input class="budget" type="number" min="1" /></label>
+        <label>Fidelity
+          <select class="fidelity">
+            <option value="L0">L0</option>
+            <option value="L1">L1</option>
+            <option value="L2">L2</option>
+          </select>
+        </label>
       </div>
       <div class="row">
         <button class="action start primary">Start run <span class="kbd">Z</span></button>

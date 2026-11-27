@@ -406,7 +406,7 @@ export class PlotterParetoView extends PlotterChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Pareto Frontier: validation accuracy vs speed",
+      title: "Pareto frontier",
       axes: [
         {
           label: "1 / walltime_s   (faster →)",
@@ -631,7 +631,7 @@ export class PlotterAblationView extends PlotterChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Ablation: credit arm → validation accuracy",
+      title: "Ablation",
       axes: [
         {
           label: "credit arm",
@@ -824,7 +824,7 @@ export class PlotterVariabilityView extends PlotterChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Seed variability: validation accuracy per arm",
+      title: "Variability",
       axes: [
         {
           label: "credit arm",
@@ -1222,7 +1222,7 @@ export class ParetoChartView extends PerInstanceChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Pareto Frontier: validation accuracy vs speed",
+      title: "Pareto frontier",
       axes: [
         {
           label: "1 / walltime_s   (faster →)",
@@ -1467,7 +1467,7 @@ export class AblationChartView extends PerInstanceChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Ablation: credit arm → validation accuracy",
+      title: "Ablation",
       axes: [
         {
           label: "credit arm",
@@ -1633,7 +1633,7 @@ export class VariabilityChartView extends PerInstanceChartView {
     const opts: uPlot.Options = {
       width: panel.clientWidth,
       height: chartHeight(panel),
-      title: "Seed variability: validation accuracy per arm",
+      title: "Variability",
       axes: [
         {
           label: "credit arm",
