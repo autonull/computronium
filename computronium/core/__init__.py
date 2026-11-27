@@ -96,7 +96,9 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "consolidate": ("computronium.core.joint", "consolidate"),
 }
 
-__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]
+# `_LAZY` is the only source of the names. Pyright cannot read a computed
+# `__all__`, and a literal copy would let the two drift apart.
+__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]  # pyright: ignore[reportUnsupportedDunderAll]
 
 
 def __getattr__(name: str) -> object:

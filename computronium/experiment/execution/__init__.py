@@ -11,6 +11,182 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from computronium.experiment.execution import (
+        allocator,
+        backends,
+        batch_sizer,
+        decision,
+        optuna_adapter,
+        pipeline,
+        policy,
+        pricing,
+        replay,
+        settle_operator,
+        stage,
+        stages_impl,
+        stream,
+        sysctx,
+    )
+    from computronium.experiment.execution.allocator import (
+        Abandonment,
+        AllocationPolicy,
+        AllocationState,
+        EvidenceDrivenAllocator,
+        Promotion,
+        PromotionCandidate,
+    )
+    from computronium.experiment.execution.backends import (
+        EvaluationResult,
+        EvaluationTask,
+        ExecutionBackend,
+        Failure,
+        LocalBackend,
+        MultiprocessBackend,
+        Success,
+    )
+    from computronium.experiment.execution.contrast_design import (
+        ContrastAssignment,
+        ContrastDesign,
+        ContrastDesignKind,
+        Factor,
+        create_contrast_design,
+        create_fractional_factorial_design,
+        create_full_factorial_design,
+        create_ofat_design,
+        create_plackett_burman_design,
+    )
+    from computronium.experiment.execution.decision import (
+        Decision,
+        Replication,
+        RoundController,
+        complete_run,
+        continue_round,
+        create_decision,
+        pause_run,
+        stop_run,
+    )
+    from computronium.experiment.execution.optuna_adapter import (
+        OptunaDistributionAdapter,
+    )
+    from computronium.experiment.execution.pipeline import (
+        PipelineConfig,
+        PipelineRunner,
+        PipelineState,
+    )
+    from computronium.experiment.execution.policy import (
+        POLICY_CATALOG,
+        DiverseRandomPolicy,
+        EvolutionPolicy,
+        ModelBasedPolicy,
+        Policy,
+        ProposalContext,
+        RecordSource,
+        RoundRobinGridPolicy,
+        StrategyProgressionPolicy,
+        StratifiedRandomPolicy,
+        SynthesisPolicy,
+        TrainerDrivenPolicy,
+        UniformRandomPolicy,
+        create_policy,
+        policy_context,
+        resolve_objectives,
+    )
+    from computronium.experiment.execution.pricing import PricePlan, price_plan
+    from computronium.experiment.execution.replay import compute_run_replay_hash
+    from computronium.experiment.execution.settle_operator import (
+        hidden_stack_operator,
+        layer_weight_shapes,
+        settle_step_operator,
+        settle_step_operator_at_state,
+    )
+    from computronium.experiment.execution.stage import (
+        S1_FRAME,
+        S2_SPACE,
+        S3_SCHEDULE,
+        S4_GATE,
+        S5_COMPOSE,
+        S6_TRAIN,
+        S7_MEASURE,
+        S8_RECORD,
+        S9_ATTRIBUTE,
+        S10_DECIDE,
+        S11_REPORT,
+        STAGE_REGISTRY,
+        STAGE_SPECS,
+        Fragment,
+        Proposal,
+        Stage,
+        StageContext,
+        StageGate,
+        StageId,
+        StageSpec,
+        StageTransition,
+        get_next_stage,
+        get_previous_stage,
+        get_stage_spec,
+    )
+    from computronium.experiment.execution.stages_impl import (
+        STAGE_IMPLEMENTATIONS,
+        AttributeStage,
+        ComposeStage,
+        DecideStage,
+        FrameStage,
+        GateStage,
+        MeasureStage,
+        RecordStage,
+        ReportStage,
+        ScheduleStage,
+        SpaceStage,
+        TrainStage,
+        _allocate_origins,
+        _design_factors,
+        _is_assignment,
+        _match_design,
+        _origins_for_design,
+        get_stage_implementation,
+    )
+    from computronium.experiment.execution.sysctx import (
+        EnvironmentSnapshot,
+        SystemContext,
+        capture_environment_snapshot,
+    )
+    from computronium.experiment.kernel.compose import (
+        GRID_CREDITS,
+        GRID_DYNAMICS,
+        GRID_UPDATES,
+        ComposedCell,
+        ProposalComposeError,
+        _fit_geometry,
+        build_geometry_config,
+        compose_cell_system,
+        compose_configs,
+        geometry_param_count,
+    )
+    from computronium.experiment.kernel.evaluate import (
+        CellEvaluation,
+        TaskShape,
+        cell_record,
+        compute_energy_metrics,
+        compute_stability_metrics,
+        evaluate_cell,
+        history_metrics,
+        task_shape,
+    )
+    from computronium.experiment.kernel.resources import (
+        Budget,
+        CostModel,
+        SimpleCostModel,
+    )
+    from computronium.experiment.kernel.search_space import (
+        SearchSpace,
+        ShapeResolver,
+        declared_cell_count,
+        generate_candidates,
+        iter_candidates,
+        narrow_domain,
+        search_space_from_spec,
+    )
+
 # Define all public symbols for static analysis and tab completion
 __all__ = [
     "GRID_CREDITS",

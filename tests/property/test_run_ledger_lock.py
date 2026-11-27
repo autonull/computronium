@@ -228,6 +228,7 @@ def test_the_same_spec_run_twice_yields_the_same_replay_hash(tmp_path: Path) -> 
 def test_one_changed_spec_field_yields_a_different_replay_hash(tmp_path: Path) -> None:
     """A changed declaration is a different run, and the hash says so."""
     base = _run_spec()
+    assert base.epochs is not None, "the fixture declares a literal epoch count"
     changed = base.model_copy(update={"epochs": base.epochs + 1})
 
     assert tuple(base.diff(changed)) == ("epochs",)

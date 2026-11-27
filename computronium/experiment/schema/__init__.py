@@ -11,6 +11,141 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from computronium.experiment.schema import (
+        axis,
+        coordinate,
+        harvest,
+        metrics,
+        record,
+        registries,
+        registry,
+        run_spec,
+        seed_registries,
+        versioning,
+    )
+    from computronium.experiment.schema.axis import (
+        AXES_REGISTRIES,
+        CREDIT_REGISTRY,
+        DYNAMICS_REGISTRY,
+        GEOMETRY_REGISTRY,
+        NO_DEFAULT,
+        PLASTICITY_REGISTRY,
+        SUBSTRATE_REGISTRY,
+        UPDATE_REGISTRY,
+        AxisKind,
+        AxisPrimitive,
+        AxisSpec,
+        Domain,
+        HyperparameterSpec,
+        Scale,
+        StructuralAxis,
+        get_axis_spec,
+        get_registry,
+        is_available,
+        list_axis_specs,
+        register_axis_spec,
+    )
+    from computronium.experiment.schema.coordinate import (
+        Coordinate,
+        DataOrigin,
+        Provenance,
+        Schedule,
+        TransferMode,
+    )
+    from computronium.experiment.schema.harvest import (
+        AXIS_KIND_ORDER,
+        ActiveSpace,
+        HarvestedSchema,
+        InactiveHyperparameterError,
+        UnresolvedHyperparameterError,
+        _config_default,
+        get_hyperparameter_names,
+        get_hyperparameter_spec,
+        harvest_schema,
+        load_axis_config,
+        qualified_name,
+    )
+    from computronium.experiment.schema.metrics import (
+        HISTORY_METRICS,
+        MEASURED_METRICS,
+        MEASURED_OBJECTIVES,
+        ObjectiveResolutionError,
+        UnknownObjectiveError,
+        UnmeasuredObjectiveError,
+        measured_objectives,
+        objective_metric,
+        objective_name,
+        objective_values,
+        optimizes,
+    )
+    from computronium.experiment.schema.record import (
+        FailureCause,
+        GateVerdict,
+        Maturity,
+        Record,
+        ReproducibilityClass,
+        Severity,
+        Status,
+    )
+    from computronium.experiment.schema.registries import (
+        ALL_REGISTRIES,
+        ASSESSMENT_PROCEDURE_VERSION,
+        CAPABILITIES_REGISTRY,
+        CONSTRAINTS_REGISTRY,
+        DEFAULT_CELL_SECONDS,
+        FIXED_RUN_COST_SECONDS,
+        MEASURED_CELL_SECONDS,
+        MEASURED_CELL_SECONDS_REGIME,
+        MEASURED_PARALLEL_SPEEDUP,
+        OBJECTIVES_REGISTRY,
+        PARAM_BUDGET_TOLERANCE,
+        POLICIES_REGISTRY,
+        PRIORS_REGISTRY,
+        RATE_PARAMETERS,
+        REPLAY_METRIC_TOLERANCE,
+        STAGES_REGISTRY,
+        CapabilityKind,
+        CapabilitySpec,
+        CapabilityStatus,
+        ConstraintKind,
+        ConstraintSpec,
+        ObjectiveSpec,
+        PolicyKind,
+        PolicySpec,
+        PriorSpec,
+        ProofKind,
+        StageId,
+        StageSpec,
+        cell_price_seconds,
+        prior_value,
+        procedure_version_key,
+        register_capability,
+        register_card_factor,
+        register_constraint,
+        register_objective,
+        register_policy,
+        register_prior,
+        register_stage,
+        validate_rate_value,
+    )
+    from computronium.experiment.schema.registry import Registry, RegistryDiff
+    from computronium.experiment.schema.run_spec import (
+        MEASURED_BATCH_LIMIT,
+        MEASURED_PARAM_BUDGET,
+        RUN_SPEC_VERSION,
+        AxisSelection,
+        Fidelity,
+        RunSpec,
+    )
+    from computronium.experiment.schema.seed_registries import (
+        PRIORS,
+        seed_all_registries,
+    )
+    from computronium.experiment.schema.versioning import (
+        SCHEMA_REGISTRY,
+        current_schema_version,
+    )
+
 # Define all public symbols for static analysis and tab completion
 __all__ = [
     "ALL_REGISTRIES",

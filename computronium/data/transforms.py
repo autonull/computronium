@@ -17,6 +17,15 @@ if TYPE_CHECKING:
 
     from torchvision import transforms
 
+    # Built on first access by ``__getattr__``; declared here so the static
+    # analyzer and the IDE resolve the ``__all__`` names.
+    CIFAR10_TRANSFORM: transforms.Compose
+    CIFAR100_TRANSFORM: transforms.Compose
+    FASHION_MNIST_TRANSFORM: transforms.Compose
+    KMNIST_TRANSFORM: transforms.Compose
+    MNIST_TRANSFORM: transforms.Compose
+    SVHN_TRANSFORM: transforms.Compose
+
 __all__ = [
     "CIFAR10_TRANSFORM",
     "CIFAR100_TRANSFORM",

@@ -185,6 +185,7 @@ class TestWrapperObligations:
         """
         from computronium.experiment.execution import (
             Budget,
+            Failure,
             LocalBackend,
             PipelineRunner,
             RoundRobinGridPolicy,
@@ -197,19 +198,22 @@ class TestWrapperObligations:
                 results = []
                 for item in items:
                     if len(items) > 1 and item[0].cell_key() == "fail_cell":
-                        # Simulate per-item failure
-                        from computronium.experiment.schema import Record
+                        # Simulate per-item failure (WP19: a Failure, not a Record)
+                        from computronium.experiment.evidence.failure import (
+                            FailureEvent,
+                        )
+                        from computronium.experiment.schema import FailureCause
 
                         results.append(
-                            Record.create(
-                                run_id="test",
-                                coordinate=item[0],
-                                schedule=item[1],
-                                provenance=item[2],
-                                status=item[2].links.get("status")
-                                if hasattr(item[2], "links")
-                                else None,
-                                payload={"status": "failed"},
+                            Failure(
+                                failure_event=FailureEvent(
+                                    cell_key=item[0].cell_key(),
+                                    failure_cause=FailureCause.RUNTIME_ERROR,
+                                    error_message="injected failure",
+                                    coordinate=item[0].to_dict(),
+                                    schedule=item[1].to_dict(),
+                                    provenance=item[2].to_dict(),
+                                )
                             )
                         )
                     else:

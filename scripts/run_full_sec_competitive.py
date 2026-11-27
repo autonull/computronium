@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 import os
 import sys
 import time
@@ -41,7 +40,7 @@ from computronium.experiment.sec_parts import (  # ruff: ignore[module-import-no
 # Load meta-SEC best params. An invalid study (objective never above 0) already
 # carries its declared defaults, so the driver never treats a zero-value optimum
 # as tuned (TODO104 A7).
-with open("/home/me/computronium/configs/meta_sec_best.json", "r") as f:
+with Path("/home/me/computronium/configs/meta_sec_best.json").open("r") as f:
     meta = json.load(f)
 
 if not meta.get("valid", False):
@@ -64,7 +63,7 @@ MIN_EFFECT_SIZE_BY_FAMILY = {
 FIDELITY_SCHEDULE = best_params.get("fidelity_schedule", "L0_L2")
 SEMAPHORE = best_params.get("semaphore", 8)
 
-print(f"\n📊 Meta-SEC params:")
+print("\n📊 Meta-SEC params:")
 print(
     f"  Ladder points: {N_LADDER_POINTS} (log-spaced {LADDER_LOG_MIN:.2f} to {LADDER_LOG_MAX:.2f})"
 )
@@ -74,30 +73,24 @@ print(f"  Fidelity: {FIDELITY_SCHEDULE}")
 print(f"  Semaphore: {SEMAPHORE}")
 
 # Import after applying void rules and setting params
+# Override module constants with meta-SEC best params
+from computronium.experiment import sec_all_axes
+from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_all_axes import (
     AXIS_DEFAULTS,
     FAMILY_TO_TASK,
+    LadderRung,
+    RungResult,
     _build_axis_box,
     _get_primary_knob,
     _get_task_families_for_primitive,
     _measure_async,
+    create_registration,
     preferred_task_family,
     resolve_semaphore,
     run_rung2_comparison,
-    create_registration,
     screen_coordinate,
 )
-from computronium.experiment.schema.coordinate import Schedule
-from computronium.experiment.sec_all_axes import LadderRung, PairedCell, RungResult
-from computronium.validation.preregistration import (
-    DEFAULT_ALPHA,
-    EffectSizeRegistration,
-    ThresholdRegistration,
-    paired_comparison,
-)
-
-# Override module constants with meta-SEC best params
-import computronium.experiment.sec_all_axes as sec_all_axes
 
 # Generate log-spaced ladder factors. The declared default (factor 1.0) is
 # always screened: a ladder that never runs the primitive at its own default
@@ -119,7 +112,7 @@ sec_all_axes.LADDER_FACTORS = tuple(
 sec_all_axes.CLAIM_SEEDS = CLAIM_SEEDS
 sec_all_axes.MIN_EFFECT_SIZE_BY_FAMILY.update(MIN_EFFECT_SIZE_BY_FAMILY)
 
-print(f"\n🔧 Updated constants:")
+print("\n🔧 Updated constants:")
 print(f"  LADDER_FACTORS: {[f'{f:.3f}' for f in sec_all_axes.LADDER_FACTORS]}")
 print(f"  CLAIM_SEEDS: {sec_all_axes.CLAIM_SEEDS}")
 print(f"  MIN_EFFECT_SIZE_BY_FAMILY: {sec_all_axes.MIN_EFFECT_SIZE_BY_FAMILY}")

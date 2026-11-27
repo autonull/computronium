@@ -8,18 +8,13 @@ pre-registration JSON files to configs/preregistrations/.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 
-from computronium.experiment.sec_deep_dive import LADDER_FACTORS, LADDER_KNOBS
+from computronium.experiment.sec_loop import _box_summary, _coordinate, base_schedule
 from computronium.experiment.sec_pilot import BASE_BOXES, base_family
-from computronium.experiment.schema.coordinate import Schedule
-from computronium.experiment.sec_loop import base_schedule, _box_summary, _coordinate
 from computronium.validation.preregistration import (
     EffectSizeRegistration,
-    PairedComparison,
-    paired_comparison,
 )
 
 
@@ -149,7 +144,7 @@ def main():
     total_claims = 0
     for result_file in result_files:
         print(f"\nProcessing {result_file.name}...")
-        with open(result_file) as f:
+        with Path(result_file).open() as f:
             result = json.load(f)
 
         # Extract task_id from filename
@@ -158,7 +153,7 @@ def main():
         if len(parts) >= 4:
             task_id = parts[-2]
         else:
-            print(f"  ⚠️  Could not parse task from filename")
+            print("  ⚠️  Could not parse task from filename")
             continue
 
         registration = create_registration_from_rung3(result, task_id, args.device)

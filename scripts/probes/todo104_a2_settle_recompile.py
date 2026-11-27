@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import torch
 
+from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.sec_all_axes import _build_axis_box, screen_coordinate
 from computronium.experiment.sec_loop import _measure, base_schedule
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 # Two widths of the same task: a second shape reaches the same settle kernel.
 CASES = (

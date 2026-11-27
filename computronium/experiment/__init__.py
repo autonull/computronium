@@ -11,6 +11,51 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from computronium.experiment import (
+        evidence,
+        execution,
+        schema,
+        surface,
+    )
+    from computronium.experiment.schema.axis import (
+        AXES_REGISTRIES,
+        CREDIT_REGISTRY,
+        DYNAMICS_REGISTRY,
+        GEOMETRY_REGISTRY,
+        PLASTICITY_REGISTRY,
+        SUBSTRATE_REGISTRY,
+        UPDATE_REGISTRY,
+        AxisKind,
+        AxisPrimitive,
+        AxisSpec,
+        Domain,
+        HyperparameterSpec,
+        Scale,
+        StructuralAxis,
+        get_axis_spec,
+        get_registry,
+        is_available,
+        list_axis_specs,
+        register_axis_spec,
+    )
+    from computronium.experiment.schema.builder import RunSpecBuilder
+    from computronium.experiment.schema.record import (
+        FailureCause,
+        GateVerdict,
+        Maturity,
+        Record,
+        ReproducibilityClass,
+        Severity,
+        Status,
+    )
+    from computronium.experiment.schema.registry import Registry, RegistryDiff
+    from computronium.experiment.schema.run_spec import (
+        RUN_SPEC_VERSION,
+        AxisSelection,
+        Fidelity,
+        RunSpec,
+    )
+
 # Define all public symbols for static analysis and tab completion
 __all__ = [
     "AXES_REGISTRIES",

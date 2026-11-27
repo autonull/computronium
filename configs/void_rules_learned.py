@@ -9,7 +9,6 @@ from computronium.experiment.legality.classify import (
     VoidReason,
 )
 
-
 # Rules to ADD (high refusal rate)
 ADD_RULES = [
     (

@@ -37,7 +37,9 @@ Two locks:
   * **11 table-driven lazy shims** -- every one resolves its names from a table
     declared in the same file, so the population *is* statically derivable:
 
-    - ``_LAZY`` (3): ``computronium/__init__.py``, ``cli``, ``core``.
+    - ``_LAZY`` (4): ``computronium/__init__.py``, ``cli``, ``core`` and
+      ``experiment/execution/dashboard``, whose web dashboard import is
+      deferred so the package surface does not require FastAPI.
       The root ``__all__``/``_LAZY`` wiring lock covers these.
     - ``_ALGORITHMS`` (1): ``algorithms``.
     - ``_CANONICAL_TRANSFORMS`` (1): ``data/transforms.py``, whose dataset
@@ -302,6 +304,7 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/experiment/evidence/__init__.py": "_symbol_to_module",
     "computronium/experiment/execution/__init__.py": "_symbol_to_module",
     "computronium/experiment/surface/__init__.py": "_symbol_to_module",
+    "computronium/experiment/execution/dashboard/__init__.py": "_LAZY",
     "computronium/harness/__init__.py": "_symbol_to_module",
     "computronium/data/transforms.py": "_CANONICAL_TRANSFORMS",
 }

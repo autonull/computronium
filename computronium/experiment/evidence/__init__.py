@@ -11,6 +11,152 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from computronium.experiment.evidence import (
+        artifacts,
+        claims,
+        failure,
+        limitations,
+        procedures,
+        protocol,
+        significance,
+        statistics,
+        status,
+        store,
+    )
+    from computronium.experiment.evidence.artifacts import (
+        Artifact,
+        ArtifactInput,
+        ArtifactRole,
+        ArtifactStorage,
+        ArtifactStore,
+        ExternalStore,
+        FilesystemExternalStore,
+    )
+    from computronium.experiment.evidence.ceec_export import (
+        export_claims_to_ceec,
+        export_statistical_result_to_ceec,
+    )
+    from computronium.experiment.evidence.claims import (
+        DEFAULT_MIN_SEEDS,
+        Alert,
+        AxisImpact,
+        CellMetrics,
+        Claim,
+        alert_on_constraint_violation,
+        alert_on_divergence,
+        alert_on_resource_exhaustion,
+        alert_on_stagnation,
+        beats_baseline,
+        cell_metrics_by_axis_value,
+        check_all_alerts,
+        check_leakage,
+        claim_eligible,
+        claim_eligible_by_achieved_seeds,
+        compare_matched_cost,
+        derive_claims,
+        evaluation_data_allowed,
+        filter_by_data_origin,
+        filter_by_maturity,
+        filter_claim_eligible,
+        filter_matured,
+        filter_promoted,
+        generalizes,
+        group_by_cell_key,
+        group_by_replication_key,
+        is_calibration_data,
+        is_exploration_data,
+        is_policy_selected_data,
+        is_test_data,
+        matured,
+        pairing_key,
+        promoted,
+        replication_key,
+        robust,
+        same_hardware_class,
+        strongest_axis,
+        training_data_allowed,
+        valid_comparison,
+    )
+    from computronium.experiment.evidence.failure import (
+        FailureCluster,
+        FailureEvent,
+        FailurePattern,
+        FixLinkage,
+        FixLinkageStore,
+        Reproducer,
+        analyze_store_failures,
+        cluster_failures,
+        detect_failure_patterns,
+        emit_reproducer,
+        save_reproducer,
+    )
+    from computronium.experiment.evidence.limitations import (
+        Limitation,
+        LimitationKind,
+        derive_limitations,
+        replication_keys_of,
+    )
+    from computronium.experiment.evidence.procedures import (
+        ASSESSMENT_PROCEDURES,
+        get_assessment_procedure,
+        list_assessment_procedures,
+        register_assessment_procedure,
+    )
+    from computronium.experiment.evidence.protocol import (
+        SYNTHETIC_FIXTURE,
+        ComparisonError,
+        ComparisonGuard,
+        CostBudget,
+        CostBudgetKind,
+        EffectSizeResult,
+        SyntheticGroundTruth,
+        cohens_d_paired,
+        compute_effect_size,
+        create_synthetic_fixture,
+        wilcoxon_paired,
+    )
+    from computronium.experiment.evidence.significance import (
+        DEFAULT_ALPHA,
+        MIN_SHARED_CELLS,
+        SIGNIFICANCE_TEST,
+        Resampling,
+        Significance,
+        paired_significance,
+    )
+    from computronium.experiment.evidence.statistics import (
+        bootstrap_percentile_ci,
+        cohens_dz,
+        permutation_test_p,
+    )
+    from computronium.experiment.evidence.status import (
+        AssessmentProcedure,
+        AssessmentProcedureKind,
+        Assessments,
+        DerivedClaims,
+        Observations,
+        StatusBundle,
+        StatusLegacy,
+        _canonical_json,
+        build_assessments_from_legacy,
+        build_legacy_from_assessments,
+    )
+    from computronium.experiment.evidence.store import (
+        DuplicateMeasurementError,
+        ProvenanceModel,
+        RecordInputModel,
+        RecordOutputModel,
+        RecordStore,
+        RunInfo,
+        ScheduleModel,
+        StatusModel,
+        StoreConfig,
+        StoreError,
+        TableName,
+        TableSlice,
+        UnsupportedSchemaVersionError,
+        format_replication_key,
+    )
+
 # Define all public symbols for static analysis and tab completion
 __all__ = [
     "ASSESSMENT_PROCEDURES",

@@ -69,6 +69,16 @@ trend down from 551.
 Lowered 2026-11-26 from 659 to the measured 640 (ruff unchanged at 0.17.5) by
 fixing the legacy ``geometry.py`` findings: ambiguous ``l`` names, out-of-place
 adds, ``_apply_stack`` complexity, and two ``assert`` guards.
+
+Lowered 2026-11-27 from 550 to the measured 499 (ruff unchanged at 0.17.5) by
+the TODO107 hygiene pass: a safe ``ruff check --fix`` on the tree's remaining
+autofixable legacy findings (unused imports, unsorted imports, f-strings with
+no placeholders, ``open()`` calls on a ``Path``), and by resolving eight
+undefined ``__all__`` submodule exports in ``benchmarks/joint`` with their
+TYPE_CHECKING imports. No rule was suppressed to buy the count: the one
+``# ruff: ignore[runtime-import-in-type-checking-block]`` names why the
+block exists, and ``test_lazy_export_surface_lock.py`` keeps the declared
+surface honest.
 """
 
 from __future__ import annotations
@@ -77,7 +87,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 550
+BASELINE = 499
 RUFF_VERSION = "0.17.5"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

@@ -4,7 +4,6 @@ Neuromorphic Domain Tasks
 Spiking neuromorphic datasets (spiking MNIST, DVS Gestures, etc.)
 """
 
-import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
@@ -19,8 +18,8 @@ from computronium.domains.base import (
 )
 
 __all__ = [
-    "SpikingMNISTTask",
     "DVSGesturesTask",
+    "SpikingMNISTTask",
 ]
 
 

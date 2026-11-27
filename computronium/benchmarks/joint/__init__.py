@@ -24,22 +24,41 @@ engagement gate + planted-ψ control and downgrades itself to
 ``ThetaInvarianceAudit`` remains open and would upgrade their status.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from computronium.benchmarks.joint._claims import (
     CLAIMS_SCOPE_PLUMBING_ONLY,
     CLAIMS_SCOPE_PSI_ENGAGED,
     CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
 )
 
+if TYPE_CHECKING:
+    # Pyright and the IDE resolve the suites through these names. At runtime
+    # they are imported by `from computronium.benchmarks.joint import *`, which
+    # imports each name in ``__all__``; the block itself never runs.
+    from computronium.benchmarks.joint import (  # ruff: ignore[runtime-import-in-type-checking-block]
+        adaptation_efficiency,
+        algorithm_migration,
+        compute_efficiency,
+        credit_assignment_scaling,
+        stability_plasticity_frontier,
+        structural_robustness,
+        substrate_precision_scaling,
+        z3_fixed_weights,
+    )
+
 __all__ = [
     "CLAIMS_SCOPE_PLUMBING_ONLY",
     "CLAIMS_SCOPE_PSI_ENGAGED",
     "CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED",
-    "adaptation_efficiency",  # ruff: ignore[undefined-export]
-    "algorithm_migration",  # ruff: ignore[undefined-export]
-    "compute_efficiency",  # ruff: ignore[undefined-export]
-    "credit_assignment_scaling",  # ruff: ignore[undefined-export]
-    "stability_plasticity_frontier",  # ruff: ignore[undefined-export]
-    "structural_robustness",  # ruff: ignore[undefined-export]
-    "substrate_precision_scaling",  # ruff: ignore[undefined-export]
-    "z3_fixed_weights",  # ruff: ignore[undefined-export]
+    "adaptation_efficiency",
+    "algorithm_migration",
+    "compute_efficiency",
+    "credit_assignment_scaling",
+    "stability_plasticity_frontier",
+    "structural_robustness",
+    "substrate_precision_scaling",
+    "z3_fixed_weights",
 ]

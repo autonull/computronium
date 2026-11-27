@@ -11,6 +11,93 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from types import ModuleType
 
+    from computronium.experiment.surface import (
+        cli,
+        codegen,
+        conformance,
+        evidence,
+        operations,
+        profiles,
+        report,
+        service,
+    )
+    from computronium.experiment.surface.cli import RUN_PROFILES, execute_spec, main
+    from computronium.experiment.surface.codegen import (
+        generate_all,
+        generate_axes_listing,
+        generate_capabilities_listing,
+        generate_cli_flag_tables,
+        generate_compatibility_matrix,
+        generate_conformance_stubs,
+        generate_constraints_listing,
+        generate_json_schema_validators,
+        generate_objectives_listing,
+        generate_policies_listing,
+        generate_priors_listing,
+        generate_stages_listing,
+        write_generated_docs,
+    )
+    from computronium.experiment.surface.conformance import (
+        ConformanceHarness,
+        ConformanceResult,
+        ConformanceStatus,
+        CurrencyLock,
+        FlagProjectionLock,
+        check_conformance,
+        generate_conformance_report,
+        generate_flag_projection_lock,
+        load_currency_lock,
+        load_flag_projection_lock,
+        run_verifying_test,
+        save_currency_lock,
+        save_flag_projection_lock,
+    )
+    from computronium.experiment.surface.evidence import (
+        INDEX,
+        SourceIndex,
+        TestEvidence,
+        evidence_for,
+    )
+    from computronium.experiment.surface.operations import (
+        DEFAULT_Q14_ROUTES,
+        AlertDedup,
+        OperatorIntent,
+        OperatorIntentKind,
+        RunController,
+        RunState,
+        ServiceConfig,
+        ServiceManager,
+        WebhookConfig,
+        create_operator_intent,
+        default_events_for,
+        submit_intent_to_run,
+    )
+    from computronium.experiment.surface.profiles import (
+        QUESTION_FIRST_STAGES,
+        question_first,
+    )
+    from computronium.experiment.surface.report import (
+        AxisImpact,
+        Claim,
+        ExportBundle,
+        Limitation,
+        ReportGenerator,
+        RunSummary,
+        Significance,
+        export_to_json,
+        export_to_parquet,
+        generate_run_report,
+        load_export_bundle,
+        narrative_handoff_summary,
+        non_dominated,
+    )
+    from computronium.experiment.surface.service import (
+        ServiceLoop,
+        ServiceLoopConfig,
+        poll_control_file,
+        write_control_intent,
+    )
+
 # Define all public symbols for static analysis and tab completion
 __all__ = [
     "DEFAULT_Q14_ROUTES",

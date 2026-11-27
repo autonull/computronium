@@ -7,6 +7,7 @@ tabular, time series, and scientific simulation.
 Re-exports the merged task factory (``create_task``) and training utilities.
 """
 
+from computronium.domains.analog import MemristorSimulationTask
 from computronium.domains.base import (
     Batch,
     DomainSpec,
@@ -15,7 +16,6 @@ from computronium.domains.base import (
     Metrics,
     TaskSplit,
 )
-from computronium.domains.analog import MemristorSimulationTask
 from computronium.domains.factory import CharNGramTask, create_task
 from computronium.domains.graph import GraphTask
 from computronium.domains.lm import LMTask

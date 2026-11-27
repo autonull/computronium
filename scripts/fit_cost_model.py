@@ -21,7 +21,7 @@ def load_cells_from_results(results_dir: Path) -> pd.DataFrame:
     all_cells = []
     for cells_file in results_dir.glob("**/cells.jsonl"):
         try:
-            with open(cells_file) as f:
+            with Path(cells_file).open() as f:
                 for line in f:
                     cell = json.loads(line)
                     screen = cell.get("screen", {})
@@ -141,7 +141,7 @@ def main():
 
     model, feature_names = fit_cost_model(df_wt)
 
-    print(f"\nModel coefficients:")
+    print("\nModel coefficients:")
     for name, coef in zip(feature_names, model.coef_):
         print(f"  {name}: {coef:.4f}")
     print(f"  Intercept: {model.intercept_:.4f}")
@@ -170,7 +170,7 @@ def main():
         "n_samples": len(df_wt),
         "r2": r2,
     }
-    with open(args.out, "wb") as f:
+    with Path(args.out).open("wb") as f:
         pickle.dump(model_data, f)
     print(f"\nModel saved to {args.out}")
 

@@ -315,14 +315,16 @@ class TestReproducibilityClasses:
                 quarantine=False,
                 maturity=Maturity.L1,
                 uncertainty={},
-                reproducibility="replayable",  # String, not enum
+                # A string where the enum is required: the rejection is the test.
+                reproducibility="replayable",  # pyright: ignore[reportArgumentType]
                 assessment_procedure_version="1.0",
                 ceec_link=None,
             )
 
     def test_status_requires_assessment_procedure_version(self) -> None:
         with pytest.raises(TypeError):
-            Status(
+            # The missing version is the test: construction must refuse it.
+            Status(  # pyright: ignore[reportCallIssue]
                 gate_verdict=GateVerdict.PASS_,
                 defect="",
                 cause=FailureCause.UNKNOWN,

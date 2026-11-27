@@ -1,5 +1,73 @@
 # TODO107 — Local release closure: tests, SEC readiness, acceleration
 
+## Progress 2026-11-27 (session 6)
+
+**Hygiene pass: the lazy `__all__` warnings, and both ratchets lowered.**
+At session start the ratchets held their recorded baselines: ruff **550**,
+pyright **3257 errors / 525 warnings**. The warning block was one class:
+**510 `reportUnsupportedDunderAll`** — a lazy package declares its `__all__`
+names and resolves them through `__getattr__`, so the analyzer sees no
+binding.
+
+- Five experiment packages (`experiment`, `execution`, `evidence`, `schema`,
+  `surface`) now declare all 489 re-exported names under `TYPE_CHECKING`,
+  generated from each `_symbol_to_module` map after validating every name
+  against the module that defines it. No runtime import moved: these blocks
+  never execute.
+- `benchmarks/joint` declared 8 `__all__` submodules that nothing bound; the
+  eight `# ruff: ignore[undefined-export]` markers are gone and the names are
+  imported under `TYPE_CHECKING`. One
+  `# ruff: ignore[runtime-import-in-type-checking-block]` carries the reason
+  the block exists (ruff counts an `__all__` reference as runtime use).
+- `data/transforms.py` declares its 6 lazily built `transforms.Compose`
+  constants, so the analyzer and tab completion see their type.
+- `dashboard/__init__.py` never bound the 3 names in its `__all__`: the
+  import was broken (`from ...dashboard import WebDashboard` raised). It now
+  has the `_LAZY` shim the other packages use, so FastAPI stays optional.
+
+**The facts the new types exposed, fixed.** Six errors the resolution
+surfaced are real call-site defects, and none is silenced:
+
+- `_demo.py` passed a `str` where `StoreConfig` takes a `Path`.
+- `test_run_ledger_lock` added 1 to an `int | None` epoch count.
+- `test_stage_model_lock` appended a `Record` for an injected failure; WP19
+  wants a `Failure`, which is what it now appends.
+- `test_warm_start_lock` passed `data_origin=None` into `Provenance`, which
+  `to_dict` would have crashed on.
+- The two deliberate-misuse tests in `test_scientific_validity_protocol_lock`
+  carry `pyright: ignore[...]` with the reason: a string where the enum is
+  required, and an omitted version.
+
+**Lock.** New `tests/property/test_lazy_export_surface_lock.py` resolves
+every declared name of the five map packages to a submodule or to a module
+that binds it, refuses a map key `__all__` does not declare, and checks the
+dashboard's names against `web.py` — without importing torch or FastAPI.
+Measured **11 passed in 3.71 s**; a probe shows it fails on a name nothing
+binds. The surface/undefined-name locks were re-pinned for the new
+`__getattr__` shim: **38 passed in 10.69 s**.
+
+**Ruff safety pass.** `ruff check --fix` retired 46 autofixable legacy
+findings (unused imports, import order, f-strings without placeholders,
+`Path(...).open()`), and the 8 `undefined-export` suppressors went with the
+`benchmarks/joint` fix: **550 → 499**. `BASELINE` is 499 and the ratchet's
+docstring names what moved.
+
+**Measured:** pyright **3257 errors / 15 warnings** in 85.1 s
+(`logs/pyright_session6c.json`), with **0 new diagnostics** against the
+session's baseline; `configs/pyright_ratchet.json` re-pinned (warnings
+525 → 15). The 15 that remain are named: 8 wildcard library imports
+(`stability`), 4 unused expressions (archived UI plus `tests/ceec/conftest.py`),
+1 `docker` module without source, 1 single-use `TypeVar`, 1 archived
+`__new__` that should take `cls`.
+
+**Gates run (the change's affected set).** Property shard: **2959 passed,
+53 skipped, 30 xfailed, 4 xpassed in 326.05 s** (`logs/w42_property_shard.log`).
+Unit shard: **955 passed, 1 xfailed in 209.35 s** (`logs/w42_unit.log`).
+Pyright ratchet: held, **3257/15**. Ruff ratchet: **499**, held.
+`generate_docs.py --all --check`: exit 0. Primitives and acceleration are
+not in this change's affected set: the new blocks are `TYPE_CHECKING`-only
+and never execute.
+
 ## Progress 2026-11-27 (session 5)
 
 **W41 opened and closed: an effect-size claim ignored its registered seed
@@ -466,6 +534,8 @@ uv run comp demo
 | W38 | 0 | fifteen campaign gates failed on 22 cells cut before their first epoch | the campaign fixture runs inside the four-way shard and the run's deadline is a wall clock; the store keeps the cut records | campaign gates on their own serial step; the shard ignores them | 18 passed in 91.6 s serial |
 | W39 | 1 | `TestFromScratchTest::test_pareto_frontier_includes_local_credit` finds no local credit at L1/L2 | the test compared `Maturity`'s lowercase values (`"l1"`) to `{"L1","L2"}`, so its promoted set was always empty; local credits do clear the L0 bar on xor/spiral | compare enum members; the probes measure the bar per credit | `probe_local_credit_bar.py` + `probe_from_scratch_promotion.py`; test **1 passed in 517.21 s** serial |
 | W40 | 1 | the fixed test passes serially but fails in the four-way acceptance shard | the fixture's 54 s stage budget is a wall clock; under xdist contention cells are cut before their second seed, the proposer sees a different frontier, and the promoted credits are `homeostatic`/`zeroth_order`/`target_inversion` instead of the local set | move `TestFromScratchTest` to its own serial step; deselect it from the shard (W38's pattern) | serial class **3 passed in 516.81 s**; shard **30 passed in 753.64 s**; release PASS |
+| W41 | 3 | a comparison at n=64 could claim a registration pre-registered for 205 seeds | `PairedComparison.passes_effect_size` read `registration.min_d` but not `registration.min_seeds`; only the equivalence path enforced the floor | the seed floor gates the claim too | `test_claim_box_identity_lock.py` locks both directions: **2 passed**; n=64 refused, the same effect at n=205 accepted |
+| W42 | 0 | 510 `reportUnsupportedDunderAll` warnings, and 3 dashboard names that never bound | a lazy `__all__` is invisible to the analyzer; `dashboard/__init__` omitted its shim, so the name raised on import | declare the names under `TYPE_CHECKING`; dashboard gets the `_LAZY` shim; lock the surface | `test_lazy_export_surface_lock.py` **11 passed**; pyright warnings **525 → 15**; errors held 3257 |
 
 ## Efficiency rules
 
@@ -488,9 +558,10 @@ uv run comp demo
       the serial `TestFromScratchTest` 3 passed (W39/W40).
 - [x] `comp demo` and the one-cell SEC run write a record; breadth PASS
       (17 error-aware credits; session 2).
-- [x] Format green; ruff ratchet green and lowered (659 → 550); pyright
-      ratchet exists (`3257/525`) and the TODO106-touched test errors are
-      clean. The remaining `evaluate.py` type findings are legacy.
+- [x] Format green; ruff ratchet green and lowered (659 → 550 → 499);
+      pyright ratchet exists and was lowered to `3257/15` (session 6); the
+      TODO106-touched test errors are clean. The remaining `evaluate.py`
+      type findings are legacy.
 - [x] The Jacobian, parity-probe, and detach locks are green; the train
       shuffle is seeded per cell (`test_seeded_shuffle`).
 - [x] The cell ceiling travels on the declaration and the replay runs it
@@ -523,13 +594,25 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-The release is closed, and the 0.277 block is a claim at its pre-registered
-n_max. One recorded row remains; it is not a release blocker.
+The release is closed, the 0.277 block is a claim at its pre-registered
+n_max, and the hygiene pass lowered both ratchets. What remains is queued
+legacy, not a blocker.
 
-1. **Hygiene (Register C, not a release gate).** The repo-wide pyright count
-   is a ratchet at its measured baseline; legacy type findings stay queued.
-   The W41 change's affected set (static locks + property shard) is the gate
-   for that change, not a second release pass.
+1. **Ruff ratchet — 499 findings.** The next groups are E402 56, RUF105 43,
+   C901 36, PLW0717 36, PLR0914 30, F841 22 and PLW1514 21. A pass names the
+   rules it retires and lowers `BASELINE` in
+   `tests/property/test_lint_count_ratchet.py`; a pass that only moves files
+   is not a closure.
+2. **Pyright ratchet — 3257 errors / 15 warnings.** The 15 warnings are
+   named in session 6 (8 wildcard library imports, 4 unused expressions,
+   1 `docker` module without source, 1 single-use `TypeVar`, 1 archived
+   `__new__`). The error bulk is `reportArgumentType` 1122,
+   `reportAttributeAccessIssue` 711 and `reportMissingImports` 603;
+   `docs/archive` alone is 680, and excluding archived code from analysis is
+   a scope decision somebody has to take — not a cleanup this plan invents.
+3. **Register C.** The canonical `# ruff: ignore` → `# noqa` directive
+   migration stays queued: enabling RUF105/106 churns 43 guard-rails without
+   adding lint signal.
 
 ## Notes
 

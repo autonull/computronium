@@ -67,4 +67,6 @@ def __dir__() -> list[str]:
     return sorted([*_ALGORITHMS, "__all__", "__doc__", "__name__", "__package__"])
 
 
-__all__: list[str] = sorted(_ALGORITHMS)  # ruff: ignore[invalid-all-format]
+# `_ALGORITHMS` is the only source of the names. Pyright cannot read a
+# computed `__all__`, and a literal copy would let the two drift apart.
+__all__: list[str] = sorted(_ALGORITHMS)  # ruff: ignore[invalid-all-format]  # pyright: ignore[reportUnsupportedDunderAll]

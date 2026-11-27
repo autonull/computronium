@@ -52,7 +52,6 @@ def _make_provenance() -> Provenance:
         code_sha="test",
         policy="test",
         links={"run_id": "test_run"},
-        data_origin=None,
     )
 
 

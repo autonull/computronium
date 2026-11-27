@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ def _demo_control(store_path: str) -> tuple[bool, str]:
     from computronium.experiment.evidence import RecordStore, StoreConfig
     from computronium.experiment.surface.report import chance_level
 
-    store = RecordStore(StoreConfig(path=store_path, read_only=True))
+    store = RecordStore(StoreConfig(path=Path(store_path), read_only=True))
     with store:
         runs = store.query_runs()
         if not runs:

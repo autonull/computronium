@@ -69,7 +69,9 @@ from computronium.stability.calibration import (
 
 __version__ = _stability.__version__
 
-__all__ = [  # ruff: ignore[invalid-all-object]
+# `_stability` is the only source of its names. Pyright cannot read a
+# computed `__all__`, and a literal copy would let the two drift apart.
+__all__ = [  # ruff: ignore[invalid-all-object]  # pyright: ignore[reportUnsupportedDunderAll]
     *_stability.__all__,
     "DEMO_GOOD_COORDINATES",
     "DISAGREEMENT_COORDINATES",

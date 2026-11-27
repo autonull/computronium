@@ -19,6 +19,7 @@ from computronium.experiment.meta_sec import (
     _resolve_best,
     analyze_cells_jsonl,
 )
+from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_all_axes import (
     LadderRung,
     _build_axis_box,
@@ -33,7 +34,6 @@ from computronium.experiment.sec_all_axes import (
 )
 from computronium.experiment.sec_loop import deadline_params
 from computronium.experiment.sec_parts import reduce_parts, write_part
-from computronium.experiment.schema.coordinate import Schedule
 
 
 def test_one_device_runs_one_cell() -> None:

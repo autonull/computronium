@@ -11,8 +11,9 @@ mathematical transpose operations, not physical substrate processes.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Final
+from typing import TYPE_CHECKING, Final
 
 import torch
 from torch import Tensor

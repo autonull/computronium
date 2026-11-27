@@ -10,20 +10,16 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from computronium.experiment.schema.coordinate import Schedule
 from computronium.experiment.sec_deep_dive import (
     CLAIM_SEEDS,
     LADDER_FACTORS,
-    LADDER_KNOBS,
     DeepDiveCandidate,
     LadderRung,
-    PairedCell,
     best_rung,
-    candidate_box,
-    claim_verdict,
     ladder_points,
     load_registration,
     primary_knob,
@@ -34,19 +30,15 @@ from computronium.experiment.sec_loop import (
     _deep_dive_coordinate,
     _is_legal,
     _measure,
-    _paired_cells_async,
     _pair_verdict,
+    _paired_cells_async,
     _task_bar,
     base_schedule,
 )
 from computronium.experiment.sec_pilot import BASE_BOXES, base_family
-from computronium.experiment.schema.coordinate import Schedule
 from computronium.validation.preregistration import (
     EffectSizeRegistration,
-    PairedComparison,
-    paired_comparison,
 )
-
 
 # Primitives to test for each task (8 each as per TODO103)
 MNIST_PRIMITIVES = [
@@ -222,7 +214,7 @@ async def run_deep_dive_on_primitive(
 
     best = best_rung(tuple(rungs))
 
-    print(f"\nLadder results:")
+    print("\nLadder results:")
     for rung in rungs:
         status_str = (
             f"val_acc={rung.val_acc:.4f}" if rung.val_acc is not None else rung.status
@@ -272,7 +264,7 @@ async def run_deep_dive_on_primitive(
     print(f"\nRunning paired comparison (n={CLAIM_SEEDS} seeds per arm)...")
     cells = await _paired_cells_async(candidate, schedule, best.factor)
 
-    print(f"\nPaired results:")
+    print("\nPaired results:")
     for cell in cells:
         print(
             f"  {cell.arm}: seed={cell.seed}, val_acc={cell.val_acc:.4f}, status={cell.status}"
@@ -292,9 +284,9 @@ async def _ladder_async(
     semaphore: asyncio.Semaphore | None = None,
 ) -> list[LadderRung]:
     """Run the 3-point ladder asynchronously."""
-    from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
-    from computronium.experiment.sec_loop import _measure, _deep_dive_coordinate
     from dataclasses import replace
+
+    from computronium.experiment.sec_deep_dive import LadderRung
 
     if semaphore is None:
         semaphore = asyncio.Semaphore(2)
