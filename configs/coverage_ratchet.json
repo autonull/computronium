@@ -1,0 +1,8 @@
+{
+  "population": "COVERAGE=1 scripts/run_local_gates.sh: property (minus the experiment invariants) + figure lock + experiment invariants with a readiness store + primitives + acceleration + unit + demo + acceptance (serial steps included)",
+  "statements": 60203,
+  "covered": 38318,
+  "percent": 63.65,
+  "slack": 150,
+  "measured": "2026-11-27"
+}

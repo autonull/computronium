@@ -19,10 +19,16 @@ surfaced. The priorities, in the order a session takes them:
 2. **P1 — locks that do not cover their declared population.** 35 skips are
    either an empty population or a config the lock cannot build; two
    contracts added in session 6 have no lock at all.
-3. **P2 — static debt.** ruff 499 findings (named groups below) and pyright
+3. **P2 — coverage and test time.** 63.65% of statements, four tiers, and a
+   fast suite whose wall is one 178 s test; the map and the brittleness rule
+   are in the strategy section.
+4. **P3 — static debt.** ruff 499 findings (named groups below) and pyright
    3240 errors / 15 warnings, with one pending scope decision.
-4. **P3 — decisions and practice.** The site-build gate, the directive
+5. **P4 — decisions and practice.** The site-build gate, the directive
    migration, and the pre-registration commit order.
+
+The four tiers (affected / fast / release / coverage) are in the strategy
+section below; a session takes the cheapest tier that can decide its question.
 
 Out of scope, recorded so it is not rediscovered: GitHub Actions stays
 disabled (a separate ticket re-enables it), and Rocq stays out of the local
@@ -49,6 +55,56 @@ The 37 skips at handoff are exactly: 31 composer task-arg configs (W47),
 4 legality tests on an empty engine (W46), 2 declared-infeasible
 `complex_substrate_real_compute` cells (no work).
 
+## Coverage and test-time strategy (session 7)
+
+The release population measured once with `--cov-context=test`: **38,318 of
+60,203 statements = 63.65%**. Line hits split into **31,446 executed by a
+test** and **29,215 executed only at import** — importing a module already
+"covers" half its body, so the per-test population is the honest signal and
+the import-only lines are not.
+
+**Four tiers, each answering one question.**
+
+| tier | command | measured | coverage | question |
+|---|---|---|---|---|
+| affected | `uv run python scripts/select_affected_tests.py` then `pytest <files>` | 122 files for the domain change | the changed module's reach | did my change break its own contracts? |
+| fast | `scripts/run_fast_gates.sh` | **133.19 s**, 2509 passed / 110 skipped / 12 xfailed | 34,756 statements = **90.7% of the release's covered statements** | is the machine still coherent? |
+| release | `scripts/run_local_gates.sh` | ~62 min | 63.65% | may this tree be released? |
+| coverage | `COVERAGE=1 scripts/run_local_gates.sh` | release + ~40% | ratchet | did coverage fall? |
+
+**Where coverage lacks** (missing statements): `experiment/surface` 3,121
+(44.4%), `core/local_learning` 880 (45.1%), `experiment/wave.py` 595 (37.7%),
+`experiment/runners` 555 (**0%**), `models/deployments` 537 (49.1%),
+`experiment/documentation` 499 (38.0%), `sec_loop.py` 470 (58.7%),
+`legality` 360 (64.2%). The surface/report/CLI and `wave.py` are the mass;
+`runners` is never imported by a test at all.
+
+**Where we over-test** (lines vs seconds, per file): 113 of 342 files cover
+no line another file does not. Worst: demo `depth_harvest` 439 s / 16 lines /
+**0 unique**, `uaxis_depth_frontier` 432 s / 145 / 0, `jpc_faithful_depth`
+269 s / 95 / 0; `test_primitive_capability` 525 s / 849 lines / 122 unique.
+The demos are artifact producers, not checks — their value is the figures,
+not the lines, so they stay out of the fast suite and stay in the release.
+
+**The fast suite's wall is one test, not the worker count.** Measured:
+`-n 4` 133.19 s, `-n 8` 161.03 s, `OMP_NUM_THREADS=1` 179.31 s. The long pole
+is `test_credit.py::...::test_cosine_similarity_reasonable` at **178.3 s**
+(under coverage), then `test_ntm_geometry` 78.3 s, `test_legality_compile_lock`
+33.4 s, `test_transformer_geometry` 30.4 s. The unit shard's 245 s wall is the
+same 178 s test. Tuning workers or threads cannot beat a single long test; the
+fix is to trim that test's budget to the smallest its assertion needs (W63).
+
+**Brittleness.** A test asserts a **contract** — an invariant, a
+round-trip, a refusal by name, a monotone ordering — not a copied measurement
+(a param count, an exact walltime, a population size). A number is legitimate
+when the number *is* the policy (a declared budget, a family ceiling) or a
+provenance record. A lock that enumerates a population keeps a named list and
+fails loudly when the population moves; it is reviewed, never auto-derived
+from today's tree. The three new pieces follow that rule: the fast list is
+tolerant of a move, the affected selection over-approximates instead of
+pinning node ids, and the coverage ratchet is a floor with a re-baseline note,
+not an exact target.
+
 ## Decisions
 
 **D1 — A bug xfail is a defect; fixing it removes the marker.** The marker
@@ -73,6 +129,15 @@ committed before the first seed runs, so the commit order proves the box
 **D5 — The release is the local script; a change runs its affected set.**
 A library change runs its shard + locks; a test/tooling change runs the
 property shard and the step it touches. One artifact per tree.
+
+**D6 — A test asserts a contract, not a measurement copy.** An invariant, a
+round-trip, a refusal by name, a monotone ordering — never a param count, an
+exact walltime, or today's population size. A number is legitimate when it
+*is* the policy (a declared budget or ceiling) or a provenance record; a
+population lock keeps a named list and is reviewed when the population moves.
+The fast list tolerates a moved file, the affected selection over-approximates
+instead of pinning node ids, and the coverage ratchet is a floor with a
+re-baseline note, not an exact target.
 
 ## Work batches
 
@@ -105,6 +170,12 @@ property shard and the step it touches. One artifact per tree.
 | W57 | 3 | ruff 499 | E402 56, RUF105 43, complexity 119 (C901 36, PLR0912 16, PLR0915 20, PLR1702 17, PLR0914 30), PLW0717 36, F841 21, PLW1514 21, S110 20, PLW2901 14 | one pass per named group, `BASELINE` lowered and the rules named; Register C migrates the 43 `# ruff: ignore` directives and enables RUF105 | `BASELINE` < 499 per pass |
 | W58 | 3 | the site build has no gate | `docs/index.html`/`index.md` are gitignored; `docs/build_site.py --check` exits 1 on a fresh clone because the artifact is absent | decide: generate on demand (no gate) and say so, or gate only when the artifact exists | decision recorded in the docs build note |
 | W59 | 3 | the 0.277 registration was committed after the first seed | the mtimes prove the order; the commit does not | commit the registration before the launch on the next claim rung | the commit order proves the box |
+| W60 | 2 | the release pays ~62 min for 63.65% coverage and nothing ranks a test by the lines it buys | suite order was never measured; 113 of 342 files cover no line another file does not | per-test attribution (`--cov-context=test` + durations) and a greedy `new lines / second` selection; `configs/fast_suite.txt` + `scripts/run_fast_gates.sh` | fast suite **2509 passed / 110 skipped / 12 xfailed in 133.19 s**, 34,756 statements = **90.7%** of the release's covered statements |
+| W61 | 1 | `test_trainer_async_dataloading` failed ~1 run in 8; the first batch was read mid-copy | the wait was enqueued on the default stream, but `train_step` runs under `with torch.cuda.stream(compute_stream)`, so the reader never awaited the load stream | `compute_stream.wait_stream(load_stream)` before consuming the buffer | **12/12 runs pass**; the spy sees batch 0 again |
+| W62 | 2 | coverage was a snapshot, not a direction | no ratchet, and no single population | `COVERAGE=1` adds the flags to the release's own pytest calls; `check_coverage_ratchet.py` holds 38,318 with slack 150 and names the files that lost lines | baseline recorded; a drop fails the step |
+| W63 | 2 | one test sets the fast suite's and the unit shard's wall (178.3 s) | the cosine-similarity test trains two MLPs at a budget larger than its assertion needs | trim its epochs/batches to the smallest that still fails on a broken claim; measure before/after | fast suite wall < 60 s; the assertion still fails when the claim breaks |
+| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | each named area rises; the ratchet moves |
+| W65 | 1 | 113 of 342 files cover no unique line; the demo shard is 777-817 s | demos are artifact producers; capability tests certify floors | keep both out of the fast suite and in the release; do not delete — they answer a different question than coverage | fast suite unchanged; the release keeps the artifacts |
 
 ## Efficiency rules
 
@@ -137,6 +208,15 @@ property shard and the step it touches. One artifact per tree.
       warnings (W56).
 - [ ] The site-build and pre-registration decisions are written where the
       gate lives (W58, W59).
+- [ ] The fast suite is green in **≤ 2.5 min**, reaches **≥ 90%** of the
+      release's covered statements, and a moved test file does not fail it
+      (W60).
+- [ ] `COVERAGE=1` holds 38,318 covered statements (63.65%) or rises with a
+      re-baseline in the same commit (W62).
+- [ ] The 178 s long pole is trimmed or marked, and the fast suite's wall is
+      **< 60 s** (W63).
+- [ ] The named coverage gaps (surface/report, wave, runners, local_learning)
+      have contract tests, each named in its change (W64).
 
 ## Remaining work (in order)
 
@@ -148,9 +228,12 @@ property shard and the step it touches. One artifact per tree.
 2. **P1 — the two population locks** (W46, W47), then the two new contracts
    (W48, W49). This is the block that makes the property shard's numbers mean
    what they say.
-3. **P2 — static debt** (W56, W57). One scope decision for `docs/archive`,
+3. **P2 — coverage and test time** (W60, W63, W64, W65). Start with the 178 s
+   long pole: it is half the fast suite's wall and the whole unit shard's
+   floor. Then the named gaps, as contract tests.
+4. **P3 — static debt** (W56, W57). One scope decision for `docs/archive`,
    then the 15 warnings; ruff one group per pass, Register C alongside.
-4. **P3 — decisions** (W58, W59).
+5. **P4 — decisions** (W58, W59).
 
 The 0.277 block is closed, and no further rung is mandated: a second credit
 family is a **new claim**, not a confirmation of this one, and runs only with

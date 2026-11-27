@@ -4,7 +4,12 @@
 # property shard, then the cheaper suites.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
+# shellcheck source=scripts/_gpu_idle.sh
+source "$SCRIPT_DIR/_gpu_idle.sh"
+warn_foreign_gpu_allocations
 
 export UV_LINK_MODE=copy
 # The compile cache outlives a run, so it lives outside the tree: inside it,
@@ -16,6 +21,16 @@ run() {
     printf '\n=== %s ===\n' "$*"
     "$@"
 }
+
+# Coverage is a measurement of this script's own population, not a second
+# selection: `COVERAGE=1` adds the flags to every pytest invocation, so the
+# suites cannot drift from the ones the ratchet is defined over. A normal pass
+# pays nothing for it.
+if [ "${COVERAGE:-0}" = 1 ]; then
+    export COVERAGE_FILE="${COVERAGE_FILE:-$PWD/logs/.coverage}"
+    rm -f "$COVERAGE_FILE"
+    export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} --cov=computronium --cov-context=test --cov-append --cov-report="
+fi
 
 run uv run ruff format --check .
 run uv run python scripts/check_pyright_ratchet.py
@@ -69,5 +84,11 @@ run uv run python -m pytest tests/acceptance -q -rf --tb=line \
 run uv run pip-audit
 run uv run python -m build
 run uv run python scripts/generate_docs.py --all --check
+
+if [ "${COVERAGE:-0}" = 1 ]; then
+    run uv run coverage json -o logs/coverage.json
+    run uv run python scripts/check_coverage_ratchet.py \
+        --coverage-json logs/coverage.json
+fi
 
 printf '\nlocal gates: PASS\n'
