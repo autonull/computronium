@@ -1,5 +1,79 @@
 # TODO107 — Local release closure: tests, SEC readiness, acceleration
 
+## Progress 2026-11-27 (session 3)
+
+**W33 closed: the cell ceiling travels with the run, and the replay runs it.**
+The ceiling was part of the environment a run measured in, but it lived only in
+the CLI, so a replay fell back to this host's default and compared two
+environments. `RunSpec.cell_workers` now declares it;
+`ExecutionLimits.declare()` records the ceiling the process resolved, and
+`execute_spec`/the campaign write it on the run row; the survey engines declare
+the `--max-workers` they plan with; `comp repro` takes no ceiling flag at all
+and runs the record's. Evidence: an 8-cell serial survey
+(`/tmp/w33_store.duckdb`, run `de84d141`) reproduces with `comp repro
+--device cpu` and no flag — **8 cells, 0 mismatches**; an 8-cell pipeline run
+(`/tmp/w33_run2.duckdb`, run `2e662d30`) does the same. A pre-W33 row declares
+nothing, and the replay says so instead of pretending.
+
+**W34 closed: the run engine never declared its objectives.** The post-training
+probe reads the declaration to decide whether anything wants the free-settle
+telemetry, and an *absent* declaration means "wants it". The pipeline built its
+batch items with `params={}`, so every cell paid the probe D13 removed, and a
+survey record and a run record of the same cell differed by 16 metrics —
+`settle_steps_used` among them — so the survey store could not replay at all (8
+mismatches). Fix: `_fresh_batch_items` declares the run's objectives. Measured:
+the run's payload drops from 60 to 45 keys against the survey's 44, the
+difference is `stage_timings` (a pipeline stage's host metric), and the survey
+store replays **0 mismatches**.
+
+**W35 opened: the in-run replay gate fails cells that a fresh process
+reproduces.** `promote_with_stats` reported `replay=fail` on 4 of 8 cells of
+that same run, while `comp repro` on the store passes and
+`scripts/probes/probe_replay_metric.py` finds `survives=True` for all 8 in a
+fresh process. So the gate reads in-process state the replay command does not
+— W32's class, inside the gate. Not fixed here: it needs its own rung-1
+measurement (which state, and does seeding it close the gate).
+
+**Static:** the pyright ratchet was stale by four errors from the previous
+session's commits; the three this pass named (`spec.n_seeds` passed as `None`
+into two `int` parameters in `_resolve_baselines`, the sampler's generator in
+`test_seeded_shuffle`) are fixed and the baseline lowered **3260 → 3257**
+(`configs/pyright_ratchet.json`, which now records its measurement date).
+`comp version` gained its parser, so `comp version --help` prints usage
+instead of the version. The README's command table is regenerated (41
+subcommands), and the ruff baseline lowered **551 → 550**.
+
+**W36 closed: the release script wrote its compile cache into the linted
+tree.** `TORCHINDUCTOR_CACHE_DIR=$PWD/.cache/torchinductor` put the inductor
+graphs inside the repository, so `ruff check .` linted them: the property
+shard's lint ratchet read **12 660 findings against the 551 baseline** — the
+count depended on whether a run had compiled anything. The cache now lives
+under `${XDG_CACHE_HOME:-$HOME/.cache}/computronium/torchinductor` and ruff
+excludes `.cache`. The same pass found `_seeded_shuffle` cloning any loader
+with a `RandomSampler`, so a time-major `SequenceBatches` stream — which has
+no `dataset` — failed its cell at 0.03 s; the clone now requires a
+`DataLoader`, and the sequence smoke cell trains.
+
+**W38 closed: the campaign's four gates read a host-load artifact.** The
+`campaign` fixture builds one 450-record campaign, shared by fifteen gates in
+two modules. Inside the four-way acceptance shard they contend with three
+sibling gates, so a cell is ~20× slower than its measured 0.7 s, the run's
+deadline cuts 22 cells before their first epoch, the store keeps them, and
+`train_acc` is missing — measured, `1 failed, 48 passed` with 22 cut cells.
+Re-run serially, the same two modules are **18 passed in 91.6 s**. The release
+script now runs them on their own serial step (`-n 1`) and the shard ignores
+them; the store is keyed by spec and source mtime, so the artifact is not
+reused across a code change.
+
+**Release measured (one pass, `logs/local_gates.log`):** format 1704 files;
+pyright ratchet held 3257/525; fast locks 126 passed; property 2945 passed, 53
+skipped, 30 xfailed, 4 xpassed (545 s); primitives 780 passed, 135 skipped
+(786 s); acceleration 440 passed, 75 skipped (28 s); unit 955 passed, 1 xfailed
+(237 s); demo 25 passed (863 s); campaign gates 18 passed (92 s); acceptance
+32 passed, **1 failed** in 943 s; `pip-audit`, `python -m build` and
+`generate_docs.py --all --check` pass. The one failure is W39, so the script
+exits 1 on a known-open gap rather than passing on a waived gate.
+
 ## Progress 2026-11-26 (session 2)
 
 **W30 closed: a governed claim restricts the loop's arms.** The loop's explore
@@ -270,6 +344,13 @@ uv run comp demo
 | W30 | 1 | todo63 loop fixtures timed out at 600 s | `hours=1.0` plus 0.1 h per stage ran one task for the whole mark | per-stage budget from the total (done); the credit space was then ungoverned | acceptance green; governed axes restrict to the declared arms (`probe_governed_axes.py`) | **5 passed** (284.94 s) |
 | W31 | 1 | `comp repro` compared different tasks and then different numbers | `(cell_key, seed)` collapses tasks; metrics diverge run-to-run | key = `_measurement_identity` (cell, task, seed); compare 8 real cells | **8 cells, 0 mismatches** with W32 fixed and `--max-workers 1` |
 | W32 | 2 | `gradient` cells did not reproduce numerically on the same seed | `DataLoader(shuffle=True)` had no seeded generator (`domains/tabular.py:180`); `_set_seeds`→`_compose_cell` raced between workers (`evaluate.py:461`) | per-cell `torch.Generator(seed)` for the train sampler; one `_RNG_LOCK` around seed→compose→trainer construction; `comp repro --max-workers` | **PASS**: 8 and 12 cells, 0 mismatches (serial); 4 concurrent cells still drift |
+| W33 | 2 | a replay fell back to the host's cell ceiling and compared two environments | the ceiling lived only in the CLI, not in the declaration | `RunSpec.cell_workers`; `ExecutionLimits.declare()`; recorded by `execute_spec`/campaign and declared by the survey engines; `comp repro` reads it, flag removed | **PASS**: 8-cell survey and 8-cell run replay with 0 mismatches, no flag |
+| W34 | 1 | a survey record and a run record of the same cell carried different metric sets | the pipeline built batch params `{}`, so `_needs_stability` read an undeclared run and paid the probe | `_fresh_batch_items` declares `spec.objectives` | payload 60→45 keys vs the survey's 44 (`stage_timings` only); survey replay 0 mismatches |
+| W35 | 1 | `replay=fail` on 4 of 8 cells that a fresh process reproduces | the in-run gate reads in-process state (W32's class) | not fixed: name the state and test whether seeding it closes the gate | `probe_replay_metric.py`: `survives=True` for all 8 in a fresh process |
+| W36 | 0 | the property shard's lint ratchet read 12 660 findings | `TORCHINDUCTOR_CACHE_DIR` sat inside the tree, so `ruff check .` linted the inductor graphs | cache under `~/.cache/computronium/torchinductor`; ruff excludes `.cache` | 550 findings in the shard |
+| W37 | 0 | a time-major sequence cell failed at 0.03 s | `_seeded_shuffle` cloned any loader with a `RandomSampler`; `SequenceBatches` has no `dataset` | the clone requires a `DataLoader` | `test_sequence_task_lock` 8 passed |
+| W38 | 0 | fifteen campaign gates failed on 22 cells cut before their first epoch | the campaign fixture runs inside the four-way shard and the run's deadline is a wall clock; the store keeps the cut records | campaign gates on their own serial step; the shard ignores them | 18 passed in 91.6 s serial |
+| W39 | 1 | `TestFromScratchTest::test_pareto_frontier_includes_local_credit` finds no local credit at L1/L2 | unproven: local credit dips below the digits bar and only `gradient` promotes (W26's mechanism, unpromoted side) | needs a rung-1 measurement of which credit clears the bar at L0 | 1 failed, 32 passed in acceptance |
 
 ## Efficiency rules
 
@@ -283,16 +364,24 @@ uv run comp demo
 
 ## Closure criteria
 
-- [ ] `scripts/run_local_gates.sh` exits 0.
-- [ ] Property + figure lock, primitives, algorithms + acceleration, unit,
-      demo, acceptance are each green once. Acceptance: todo63
-      `TestFirstGovernedClaim` 5/5 (targeted); full shard not rerun.
+- [ ] `scripts/run_local_gates.sh` exits 0. Measured: every step is green
+      except acceptance's `TestFromScratchTest::test_pareto_frontier_includes_local_credit`
+      (W39), so the script exits 1 on that one known-open gap.
+- [x] Property + figure lock, primitives, acceleration, unit, demo and the
+      campaign gates are each green once; acceptance is 32 passed, 1 failed
+      (W39).
 - [ ] `comp demo` and the one-cell SEC run write a record; breadth PASS.
 - [x] Format green; ruff ratchet green and lowered (659 → 551); pyright
-      ratchet exists (`3260/525`) and the TODO106-touched test errors are
+      ratchet exists (`3257/525`) and the TODO106-touched test errors are
       clean. The remaining `evaluate.py` type findings are legacy.
 - [x] The Jacobian, parity-probe, and detach locks are green; the train
       shuffle is seeded per cell (`test_seeded_shuffle`).
+- [x] The cell ceiling travels on the declaration and the replay runs it
+      (`test_replay_environment_lock.py`): an 8-cell survey and an 8-cell run
+      replay with 0 mismatches and no flag (W33).
+- [x] The run engine declares its objectives, so the free-settle probe is paid
+      only when an objective reads it
+      (`test_every_batch_carries_the_runs_objectives`, W34).
 - [x] Lazy stability telemetry is locked in both directions.
 - [ ] The `dynamic=True` compile probe is measured and either adopted or
       rejected. It is adopted and the TODO104 A2 probe exists, but the
@@ -303,8 +392,8 @@ uv run comp demo
 - [ ] The campaign writes claims/limitations; `comp coverage` and
       `comp repro --device cpu` pass; the 0.277 block has a pre-registered
       `n_max` verdict. Measured campaign: 450 records in 279 s. Coverage
-      passes; `comp repro` passes on an 8-cell serial survey store, and needs
-      `--max-workers 1` (W32). A fresh serial campaign is still open.
+      passes; `comp repro` passes on an 8-cell serial survey store with no
+      ceiling flag (W33). A fresh serial campaign is still open.
 - [ ] `generate_docs.py --all --check`, `pip-audit`, and `python -m build`
       are green.
 - [x] The eqprop reference-only condition is declared in its generated spec
@@ -313,15 +402,19 @@ uv run comp demo
 
 ## Remaining work (in order)
 
-1. **Record the cell ceiling in the run spec (W33).** `cell_workers` is part
-   of the environment a replay must match, but it lives only in the CLI. Add it
-   to `RunSpec` and have `comp repro` read it instead of `--max-workers`.
-2. **Release.** `scripts/run_local_gates.sh` once, with
-   `TORCHINDUCTOR_CACHE_DIR` persistent. Acceptance and the serial replay are
-   green; the W33 spec field remains.
+1. **W39: the local-credit frontier.** Measure which credit clears the digits
+   bar at L0 on the from-scratch loop's own seeds, then fix the promotion path
+   or the bar — the release's only red gate (`run_local_gates.sh` exits 1 on
+   it).
+2. **W35.** Name the in-process state the in-run replay gate reads, and test
+   whether seeding it closes the gate (`scripts/probes/probe_replay_metric.py`
+   is the probe; a fresh process reproduces every cell).
 3. **D14 follow-up.** Count recompiles for a layer-count sweep and adopt a
    shape bucket/padding only if it removes them without slowing the steady
    state. Record the measured number beside `compile_settle`.
+4. **The serial campaign** the previous session left open: a fresh
+   `2 × 2 × 2` campaign, its `comp coverage`/`comp repro`, and the 0.277
+   seed block's pre-registered `n_max` verdict.
 
 ## Notes
 
