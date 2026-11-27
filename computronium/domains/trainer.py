@@ -45,7 +45,7 @@ class TaskProtocol(Protocol):
         ...
 
     @property
-    def input_dim(self) -> int | None: ...
+    def input_dim(self) -> int | tuple[int, ...] | None: ...
 
     @property
     def output_dim(self) -> int: ...
@@ -69,6 +69,21 @@ class TaskProtocol(Protocol):
     ) -> dict[str, float]: ...
 
 
+@runtime_checkable
+class _CustomLoss(Protocol):
+    """A task that computes its own loss: an LM reshape, a continuous target.
+
+    ``hasattr`` does not narrow a protocol for the type checker, so the
+    branch that reads ``compute_loss`` is declared as its own protocol and
+    entered through ``isinstance`` (the task protocol is runtime-checkable
+    too).
+    """
+
+    def compute_loss(
+        self, logits: torch.Tensor, targets: torch.Tensor
+    ) -> torch.Tensor: ...
+
+
 def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     """Pick the torch loss module for the task's declared loss kind.
 
@@ -90,7 +105,7 @@ def _compute_task_loss(
     LM tasks need special handling: they output (B, T, V) and target is (B, T),
     requiring reshape before cross_entropy.
     """
-    if hasattr(task, "compute_loss"):
+    if isinstance(task, _CustomLoss):
         return task.compute_loss(logits, targets)
     loss_fn = _resolve_task_loss(task)
     return loss_fn(logits, targets)

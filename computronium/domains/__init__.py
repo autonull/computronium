@@ -15,6 +15,7 @@ from computronium.domains.base import (
     DomainType,
     Metrics,
     TaskSplit,
+    flat_input_dim,
 )
 from computronium.domains.factory import CharNGramTask, create_task
 from computronium.domains.graph import GraphTask
@@ -79,6 +80,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "TaskSplit",
     "Batch",
     "Metrics",
+    "flat_input_dim",
     # Concrete tasks
     "VisionTask",
     "LMTask",

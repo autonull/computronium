@@ -22,6 +22,7 @@ import torch
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.rl_trainer import RLSystemTrainer
+from computronium.domains.base import flat_input_dim
 from computronium.domains.factory import create_task
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate
@@ -55,7 +56,7 @@ def main() -> int:
             params={},
         ),
         geometry={"hidden_dim": 64, "num_layers": 2},
-        input_shape=(task.input_dim,),
+        input_shape=(flat_input_dim(task.input_dim, task.name),),
         output_dim=task.output_dim,
     )
     config = SystemTrainerConfig(

@@ -2,6 +2,7 @@
 Base classes for Domain Abstraction Layer.
 """
 
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -22,6 +23,7 @@ __all__ = [
     "Metrics",
     "TaskSplit",
     "TaskType",
+    "flat_input_dim",
 ]
 
 
@@ -136,6 +138,25 @@ class Metrics:
         )
 
 
+def flat_input_dim(input_dim: int | tuple[int, ...] | None, task: str) -> int:
+    """The flattened input width, which is what an MLP geometry is sized by.
+
+    A spatial task reports its unflattened shape (the same reduction
+    ``resolve_task`` makes), so a geometry that needs one width takes the
+    product rather than the tuple (D16).
+    """
+    if isinstance(input_dim, int):
+        return input_dim
+    if isinstance(input_dim, (tuple, list)) and all(
+        isinstance(dim, int) for dim in input_dim
+    ):
+        return math.prod(input_dim)
+    raise ValueError(
+        f"task {task!r} reports input_dim={input_dim!r}, which is neither a width "
+        "nor a shape, so no MLP geometry can be sized from it"
+    )
+
+
 class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
     """
     Abstract base class for domain tasks.
@@ -163,7 +184,7 @@ class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
         self._train_loader: DataLoader | None = None
         self._val_loader: DataLoader | None = None
         self._test_loader: DataLoader | None = None
-        self._input_dim: int | None = None
+        self._input_dim: int | tuple[int, ...] | None = None
         self._output_dim: int | None = None
         self._setup_done = False
 
@@ -247,10 +268,19 @@ class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
         return Batch(inputs=inputs, targets=targets)
 
     @property
-    def input_dim(self) -> int:
-        """Get input dimension."""
+    def input_dim(self) -> int | tuple[int, ...]:
+        """The input width, or the task's channel-first input shape.
+
+        A spatial task reports its unflattened shape (the same reduction
+        ``resolve_task`` makes); a geometry that needs one width lets
+        ``flat_input_dim`` take the product, and one that consumes space
+        keeps the tuple (D16).
+        """
         if self._input_dim is None:
             self.setup()
+        if self._input_dim is None:
+            msg = f"{type(self).__name__}.setup() declared no input dimension"
+            raise RuntimeError(msg)
         return self._input_dim
 
     @property
@@ -258,6 +288,9 @@ class DomainTask(ABC):  # ruff: ignore[too-many-public-methods]
         """Get output dimension."""
         if self._output_dim is None:
             self.setup()
+        if self._output_dim is None:
+            msg = f"{type(self).__name__}.setup() declared no output dimension"
+            raise RuntimeError(msg)
         return self._output_dim
 
     @abstractmethod

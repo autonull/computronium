@@ -23,6 +23,14 @@ __all__ = [
 ]
 
 
+def _built(loader: DataLoader | None) -> DataLoader:
+    """The loader a ``setup`` pass built; a missing one is a setup defect."""
+    if loader is None:
+        msg = "setup must build both loaders before get_dataloader returns one"
+        raise RuntimeError(msg)
+    return loader
+
+
 class SpikingMNISTTask(DomainTask):
     """MNIST frames as binary spike rasters for a neuromorphic substrate.
 
@@ -92,8 +100,8 @@ class SpikingMNISTTask(DomainTask):
         if not self._setup_done:
             self.setup()
         if split == TaskSplit.TRAIN:
-            return self._train_loader
-        return self._val_loader
+            return _built(self._train_loader)
+        return _built(self._val_loader)
 
     def evaluate(
         self,
@@ -212,8 +220,8 @@ class DVSGesturesTask(DomainTask):
         if not self._setup_done:
             self.setup()
         if split == TaskSplit.TRAIN:
-            return self._train_loader
-        return self._val_loader
+            return _built(self._train_loader)
+        return _built(self._val_loader)
 
     def evaluate(
         self,

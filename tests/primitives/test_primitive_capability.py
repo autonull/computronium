@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from computronium.domains.base import DomainType
+from computronium.domains.base import DomainType, flat_input_dim
 from computronium.domains.factory import create_task
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.sec_census import build_census
@@ -295,18 +295,19 @@ def test_primitive_on_declared_families(spec, screened_rows):
             pytest.skip(f"no dataset: task {rung.task_id} not available: {e}")
 
         try:
+            flat = flat_input_dim(task.input_dim, task.name)
             # For LM tasks with causal_transformer, input_dim is seq_len, so input_shape should be (seq_len,)
             if (
                 hasattr(task, "domain_type")
                 and task.domain_type.value == "lm"
                 and rung.coordinate.geometry == "causal_transformer"
             ):
-                input_shape = (int(task.input_dim),)
+                input_shape = (flat,)
             else:
                 input_shape = (
                     tuple(task.input_dim)
                     if isinstance(task.input_dim, (tuple, list))
-                    else (1, int(task.input_dim))
+                    else (1, flat)
                 )
             assert rung.coordinate is not None
             # Add geometry.sequence for time-major tasks with recurrent geometry

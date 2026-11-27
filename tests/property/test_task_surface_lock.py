@@ -16,7 +16,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from computronium.domains.base import DomainType, TaskSplit
+from computronium.domains.base import DomainType, TaskSplit, flat_input_dim
 from computronium.domains.factory import create_task
 from computronium.domains.registry import SUPPORTED_TASKS, resolve_task
 from computronium.domains.tabular import TabularTask
@@ -72,7 +72,7 @@ def test_registry_rows_match_their_loaders() -> None:
         task.setup()
         row = get_task_registry().get(name)
         assert row.domain is task.domain_type, name
-        assert row.input_shape == (task.input_dim,), name
+        assert row.input_shape == (flat_input_dim(task.input_dim, task.name),), name
         assert row.output_dim == task.output_dim, name
         assert row.typical_batch_size == task.batch_size, name
         assert _primary_domain_metric_key(task.domain_type) == (
@@ -97,7 +97,9 @@ def test_diabetes_is_regression_with_a_declared_ruler() -> None:
     zero = torch.zeros_like(targets)
     assert 0.5 < float(task.compute_loss(zero, targets)) < 2.0
 
-    metrics = task.evaluate(nn.Linear(task.input_dim, task.output_dim))
+    metrics = task.evaluate(
+        nn.Linear(flat_input_dim(task.input_dim, task.name), task.output_dim)
+    )
     assert "accuracy" not in metrics.to_dict()
     assert "mse" in metrics.to_dict()
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import torch
 
-from computronium.domains.base import TaskSplit
+from computronium.domains.base import TaskSplit, flat_input_dim
 from computronium.domains.tabular import TabularTask
 
 
@@ -53,7 +53,7 @@ def test_evaluate_reports_majority_baseline() -> None:
     """A cell reports the rate a constant predictor reaches on this split."""
     task = _task("wine")
     task.setup()
-    model = torch.nn.Linear(task.input_dim, 3)
+    model = torch.nn.Linear(flat_input_dim(task.input_dim, task.name), 3)
     metrics = task.evaluate(model, split=TaskSplit.VAL)
 
     val = _labels(task, TaskSplit.VAL)

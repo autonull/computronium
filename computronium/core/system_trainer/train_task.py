@@ -14,11 +14,11 @@ what the documented entry points have.
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Any
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.trainer import SystemTrainer
+from computronium.domains.base import flat_input_dim
 from computronium.domains.factory import create_task
 
 if TYPE_CHECKING:
@@ -177,25 +177,6 @@ class TaskBatches:
     def __len__(self) -> int:
         self._resolve()
         return self._length
-
-
-def flat_input_dim(input_dim: object, task: str) -> int:
-    """The flattened input width, which is what an MLP geometry is sized by.
-
-    Vision tasks report their unflattened shape (the registry's
-    ``resolve_task`` makes the same reduction), so an MLP arm needs the
-    product rather than the tuple.
-    """
-    if isinstance(input_dim, int):
-        return input_dim
-    if isinstance(input_dim, (tuple, list)) and all(
-        isinstance(dim, int) for dim in input_dim
-    ):
-        return math.prod(input_dim)
-    raise ValueError(
-        f"task {task!r} reports input_dim={input_dim!r}, which is neither a width "
-        "nor a shape, so no MLP geometry can be sized from it"
-    )
 
 
 def final_metrics(history: list[dict[str, float]]) -> dict[str, float]:

@@ -52,13 +52,47 @@ findings (unused imports, import order, f-strings without placeholders,
 `benchmarks/joint` fix: **550 → 499**. `BASELINE` is 499 and the ratchet's
 docstring names what moved.
 
-**Measured:** pyright **3257 errors / 15 warnings** in 85.1 s
-(`logs/pyright_session6c.json`), with **0 new diagnostics** against the
-session's baseline; `configs/pyright_ratchet.json` re-pinned (warnings
-525 → 15). The 15 that remain are named: 8 wildcard library imports
-(`stability`), 4 unused expressions (archived UI plus `tests/ceec/conftest.py`),
-1 `docker` module without source, 1 single-use `TypeVar`, 1 archived
-`__new__` that should take `cls`.
+**Measured:** pyright **3240 errors / 15 warnings** in 78.7 s
+(`logs/pyright_session6e.json`), with **0 new diagnostics** against the
+session's baseline; `configs/pyright_ratchet.json` re-pinned (errors
+3257 → 3240, warnings 525 → 15). The 15 that remain are named: 8 wildcard
+library imports (`stability`), 4 unused expressions (archived UI plus
+`tests/ceec/conftest.py`), 1 `docker` module without source, 1 single-use
+`TypeVar`, 1 archived `__new__` that should take `cls`.
+
+**W43: the pre-commit `slides-build` hook had no script.** Running the hooks
+on this session's commit failed on `docs/slides/build_slides.py`, which
+`5a8ae9d4` deleted together with `docs/slides.html` when
+`docs/build_site.py` replaced them. The hook stayed behind, so any commit
+touching `computronium/experiment/schema/` (this one does) could not pass
+it. Its artifact is gitignored (`docs/index.html`, `docs/index.md`), so it
+is not a commit gate; the dead hook is removed and every hook passes on the
+range. The site it used to build was also stale locally:
+`docs/build_site.py --check` exited 1, and the rebuild wrote 424 KiB of
+`index.html` + 110 KiB of `index.md`; a second `--check` exits 0.
+
+**W44: the changed-file pyright hook found the domain-task interface.** The
+hooks named five errors in `domains/neuromorphic.py`, and fixing them
+exposed the interface they came from:
+
+- `DomainTask.input_dim` was typed `int`, but `vision`, `analog`, `photonic`
+  and `neuromorphic` store a channel-first shape there; `resolve_task`,
+  `_task_shape` and `flat_input_dim` already reduce a tuple. The base and
+  `TaskProtocol` now say `int | tuple[int, ...]`, and the reduction lives in
+  one place: `domains/base.flat_input_dim` (moved out of
+  `core/system_trainer/train_task.py`, which re-imports it).
+- `input_dim`/`output_dim` read `None` after `setup()`; both now raise a
+  named `RuntimeError` instead of returning the `None`.
+- The two neuromorphic loaders returned `DataLoader | None`; a `_built`
+  helper raises rather than returning a missing loader.
+- `_compute_task_loss` tested `hasattr(task, "compute_loss")`, which does
+  not narrow a protocol; `_CustomLoss` declares the method and
+  `isinstance` enters it.
+
+Measured: pyright **3257 → 3240**, **0 new diagnostics**, warnings held at
+15. The five changed modules are pyright-clean. The sites that passed
+`task.input_dim` into an `int` go through `flat_input_dim` (the capability,
+RL-lane, tabular-split and task-surface locks, plus the pendulum probe).
 
 **Gates run (the change's affected set).** Property shard: **2959 passed,
 53 skipped, 30 xfailed, 4 xpassed in 326.05 s** (`logs/w42_property_shard.log`).
@@ -536,6 +570,8 @@ uv run comp demo
 | W40 | 1 | the fixed test passes serially but fails in the four-way acceptance shard | the fixture's 54 s stage budget is a wall clock; under xdist contention cells are cut before their second seed, the proposer sees a different frontier, and the promoted credits are `homeostatic`/`zeroth_order`/`target_inversion` instead of the local set | move `TestFromScratchTest` to its own serial step; deselect it from the shard (W38's pattern) | serial class **3 passed in 516.81 s**; shard **30 passed in 753.64 s**; release PASS |
 | W41 | 3 | a comparison at n=64 could claim a registration pre-registered for 205 seeds | `PairedComparison.passes_effect_size` read `registration.min_d` but not `registration.min_seeds`; only the equivalence path enforced the floor | the seed floor gates the claim too | `test_claim_box_identity_lock.py` locks both directions: **2 passed**; n=64 refused, the same effect at n=205 accepted |
 | W42 | 0 | 510 `reportUnsupportedDunderAll` warnings, and 3 dashboard names that never bound | a lazy `__all__` is invisible to the analyzer; `dashboard/__init__` omitted its shim, so the name raised on import | declare the names under `TYPE_CHECKING`; dashboard gets the `_LAZY` shim; lock the surface | `test_lazy_export_surface_lock.py` **11 passed**; pyright warnings **525 → 15**; errors held 3257 |
+| W43 | 0 | the `slides-build` pre-commit hook fails on a commit touching `experiment/schema` | its script and `docs/slides.html` were deleted in `5a8ae9d4` (the site builder replaced them) and the hook stayed behind | drop the hook: a gitignored artifact is not a commit gate | `pre-commit run --from-ref HEAD~1 --to-ref HEAD`: every hook passes; `docs/build_site.py --check` exit 0 |
+| W44 | 1 | the changed-file pyright hook failed on `domains/neuromorphic.py` | `input_dim` was typed `int` although four domains store a shape; the loaders returned `DataLoader | None`; `hasattr` does not narrow a protocol | widen the base and `TaskProtocol` to `int | tuple`; one `flat_input_dim` in `domains/base`; `_built` for the loaders; `_CustomLoss` for the trainer | pyright **3257 → 3240**, 0 new; the five modules clean; property/unit shards and the capability slice pass |
 
 ## Efficiency rules
 
@@ -559,7 +595,7 @@ uv run comp demo
 - [x] `comp demo` and the one-cell SEC run write a record; breadth PASS
       (17 error-aware credits; session 2).
 - [x] Format green; ruff ratchet green and lowered (659 → 550 → 499);
-      pyright ratchet exists and was lowered to `3257/15` (session 6); the
+      pyright ratchet exists and was lowered to `3240/15` (session 6); the
       TODO106-touched test errors are clean. The remaining `evaluate.py`
       type findings are legacy.
 - [x] The Jacobian, parity-probe, and detach locks are green; the train
@@ -603,7 +639,7 @@ legacy, not a blocker.
    rules it retires and lowers `BASELINE` in
    `tests/property/test_lint_count_ratchet.py`; a pass that only moves files
    is not a closure.
-2. **Pyright ratchet — 3257 errors / 15 warnings.** The 15 warnings are
+2. **Pyright ratchet — 3240 errors / 15 warnings.** The 15 warnings are
    named in session 6 (8 wildcard library imports, 4 unused expressions,
    1 `docker` module without source, 1 single-use `TypeVar`, 1 archived
    `__new__`). The error bulk is `reportArgumentType` 1122,

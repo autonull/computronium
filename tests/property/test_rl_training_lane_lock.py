@@ -16,6 +16,7 @@ import torch
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.rl_trainer import RLSystemTrainer
+from computronium.domains.base import flat_input_dim
 from computronium.domains.factory import create_task
 from computronium.experiment.kernel.compose import compose_cell_system
 from computronium.experiment.schema.coordinate import Coordinate
@@ -55,7 +56,7 @@ def test_continuous_lane_updates_from_replay() -> None:
     task = create_task("pendulum", device="cpu", quick_mode=True)
     task.setup()
     task.max_steps = 5
-    system = _cell(task.input_dim, task.output_dim)
+    system = _cell(flat_input_dim(task.input_dim, task.name), task.output_dim)
     trainer = RLSystemTrainer(system=system, config=_config(2), train_data=task)
     import computronium.core.system_trainer.rl_trainer as module
 
@@ -84,7 +85,7 @@ def test_discrete_lane_updates_per_step() -> None:
     task = create_task("cartpole", device="cpu", quick_mode=True)
     task.setup()
     task.max_steps = 5
-    system = _cell(task.input_dim, task.output_dim)
+    system = _cell(flat_input_dim(task.input_dim, task.name), task.output_dim)
     trainer = RLSystemTrainer(system=system, config=_config(2), train_data=task)
     before = {
         key: value.detach().clone() for key, value in system.geometry.params.items()
