@@ -11,6 +11,7 @@ build/
 dist/
 *.egg-info/
 .eggs/
+.cache/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
