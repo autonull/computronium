@@ -748,7 +748,10 @@ def promote_with_stats(
         )
 
         l2_passed = False
-        replay_status = "fail"
+        # "not_attempted" is not "fail": a cell the L1 statistical gates
+        # reject never reaches the replay/confirmation path, and reporting it
+        # as a failed replay blamed in-process state for a gate decision.
+        replay_status = "not_attempted"
         confirmation_gate_result = None
 
         if gate_result.all_passed and allow_l2:
