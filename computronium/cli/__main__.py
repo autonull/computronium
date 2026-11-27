@@ -18,8 +18,10 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import difflib
 import sys
 import warnings
+from importlib import metadata
 from typing import TYPE_CHECKING
 
 # Surface hints from SystemConfig validation are advisory: they describe a
@@ -33,10 +35,43 @@ _INFORMATIONAL_WARNING_PATTERNS = (
 for _pattern in _INFORMATIONAL_WARNING_PATTERNS:
     warnings.filterwarnings("ignore", message=_pattern, category=UserWarning)
 
+# torch-geometric script-compiles its reader at import time, which Python 3.14
+# flags once per process. The call is the library's, not ours, and every
+# `comp` command would otherwise start with it.
+warnings.filterwarnings(
+    "ignore",
+    message=r"^`torch\.jit\.script` is not supported in Python 3\.14\+",
+    category=FutureWarning,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 _SURFACE = "computronium.experiment.surface.cli"
+
+
+def _version() -> str:
+    """The installed distribution version, or ``"unknown"`` from a source tree."""
+    try:
+        return metadata.version("computronium")
+    except metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def _version_parser() -> argparse.ArgumentParser:
+    """The version command's own parser, so `comp version --help` answers."""
+    return argparse.ArgumentParser(
+        prog="comp version",
+        description="Show the installed Computronium distribution's version.",
+    )
+
+
+def _print_version(argv: Sequence[str] | None = None) -> int:
+    """Print the console script's version, one line, for scripts and bindings."""
+    _version_parser().parse_args(list(sys.argv[1:] if argv is None else argv))
+    print(f"computronium {_version()}")
+    return 0
+
 
 # command -> (module, attribute, argv prefix). Resolved lazily to keep the
 # import graph shallow: the dispatcher itself must not drag in the zoo/execution
@@ -84,6 +119,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "verify": ("computronium.cli.commands.verify", "app", ()),
     "plugin": ("computronium.plugins", "main", ()),
     "benchmark-contrib": ("computronium.benchmarks.contributions.cli", "main", ()),
+    "version": ("computronium.cli.__main__", "_print_version", ()),
 }
 
 # Commands that tell the story. Everything else is reachable, but only under
@@ -139,6 +175,7 @@ _SUMMARIES: dict[str, str] = {
     "verify": "Verify a primitive's map row in a slice family (TODO95 P5)",
     "plugin": "Plugin management: custom objectives, substrates, dynamics (Phase F3)",
     "benchmark-contrib": "Benchmark contributions: standard tasks, reference results, leaderboards (Phase F3)",
+    "version": "Show the installed Computronium version",
 }
 
 
@@ -159,6 +196,11 @@ def _build_parser(*, full: bool = False) -> argparse.ArgumentParser:
             "Run 'comp <command> --help' for that command's own options; "
             "'comp --help-all' lists every command."
         ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"computronium {_version()}",
     )
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     for name in _SUBCOMMANDS:
@@ -207,10 +249,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     command, rest = args[0], args[1:]
     if command not in _SUBCOMMANDS:
-        print(
-            f"comp: unknown command {command!r}",
-            file=sys.stderr,
+        close = difflib.get_close_matches(command, _SUBCOMMANDS, n=1, cutoff=0.6)
+        hint = (
+            f"did you mean {close[0]!r}?"
+            if close
+            else "run 'comp --help-all' for every command"
         )
+        print(f"comp: unknown command {command!r}; {hint}", file=sys.stderr)
         parser.print_usage(sys.stderr)
         return 2
 
