@@ -57,7 +57,14 @@ trend down from 580.
 Re-baselined 2026-11-26 from 580 to the measured 659 with ruff 0.17.5. The
 same rule set under the newer ruff reports 79 more findings on unchanged code;
 the TODO106 repair added no new findings (the changed files lint clean apart
-from the legacy geometry module). The count must now trend down from 659.
+from the legacy geometry module).
+
+Re-baselined 2026-11-26 from 659 to the measured 551 after the TODO107 Batch 0
+`ruff format` + `ruff check --fix` pass on the 13 files that predated the
+formatter (and the sync stream test). The pass retired 89 findings, mostly
+unused imports and variables, import order, f-string placeholders, and
+typing-only imports; no rule was suppressed to buy it. The count must now
+trend down from 551.
 
 Lowered 2026-11-26 from 659 to the measured 640 (ruff unchanged at 0.17.5) by
 fixing the legacy ``geometry.py`` findings: ambiguous ``l`` names, out-of-place
@@ -70,7 +77,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 640
+BASELINE = 551
 RUFF_VERSION = "0.17.5"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

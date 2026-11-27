@@ -141,13 +141,13 @@ class TestNcaCreditUpdateComposition:
     def test_system_config_rejects_non_instantaneous_dynamics(self) -> None:
         config = SystemConfig(
             substrate=SubstrateConfig.digital(),
-            geometry=GeometryConfig.nca(channels=CHANNELS),
+            geometry=GeometryConfig.nca(channels=CHANNELS, grid_hw=(GRID, GRID)),
             dynamics=StateDynamicsConfig.energy_minimization(),
             credit=_credit(),
             update=ParameterUpdateConfig.euclidean(),
         )
         with pytest.raises(
-            ValueError, match="nca.*geometry cannot host settling dynamics"
+            ValueError, match=r"nca.*geometry cannot host settling dynamics"
         ):
             config.validate()
 

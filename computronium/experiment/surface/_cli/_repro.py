@@ -27,6 +27,33 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
+# Host and device measurements are outcomes, not identities (TODO107 D8): a
+# replay on another host, or on CPU for a CUDA run, cannot reproduce RSS,
+# walltime, latency, or a device-derived energy. They stay out of the default
+# diff; naming one in --metrics opts back in.
+_HOST_METRICS = frozenset({
+    "cpu_rss_mb",
+    "memory_usage",
+    "memory_mb",
+    "latency_ms",
+    "walltime_s",
+    "training_time",
+    "energy_per_step",
+    "energy_per_mac",
+    "energy_efficiency",
+    "energy_per_batch",
+    "energy_per_sample",
+})
+
+
+def _comparable_metrics(payload: dict) -> list[str]:
+    """The payload's numeric metrics a replay can reproduce."""
+    return [
+        k
+        for k, v in payload.items()
+        if isinstance(v, int | float) and k not in _HOST_METRICS
+    ]
+
 
 def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     store: RecordStore,
@@ -146,12 +173,18 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                     run_id=repro_run_id
                 )
 
-            # Match by cell_key
-            orig_by_cell = {r.cell_key: r for r in orig_records}
-            repro_by_cell = {r.cell_key: r for r in repro_records}
+            # A cell_key collapses seeds; a measurement_key carries the
+            # replay's changed device/determinism. Compare the same cell and
+            # seed, not the schedule's environment flags.
+            orig_by_measurement = {
+                (r.cell_key, r.schedule.seed): r for r in orig_records
+            }
+            repro_by_measurement = {
+                (r.cell_key, r.schedule.seed): r for r in repro_records
+            }
 
-            common_cells = set(orig_by_cell.keys()) & set(repro_by_cell.keys())
-            if not common_cells:
+            common_measurements = set(orig_by_measurement) & set(repro_by_measurement)
+            if not common_measurements:
                 logger.error("No matching cells between original and reproduction")
                 return 1
 
@@ -160,20 +193,13 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
             )
 
             mismatches = []
-            for cell_key in sorted(common_cells):
-                orig_r = orig_by_cell[cell_key]
-                repro_r = repro_by_cell[cell_key]
+            for measurement_key in sorted(common_measurements):
+                orig_r = orig_by_measurement[measurement_key]
+                repro_r = repro_by_measurement[measurement_key]
                 orig_payload = orig_r.payload
                 repro_payload = repro_r.payload
 
-                if metrics_to_check:
-                    check_metrics = metrics_to_check
-                else:
-                    check_metrics = [
-                        k
-                        for k in orig_payload
-                        if isinstance(orig_payload[k], int | float)
-                    ]
+                check_metrics = metrics_to_check or _comparable_metrics(orig_payload)
 
                 for metric in check_metrics:
                     if metric not in orig_payload or metric not in repro_payload:
@@ -186,7 +212,7 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                         diff = abs(float(orig_val) - float(repro_val))
                         if diff > args.tolerance:
                             mismatches.append({
-                                "cell_key": cell_key,
+                                "measurement_key": orig_r.measurement_key,
                                 "metric": metric,
                                 "original": orig_val,
                                 "reproduction": repro_val,
@@ -197,7 +223,7 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                 "original_run_id": run_id,
                 "reproduction_run_id": repro_run_id,
                 "tolerance": args.tolerance,
-                "cells_compared": len(common_cells),
+                "cells_compared": len(common_measurements),
                 "metrics_checked": metrics_to_check or "all",
                 "mismatches": mismatches,
                 "passed": len(mismatches) == 0,
@@ -212,11 +238,11 @@ def _cmd_repro_docker(  # ruff: ignore[complex-structure, too-many-branches, too
                 ]
                 for m in mismatches[:10]:
                     lines.append(
-                        f"  {m['cell_key'][:16]} {m['metric']}: {m['original']} vs {m['reproduction']} (diff={m['diff']})"
+                        f"  {m['measurement_key'][:16]} {m['metric']}: {m['original']} vs {m['reproduction']} (diff={m['diff']})"
                     )
                 output = "\n".join(lines)
             else:
-                output = f"REPRO PASSED: {len(common_cells)} cells match within {args.tolerance}"
+                output = f"REPRO PASSED: {len(common_measurements)} cells match within {args.tolerance}"
 
             if args.output:
                 Path(args.output).write_text(output, encoding="utf-8")
@@ -325,12 +351,20 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                         run_id=repro_run_id
                     )
 
-                # Match by cell_key
-                orig_by_cell = {r.cell_key: r for r in orig_records}
-                repro_by_cell = {r.cell_key: r for r in repro_records}
+                # A cell_key collapses seeds; a measurement_key carries the
+                # replay's changed device/determinism. Compare the same cell
+                # and seed, not the schedule's environment flags.
+                orig_by_measurement = {
+                    (r.cell_key, r.schedule.seed): r for r in orig_records
+                }
+                repro_by_measurement = {
+                    (r.cell_key, r.schedule.seed): r for r in repro_records
+                }
 
-                common_cells = set(orig_by_cell.keys()) & set(repro_by_cell.keys())
-                if not common_cells:
+                common_measurements = set(orig_by_measurement) & set(
+                    repro_by_measurement
+                )
+                if not common_measurements:
                     logger.error("No matching cells between original and reproduction")
                     return 1
 
@@ -341,20 +375,15 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                 )
 
                 mismatches = []
-                for cell_key in sorted(common_cells):
-                    orig_r = orig_by_cell[cell_key]
-                    repro_r = repro_by_cell[cell_key]
+                for measurement_key in sorted(common_measurements):
+                    orig_r = orig_by_measurement[measurement_key]
+                    repro_r = repro_by_measurement[measurement_key]
                     orig_payload = orig_r.payload
                     repro_payload = repro_r.payload
 
-                    if metrics_to_check:
-                        check_metrics = metrics_to_check
-                    else:
-                        check_metrics = [
-                            k
-                            for k in orig_payload
-                            if isinstance(orig_payload[k], int | float)
-                        ]
+                    check_metrics = metrics_to_check or _comparable_metrics(
+                        orig_payload
+                    )
 
                     for metric in check_metrics:
                         if metric not in orig_payload or metric not in repro_payload:
@@ -367,7 +396,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                             diff = abs(float(orig_val) - float(repro_val))
                             if diff > args.tolerance:
                                 mismatches.append({
-                                    "cell_key": cell_key,
+                                    "measurement_key": orig_r.measurement_key,
                                     "metric": metric,
                                     "original": orig_val,
                                     "reproduction": repro_val,
@@ -378,7 +407,7 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     "original_run_id": args.run_id,
                     "reproduction_run_id": repro_run_id,
                     "tolerance": args.tolerance,
-                    "cells_compared": len(common_cells),
+                    "cells_compared": len(common_measurements),
                     "metrics_checked": metrics_to_check or "all",
                     "mismatches": mismatches,
                     "passed": len(mismatches) == 0,
@@ -392,11 +421,11 @@ def _cmd_repro(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structu
                     ]
                     for m in mismatches[:10]:
                         lines.append(
-                            f"  {m['cell_key'][:16]} {m['metric']}: {m['original']} vs {m['reproduction']} (diff={m['diff']})"
+                            f"  {m['measurement_key'][:16]} {m['metric']}: {m['original']} vs {m['reproduction']} (diff={m['diff']})"
                         )
                     output = "\n".join(lines)
                 else:
-                    output = f"REPRO PASSED: {len(common_cells)} cells match within {args.tolerance}"
+                    output = f"REPRO PASSED: {len(common_measurements)} cells match within {args.tolerance}"
 
                 if args.output:
                     Path(args.output).write_text(output, encoding="utf-8")

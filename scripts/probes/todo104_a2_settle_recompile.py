@@ -23,7 +23,9 @@ CASES = (
 
 def main() -> int:
     seed_all_registries()
-    print(f"device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'}")
+    print(
+        f"device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'}"
+    )
     failures = 0
     for axis, primitive, task_id, overrides in CASES:
         box = _build_axis_box(axis, primitive, task_id)

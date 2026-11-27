@@ -24,7 +24,11 @@ from tempfile import mkdtemp
 import pytest
 import yaml
 
-from computronium.experiment.evidence import RecordStore, StoreConfig
+from computronium.experiment.evidence import (
+    RecordStore,
+    StoreConfig,
+    replication_key,
+)
 from computronium.experiment.schema import Maturity
 from computronium.experiment.surface import ReportGenerator, cli
 
@@ -36,6 +40,10 @@ _SPEC = {
     "task": "digits",
     "fidelity": "L2",
     "n_seeds": 2,
+    # Three epochs is the smallest measured regime that clears the digits bar
+    # for thermodynamic_contrast on every seed (0.48-0.64); gradient at the
+    # same regime dips below the 0.10 bar on some seeds, which would leave a
+    # PASS seed unpromoted and make this promotion lock flaky (TODO107 D9).
     "epochs": 3,
     "batch_limit": 0,
     "seed": 0,
@@ -50,7 +58,7 @@ _SPEC = {
         {"axis": "plasticity", "primitives": ["fast_weights"]},
         {"axis": "update", "primitives": ["euclidean"]},
         {"axis": "dynamics", "primitives": ["energy_minimization"]},
-        {"axis": "credit", "primitives": ["gradient"]},
+        {"axis": "credit", "primitives": ["thermodynamic_contrast"]},
         {"axis": "geometry", "primitives": ["feedforward"]},
     ],
 }
@@ -90,9 +98,23 @@ def test_a_promoted_cell_reaches_l1_by_promotion(run: tuple[Path, str]) -> None:
     with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
         records = store.query_records(run_id=run_id)
         assert records, "the run measured nothing"
-        earned = {r.status.maturity for r in records}
-        assert Maturity.L0 not in earned, (
-            "a record kept the default maturity: promotion never ran"
+        # A cell whose sibling seed failed the bar is not eligible: its PASS
+        # seed legitimately stays L0. Only an eligible pair may not.
+        achieved: dict[str, int] = {}
+        for record in records:
+            if record.status.gate_verdict.value == "PASS":
+                key = replication_key(record)
+                achieved[key] = achieved.get(key, 0) + 1
+        stale = [
+            r
+            for r in records
+            if r.status.gate_verdict.value == "PASS"
+            and achieved[replication_key(r)] >= 2
+            and r.status.maturity is Maturity.L0
+        ]
+        assert not stale, (
+            f"eligible PASS seeds kept the default maturity: "
+            f"{[r.measurement_key[:8] for r in stale]}"
         )
         # L1 should be earned for all eligible cells (2 seeds meets relaxed threshold)
         l1_records = [r for r in records if r.status.maturity is Maturity.L1]

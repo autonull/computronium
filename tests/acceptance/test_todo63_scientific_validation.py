@@ -27,7 +27,10 @@ from computronium.experiment.evidence import RecordStore, StoreConfig
 from computronium.experiment.registry.loop import LoopConfig, LoopDriver
 from computronium.experiment.schema import seed_all_registries
 
-pytestmark = pytest.mark.timeout(600)
+# The two class fixtures run a real loop over three tasks; measured 366 s
+# each. The 600 s mark left only 1.6x, and the xdist acceptance shard
+# contends, so the setup timed out. 900 s is the measured 2x watchdog.
+pytestmark = pytest.mark.timeout(900)
 
 
 def _resolve_git_sha() -> str:
@@ -87,18 +90,25 @@ def _run_loop(
         checkpoint_every_n=0,
         device="cpu",
         master_seed=42,
-        hours=1.0,
+        # The loop budget is a ceiling shared by every task in the schedule:
+        # one stage at 0.1 h consumed the whole 0.1 h ceiling on the first
+        # task, so later tasks never ran. Budget each stage from the total
+        # (0.2 h / 12 stages = 1 min), which covers every declared task and
+        # stays under the 900 s watchdog.
+        hours=0.2,
         cycles=cycles,
         n_seeds=n_seeds,
         explore_fidelity="L0",
         exploit_fidelity="L1",
-        explore_hours=0.1,
-        exploit_hours=0.1,
+        explore_hours=0.015,
+        exploit_hours=0.015,
         explore_sweep_steps=10,
         exploit_sweep_steps=5,
         epochs_explore=1,
         epochs_exploit=3,
-        cell_workers=2,
+        # One torch autograd graph at a time: two loop workers on
+        # free-threaded CPython segfaulted in libtorch_cpu after ~7 min.
+        cell_workers=1,
         task_schedule=task_schedule,
         hypothesis_ids=hypothesis_ids,
         hypothesis_registry_path=state_dir / "hypotheses.json",
@@ -367,7 +377,7 @@ class TestLoopScientificIntegrity:
                 exploit_sweep_steps=3,
                 epochs_explore=1,
                 epochs_exploit=1,
-                cell_workers=2,
+                cell_workers=1,
                 task_schedule=("xor",),
             )
 
@@ -419,7 +429,7 @@ class TestLoopScientificIntegrity:
                 exploit_sweep_steps=3,
                 epochs_explore=1,
                 epochs_exploit=1,
-                cell_workers=2,
+                cell_workers=1,
                 task_schedule=("xor",),
             )
 
@@ -472,7 +482,7 @@ class TestLoopScientificIntegrity:
                 exploit_sweep_steps=3,
                 epochs_explore=1,
                 epochs_exploit=1,
-                cell_workers=2,
+                cell_workers=1,
                 task_schedule=("xor",),
             )
 

@@ -118,16 +118,16 @@ async def run_deep_dive_on_primitive(
     registration_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run the deep dive (Rung 2 ladder + Rung 3 paired) on a single primitive."""
-    
+
     # Get the base family for this task
     family = base_family(task_id)
     if family is None:
         raise ValueError(f"No base family for task {task_id}")
-    
+
     base = BASE_BOXES.get(family)
     if base is None:
         raise ValueError(f"No base box for family {family}")
-    
+
     # Parse primitive axis and name
     parts = primitive_id.split(".")
     if len(parts) != 3:
@@ -141,7 +141,7 @@ async def run_deep_dive_on_primitive(
         "parameter_update": "update",
     }
     axis = axis_map.get(axis, axis)
-    
+
     # Get the primary knob for this primitive
     axis_enum = axis  # axis segment
     knob_info = primary_knob(axis_enum, level, task_id=task_id)
@@ -152,9 +152,9 @@ async def run_deep_dive_on_primitive(
             "status": "no_knob",
             "reason": f"No primary knob found for {primitive_id} on {task_id}",
         }
-    
+
     knob_key, knob_default = knob_info
-    
+
     # Use the family's base coordinate (from BASE_BOXES)
     base_axes = base.base_coordinate.copy() if base.base_coordinate else {}
     # Ensure all required axes are present
@@ -172,18 +172,18 @@ async def run_deep_dive_on_primitive(
             base_axes[k] = v
     # Override the axis under test
     base_axes[axis] = level
-    
+
     # Get the base schedule
     schedule = base_schedule(task_id, device)
     if schedule is None:
         raise ValueError(f"No schedule for task {task_id}")
-    
+
     # Build the coordinate with the family's base axes
     base_coord = _coordinate(base_axes)
-    
+
     # Get the box summary for the base coordinate
     base_box = _box_summary(base_coord, schedule)
-    
+
     # Check if legal
     legal, refusal = _is_legal(base_coord, task_id)
     if not legal:
@@ -193,7 +193,7 @@ async def run_deep_dive_on_primitive(
             "status": "refused",
             "reason": refusal,
         }
-    
+
     # Build the candidate
     candidate = DeepDiveCandidate(
         primitive=primitive_id,
@@ -206,27 +206,29 @@ async def run_deep_dive_on_primitive(
         box=base_box,
         walltime_s=None,
     )
-    
+
     # Get the task bar
     bar = _task_bar(task_id)
     bar_value = bar.value if bar else None
-    
+
     # Run the ladder (Rung 2)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running ladder for {primitive_id} on {task_id}")
     print(f"Knob: {knob_key} = {knob_default}")
     print(f"Ladder factors: {LADDER_FACTORS}")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     rungs = await _ladder_async(candidate, schedule)
-    
+
     best = best_rung(tuple(rungs))
-    
+
     print(f"\nLadder results:")
     for rung in rungs:
-        status_str = f"val_acc={rung.val_acc:.4f}" if rung.val_acc is not None else rung.status
+        status_str = (
+            f"val_acc={rung.val_acc:.4f}" if rung.val_acc is not None else rung.status
+        )
         print(f"  factor={rung.factor}, value={rung.value:.4f}, {status_str}")
-    
+
     if best is None:
         return {
             "primitive": primitive_id,
@@ -235,9 +237,11 @@ async def run_deep_dive_on_primitive(
             "reason": "No valid ladder point",
             "rungs": [r.to_dict() for r in rungs],
         }
-    
-    print(f"\nBest rung: factor={best.factor}, value={best.value:.4f}, val_acc={best.val_acc:.4f}")
-    
+
+    print(
+        f"\nBest rung: factor={best.factor}, value={best.value:.4f}, val_acc={best.val_acc:.4f}"
+    )
+
     # Check if best rung clears the bar
     if bar_value is not None and (best.val_acc or 0.0) <= bar_value:
         return {
@@ -248,7 +252,7 @@ async def run_deep_dive_on_primitive(
             "rungs": [r.to_dict() for r in rungs],
             "best_rung": best.to_dict(),
         }
-    
+
     # Load or create registration
     if registration_path and registration_path.exists():
         registration = load_registration(registration_path)
@@ -263,18 +267,22 @@ async def run_deep_dive_on_primitive(
             created=time.strftime("%Y-%m-%d"),
             box=base_box,
         )
-    
+
     # Run paired comparison (Rung 3)
     print(f"\nRunning paired comparison (n={CLAIM_SEEDS} seeds per arm)...")
     cells = await _paired_cells_async(candidate, schedule, best.factor)
-    
+
     print(f"\nPaired results:")
     for cell in cells:
-        print(f"  {cell.arm}: seed={cell.seed}, val_acc={cell.val_acc:.4f}, status={cell.status}")
-    
+        print(
+            f"  {cell.arm}: seed={cell.seed}, val_acc={cell.val_acc:.4f}, status={cell.status}"
+        )
+
     # Compute verdict
-    result = _pair_verdict(candidate, rungs, best, cells, registration, schedule, time.monotonic())
-    
+    result = _pair_verdict(
+        candidate, rungs, best, cells, registration, schedule, time.monotonic()
+    )
+
     return result
 
 
@@ -287,13 +295,13 @@ async def _ladder_async(
     from computronium.experiment.sec_deep_dive import LadderRung, ladder_points
     from computronium.experiment.sec_loop import _measure, _deep_dive_coordinate
     from dataclasses import replace
-    
+
     if semaphore is None:
         semaphore = asyncio.Semaphore(2)
-    
+
     async def _measure_async(coord: Any, run: Schedule) -> dict[str, Any]:
         return await asyncio.to_thread(_measure, coord, run)
-    
+
     async def _run_one(factor: float, value: float) -> LadderRung:
         async with semaphore:
             measured = await _measure_async(
@@ -310,7 +318,7 @@ async def _ladder_async(
             box=measured["box"],
             reason=measured["reason"],
         )
-    
+
     tasks = [_run_one(factor, value) for factor, value in ladder_points(candidate)]
     results = await asyncio.gather(*tasks)
     return list(results)
@@ -318,17 +326,27 @@ async def _ladder_async(
 
 async def main():
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Run Rung 3 claims on specific primitives")
-    parser.add_argument("--task", required=True, help="Task to run on (e.g., mnist, iris, spiking_mnist, optical_mnist, memristor_simulation)")
+
+    parser = argparse.ArgumentParser(
+        description="Run Rung 3 claims on specific primitives"
+    )
+    parser.add_argument(
+        "--task",
+        required=True,
+        help="Task to run on (e.g., mnist, iris, spiking_mnist, optical_mnist, memristor_simulation)",
+    )
     parser.add_argument("--device", default="cuda", help="Device to use")
     parser.add_argument("--out", type=Path, required=True, help="Output directory")
     parser.add_argument("--registration", type=Path, help="Pre-registration file")
-    parser.add_argument("--primitives", nargs="+", help="Specific primitives to test (overrides defaults)")
+    parser.add_argument(
+        "--primitives",
+        nargs="+",
+        help="Specific primitives to test (overrides defaults)",
+    )
     args = parser.parse_args()
-    
+
     args.out.mkdir(parents=True, exist_ok=True)
-    
+
     if args.primitives:
         primitives = args.primitives
     elif args.task == "mnist":
@@ -338,10 +356,10 @@ async def main():
     else:
         # For other tasks, use the primitives passed via --primitives
         primitives = []
-    
+
     print(f"Running Rung 3 claims on {len(primitives)} primitives for {args.task}")
     print(f"Primitives: {primitives}")
-    
+
     results = []
     for primitive_id in primitives:
         try:
@@ -352,12 +370,14 @@ async def main():
                 registration_path=args.registration,
             )
             results.append(result)
-            
+
             # Save individual result
-            result_file = args.out / f"{primitive_id.replace('.', '_')}_{args.task}_rung3.json"
+            result_file = (
+                args.out / f"{primitive_id.replace('.', '_')}_{args.task}_rung3.json"
+            )
             result_file.write_text(json.dumps(result, indent=2, default=str))
             print(f"Saved result to {result_file}")
-            
+
         except Exception as e:
             print(f"Error running {primitive_id}: {e}")
             results.append({
@@ -366,7 +386,7 @@ async def main():
                 "status": "error",
                 "reason": str(e),
             })
-    
+
     # Save summary (append to existing)
     summary_file = args.out / f"rung3_summary_{args.task}.json"
     existing_results = []
@@ -378,16 +398,23 @@ async def main():
     all_results = existing_results + results
     summary_file.write_text(json.dumps(all_results, indent=2, default=str))
     print(f"\nSummary saved to {summary_file}")
-    
+
     # Print summary
     print("\n=== Summary ===")
     for r in results:
         # The result structure has track and deep_dive
         if "deep_dive" in r:
-            status = r["deep_dive"].get("verdict", r["deep_dive"].get("status", "unknown"))
+            status = r["deep_dive"].get(
+                "verdict", r["deep_dive"].get("status", "unknown")
+            )
         else:
             status = r.get("verdict", r.get("status", "unknown"))
-        primitive = r.get("deep_dive", {}).get("candidate", {}).get("primitive", r.get('primitive', 'unknown'))
+        primitive = (
+            r
+            .get("deep_dive", {})
+            .get("candidate", {})
+            .get("primitive", r.get("primitive", "unknown"))
+        )
         print(f"  {primitive}: {status}")
 
 

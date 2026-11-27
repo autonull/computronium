@@ -68,7 +68,9 @@ class QuantumCircuitLearningTask(DomainTask):
         # fidelity-like objective. Real implementation would use a quantum simulator.
         if self.quick_mode:
             # Synthetic data: parameter vectors -> fidelity
-            num_params = self.num_qubits * self.num_layers * 3  # 3 rotations per qubit per layer
+            num_params = (
+                self.num_qubits * self.num_layers * 3
+            )  # 3 rotations per qubit per layer
             num_train = 500
             num_val = 100
 
@@ -77,7 +79,9 @@ class QuantumCircuitLearningTask(DomainTask):
             # Target: fidelity with target state (simulated as smooth function of params)
             # For GHZ state, fidelity is high when params are near specific values
             target_params = torch.zeros(num_params)
-            train_fidelity = torch.exp(-0.5 * ((train_x - target_params) ** 2).sum(dim=1))
+            train_fidelity = torch.exp(
+                -0.5 * ((train_x - target_params) ** 2).sum(dim=1)
+            )
             train_y = (train_fidelity > 0.5).long()  # Binary: high fidelity vs low
 
             val_x = torch.randn(num_val, num_params)

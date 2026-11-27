@@ -112,6 +112,10 @@ class DefectRegistry:
         if state_dir:
             self._constraints_path = state_dir / "defect_constraints.json"
             self._load()
+            # The file is the loop's declared artifact, not a side effect of
+            # finding a failure: a clean run still writes the empty list.
+            if not self._constraints_path.exists():
+                self._persist()
 
     @property
     def engine(self) -> LegalityEngine:

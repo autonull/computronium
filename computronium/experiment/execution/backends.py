@@ -379,9 +379,7 @@ class _ThreadedBackend:
                 try:
                     records = await self.submit(coord, sched, prov, params, store)
                 except Exception as e:
-                    logger.exception(
-                        "Evaluation failed for %s", coord.cell_key()[:12]
-                    )
+                    logger.exception("Evaluation failed for %s", coord.cell_key()[:12])
                     return Failure(
                         failure_event=self._create_failure_event(
                             coord, sched, prov, str(e)

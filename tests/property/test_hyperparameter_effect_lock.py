@@ -326,7 +326,7 @@ class TestHyperparameterEffectLock:
                     coord2, sched2 = c, s
                     break
 
-            if coord2 is None:
+            if coord2 is None or sched2 is None:
                 # No variation in this sweep for these cells
                 continue
 
@@ -337,18 +337,14 @@ class TestHyperparameterEffectLock:
                 geometry={},
                 input_shape=shape.input_shape,
                 output_dim=shape.output_dim,
-                param_budget=sched1.param_budget
-                if sched1.param_budget is not None
-                else 50_000,
+                param_budget=sched1.param_budget,
             )
             cell2 = compose_configs(
                 coordinate=coord2,
                 geometry={},
                 input_shape=shape.input_shape,
                 output_dim=shape.output_dim,
-                param_budget=sched2.param_budget
-                if sched2.param_budget is not None
-                else 50_000,
+                param_budget=sched2.param_budget,
             )
 
             # Check that the relevant config field differs
@@ -429,7 +425,7 @@ class TestHyperparameterEffectLock:
                     coord2, sched2 = c, s
                     break
 
-            if coord2 is None:
+            if coord2 is None or sched2 is None:
                 pytest.fail(f"No variation for {qname}")
 
             shape = task_shape("digits")
@@ -438,18 +434,14 @@ class TestHyperparameterEffectLock:
                 geometry={},
                 input_shape=shape.input_shape,
                 output_dim=shape.output_dim,
-                param_budget=sched1.param_budget
-                if sched1.param_budget is not None
-                else 50_000,
+                param_budget=sched1.param_budget,
             )
             cell2 = compose_configs(
                 coordinate=coord2,
                 geometry={},
                 input_shape=shape.input_shape,
                 output_dim=shape.output_dim,
-                param_budget=sched2.param_budget
-                if sched2.param_budget is not None
-                else 50_000,
+                param_budget=sched2.param_budget,
             )
 
             axis_config1 = getattr(cell1, axis)

@@ -4,7 +4,6 @@ Graph Domain Tasks
 Standard graph datasets (Cora, PubMed, CiteSeer, etc.)
 """
 
-
 import torch
 from torch import nn
 

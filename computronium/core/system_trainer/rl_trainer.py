@@ -525,7 +525,9 @@ class RLSystemTrainer:
                 if self.is_continuous:
                     # Deterministic policy for eval (mean)
                     if self.action_scale is None or self.action_bias is None:
-                        raise RuntimeError("action_scale and action_bias must be initialized")
+                        raise RuntimeError(
+                            "action_scale and action_bias must be initialized"
+                        )
                     action_tensor = (
                         torch.tanh(logits) * self.action_scale + self.action_bias
                     )

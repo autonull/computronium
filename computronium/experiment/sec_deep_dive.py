@@ -106,14 +106,31 @@ LADDER_KNOBS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType({
     ),
     "dynamics": ("step_size", "max_steps"),
     "geometry": (
-        "hidden_dim", "depth", "width",  # Original names
+        "hidden_dim",
+        "depth",
+        "width",  # Original names
         "hidden_dims",  # feedforward, routing
-        "num_layers", "init_scale",  # feedforward, attention, routing
-        "hidden", "delta_scale", "mask_prob", "label_channels",  # nca
-        "num_heads", "head_dim", "attention_dropout",  # attention
-        "num_experts", "top_k", "routing_temperature",  # routing
-        "conv_channels", "kernel_size", "in_channels",  # conv
-        "d_model", "n_layers", "n_heads", "seq_len", "patch_size", "patch_embed_dim",  # causal_transformer
+        "num_layers",
+        "init_scale",  # feedforward, attention, routing
+        "hidden",
+        "delta_scale",
+        "mask_prob",
+        "label_channels",  # nca
+        "num_heads",
+        "head_dim",
+        "attention_dropout",  # attention
+        "num_experts",
+        "top_k",
+        "routing_temperature",  # routing
+        "conv_channels",
+        "kernel_size",
+        "in_channels",  # conv
+        "d_model",
+        "n_layers",
+        "n_heads",
+        "seq_len",
+        "patch_size",
+        "patch_embed_dim",  # causal_transformer
     ),
     "update": ("step_size", "momentum"),
     "plasticity": ("trace_decay",),

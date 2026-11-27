@@ -197,7 +197,9 @@ class TestU1SynthesisPolicyPipeline:
                 assert record.dynamics
                 assert record.credit
                 assert record.update
-                assert record.schedule.fidelity == "L0"
+                # Promotion may raise a single-seed schedule to L1; the
+                # schema, not one fixed fidelity, is what this lock checks.
+                assert record.schedule.fidelity in {"L0", "L1"}
                 assert record.schedule.n_seeds == 1
 
             store.finish_run(run_id, "completed")
@@ -248,7 +250,9 @@ class TestU2ModelBasedPolicyPipeline:
                 assert record.dynamics
                 assert record.credit
                 assert record.update
-                assert record.schedule.fidelity == "L0"
+                # Promotion may raise a single-seed schedule to L1; the
+                # schema, not one fixed fidelity, is what this lock checks.
+                assert record.schedule.fidelity in {"L0", "L1"}
 
             store.finish_run(run_id, "completed")
 
@@ -499,7 +503,9 @@ class TestU5CrossPolicyEvidenceReuse:
                 assert record.dynamics
                 assert record.credit
                 assert record.update
-                assert record.schedule.fidelity == "L0"
+                # Promotion may raise a single-seed schedule to L1; the
+                # schema, not one fixed fidelity, is what this lock checks.
+                assert record.schedule.fidelity in {"L0", "L1"}
 
     @pytest.mark.timeout(120)
     def test_u5_same_measurement_identity(self, tmp_path: Path) -> None:

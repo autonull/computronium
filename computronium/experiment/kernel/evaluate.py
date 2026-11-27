@@ -16,7 +16,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import torch
 
@@ -49,6 +49,10 @@ from computronium.experiment.kernel.compose import (
     compose_cell_system,
 )
 from computronium.experiment.registry.task_registry import get_task_registry
+from computronium.experiment.schema.metrics import (
+    MEASURED_OBJECTIVES,
+    STABILITY_METRICS,
+)
 from computronium.experiment.schema.registries import (
     ASSESSMENT_PROCEDURE_VERSION,
     PARAM_BUDGET_TOLERANCE,
@@ -76,6 +80,7 @@ def _attach_algorithm_kernel_backend(
     coordinate: Any,
     task: Any = None,
     device: str = "cuda",
+    geometry: Mapping[str, Any] | None = None,
 ) -> None:
     """Attach an algorithm kernel backend to the system if a match exists.
 
@@ -116,8 +121,47 @@ def _attach_algorithm_kernel_backend(
     probe_input = _parity_probe(system, task, device)
     if probe_input is None:
         return
-    if not _kernel_matches_reference(system, backend, alg_spec, probe_input):
+    if not _kernel_matches_cell(
+        coordinate, geometry, task, system, backend, alg_spec, probe_input
+    ):
         system.detach_kernel_backend()
+
+
+def _parity_key(
+    coordinate: Any,
+    geometry: Mapping[str, Any] | None,
+    task: Any,
+    alg_spec: Any,
+) -> tuple[Any, ...]:
+    """The cell identity the attach decision depends on."""
+    geometry_key = tuple(sorted((str(k), repr(v)) for k, v in (geometry or {}).items()))
+    return (
+        alg_spec.id,
+        coordinate.cell_key(),
+        geometry_key,
+        getattr(task, "name", ""),
+        repr(getattr(task, "input_dim", None)),
+        repr(getattr(task, "output_dim", None)),
+    )
+
+
+def _kernel_matches_cell(
+    coordinate: Any,
+    geometry: Mapping[str, Any] | None,
+    task: Any,
+    system: Any,
+    backend: Any,
+    alg_spec: Any,
+    probe_input: torch.Tensor,
+) -> bool:
+    """The cached parity verdict for one composed cell."""
+    key = _parity_key(coordinate, geometry, task, alg_spec)
+    with _PARITY_LOCK:
+        cached = _PARITY_CACHE.get(key)
+        if cached is None:
+            cached = _kernel_matches_reference(system, backend, alg_spec, probe_input)
+            _PARITY_CACHE[key] = cached
+    return cached
 
 
 def _parity_probe(system: Any, task: Any, device: str) -> torch.Tensor | None:
@@ -179,6 +223,12 @@ logger = get_logger(__name__)
 _TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
 
+# The attach guard answers a per-cell question, but it used to pay one forward
+# and one kernel equilibrium per seed. Cache the decision by cell identity
+# (TODO107 D6); replication must not repeat the probe.
+_PARITY_CACHE: dict[tuple[Any, ...], bool] = {}
+_PARITY_LOCK: Final[threading.Lock] = threading.Lock()
+
 # One CUDA device trains one cell at a time. Inductor's static Triton launcher
 # and cuSOLVER's QR wrapper keep per-module state that concurrent launches
 # corrupt (measured: CUDA_ERROR_INVALID_HANDLE, "lazy wrapper should be called
@@ -220,7 +270,7 @@ def _primary_metric_key(task_id: str) -> str:
         registry = get_task_registry()
         spec = registry.get(task_id)
         for obj in spec.objectives:
-            if obj.name == spec.primary_objective:
+            if obj.name == spec.primary_objective and obj.payload_key:
                 return obj.payload_key
     except Exception:
         pass
@@ -417,14 +467,14 @@ def _evaluate_cell(
     # GPU Kernel Cache for SEC (TODO99 #8): Attach algorithm kernel backend when on CUDA
     # Move system to target device first so kernel config uses correct device
     if resolved_device == "cuda":
-        cell.system.to("cuda")
+        cell.system.to("cuda")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
     elif resolved_device == "cpu":
-        cell.system.to("cpu")
+        cell.system.to("cpu")  # pyright: ignore[reportAttributeAccessIssue] - runtime System exposes to
 
     if resolved_device == "cuda":
         try:
             _attach_algorithm_kernel_backend(
-                cell.system, coordinate, task, resolved_device
+                cell.system, coordinate, task, resolved_device, geometry
             )
         except Exception:
             # Kernel attachment failed; fall back to reference implementation
@@ -439,7 +489,12 @@ def _evaluate_cell(
 
     start = time.monotonic()
     trainer, history = _run_training(
-        trainer_class, cell, task, config, resume_checkpoint_path, checkpoint_callback
+        cast("type[SystemTrainer]", trainer_class),
+        cell,
+        task,
+        config,
+        resume_checkpoint_path,
+        checkpoint_callback,
     )
     walltime_s = time.monotonic() - start
 
@@ -447,7 +502,9 @@ def _evaluate_cell(
         temp_dir.cleanup()
 
     metrics = _collect_all_metrics(trainer, history, cell, task, schedule, coordinate)
-    _post_training_metrics(metrics, cell, task, schedule, coordinate, walltime_s)
+    _post_training_metrics(
+        metrics, cell, task, schedule, coordinate, walltime_s, params
+    )
     metrics.update(derived_metrics(history, walltime_s, metrics))
     _validate_metrics_finite(metrics, coordinate, schedule.task_id)
 
@@ -483,6 +540,23 @@ def _compose_cell(
     )
 
 
+def _needs_stability(params: Mapping[str, Any] | None) -> bool:
+    """Whether the run's declared objectives read the free-settle probe.
+
+    A direct evaluation that declares nothing keeps the full telemetry: the
+    absence of a declaration is not a declaration of absence. A run always
+    carries ``objectives``, so its cells are gated.
+    """
+    if params is None or "objectives" not in params:
+        return True
+    objectives = params["objectives"]
+    if not isinstance(objectives, tuple | list):
+        return True
+    return any(
+        MEASURED_OBJECTIVES.get(str(name)) in STABILITY_METRICS for name in objectives
+    )
+
+
 def _post_training_metrics(
     metrics: dict[str, float],
     cell: ComposedCell,
@@ -490,6 +564,7 @@ def _post_training_metrics(
     schedule: Schedule,
     coordinate: Coordinate,
     walltime_s: float,
+    params: Mapping[str, Any] | None = None,
 ) -> None:
     """Collect post-training metrics: stability, energy, substrate, plasticity, task-specific."""
     # Ensure system geometry is on the correct device for metrics computation
@@ -504,7 +579,7 @@ def _post_training_metrics(
     sample_x, sample_count = _sample_inputs(task, resolved_device, time_major=sequence)
     # A PyG batch has no batch-free input, so the free-phase probes (settle
     # telemetry, Jacobian) are not defined for it; the energy estimate is.
-    if sample_x is not None:
+    if sample_x is not None and _needs_stability(params):
         # A label-channel system reads a widened input; the probe carries a
         # zero channel (no label information) so settle telemetry still runs.
         metrics.update(

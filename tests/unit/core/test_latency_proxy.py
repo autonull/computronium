@@ -66,7 +66,15 @@ def test_proxy_scales_with_depth_and_settle_steps() -> None:
     assert many == few * 5
 
 
+@pytest.mark.benchmark
 def test_proxy_ordering_matches_measured_walltime() -> None:
+    """The one walltime comparison in the file is a benchmark, not a lock.
+
+    Under the parallel unit shard the measured order flips with host
+    contention, which is the walltime-is-an-outcome rule (TODO107 D8), not a
+    proxy defect. Keep it runnable as a benchmark; the structural ordering
+    above is the deterministic gate.
+    """
     torch.manual_seed(0)
     systems = (
         ("shallow", _system((32,), max_steps=2)),

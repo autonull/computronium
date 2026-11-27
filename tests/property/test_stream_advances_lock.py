@@ -15,8 +15,7 @@ from computronium.experiment.schema.run_spec import AxisSelection
 
 
 @pytest.mark.timeout(300)
-@pytest.mark.asyncio
-async def test_stream_advances_lock():
+def test_stream_advances_lock():
     """The pager advances past page_size and yields distinct cells.
 
     Uses a small page_size (1000) to force multiple pages even for a modest space.
@@ -98,10 +97,3 @@ async def test_stream_advances_lock():
     # appear in both pages (offset-based paging on raw walk + filtering).
     # The runner's CellStream dedups against store history, so this is
     # caught downstream. The lock here is that the pager *advances*.
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(test_stream_advances_lock())
-    print("PASSED")

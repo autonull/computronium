@@ -200,7 +200,12 @@ class DVSGesturesTask(DomainTask):
             val_ds, batch_size=batch_size, shuffle=False, num_workers=self.num_workers
         )
         self._test_loader = self._val_loader
-        self._input_dim = (self.time_bins, 2, 32, 32)  # (T, C, H, W) - reduced for quick_mode
+        self._input_dim = (
+            self.time_bins,
+            2,
+            32,
+            32,
+        )  # (T, C, H, W) - reduced for quick_mode
         self._output_dim = 11
         self._setup_done = True
 

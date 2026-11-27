@@ -28,6 +28,7 @@ __all__ = [
     "HISTORY_METRICS",
     "MEASURED_METRICS",
     "MEASURED_OBJECTIVES",
+    "STABILITY_METRICS",
     "ObjectiveResolutionError",
     "UnknownObjectiveError",
     "UnmeasuredObjectiveError",
@@ -204,6 +205,35 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "mean_length": "mean_length",
     # Graph objectives
     "accuracy": "accuracy",
+})
+
+
+# Payload keys that only the free-settle/spectral probe emits. A run that names
+# none of them must not pay for the probe: on the measured cell it is the
+# Jacobian, not the training, that dominates the profiled CPU share (TODO107
+# D13). The settle telemetry is included because the same probe emits it.
+STABILITY_METRICS: Final[frozenset[str]] = frozenset({
+    "spectral_radius",
+    "max_singular_value",
+    "min_singular_value",
+    "lyapunov_exponent",
+    "stability_margin",
+    "nonnormality",
+    "drift_spectral_radius",
+    "drift_max_singular_value",
+    "drift_nonnormality",
+    "contraction_rate",
+    "settle_step_size",
+    "settle_steps",
+    "settle_converged",
+    "settle_horizon",
+    "hopfield_energy",
+    "free_energy",
+    "pc_free_energy",
+    "augmented_lagrangian",
+    "spike_proxy_energy",
+    "instantaneous_proxy_energy",
+    "energy_clamped",
 })
 
 

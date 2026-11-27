@@ -68,7 +68,12 @@ _CREDITS = ("thermodynamic_contrast", "local_contrastive")
 _SEEDS = 5
 _SHORT_SEEDS = 2
 _BATCHES = 0
-_EPOCHS = 5
+# Measured on one seed per credit: two epochs leaves local_contrastive below
+# the digits bar (0.075 < 0.10); three clears it on all five
+# thermodynamic_contrast seeds and both fixture local_contrastive seeds. Keep
+# the smallest regime that still measures, not the one that merely runs
+# (TODO107 D9).
+_EPOCHS = 3
 # The campaign's proved regime (TODO48 Q1): without the settle step the
 # 10k-budget composition does not learn digits inside the lock's short run.
 _PARAMS = {

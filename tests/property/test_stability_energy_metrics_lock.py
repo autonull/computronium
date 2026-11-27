@@ -48,7 +48,7 @@ from computronium.experiment.schema.metrics import (
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 
-def _system(hidden: int, layers: int = 3, step_size: float | None = None):
+def _composed_cell(hidden: int, layers: int = 3, step_size: float | None = None):
     from computronium.experiment.execution import compose_cell_system
     from computronium.experiment.schema import Coordinate
 
@@ -75,7 +75,11 @@ def _system(hidden: int, layers: int = 3, step_size: float | None = None):
         output_dim=10,
         param_budget=2_000_000,
     )
-    return cell.system
+    return cell, coordinate
+
+
+def _system(hidden: int, layers: int = 3, step_size: float | None = None):
+    return _composed_cell(hidden, layers, step_size)[0].system
 
 
 def _radius(jac: torch.Tensor) -> float:
@@ -83,6 +87,96 @@ def _radius(jac: torch.Tensor) -> float:
     if jac.shape[0] == jac.shape[1]:
         return float(torch.linalg.eigvals(jac).abs().max().item())
     return float(singular.max().item())
+
+
+@pytest.mark.timeout(300)
+def test_one_jacobian_per_stability_measurement(monkeypatch) -> None:
+    """The probe pays one Jacobian, not one per downstream metric.
+
+    ``jacobian_spectral_metrics`` and ``drift_metrics`` each accept an
+    already-built Jacobian. A second call means one of them built its own
+    again — the 3→1 change is not locked by asserting a number.
+    """
+    import stability.jacobian as jacobian_module
+
+    calls: list[int] = []
+    original = jacobian_module._full_jacobian_tensor
+
+    def counted(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(jacobian_module, "_full_jacobian_tensor", counted)
+    torch.manual_seed(0)
+    system = _system(hidden=64)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert "spectral_radius" in metrics
+    assert len(calls) == 1, f"stability measurement built {len(calls)} Jacobians"
+
+
+def test_stability_probe_is_paid_only_when_an_objective_reads_it(monkeypatch) -> None:
+    """A validation-accuracy run must not build the Jacobian; a rho run must."""
+    from computronium.experiment.kernel import evaluate
+    from computronium.experiment.schema import Schedule
+
+    class _Task:
+        name = "digits"
+        domain_type = None
+
+        def get_dataloader(self, split: str):
+            return [(torch.randn(4, 64), torch.zeros(4, dtype=torch.long))]
+
+        def evaluate(self, *_args, **_kwargs):
+            raise RuntimeError("not needed for the telemetry probe")
+
+    calls: list[dict[str, float]] = []
+
+    def spy(*_args, **_kwargs):
+        calls.append({})
+        return {}
+
+    monkeypatch.setattr(evaluate, "compute_stability_metrics", spy)
+    cell, coordinate = _composed_cell(hidden=32)
+    schedule = Schedule(
+        fidelity="L0",
+        seed=0,
+        n_seeds=1,
+        epochs=1,
+        batch_limit=1,
+        budget_id="stability-lock",
+        task_id="digits",
+    )
+    metrics: dict[str, float] = {}
+
+    evaluate._post_training_metrics(
+        metrics,
+        cell,
+        _Task(),
+        schedule,
+        coordinate,
+        1.0,
+        {"objectives": ("validation_accuracy",)},
+    )
+    assert calls == [], "validation_accuracy must not pay for the stability probe"
+
+    evaluate._post_training_metrics(
+        metrics,
+        cell,
+        _Task(),
+        schedule,
+        coordinate,
+        1.0,
+        {"objectives": ("spectral_radius",)},
+    )
+    assert len(calls) == 1, "a stability objective must pay for the probe"
+
+    # An undeclared direct call keeps the full telemetry: absence of a
+    # declaration is not a declaration of absence.
+    evaluate._post_training_metrics(
+        metrics, cell, _Task(), schedule, coordinate, 1.0, None
+    )
+    assert len(calls) == 2, "an undeclared direct call must still probe"
 
 
 def test_the_step_and_the_whole_settle_are_different_operators() -> None:

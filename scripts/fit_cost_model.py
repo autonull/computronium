@@ -44,7 +44,7 @@ def load_cells_from_results(results_dir: Path) -> pd.DataFrame:
                         })
         except Exception as e:
             print(f"Error loading {cells_file}: {e}")
-    
+
     return pd.DataFrame(all_cells)
 
 
@@ -62,11 +62,11 @@ def estimate_param_count(params: dict) -> int:
 
 def fit_cost_model(df: pd.DataFrame) -> tuple[LinearRegression, list[str]]:
     """Fit linear regression for walltime prediction."""
-    
+
     # Estimate param count
     df["param_count_est"] = df["params"].apply(estimate_param_count)
     df["log_params"] = np.log(df["param_count_est"])
-    
+
     # Prepare features
     features = []
     targets = []
@@ -81,10 +81,10 @@ def fit_cost_model(df: pd.DataFrame) -> tuple[LinearRegression, list[str]]:
             ]
             features.append(feat)
             targets.append(row["walltime_s"])
-    
+
     X = np.array(features)
     y = np.array(targets)
-    
+
     feature_names = [
         "log_params",
         "non_feedforward_geom",
@@ -92,15 +92,16 @@ def fit_cost_model(df: pd.DataFrame) -> tuple[LinearRegression, list[str]]:
         "non_gradient_credit",
         "non_euclidean_update",
     ]
-    
+
     model = LinearRegression()
     model.fit(X, y)
-    
+
     return model, feature_names
 
 
-def predict_walltime(model: LinearRegression, feature_names: list[str], 
-                     primitive_info: dict) -> float:
+def predict_walltime(
+    model: LinearRegression, feature_names: list[str], primitive_info: dict
+) -> float:
     """Predict walltime for a primitive configuration."""
     # Extract features
     log_params = np.log(primitive_info.get("param_count", 32768))
@@ -117,38 +118,49 @@ def predict_walltime(model: LinearRegression, feature_names: list[str],
 
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Fit cost model from SEC results")
-    parser.add_argument("--results-dir", type=Path, default=Path("results"), help="Results directory")
-    parser.add_argument("--out", type=Path, default=Path("configs/cost_model.pkl"), help="Output model file")
+    parser.add_argument(
+        "--results-dir", type=Path, default=Path("results"), help="Results directory"
+    )
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("configs/cost_model.pkl"),
+        help="Output model file",
+    )
     args = parser.parse_args()
-    
+
     print(f"Loading cells from {args.results_dir}...")
     df = load_cells_from_results(args.results_dir)
     print(f"Loaded {len(df)} measured cells")
-    
+
     # Filter to cells with walltime
     df_wt = df[df["walltime_s"].notna()]
     print(f"Cells with walltime: {len(df_wt)}")
-    
+
     model, feature_names = fit_cost_model(df_wt)
-    
+
     print(f"\nModel coefficients:")
     for name, coef in zip(feature_names, model.coef_):
         print(f"  {name}: {coef:.4f}")
     print(f"  Intercept: {model.intercept_:.4f}")
-    
+
     # Compute R^2 properly
-    X = np.array([[row["log_params"],
-                   1 if row["geometry"] != "feedforward" else 0,
-                   1 if row["dynamics"] != "instantaneous" else 0,
-                   1 if row["credit"] != "gradient" else 0,
-                   1 if row["update"] != "euclidean" else 0]
-                  for _, row in df_wt.iterrows()])
+    X = np.array([
+        [
+            row["log_params"],
+            1 if row["geometry"] != "feedforward" else 0,
+            1 if row["dynamics"] != "instantaneous" else 0,
+            1 if row["credit"] != "gradient" else 0,
+            1 if row["update"] != "euclidean" else 0,
+        ]
+        for _, row in df_wt.iterrows()
+    ])
     y = df_wt["walltime_s"].values
     r2 = model.score(X, y)
     print(f"  R^2: {r2:.4f}")
-    
+
     # Save model
     args.out.parent.mkdir(parents=True, exist_ok=True)
     model_data = {

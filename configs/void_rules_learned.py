@@ -12,20 +12,74 @@ from computronium.experiment.legality.classify import (
 
 # Rules to ADD (high refusal rate)
 ADD_RULES = [
-    ("dynamics", "energy_minimization", "geometry", "feedforward", DefectClass.VOID_GEOMETRY_DYNAMICS, VoidReason.INCOMPATIBLE_GEOMETRY_DYNAMICS),  # refused_rate=0.81, measured=35
-    ("credit", "gradient", "dynamics", "energy_minimization", DefectClass.VOID_DYNAMICS_CREDIT, VoidReason.INCOMPATIBLE_DYNAMICS_CREDIT),  # refused_rate=0.81, measured=35
-    ("geometry", "feedforward", "substrate", "neuromorphic", DefectClass.VOID_SUBSTRATE_GEOMETRY, VoidReason.INCOMPATIBLE_SUBSTRATE_GEOMETRY),  # refused_rate=0.92, measured=13
-    ("dynamics", "energy_minimization", "substrate", "neuromorphic", DefectClass.VOID_SUBSTRATE_DYNAMICS, VoidReason.INCOMPATIBLE_SUBSTRATE_DYNAMICS),  # refused_rate=0.92, measured=14
-    ("plasticity", "null", "substrate", "neuromorphic", DefectClass.VOID_SUBSTRATE_PLASTICITY, VoidReason.INCOMPATIBLE_SUBSTRATE_PLASTICITY),  # refused_rate=0.90, measured=16
-    ("credit", "gradient", "substrate", "neuromorphic", DefectClass.VOID_CREDIT_SUBSTRATE, VoidReason.INCOMPATIBLE_CREDIT_SUBSTRATE),  # refused_rate=0.92, measured=14
-    ("substrate", "neuromorphic", "update", "euclidean", DefectClass.VOID_UNCLASSIFIED, VoidReason.INCOMPATIBLE_UNCLASSIFIED),  # refused_rate=0.92, measured=13
+    (
+        "dynamics",
+        "energy_minimization",
+        "geometry",
+        "feedforward",
+        DefectClass.VOID_GEOMETRY_DYNAMICS,
+        VoidReason.INCOMPATIBLE_GEOMETRY_DYNAMICS,
+    ),  # refused_rate=0.81, measured=35
+    (
+        "credit",
+        "gradient",
+        "dynamics",
+        "energy_minimization",
+        DefectClass.VOID_DYNAMICS_CREDIT,
+        VoidReason.INCOMPATIBLE_DYNAMICS_CREDIT,
+    ),  # refused_rate=0.81, measured=35
+    (
+        "geometry",
+        "feedforward",
+        "substrate",
+        "neuromorphic",
+        DefectClass.VOID_SUBSTRATE_GEOMETRY,
+        VoidReason.INCOMPATIBLE_SUBSTRATE_GEOMETRY,
+    ),  # refused_rate=0.92, measured=13
+    (
+        "dynamics",
+        "energy_minimization",
+        "substrate",
+        "neuromorphic",
+        DefectClass.VOID_SUBSTRATE_DYNAMICS,
+        VoidReason.INCOMPATIBLE_SUBSTRATE_DYNAMICS,
+    ),  # refused_rate=0.92, measured=14
+    (
+        "plasticity",
+        "null",
+        "substrate",
+        "neuromorphic",
+        DefectClass.VOID_SUBSTRATE_PLASTICITY,
+        VoidReason.INCOMPATIBLE_SUBSTRATE_PLASTICITY,
+    ),  # refused_rate=0.90, measured=16
+    (
+        "credit",
+        "gradient",
+        "substrate",
+        "neuromorphic",
+        DefectClass.VOID_CREDIT_SUBSTRATE,
+        VoidReason.INCOMPATIBLE_CREDIT_SUBSTRATE,
+    ),  # refused_rate=0.92, measured=14
+    (
+        "substrate",
+        "neuromorphic",
+        "update",
+        "euclidean",
+        DefectClass.VOID_UNCLASSIFIED,
+        VoidReason.INCOMPATIBLE_UNCLASSIFIED,
+    ),  # refused_rate=0.92, measured=13
 ]
 
 # Rules to REMOVE (all viable, no refusals)
 REMOVE_RULES = [
     ("credit", "forward_tangent", "substrate", "digital"),  # measured=35, all_viable
     ("credit", "forward_tangent", "geometry", "feedforward"),  # measured=10, all_viable
-    ("credit", "forward_tangent", "dynamics", "instantaneous"),  # measured=30, all_viable
+    (
+        "credit",
+        "forward_tangent",
+        "dynamics",
+        "instantaneous",
+    ),  # measured=30, all_viable
     ("credit", "forward_tangent", "plasticity", "null"),  # measured=35, all_viable
     ("credit", "forward_tangent", "update", "euclidean"),  # measured=35, all_viable
     ("credit", "homeostatic", "substrate", "digital"),  # measured=20, all_viable
@@ -38,21 +92,46 @@ REMOVE_RULES = [
     ("credit", "local_goodness", "plasticity", "null"),  # measured=24, all_viable
     ("credit", "local_goodness", "update", "euclidean"),  # measured=24, all_viable
     ("credit", "random_projections", "substrate", "digital"),  # measured=11, all_viable
-    ("credit", "random_projections", "geometry", "feedforward"),  # measured=10, all_viable
-    ("credit", "random_projections", "dynamics", "instantaneous"),  # measured=11, all_viable
+    (
+        "credit",
+        "random_projections",
+        "geometry",
+        "feedforward",
+    ),  # measured=10, all_viable
+    (
+        "credit",
+        "random_projections",
+        "dynamics",
+        "instantaneous",
+    ),  # measured=11, all_viable
     ("credit", "random_projections", "plasticity", "null"),  # measured=11, all_viable
     ("credit", "random_projections", "update", "euclidean"),  # measured=11, all_viable
     ("credit", "score_function", "substrate", "digital"),  # measured=11, all_viable
-    ("credit", "score_function", "dynamics", "instantaneous"),  # measured=11, all_viable
+    (
+        "credit",
+        "score_function",
+        "dynamics",
+        "instantaneous",
+    ),  # measured=11, all_viable
     ("credit", "score_function", "update", "euclidean"),  # measured=11, all_viable
     ("geometry", "routing", "substrate", "digital"),  # measured=20, all_viable
     ("dynamics", "instantaneous", "geometry", "routing"),  # measured=20, all_viable
     ("geometry", "routing", "plasticity", "null"),  # measured=20, all_viable
     ("geometry", "routing", "update", "euclidean"),  # measured=20, all_viable
-    ("credit", "target_inversion", "geometry", "feedforward"),  # measured=10, all_viable
+    (
+        "credit",
+        "target_inversion",
+        "geometry",
+        "feedforward",
+    ),  # measured=10, all_viable
     ("credit", "target_inversion", "plasticity", "null"),  # measured=10, all_viable
     ("credit", "target_inversion", "update", "euclidean"),  # measured=10, all_viable
-    ("dynamics", "energy_minimization", "substrate", "digital"),  # measured=22, all_viable
+    (
+        "dynamics",
+        "energy_minimization",
+        "substrate",
+        "digital",
+    ),  # measured=22, all_viable
     ("geometry", "attention", "substrate", "digital"),  # measured=13, all_viable
     ("dynamics", "instantaneous", "geometry", "attention"),  # measured=13, all_viable
     ("geometry", "attention", "plasticity", "null"),  # measured=13, all_viable
@@ -64,21 +143,71 @@ REMOVE_RULES = [
     ("geometry", "tile_mesh", "plasticity", "null"),  # measured=11, all_viable
     ("credit", "gradient", "geometry", "tile_mesh"),  # measured=11, all_viable
     ("geometry", "tile_mesh", "update", "euclidean"),  # measured=11, all_viable
-    ("plasticity", "closed_form_ridge", "substrate", "digital"),  # measured=15, all_viable
-    ("geometry", "feedforward", "plasticity", "closed_form_ridge"),  # measured=14, all_viable
-    ("dynamics", "instantaneous", "plasticity", "closed_form_ridge"),  # measured=15, all_viable
-    ("credit", "gradient", "plasticity", "closed_form_ridge"),  # measured=14, all_viable
-    ("plasticity", "closed_form_ridge", "update", "euclidean"),  # measured=15, all_viable
+    (
+        "plasticity",
+        "closed_form_ridge",
+        "substrate",
+        "digital",
+    ),  # measured=15, all_viable
+    (
+        "geometry",
+        "feedforward",
+        "plasticity",
+        "closed_form_ridge",
+    ),  # measured=14, all_viable
+    (
+        "dynamics",
+        "instantaneous",
+        "plasticity",
+        "closed_form_ridge",
+    ),  # measured=15, all_viable
+    (
+        "credit",
+        "gradient",
+        "plasticity",
+        "closed_form_ridge",
+    ),  # measured=14, all_viable
+    (
+        "plasticity",
+        "closed_form_ridge",
+        "update",
+        "euclidean",
+    ),  # measured=15, all_viable
     ("plasticity", "routing", "substrate", "digital"),  # measured=15, all_viable
     ("geometry", "feedforward", "plasticity", "routing"),  # measured=14, all_viable
     ("dynamics", "instantaneous", "plasticity", "routing"),  # measured=15, all_viable
     ("credit", "gradient", "plasticity", "routing"),  # measured=15, all_viable
     ("plasticity", "routing", "update", "euclidean"),  # measured=15, all_viable
-    ("dynamics", "predictive_settling", "substrate", "digital"),  # measured=10, all_viable
-    ("dynamics", "predictive_settling", "geometry", "feedforward"),  # measured=10, all_viable
-    ("dynamics", "predictive_settling", "plasticity", "null"),  # measured=10, all_viable
-    ("credit", "local_goodness", "dynamics", "predictive_settling"),  # measured=10, all_viable
-    ("dynamics", "predictive_settling", "update", "euclidean"),  # measured=10, all_viable
+    (
+        "dynamics",
+        "predictive_settling",
+        "substrate",
+        "digital",
+    ),  # measured=10, all_viable
+    (
+        "dynamics",
+        "predictive_settling",
+        "geometry",
+        "feedforward",
+    ),  # measured=10, all_viable
+    (
+        "dynamics",
+        "predictive_settling",
+        "plasticity",
+        "null",
+    ),  # measured=10, all_viable
+    (
+        "credit",
+        "local_goodness",
+        "dynamics",
+        "predictive_settling",
+    ),  # measured=10, all_viable
+    (
+        "dynamics",
+        "predictive_settling",
+        "update",
+        "euclidean",
+    ),  # measured=10, all_viable
     ("substrate", "digital", "update", "adafactor"),  # measured=14, all_viable
     ("geometry", "feedforward", "update", "adafactor"),  # measured=13, all_viable
     ("dynamics", "instantaneous", "update", "adafactor"),  # measured=14, all_viable
@@ -114,19 +243,59 @@ REMOVE_RULES = [
     ("dynamics", "instantaneous", "update", "ortho_adam"),  # measured=11, all_viable
     ("plasticity", "null", "update", "ortho_adam"),  # measured=11, all_viable
     ("credit", "gradient", "update", "ortho_adam"),  # measured=11, all_viable
-    ("substrate", "digital", "update", "riemannian_orthogonal"),  # measured=11, all_viable
-    ("geometry", "feedforward", "update", "riemannian_orthogonal"),  # measured=10, all_viable
-    ("dynamics", "instantaneous", "update", "riemannian_orthogonal"),  # measured=11, all_viable
-    ("plasticity", "null", "update", "riemannian_orthogonal"),  # measured=11, all_viable
-    ("credit", "gradient", "update", "riemannian_orthogonal"),  # measured=11, all_viable
+    (
+        "substrate",
+        "digital",
+        "update",
+        "riemannian_orthogonal",
+    ),  # measured=11, all_viable
+    (
+        "geometry",
+        "feedforward",
+        "update",
+        "riemannian_orthogonal",
+    ),  # measured=10, all_viable
+    (
+        "dynamics",
+        "instantaneous",
+        "update",
+        "riemannian_orthogonal",
+    ),  # measured=11, all_viable
+    (
+        "plasticity",
+        "null",
+        "update",
+        "riemannian_orthogonal",
+    ),  # measured=11, all_viable
+    (
+        "credit",
+        "gradient",
+        "update",
+        "riemannian_orthogonal",
+    ),  # measured=11, all_viable
     ("substrate", "digital", "update", "schedule_free"),  # measured=11, all_viable
     ("geometry", "feedforward", "update", "schedule_free"),  # measured=10, all_viable
     ("dynamics", "instantaneous", "update", "schedule_free"),  # measured=11, all_viable
     ("plasticity", "null", "update", "schedule_free"),  # measured=11, all_viable
     ("credit", "gradient", "update", "schedule_free"),  # measured=11, all_viable
-    ("substrate", "digital", "update", "spectral_constrained"),  # measured=11, all_viable
-    ("geometry", "feedforward", "update", "spectral_constrained"),  # measured=10, all_viable
-    ("dynamics", "instantaneous", "update", "spectral_constrained"),  # measured=11, all_viable
+    (
+        "substrate",
+        "digital",
+        "update",
+        "spectral_constrained",
+    ),  # measured=11, all_viable
+    (
+        "geometry",
+        "feedforward",
+        "update",
+        "spectral_constrained",
+    ),  # measured=10, all_viable
+    (
+        "dynamics",
+        "instantaneous",
+        "update",
+        "spectral_constrained",
+    ),  # measured=11, all_viable
     ("plasticity", "null", "update", "spectral_constrained"),  # measured=11, all_viable
     ("credit", "gradient", "update", "spectral_constrained"),  # measured=11, all_viable
     ("geometry", "feedforward", "substrate", "noisy"),  # measured=11, all_viable

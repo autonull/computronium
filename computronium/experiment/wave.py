@@ -830,12 +830,14 @@ def _evaluate_one(
     provenance: Provenance,
     deadline_check: Any,
     log_steps: int = 0,
+    objectives: tuple[str, ...] = (),
 ) -> Any:
     """Evaluate one cell in this process, stopping it if the wave deadline passes."""
     coord, schedule = cell
     params = {
         "deadline_check": deadline_check,
         "deadline_check_every_n_steps": 1,
+        "objectives": objectives,
     }
     if log_steps > 0:
         params["log_every_n_steps"] = log_steps
@@ -960,6 +962,7 @@ def _cell_records(
     max_workers: int,
     log_steps: int,
     deadline_at: float | None = None,
+    objectives: tuple[str, ...] = (),
 ) -> Iterator[Any]:
     """Each cell's record, in submission order.
 
@@ -993,7 +996,7 @@ def _cell_records(
     def _run(cell: tuple[Coordinate, Schedule]) -> Any:
         if not before_deadline():
             return None
-        return _evaluate_one(cell, provenance, before_deadline, log_steps)
+        return _evaluate_one(cell, provenance, before_deadline, log_steps, objectives)
 
     if max_workers <= 1:
         for i, cell in enumerate(cells, 1):
@@ -1040,6 +1043,7 @@ def _evaluate_cells(
     max_workers: int = 1,
     log_steps: int = 0,
     shutdown: _ShutdownSignal | None = None,
+    objectives: tuple[str, ...] = (),
 ) -> _Evaluation:
     """Evaluate cells until the budget is spent.
 
@@ -1077,6 +1081,7 @@ def _evaluate_cells(
             max_workers,
             log_steps,
             deadline_at=deadline,
+            objectives=objectives,
         )
         for record in records:
             results.append(record)
@@ -1419,6 +1424,7 @@ def _run_ladder_promotion(
             max_workers=max_workers,
             log_steps=log_steps,
             shutdown=shutdown,
+            objectives=spec.objectives,
         )
 
         wave_elapsed = time.monotonic() - wave_start
@@ -1741,6 +1747,7 @@ def _run_waves(
             max_workers=max_workers,
             log_steps=log_steps,
             shutdown=shutdown,
+            objectives=spec.objectives,
         )
         pc_elapsed = time.monotonic() - pc_start
         positive_control_results.extend(pc_eval.results)
@@ -1843,6 +1850,7 @@ def _run_waves(
             budget_seconds=int(budget_remaining),
             max_workers=max_workers,
             log_steps=log_steps,
+            objectives=spec.objectives,
         )
 
         wave_elapsed = time.monotonic() - wave_start

@@ -31,6 +31,11 @@ SPEC = ImplementationSpec(
         "local contrastive update approximates true gradient",
         "deterministic under fixed seed",
     ),
-    notes="Kernel may accelerate the energy minimization settling dynamics.",
+    notes=(
+        "Kernel may accelerate the energy minimization settling dynamics. "
+        "Reference-only on a composed relu cell: the tanh kernel cannot reproduce "
+        "a relu geometry, and the attach guard detaches to the reference "
+        "(TODO107 D5)."
+    ),
     tags=("equilibrium_propagation", "energy_based", "local_learning", "contrastive"),
 )

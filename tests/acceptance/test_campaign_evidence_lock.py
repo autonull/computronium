@@ -37,7 +37,11 @@ from computronium.experiment.surface import ReportGenerator, cli
 if TYPE_CHECKING:
     from _campaign import Campaign
 
-pytestmark = pytest.mark.timeout(300)
+# The campaign is the fixture: measured 302.5 s at the 300 s budget, so the
+# old 300 s mark timed out the builder before it could finish. The fixture
+# itself allows 1800 s; give the setup room for the measured budget plus the
+# gates (TODO107 acceptance triage).
+pytestmark = pytest.mark.timeout(900)
 
 # The same band `test_price_oracle_lock.py` publishes, read from its own
 # registry-adjacent declaration rather than restated: a projection is a plan,

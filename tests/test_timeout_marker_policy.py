@@ -176,6 +176,10 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         60,
     ),
     (
+        "tests/property/test_stability_energy_metrics_lock.py::test_one_jacobian_per_stability_measurement",
+        300,
+    ),
+    (
         "tests/property/test_state_algebra_lock.py::test_type_checking_imports_are_not_called_at_runtime",
         300,
     ),
@@ -191,7 +195,7 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         300,
     ),
     ("tests/acceptance/conftest.py", 1800),
-    ("tests/acceptance/test_campaign_evidence_lock.py", 300),
+    ("tests/acceptance/test_campaign_evidence_lock.py", 900),
     ("tests/acceptance/test_campaign_lock.py", 900),
     (
         "tests/acceptance/test_demo_acceptance_full_regime.py::test_u1_full_regime_produces_real_measurements",
@@ -238,7 +242,7 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         "tests/acceptance/test_demo_script.py::test_two_clean_runs_visit_the_same_cells",
         300,
     ),
-    ("tests/acceptance/test_todo63_scientific_validation.py", 600),
+    ("tests/acceptance/test_todo63_scientific_validation.py", 900),
     ("tests/acceptance/test_v1_exit.py::test_01_config_drives_loop_cross_domain", 600),
     ("tests/acceptance/test_v1_exit.py::test_02_reachability_locks_pass", 600),
     ("tests/acceptance/test_v1_exit.py::test_03_s10_promotions_non_empty", 600),
