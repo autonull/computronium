@@ -137,6 +137,56 @@ The fast wall is 138 s with 2553 tests: the 6 formerly-xfailed tests now run,
 and the GPU kernel tests add a few seconds. The 82.43 s record was measured
 before those tests ran.
 
+## Progress 2026-11-28 (session 9)
+
+**P2/W64 — the uncovered rules now have locks. Three modules, 32 tests.**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W64a | `experiment/runners` 0% → imported | **DONE** | `test_runner_contracts.py`, 12 tests: the scaling grid is the declared cartesian product (9 cells, integer narrowing, endpoints), a log axis keeps its ratio, one point per dimension is the low end, a scaled coordinate keeps the axes it did not sweep, an ablation variant pins only the varied axis, a replay classifies by its worst metric and skips a metric with no baseline or a zero baseline, a missing arm is "no evidence" (p = 1), an unknown test is refused by name, and the bootstrap separates a shift from an empty difference. |
+| W64b | `experiment/wave.py` 37.7% | **PARTIAL** | `test_wave_pricing_lock.py`, 9 tests: a box price wins over its task price, a wave is priced by the boxes it plans, a budget pays startup once and keeps one cell, a serial wave admits only with 1.05x headroom over the last cell, a first cell needs no history, a passed deadline refuses, replicates expand to one cell per seed with distinct measurement keys, and the rejection summary names the top reasons. The planner's mutation/exploration path is still uncovered. |
+| W64c | `experiment/surface/report.py` 44.4% | **PARTIAL** | `test_report_front_lock.py`, 11 tests: a two-axis and a six-axis front, a tie is not dominance, mismatched arity is refused by name, a record missing or carrying a non-numeric objective is not a zero, an unclaimed metric is a cost, a coordinate key drops unnamed axes, a measured cell is its structural axes, a registration is dated by its moment or its day (or before any run), and the chance line is read from the task's output dimension (digits → 0.1). Rendering and export paths are still uncovered. |
+
+Measured with the new files alone: `runners` 0% → **45-56%** (ablation 52,
+comparison 56, replay 38, scaling 45); `wave.py` **21%** from the pricing lock
+alone (the release adds its other tests); `report.py` **15%**.
+
+Fixes the locks forced:
+
+- `_spaced_values` is now one function for both spacings, and a single point
+  per dimension returns the low end instead of dividing by `n - 1` (a
+  `ZeroDivisionError` before).
+- `classify_changes` is one function for the replay split; `_replay_cell` reads
+  it, so the policy the tests assert is the policy the runner applies.
+
+**P3/W57 — the `PLW1514` group retired; `BASELINE` 499 → 473.**
+
+All 21 `unspecified-encoding` findings now name `encoding="utf-8"`: two
+library sites (`monitoring/alerts.py`, `sec_watch.py`), one notebook cell, and
+18 script sites. The other two findings left with W64's refactor
+(`replay.py`'s `Mapping`/`Sequence` imports moved into `TYPE_CHECKING`). No
+rule was suppressed. `tests/property/test_lint_count_ratchet.py` carries the
+pass in its body.
+
+**P4/W58 — the site build is on demand, and `--check` says so.**
+
+`docs/index.html` and `docs/index.md` are gitignored, so a fresh clone has no
+artifact and `--check` exited 1 on "staleness" no one could have caused. The
+decision: `--check` reports drift only for an artifact that exists; a missing
+one prints "not built" and exits 0. Recorded in the builder's docstring.
+
+**Session 9 end state.**
+
+| Gate | Command | State |
+|---|---|---|
+| property | `pytest tests/property -q` | **3067 passed, 9 skipped, 0 xfailed** (268.02 s) |
+| fast | `scripts/run_fast_gates.sh` | **2585 passed, 75 skipped**, 89.45 s (93 s wall); 138.01 s was not reproduced on this host with the same list plus three files |
+| ruff | `ruff check .` | **473 findings** (baseline 473, lowered this session) |
+| format | `ruff format --check .` | green (1723 files) |
+| pyright | changed files | the six new/changed files clean; `docs/build_site.py` and `comparison.py` legacy lines only |
+| new locks | the three files | 32 passed |
+| site | `docs/build_site.py --check` | 0 with the artifact, 0 with "not built", 1 only on real drift |
+
 ## Coverage and test-time strategy (session 7)
 
 The release population measured once with `--cov-context=test`: **38,318 of
@@ -249,14 +299,14 @@ re-baseline note, not an exact target.
 | W54 | 2 | 7 xfails are capability boundaries | deep settle at 100 steps; vision transpose feedback (needs FA or a learned inverse); no JVP scale; primitive capability 0.122; no ladder point clears the near-chance band; ternary substrate severs the forward graph; tile mesh projects 614k params over the 150k ceiling | each names the primitive that closes it (FA arm, JVP-scale knob, input compression for the mesh, ternary gradient path) | fixed (a capability) or filed as a gap with its cost |
 | W55 | 1 | 2 xfails are wrong test assumptions | Hopfield energy "can be negative" is legal; the scale-free test hits numerical precision | fix the assertion or its tolerance | 2 xfails flip |
 | W56 | 3 | pyright: 3240 errors / 15 warnings, of which `docs/archive` is 680 | archived UI code imports PyQt6/pyqtgraph/bioplausible and is not shipped; the 15 warnings are 8 wildcard library imports, 4 unused expressions, 1 `docker` source, 1 single-use `TypeVar`, 1 archived `__new__` | decide the archive scope once, then fix the 15 warnings | count moves once by the decision; the 15 are gone |
-| W57 | 3 | ruff 499 | E402 56, RUF105 43, complexity 119 (C901 36, PLR0912 16, PLR0915 20, PLR1702 17, PLR0914 30), PLW0717 36, F841 21, PLW1514 21, S110 20, PLW2901 14 | one pass per named group, `BASELINE` lowered and the rules named; Register C migrates the 43 `# ruff: ignore` directives and enables RUF105 | `BASELINE` < 499 per pass |
-| W58 | 3 | the site build has no gate | `docs/index.html`/`index.md` are gitignored; `docs/build_site.py --check` exits 1 on a fresh clone because the artifact is absent | decide: generate on demand (no gate) and say so, or gate only when the artifact exists | decision recorded in the docs build note |
+| W57 | 3 | ruff 473 (was 499) | PLW1514 retired this session (21 sites named their encoding); next groups: E402 56, RUF105 43, complexity 119 (C901 36, PLR0912 16, PLR0915 20, PLR1702 17, PLR0914 29), PLW0717 36, F841 20, S110 20, PLW2901 14 | one pass per named group, `BASELINE` lowered and the rules named; Register C migrates the 43 `# ruff: ignore` directives and enables RUF105 | `BASELINE` < 473 per pass |
+| W58 | 3 | the site build has no gate | **DONE** (session 9): the outputs are gitignored, so `--check` exited 1 on a fresh clone for an artifact that cannot exist | `--check` compares only an artifact that exists; a missing one prints "not built" and exits 0 | 0 with the artifact, 0 without it, 1 on real drift; recorded in the builder's docstring |
 | W59 | 3 | the 0.277 registration was committed after the first seed | the mtimes prove the order; the commit does not | commit the registration before the launch on the next claim rung | the commit order proves the box |
 | W60 | 2 | the release pays ~62 min for 63.65% coverage and nothing ranks a test by the lines it buys | suite order was never measured; 113 of 342 files cover no line another file does not | per-test attribution (`--cov-context=test` + durations) and a greedy `new lines / second` selection; `configs/fast_suite.txt` + `scripts/run_fast_gates.sh` | fast suite **2509 passed / 110 skipped / 12 xfailed in 133.19 s**, 34,756 statements = **90.7%** of the release's covered statements |
 | W61 | 1 | `test_trainer_async_dataloading` failed ~1 run in 8; the first batch was read mid-copy | the wait was enqueued on the default stream, but `train_step` runs under `with torch.cuda.stream(compute_stream)`, so the reader never awaited the load stream | `compute_stream.wait_stream(load_stream)` before consuming the buffer | **12/12 runs pass**; the spy sees batch 0 again |
 | W62 | 2 | coverage was a snapshot, not a direction | no ratchet, and no single population | `COVERAGE=1` adds the flags to the release's own pytest calls; `check_coverage_ratchet.py` holds 38,318 with slack 150 and names the files that lost lines | baseline recorded; a drop fails the step |
 | W63 | 2 | one test sets the fast suite's and the unit shard's wall (178.3 s) | the cosine-similarity test trains two MLPs at a budget larger than its assertion needs | trim its epochs/batches to the smallest that still fails on a broken claim; measure before/after | fast suite wall < 60 s; the assertion still fails when the claim breaks |
-| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | each named area rises; the ratchet moves |
+| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | **PARTIAL** (session 9): runners 0% → 45-56%, 32 new tests in three files; the surface/CLI render paths, `local_learning`, `deployments` and `documentation` still lack contract tests |
 | W65 | 1 | 113 of 342 files cover no unique line; the demo shard is 777-817 s | demos are artifact producers; capability tests certify floors | keep both out of the fast suite and in the release; do not delete — they answer a different question than coverage | fast suite unchanged; the release keeps the artifacts |
 
 ## Efficiency rules
@@ -286,38 +336,50 @@ re-baseline note, not an exact target.
       because the suite mocks CuPy (environment refusal, D2).
 - [x] The `input_dim` and `compute_loss` contracts are locked both ways
       (W48, W49).
-- [ ] ruff < 499, with the retired rules named in the ratchet's docstring;
+- [ ] ruff < 473, with the retired rules named in the ratchet's docstring;
       Register C's 43 directives migrated and RUF105 enabled (W57). The
-      measured count is **496** (baseline 499; session 8 adds none).
+      measured count is **473** (baseline 473; session 9 retired PLW1514's
+      21 sites).
 - [ ] pyright < 3240 errors or a recorded archive-scope decision, and 0
       warnings (W56).
-- [ ] The site-build and pre-registration decisions are written where the
-      gate lives (W58, W59).
-- [x] The fast suite is green in **≤ 2.5 min** (**138.01 s** with 2553
-      passed / 75 skipped), reaches **≥ 90%** of the release's covered
-      statements (90.7%), and a moved test file does not fail it (W60).
-      The older 82.43 s record predates the 6 retired xfails and the GPU
-      kernel tests.
+- [x] The site-build decision is written where the gate lives (W58: a
+      missing artifact is "not built", not stale). The pre-registration
+      order (W59) is proved on the next claim rung.
+- [x] The fast suite is green in **≤ 2.5 min** (**89.45 s** with 2585
+      passed / 75 skipped; session 9 re-measured the list plus three files),
+      reaches **≥ 90%** of the release's covered statements (90.7%), and a
+      moved test file does not fail it (W60). The 138.01 s session-8 figure
+      was not reproduced on this host.
 - [ ] `COVERAGE=1` holds 38,318 covered statements (63.65%) or rises with a
       re-baseline in the same commit (W62). Not re-measured this session.
 - [ ] The 178 s long pole is trimmed (**8.07 s** standalone), but the fast
-      suite's wall is **138.01 s**, not **< 60 s** (W63). The remaining
-      wall is the schedule of 2553 tests, not one test.
-- [ ] The named coverage gaps (surface/report, wave, runners, local_learning)
-      have contract tests, each named in its change (W64).
+      suite's wall is **89.45 s**, not **< 60 s** (W63). The remaining
+      wall is the schedule of 2585 tests, not one test.
+- [ ] The named coverage gaps (surface/report, wave, runners,
+      local_learning) have contract tests, each named in its change (W64).
+      **Runners, wave pricing and the report front are locked** (session 9,
+      32 tests); the render/export, CLI-branch and local_learning paths
+      remain.
 
 ## Remaining work (in order)
 
-1. **P2 — coverage and test time** (W63, W64, W65). The fast wall is
-   138.01 s. The named gaps (surface/report, wave, runners,
-   local_learning) are still contract-test work; the coverage ratchet is
-   not re-measured since session 7.
-2. **P3 — static debt** (W56, W57). One scope decision for `docs/archive`,
-   then the 15 warnings; the measured ruff count is 496 against the 499 baseline, so W57's
-   next pass must retire a named group (complexity 119, E402 56, RUF105 43)
-   and lower `BASELINE` in the same commit. Register C alongside.
-3. **P4 — decisions** (W58, W59): the site-build gate and the
-   registration-before-launch order.
+1. **P2 — coverage and test time** (W64, W65). Session 9 locked the runner,
+   wave-pricing and report-front rules (32 tests, `runners` 0% → 45-56%).
+   Still open, in the order they buy lines: `surface/report`'s render and
+   export paths (the largest remaining mass), `experiment/surface/cli.py`'s
+   command branches, `core/local_learning` (880 missing), `deployments`
+   (537) and `documentation` (499). Re-measure the coverage ratchet with
+   `COVERAGE=1` before the next re-baseline; the fast wall is 89.45 s, so
+   the `< 60 s` clause in W63 stays open (the 2500-test schedule, not one
+   test).
+2. **P3 — static debt** (W56, W57). Ruff is 473 with the baseline at 473:
+   the next pass retires a named group (E402 56, complexity 119, RUF105 43
+   via Register C, PLW0717 36, F841 20, S110 20) and lowers `BASELINE` in
+   the same commit. W56 still owes the one-time `docs/archive` scope
+   decision for pyright (680 of its 3240 errors) and the 15 warnings.
+3. **P4 — decisions** (W59): W58 is closed; the registration-before-launch
+   order is proved on the next claim rung (commit the registration before
+   the first seed runs).
 4. **Release** — re-run `scripts/run_local_gates.sh` on the final tree
    (the primitives shard is the outstanding shard; queued on the idle
    device).
