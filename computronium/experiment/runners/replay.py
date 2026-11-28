@@ -23,6 +23,8 @@ from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.schema.coordinate import Coordinate
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from computronium.experiment.execution.policy import Policy
 
 
@@ -59,6 +61,47 @@ class ReplayResult:
     stable: list[dict[str, Any]]
     errors: list[dict[str, Any]]
     walltime_s: float
+
+
+def classify_changes(
+    current: Mapping[str, Any],
+    original: Mapping[str, Any],
+    metrics: Sequence[str],
+    tolerance: float,
+) -> dict[str, list[dict[str, Any]]]:
+    """Split re-measured metrics into regressed, improved and stable.
+
+    A metric the two runs do not share, or whose original is zero, cannot be
+    compared and is skipped rather than counted as stable. The tolerance is a
+    *relative* change, so a metric on a different scale is judged on its own.
+    """
+    split: dict[str, list[dict[str, Any]]] = {
+        "regressed": [],
+        "improved": [],
+        "stable": [],
+    }
+    for metric in metrics:
+        if metric not in current or metric not in original:
+            continue
+        current_val = float(current[metric])
+        original_val = float(original[metric])
+        if original_val == 0:
+            continue
+        change = (current_val - original_val) / abs(original_val)
+        category = (
+            "regressed"
+            if change < -tolerance
+            else "improved"
+            if change > tolerance
+            else "stable"
+        )
+        split[category].append({
+            "metric": metric,
+            "original": original_val,
+            "current": current_val,
+            "change": change,
+        })
+    return split
 
 
 class ReplayRunner:
@@ -169,51 +212,17 @@ class ReplayRunner:
         )
 
         # Compare metrics
-        current_metrics = evaluation.metrics
-        original_metrics = record.payload
+        split = classify_changes(
+            evaluation.metrics,
+            record.payload,
+            self.spec.check_metrics,
+            self.spec.tolerance,
+        )
+        regressed_metrics = split["regressed"]
+        improved_metrics = split["improved"]
+        stable_metrics = split["stable"]
 
-        regressed_metrics = []
-        improved_metrics = []
-        stable_metrics = []
-
-        for metric in self.spec.check_metrics:
-            current_val = current_metrics.get(metric)
-            original_val = original_metrics.get(metric)
-
-            if current_val is None or original_val is None:
-                continue
-
-            current_val = float(current_val)
-            original_val = float(original_val)
-
-            if original_val == 0:
-                continue
-
-            relative_change = (current_val - original_val) / abs(original_val)
-
-            if relative_change < -self.spec.tolerance:
-                regressed_metrics.append({
-                    "metric": metric,
-                    "original": original_val,
-                    "current": current_val,
-                    "change": relative_change,
-                })
-            elif relative_change > self.spec.tolerance:
-                improved_metrics.append({
-                    "metric": metric,
-                    "original": original_val,
-                    "current": current_val,
-                    "change": relative_change,
-                })
-            else:
-                stable_metrics.append({
-                    "metric": metric,
-                    "original": original_val,
-                    "current": current_val,
-                    "change": relative_change,
-                })
-
-        # Categorize
+        # A cell is its worst metric: a regression outranks an improvement.
         if regressed_metrics:
             category = "regressed"
         elif improved_metrics:

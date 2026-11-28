@@ -76,6 +76,27 @@ _DEFAULT_RANGES: dict[str, tuple[float, float]] = {
     "beta": (0.1, 2.0),
 }
 
+_INTEGER_PARAMS: frozenset[str] = frozenset({
+    "hidden_dims",
+    "param_budget",
+    "num_layers",
+    "max_steps",
+    "settle_horizon",
+})
+
+
+def _spaced_values(lo: float, hi: float, n: int, *, log_scale: bool) -> list[float]:
+    """``n`` points over ``[lo, hi]``, log-spaced or affine, endpoints included.
+
+    One point is the low end: a single point per dimension is a grid of one
+    cell, not a division by ``n - 1``.
+    """
+    if n <= 1:
+        return [lo]
+    if log_scale:
+        return [lo * (hi / lo) ** (i / (n - 1)) for i in range(n)]
+    return [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+
 
 class ScalingRunner:
     """Runs scaling experiments sweeping architectural/dynamical parameters.
@@ -110,44 +131,15 @@ class ScalingRunner:
 
     def _generate_parameter_grid(self) -> list[dict[str, Any]]:
         """Generate the grid of parameter values to sweep."""
-
-        grid = [{}]
+        grid: list[dict[str, Any]] = [{}]
         for param in self.spec.vary:
             lo, hi = _DEFAULT_RANGES.get(param, (1, 10))
-            if self.spec.log_scale:
-                values = [
-                    lo * (hi / lo) ** (i / (self.spec.n_points_per_dim - 1))
-                    for i in range(self.spec.n_points_per_dim)
-                ]
-                if param in {
-                    "hidden_dims",
-                    "param_budget",
-                    "num_layers",
-                    "max_steps",
-                    "settle_horizon",
-                }:
-                    values = [int(round(v)) for v in values]
-            else:
-                values = [
-                    lo + (hi - lo) * i / (self.spec.n_points_per_dim - 1)
-                    for i in range(self.spec.n_points_per_dim)
-                ]
-                if param in {
-                    "hidden_dims",
-                    "param_budget",
-                    "num_layers",
-                    "max_steps",
-                    "settle_horizon",
-                }:
-                    values = [int(round(v)) for v in values]
-
-            new_grid = []
-            for g in grid:
-                for v in values:
-                    new_g = g.copy()
-                    new_g[param] = v
-                    new_grid.append(new_g)
-            grid = new_grid
+            values: list[Any] = _spaced_values(
+                lo, hi, self.spec.n_points_per_dim, log_scale=self.spec.log_scale
+            )
+            if param in _INTEGER_PARAMS:
+                values = [round(v) for v in values]
+            grid = [{**g, param: v} for g in grid for v in values]
         return grid
 
     def _build_run_spec(self, param_values: dict[str, Any]) -> RunSpec:

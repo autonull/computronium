@@ -215,3 +215,6 @@ tests/primitives/geometry/test_geometry_contract.py
 tests/unit/core/test_transformer_geometry.py
 tests/property/test_checkpoint_parity.py
 tests/unit/core/test_trainer_async_dataloading.py
+tests/property/test_runner_contracts.py
+tests/property/test_wave_pricing_lock.py
+tests/property/test_report_front_lock.py
