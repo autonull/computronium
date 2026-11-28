@@ -172,7 +172,7 @@ A test asserts a **contract**, never a copied measurement.
 3. Keep it under ~1 s; if it needs more, say why and put it outside the fast
    tier.
 4. One family per primitive is a unit gate; the family matrix belongs to SEC
-   (`AGENTS.md`'s SEC section), not to the fast suite.
+   (`AGENTS.experimenting.md`), not to the fast suite.
 5. A demo's figures and manifest are its deliverable, not coverage; a
    capability test certifies a floor. Neither is a coverage test.
 6. Prefer a fixture over setup/teardown, and `parametrize` over a copied test.
@@ -194,8 +194,6 @@ repo-wide ruff/pyright hygiene pass.
 ## Evidence
 
 - Report the command, the walltime and the result; never truncate failures.
-- A gate is a predicate the repository evaluates (a script's exit code), not a
-  sentence a session asserts. If it cannot be run as a check, it is not a gate.
 - A commit message carries the tier's measured result, and the log it came
   from.
 - A number travels with its ruler: the n, the device, the fidelity, and the
