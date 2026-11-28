@@ -208,6 +208,7 @@ class TritonEqPropOps:
                 K: tl.constexpr,
                 H: tl.constexpr,
                 BLOCK_M: tl.constexpr,
+                BLOCK_H: tl.constexpr,
             ):
                 pid = tl.program_id(0)
                 offs_m = pid * BLOCK_M + tl.arange(0, BLOCK_M)
@@ -218,10 +219,12 @@ class TritonEqPropOps:
                 h = tl.load(
                     h_ptr + offs_m[:, None] * K + offs_k[None, :],
                     mask=mask_m[:, None],
+                    other=0.0,
                 )
                 x_emb = tl.load(
                     x_emb_ptr + offs_m[:, None] * K + offs_k[None, :],
                     mask=mask_m[:, None],
+                    other=0.0,
                 )
 
                 # LayerNorm over K (per row)
@@ -236,29 +239,37 @@ class TritonEqPropOps:
                     mask=mask_m[:, None],
                 )
 
-                # ffn_hidden = tanh(h_norm @ W1^T + b1); W1 is (H, K)  # ruff: ignore[commented-out-code]
-                offs_h = tl.arange(0, H)
-                w1 = tl.load(w1_ptr + offs_h[:, None] * K + offs_k[None, :])
-                b1 = tl.load(b1_ptr + offs_h)
-                ffn = tl.dot(
-                    h_norm, tl.trans(w1), input_precision="ieee"
-                )  # (BLOCK_M, H)
-                ffn = libdevice.tanh(ffn + b1[None, :])
-                tl.store(
-                    ffnhid_ptr + offs_m[:, None] * H + offs_h[None, :],
-                    ffn,
-                    mask=mask_m[:, None],
-                )
-
-                # ffn_out = ffn @ W2^T + b2; W2 is (K, H)  # ruff: ignore[commented-out-code]
-                w2 = tl.load(w2_ptr + offs_k[:, None] * H + offs_h[None, :])
+                # FFN in H chunks so the weight tiles stay inside shared
+                # memory (the whole H x K block overflowed a 101 KB limit at
+                # H=512, K=128).
                 b2 = tl.load(b2_ptr + offs_k)
-                ffn_out = tl.dot(
-                    ffn, tl.trans(w2), input_precision="ieee"
-                )  # (BLOCK_M, K)
-                ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
+                ffn_out = tl.zeros((BLOCK_M, K), dtype=tl.float32)
+                for start_h in range(0, H, BLOCK_H):
+                    offs_h = start_h + tl.arange(0, BLOCK_H)
+                    mask_h = offs_h < H
+                    w1 = tl.load(
+                        w1_ptr + offs_h[:, None] * K + offs_k[None, :],
+                        mask=mask_h[:, None],
+                        other=0.0,
+                    )
+                    b1 = tl.load(b1_ptr + offs_h, mask=mask_h, other=0.0)
+                    ffn = tl.dot(h_norm, tl.trans(w1), input_precision="ieee")
+                    ffn = libdevice.tanh(ffn + b1[None, :])
+                    tl.store(
+                        ffnhid_ptr + offs_m[:, None] * H + offs_h[None, :],
+                        ffn,
+                        mask=mask_m[:, None] & mask_h[None, :],
+                    )
+                    w2 = tl.load(
+                        w2_ptr + offs_k[None, :] * H + offs_h[:, None],
+                        mask=mask_h[:, None],
+                        other=0.0,
+                    )
+                    ffn_out += tl.dot(ffn, w2, input_precision="ieee")
 
-                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)  # ruff: ignore[commented-out-code]
+                ffn_out += b2[None, :]
+
+                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)
                 h_next = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)
                 tl.store(
                     out_ptr + offs_m[:, None] * K + offs_k[None, :],
@@ -310,6 +321,7 @@ class TritonEqPropOps:
         M, K = h_t.shape
         H = w1_t.shape[0]
         BLOCK_M = 16
+        BLOCK_H = 32
 
         out_t = torch.empty_like(h_t)
         hnorm_t = torch.empty_like(h_t)
@@ -330,6 +342,7 @@ class TritonEqPropOps:
             K=K,
             H=H,
             BLOCK_M=BLOCK_M,
+            BLOCK_H=BLOCK_H,
         )
 
         def _store(dst, src):
@@ -700,29 +713,26 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                     K: tl.constexpr,
                     H: tl.constexpr,
                     BLOCK_M: tl.constexpr,
+                    BLOCK_H: tl.constexpr,
                 ):
                     """Fused EP settle: LayerNorm -> W1 -> tanh -> W2 -> residual"""
                     pid = tl.program_id(0)
                     offs_m = pid * BLOCK_M + tl.arange(0, BLOCK_M)
                     mask_m = offs_m < M
                     offs_k = tl.arange(0, K)
-                    offs_h = tl.arange(0, H)
-
-                    # Load persistent weights
-                    W1 = tl.load(W1_ptr + offs_h[:, None] * K + offs_k[None, :])
-                    b1 = tl.load(b1_ptr + offs_h)
-                    W2 = tl.load(W2_ptr + offs_k[:, None] * H + offs_h[None, :])
-                    b2 = tl.load(b2_ptr + offs_k)
 
                     # Load initial state
                     h = tl.load(
                         h_ptr + offs_m[:, None] * K + offs_k[None, :],
                         mask=mask_m[:, None],
+                        other=0.0,
                     )
                     x_emb = tl.load(
                         x_emb_ptr + offs_m[:, None] * K + offs_k[None, :],
                         mask=mask_m[:, None],
+                        other=0.0,
                     )
+                    b2 = tl.load(b2_ptr + offs_k)
 
                     for _ in range(steps):
                         # LayerNorm
@@ -732,11 +742,29 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                         std = tl.sqrt(var + 1e-5)
                         h_norm = h_centered / std[:, None]
 
-                        # FFN
-                        ffn = tl.dot(h_norm, tl.trans(W1), input_precision="ieee")
-                        ffn = libdevice.tanh(ffn + b1[None, :])
-                        ffn_out = tl.dot(ffn, tl.trans(W2), input_precision="ieee")
-                        ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
+                        # FFN in H chunks so the weight tiles stay inside
+                        # shared memory (the whole H x K block overflowed a
+                        # 101 KB limit at H=512, K=128).
+                        ffn_out = tl.zeros((BLOCK_M, K), dtype=tl.float32)
+                        for start_h in range(0, H, BLOCK_H):
+                            offs_h = start_h + tl.arange(0, BLOCK_H)
+                            mask_h = offs_h < H
+                            W1 = tl.load(
+                                W1_ptr + offs_h[:, None] * K + offs_k[None, :],
+                                mask=mask_h[:, None],
+                                other=0.0,
+                            )
+                            b1 = tl.load(b1_ptr + offs_h, mask=mask_h, other=0.0)
+                            ffn = tl.dot(h_norm, tl.trans(W1), input_precision="ieee")
+                            ffn = libdevice.tanh(ffn + b1[None, :])
+                            W2 = tl.load(
+                                W2_ptr + offs_k[None, :] * H + offs_h[:, None],
+                                mask=mask_h[:, None],
+                                other=0.0,
+                            )
+                            ffn_out += tl.dot(ffn, W2, input_precision="ieee")
+
+                        ffn_out += b2[None, :]
 
                         # Residual update
                         h = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)
@@ -770,6 +798,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                 M, K = h.shape
                 H = W1.shape[0]
                 BLOCK_M = 16
+                BLOCK_H = 32
 
                 out = torch.empty_like(h)
                 grid = ((M + BLOCK_M - 1) // BLOCK_M,)
@@ -788,6 +817,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                     K=K,
                     H=H,
                     BLOCK_M=BLOCK_M,
+                    BLOCK_H=BLOCK_H,
                     grid=grid,
                     kernel_name="ep_settle",
                 )
