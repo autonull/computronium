@@ -18,7 +18,10 @@ from computronium.core.local_learning.settling import (
     settle_universal,
 )
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
-from computronium.models.native.fa_native import create_native_fa_mlp
+from computronium.models.native.fa_native import (
+    create_native_fa_adaptive,
+    create_native_fa_mlp,
+)
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -316,17 +319,11 @@ class TestWeightTransportFreeness:
 class TestAdaptiveFAAlignment:
     """Verify an adaptive FA rule moves B toward W.T over training."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="adaptive feedback alignment (B <- B + eta*delta*a^T) is not "
-        "implemented: RandomProjectionsCredit fixates B at init, so B never "
-        "moves toward W.T",
-    )
     def test_feedback_alignment_improves(self, synthetic_mlp_task):
         """After 50 steps the adaptive rule has moved B toward W.T."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
-        model = create_native_fa_mlp(
+        model = create_native_fa_adaptive(
             input_dim, hidden_dim, output_dim, lr=0.001, feedback_scale=0.01
         )
         model.train()

@@ -205,6 +205,10 @@ class CreditAssignmentConfig:
             ``feedback_update_every`` steps. Never reads forward weights
             (the L3 transport lock is the guard — B0's legacy-AdaptiveFA
             defect is not inherited)
+        adaptive_feedback: Apply the Adaptive-FA rule
+            B_i ← B_i + feedback_lr·δ_{i+1}ᵀ a_i on the layered chain
+            (the factory's ``create_native_fa_adaptive`` arm). Fixed
+            random projections when False.
         feedback_lr: EMA rate toward the ridge solution (learned_feedback)
         feedback_update_every: Steps between learned-feedback updates
         label_dim: Width of the trailing label channel the credit reads as its
@@ -238,6 +242,7 @@ class CreditAssignmentConfig:
     homeostatic_target: float = 1.0
     homeostatic_scaling: bool = False
     learned_feedback: bool = False
+    adaptive_feedback: bool = False
     feedback_lr: float = 0.05  # measured insane at 0.5 (‖B‖ collapse, TODO12b H6)
     feedback_update_every: int = 1
     train_biases: bool = False
@@ -347,6 +352,7 @@ class CreditAssignmentConfig:
         local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
+        adaptive_feedback: bool = False,
     ) -> CreditAssignmentConfig:
         """Random-projection feedback credit (FA/DFA family).
 
@@ -372,6 +378,7 @@ class CreditAssignmentConfig:
             local_objective=local_objective,
             orthogonal_init=orthogonal_init,
             feedback_scale=feedback_scale,
+            adaptive_feedback=adaptive_feedback,
         )
 
     @classmethod
@@ -1124,6 +1131,8 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
             "variant), not the pure FA single-random-B form",
             "recurrent self-connections project the last hidden layer's "
             "error through their own fixed feedback",
+            "adaptive variant moves B_i ← B_i + feedback_lr·δ_{i+1}ᵀ a_i "
+            "on the layered chain; the fixed arm keeps B at its init",
         ),
         objective_function="task loss (readout autograd only; hidden layers receive projected error)",
         pseudo_gradient_def="ΔW_i = δ_{i+1}ᵀ a_i / batch, δ_i = δ_{i+1} @ B_i with B_i = feedback_scale·N(0,1) fixed at first use",
@@ -1336,6 +1345,11 @@ class RandomProjectionsCredit(FeedbackMatrixMixin, TileFeedbackMixin, InertZeros
         hidden_err = err
         for i in range(n_trans - 1, -1, -1):
             grads.append(err.T @ acts[i] / batch)
+            if self.config.adaptive_feedback:
+                b = self._feedback_weights[weight_names[i]]
+                b.add_(
+                    self.config.feedback_lr * err.detach().T @ acts[i].detach() / batch
+                )
             err = apply_norm(
                 [err @ self._feedback_weights[weight_names[i]]],
                 self.config.credit_norm,
@@ -2594,38 +2608,33 @@ class TemporalTraceCredit(_SurrogateUndefined):
 
     def compute_stdp_window(
         self,
-        pre_spikes: Tensor,  # [batch, 1] or [batch] - spike times (unused for window function)
-        post_spikes: Tensor,  # [batch, 1] or [batch] - spike times (unused for window function)
-        dt: Tensor,  # [n_dt] - time lag grid
+        pre_spikes: Tensor,  # [batch] - pre-spike times
+        post_spikes: Tensor,  # [batch] - post-spike times
+        dt: Tensor,  # [n_dt] - lag grid; sets the returned row width
     ) -> Tensor:
-        """Compute STDP window W(Δt) over the lag grid dt.
+        """Compute the STDP window for each spike pair.
 
-        The STDP window is an antisymmetric function of the time lag Δt:
-        W(Δt) = A+ exp(-Δt/τ) for Δt > 0 (potentiation),
-              = -A- exp(Δt/τ) for Δt < 0 (depression),
-              = 0 for Δt = 0.
+        The window is the antisymmetric function of the pair's lag
+        Δt = post − pre: W(Δt) = A+ exp(−Δt/τ) for Δt > 0,
+        −A− exp(Δt/τ) for Δt < 0, and 0 at simultaneity. The pair's
+        value repeats across ``dt`` so the result keeps the declared
+        ``[batch, n_dt]`` shape while its sign and magnitude follow the
+        measured spike order.
 
-        The pre_spikes and post_spikes arguments are retained for API consistency
-        (e.g., batching multiple spike pairs) but the window function itself
-        depends only on the time lag grid dt.
-
-        Returns: Tensor of shape [batch, n_dt] where each row is W(dt).
+        Returns: Tensor of shape [batch, n_dt].
         """
-        # Standard STDP window function evaluated at dt grid
-        pos_mask = dt > 0
-        neg_mask = dt < 0
-
-        window = torch.zeros_like(dt)
+        delta = (post_spikes.reshape(-1) - pre_spikes.reshape(-1)).to(dt.dtype)
+        window = torch.zeros_like(delta)
+        pos_mask = delta > 0
+        neg_mask = delta < 0
         window[pos_mask] = self.config.a_plus * torch.exp(
-            -dt[pos_mask] / self.config.tau
+            -delta[pos_mask] / self.config.tau
         )
         window[neg_mask] = -self.config.a_minus * torch.exp(
-            dt[neg_mask] / self.config.tau
+            delta[neg_mask] / self.config.tau
         )
 
-        # Expand to [batch, n_dt] for API consistency (same window for all pairs in batch)
-        batch_size = pre_spikes.shape[0] if pre_spikes.ndim > 0 else 1
-        return window.expand(batch_size, -1)
+        return window.unsqueeze(-1).expand(-1, dt.numel())
 
 
 class TargetInversionCredit:

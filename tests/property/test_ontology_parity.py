@@ -249,7 +249,6 @@ class TestDiffusionEqPropParity:
     """Test Diffusion EqProp native compositions."""
 
     @pytest.mark.parametrize("epochs", [2])
-    @pytest.mark.xfail(reason="DiffusionDynamics has gradient computation bug")
     def test_native_diffusion_eqprop_composes_and_trains(self, epochs):
         """native_diffusion_eqprop should compose and train."""
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -625,9 +624,6 @@ class TestSNNParity:
         assert acc >= 0.0, f"SNN accuracy: {acc:.1f}%"
 
     @pytest.mark.parametrize("epochs", [2])
-    @pytest.mark.xfail(
-        reason="SpikeIntegrationDynamics has tensor size mismatch with TileGeometry"
-    )
     def test_native_tile_snn_composes_and_trains(self, epochs):
         """native_tile_snn should compose and train."""
         device = "cuda" if torch.cuda.is_available() else "cpu"

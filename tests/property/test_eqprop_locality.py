@@ -217,7 +217,6 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(  # ruff: ignor
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
-@pytest.mark.xfail(reason="Numerical precision issue in scale-free property test")
 def test_thermodynamic_contrast_scale_free_property(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, scale, seed
 ):
@@ -276,11 +275,23 @@ def test_thermodynamic_contrast_scale_free_property(  # ruff: ignore[too-many-lo
     # Gradient scales by scale^2 (outer product scaling)
     for g_orig, g_scaled in zip(grads_orig, grads_scaled):
         expected = g_orig * (scale**2)
-        # Compare values directly to avoid gradient function issues
-        diff = (g_scaled - expected).abs().max().item()
-        assert diff < 2e-5, (
-            f"Gradient scaling property violated: expected {scale**2}x, "
-            f"max diff = {diff:.6f}"
+        # Normwise and directional: per-entry tolerance is unstable where the
+        # expected entry is at float32 noise, and the claim is the scale factor
+        # plus the direction.
+        expected_norm = expected.norm().item()
+        scaled_norm = g_scaled.norm().item()
+        if expected_norm < 1e-12:
+            assert scaled_norm < 1e-10
+            continue
+        ratio = scaled_norm / expected_norm
+        cosine = torch.nn.functional.cosine_similarity(
+            g_scaled.flatten(), expected.flatten(), dim=0
+        ).item()
+        assert abs(ratio - 1.0) < 0.02, (
+            f"Gradient magnitude did not scale by {scale**2}: ratio={ratio:.4f}"
+        )
+        assert cosine > 0.999, (
+            f"Gradient direction changed under scaling: cosine={cosine:.6f}"
         )
 
 
@@ -673,9 +684,6 @@ def test_eqprop_feedback_alignment_still_local(  # ruff: ignore[too-many-locals]
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
-@pytest.mark.xfail(
-    reason="Hopfield energy can be negative - test assumption is incorrect"
-)
 def test_energy_minimization_dynamics_free_energy_decreases(
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, seed
 ):
@@ -720,8 +728,6 @@ def test_energy_minimization_dynamics_free_energy_decreases(
     assert final_energy <= init_energy + 1e-4, (
         f"Free energy increased after settling: {init_energy:.6f} -> {final_energy:.6f}"
     )
-    # Also verify energy is non-negative
-    assert final_energy >= 0.0, "Energy should be non-negative"
 
 
 # ============================================================

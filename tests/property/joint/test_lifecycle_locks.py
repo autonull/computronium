@@ -599,10 +599,6 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
     registry.validate(z)
 
 
-@pytest.mark.xfail(
-    reason="EnergyToInstantaneousAdapter modifies frozen config - bug in adapter",
-    strict=True,
-)
 def test_j6_dynamics_adapter_preserves_shape():
     """J6: Dynamics adapter preserves CompositeState structure."""
     substrate = DigitalSubstrate(SubstrateConfig.digital())

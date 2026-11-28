@@ -238,13 +238,11 @@ class TestGradientEquivalence:
         # for shape information)
 
 
-# EqProp joint system test - xfail for now due to PlasticityConfig API issue
-@pytest.mark.xfail(reason="PlasticityConfig.initial_psi API not yet implemented")
 def test_eqprop_joint_system():
     """EqProp joint system should run a training step."""
     import torch
 
-    from computronium.core.joint import PlasticityConfig
+    from computronium.core.joint import NullPlasticity
     from computronium.core.system_trainer import compose_joint_system
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -275,7 +273,7 @@ def test_eqprop_joint_system():
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
-    plasticity = PlasticityConfig.null()
+    plasticity = NullPlasticity()
 
     system = compose_joint_system(
         substrate, geometry, dynamics, plasticity, credit, update

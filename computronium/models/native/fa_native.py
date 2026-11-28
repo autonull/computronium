@@ -47,6 +47,8 @@ def create_native_fa_mlp(
     lr: float = 0.001,
     feedback_scale: float = 0.01,
     device: str | torch.device = "cpu",
+    *,
+    adaptive_feedback: bool = False,
 ) -> System:
     """Create a Feedback Alignment system using native 5-D composition.
 
@@ -58,6 +60,7 @@ def create_native_fa_mlp(
         lr: Learning rate
         feedback_scale: Scale of feedback weights
         device: Target device for parameter placement
+        adaptive_feedback: Move feedback weights toward the task error
 
     Returns:
         A composed System with FeedforwardGeometry + InstantaneousDynamics
@@ -83,6 +86,7 @@ def create_native_fa_mlp(
         CreditAssignmentConfig.random_projections(
             beta=0.5,
             feedback_scale=feedback_scale,
+            adaptive_feedback=adaptive_feedback,
         )
     )
     update = EuclideanUpdate(
@@ -94,10 +98,8 @@ def create_native_fa_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-# Convenience factory functions for each variant (all use the same
-# RandomProjectionsCredit with different config tags for discovery)
-# The actual algorithmic differences would be implemented in the credit
-# assignment implementation; for now they share the same base implementation.
+# Convenience factory functions for each variant, differing in the
+# RandomProjectionsCredit configuration they compose.
 def create_native_fa_fixed(
     input_dim: int,
     hidden_dim: int,
@@ -137,6 +139,7 @@ def create_native_fa_adaptive(
         lr,
         feedback_scale=feedback_scale,
         device=device,
+        adaptive_feedback=True,
     )
 
 

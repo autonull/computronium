@@ -7,6 +7,8 @@ dynamics type into another.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import torch
 from torch import Tensor
 
@@ -124,7 +126,9 @@ class EnergyToInstantaneousAdapter(DynamicsAdapter):
         distilled = torch.nn.Sequential(*layers)
 
         optimizer = torch.optim.Adam(distilled.parameters(), lr=self._distillation_lr)
-        self._source.config.track_free_energy_per_iter = True
+        source = EnergyMinimizationDynamics(
+            replace(self._source.config, track_free_energy_per_iter=True)
+        )
 
         for step in range(self._distillation_steps):
             optimizer.zero_grad()
@@ -136,7 +140,7 @@ class EnergyToInstantaneousAdapter(DynamicsAdapter):
             # Run source dynamics to get equilibrium
             state = SystemState(x=x_batch)
             state.activations = geometry.forward(x_batch, substrate)
-            state = self._source.settle(state, geometry, substrate, target=None)
+            state = source.settle(state, geometry, substrate, target=None)
             eq_state = state.activations
 
             # Predict with distilled model
@@ -166,8 +170,10 @@ class EnergyToInstantaneousAdapter(DynamicsAdapter):
         """Single-pass forward using distilled model."""
         if self._distilled_model is None:
             # Fall back to single-step energy minimization
-            self._source.config.max_steps = 1
-            return self._source.settle(state, geometry, substrate, target)
+            source = EnergyMinimizationDynamics(
+                replace(self._source.config, max_steps=1)
+            )
+            return source.settle(state, geometry, substrate, target)
 
         x = state.x
         if x is None:

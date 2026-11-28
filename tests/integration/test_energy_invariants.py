@@ -277,10 +277,6 @@ class TestControlLyapunovStability:
         # Initial energy should be positive (non-zero errors)
         assert history[0] >= 0
 
-    @pytest.mark.xfail(
-        reason="Free energy in nudged phase can increase due to target force; "
-        "not a strict Lyapunov function"
-    )
     def test_control_lyapunov_nudged_phase_decreases(self):
         """Control-Lyapunov function decreases in nudged phase as well.
 
@@ -319,11 +315,11 @@ class TestControlLyapunovStability:
         assert history is not None, "Free energy history should be tracked"
         assert len(history) > 1, "Should have multiple iterations"
 
-        # Energy should be finite and non-negative
+        # The tracked quantity is the Hopfield activation energy, which is
+        # unbounded below; only finiteness and the trend are asserted.
         for e in history:
             assert not torch.isnan(torch.tensor(e))
             assert not torch.isinf(torch.tensor(e))
-            assert e >= 0
 
         # Generally decreasing (allow small increases due to target force)
         # Check overall trend: final should be <= initial (or close)
