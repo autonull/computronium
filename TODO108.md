@@ -187,6 +187,32 @@ one prints "not built" and exits 0. Recorded in the builder's docstring.
 | new locks | the three files | 32 passed |
 | site | `docs/build_site.py --check` | 0 with the artifact, 0 with "not built", 1 only on real drift |
 
+## Progress 2026-11-28 (session 10)
+
+**P2/W64 — the credit rules and the render surface are locked; one bug fixed.**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W64d | `core/local_learning` 45.1% | **PARTIAL** | `test_local_learning_contracts.py`, 20 tests: the Hebbian update scales with `learning_rate` and returns the negated correlation the builder's `w -= w_up` potentiates; a missing free state is a zero update; the contrastive update scales with `importance`, is transposed to the weight layout, and a missing nudged phase is zero; an EP/Hebbian activity rule without settled state is refused by name, a Hebbian rule settles to its prediction, a spiking rule zeroes a fired neuron; the task gradient is the per-sample residual of its own mean loss; the registry round-trips metadata, refuses an unknown variant by name, and lists a copy; a local update writes a delta and leaves `.grad` alone, an autograd step writes the gradient it optimizes. Measured with this file alone: registry 100%, activity 95%, builder 59%, package 40%. The `settling.py` step path stays uncovered. |
+| W64e | `surface/report` 44.4% | **PARTIAL** | `test_report_render_lock.py`, 9 tests: the run named, the record count, the axes stratified, an export that round-trips the run's records (and the whole store without a run id), an HTML page that names the run, refuses an empty run by name, the narrative, and each objective's declared direction. Measured with the two report locks alone: **49%** (the front lock alone was 15%). The LaTeX/PDF and stability-analysis paths stay uncovered. |
+| W66 | report raised `KeyError` on an empty run | **DONE (bug)** | `_maximizes` read `optimizes`, which indexes `OBJECTIVES_REGISTRY`; that registry is seeded only as a side effect of appending a record, so a read-only store (dashboard, CLI) reported with an empty registry and `claim_metrics` silently dropped every objective. `_ensure_objective_registry` seeds once, guarded by a lock and a module flag; `_maximizes` and `claim_metrics` call it. An empty run now renders a report that names the run and counts zero records. |
+
+One convention the lock records rather than changes: `TaskHandler.compute_loss_and_grad`
+returns **per-sample** residuals against a **batch-mean** loss, so the batch
+size is the factor between them. No caller in the library uses it.
+
+**Session 10 end state.**
+
+| Gate | Command | State |
+|---|---|---|
+| property | `pytest tests/property -q` | **3096 passed, 9 skipped, 0 xfailed** (262.66 s) |
+| fast | `scripts/run_fast_gates.sh` | **2614 passed, 75 skipped**, 89.91 s (92 s wall) |
+| ruff | `ruff check .` | **473** (baseline 473; no new finding) |
+| format | `ruff format --check .` | green |
+| pyright | the four new lock files | clean (`report.py` keeps its legacy 43) |
+| report | two locks alone | `surface/report.py` 49% |
+| local learning | one lock alone | package 40%, registry 100% |
+
 ## Coverage and test-time strategy (session 7)
 
 The release population measured once with `--cov-context=test`: **38,318 of
@@ -306,7 +332,7 @@ re-baseline note, not an exact target.
 | W61 | 1 | `test_trainer_async_dataloading` failed ~1 run in 8; the first batch was read mid-copy | the wait was enqueued on the default stream, but `train_step` runs under `with torch.cuda.stream(compute_stream)`, so the reader never awaited the load stream | `compute_stream.wait_stream(load_stream)` before consuming the buffer | **12/12 runs pass**; the spy sees batch 0 again |
 | W62 | 2 | coverage was a snapshot, not a direction | no ratchet, and no single population | `COVERAGE=1` adds the flags to the release's own pytest calls; `check_coverage_ratchet.py` holds 38,318 with slack 150 and names the files that lost lines | baseline recorded; a drop fails the step |
 | W63 | 2 | one test sets the fast suite's and the unit shard's wall (178.3 s) | the cosine-similarity test trains two MLPs at a budget larger than its assertion needs | trim its epochs/batches to the smallest that still fails on a broken claim; measure before/after | fast suite wall < 60 s; the assertion still fails when the claim breaks |
-| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | **PARTIAL** (session 9): runners 0% → 45-56%, 32 new tests in three files; the surface/CLI render paths, `local_learning`, `deployments` and `documentation` still lack contract tests |
+| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | **PARTIAL** (sessions 9-10): runners 0% → 45-56%, report 49% and local_learning 40% measured alone, 61 new tests in five files; the report's LaTeX/PDF and stability paths, the surface CLI branches, `settling.py`, `deployments` and `documentation` still lack contract tests |
 | W65 | 1 | 113 of 342 files cover no unique line; the demo shard is 777-817 s | demos are artifact producers; capability tests certify floors | keep both out of the fast suite and in the release; do not delete — they answer a different question than coverage | fast suite unchanged; the release keeps the artifacts |
 
 ## Efficiency rules
@@ -345,31 +371,36 @@ re-baseline note, not an exact target.
 - [x] The site-build decision is written where the gate lives (W58: a
       missing artifact is "not built", not stale). The pre-registration
       order (W59) is proved on the next claim rung.
-- [x] The fast suite is green in **≤ 2.5 min** (**89.45 s** with 2585
-      passed / 75 skipped; session 9 re-measured the list plus three files),
+- [x] The fast suite is green in **≤ 2.5 min** (**89.91 s** with 2614
+      passed / 75 skipped; session 10 re-measured the list plus five files),
       reaches **≥ 90%** of the release's covered statements (90.7%), and a
       moved test file does not fail it (W60). The 138.01 s session-8 figure
       was not reproduced on this host.
 - [ ] `COVERAGE=1` holds 38,318 covered statements (63.65%) or rises with a
       re-baseline in the same commit (W62). Not re-measured this session.
 - [ ] The 178 s long pole is trimmed (**8.07 s** standalone), but the fast
-      suite's wall is **89.45 s**, not **< 60 s** (W63). The remaining
-      wall is the schedule of 2585 tests, not one test.
+      suite's wall is **89.91 s**, not **< 60 s** (W63). The remaining
+      wall is the schedule of 2614 tests, not one test.
 - [ ] The named coverage gaps (surface/report, wave, runners,
       local_learning) have contract tests, each named in its change (W64).
-      **Runners, wave pricing and the report front are locked** (session 9,
-      32 tests); the render/export, CLI-branch and local_learning paths
-      remain.
+      **Runners, wave pricing, the report front and render surface, and
+      the local-learning credit/task rules are locked** (sessions 9-10, 61
+      tests); the CLI-branch, `settling.py`, LaTeX/PDF, `deployments` and
+      `documentation` paths remain.
 
 ## Remaining work (in order)
 
 1. **P2 — coverage and test time** (W64, W65). Session 9 locked the runner,
    wave-pricing and report-front rules (32 tests, `runners` 0% → 45-56%).
-   Still open, in the order they buy lines: `surface/report`'s render and
-   export paths (the largest remaining mass), `experiment/surface/cli.py`'s
-   command branches, `core/local_learning` (880 missing), `deployments`
-   (537) and `documentation` (499). Re-measure the coverage ratchet with
-   `COVERAGE=1` before the next re-baseline; the fast wall is 89.45 s, so
+   Session 10 locked the local-learning credit/task rules and the report's
+   render surface (29 more tests; `report.py` 49% and the
+   `local_learning` package 40% measured alone), and fixed the report's
+   unseeded objective registry (W66). Still open, in the order they buy
+   lines: the report's LaTeX/PDF and stability-analysis paths,
+   `experiment/surface/cli.py`'s command branches, `core/local_learning`'s
+   `settling.py` step path, `deployments` (537) and `documentation`
+   (499). Re-measure the coverage ratchet with
+   `COVERAGE=1` before the next re-baseline; the fast wall is 89.91 s, so
    the `< 60 s` clause in W63 stays open (the 2500-test schedule, not one
    test).
 2. **P3 — static debt** (W56, W57). Ruff is 473 with the baseline at 473:
