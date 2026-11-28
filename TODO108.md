@@ -213,6 +213,28 @@ size is the factor between them. No caller in the library uses it.
 | report | two locks alone | `surface/report.py` 49% |
 | local learning | one lock alone | package 40%, registry 100% |
 
+## Progress 2026-11-28 (session 11)
+
+**P3/W56 — the archive scope is decided and the 15 warnings are gone.**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W56 | pyright 3240 / 15 warnings | **DONE** | `docs/archive` is the retired PyQt6/bioplausible UI, shipped by nothing, and held 680 of the 3244 measured errors; it is excluded once in `pyrightconfig.json`. The 15 warnings left at their causes: 8 wildcard re-export warnings are the `computronium/stability` adapters, declared off by one execution-environment row (with the `extraPaths` the ontology row already carries); the `docker` import names `reportMissingModuleSource`; `ontology._registry.create_registry` was dead (a `TypeVar` appearing once) and is deleted with its typing-only `Callable`; `tests/ceec/conftest.py` re-exported `shutil` in a bare expression no test read. **2564 errors / 0 warnings**, re-baselined in the same commit. |
+
+The baseline was already stale: the pre-session tree measured **3244**, not
+the recorded 3240, so the ratchet was red at `HEAD` before this pass. The
+re-baseline names both movements (the 680-error scope and the 4-error drift).
+
+**Session 11 end state.**
+
+| Gate | Command | State |
+|---|---|---|
+| property | `pytest tests/property -q` | **3096 passed, 9 skipped** (254.47 s) |
+| fast | `scripts/run_fast_gates.sh` | **2614 passed, 75 skipped**, 91.70 s (94 s wall) |
+| ruff | `ruff check .` | **472** (baseline lowered 473 -> 472) |
+| pyright | `scripts/check_pyright_ratchet.py` | **2564 errors / 0 warnings** (was 3240 / 15) |
+| ceec | `pytest tests/ceec` | 125 passed |
+
 ## Coverage and test-time strategy (session 7)
 
 The release population measured once with `--cov-context=test`: **38,318 of
@@ -324,7 +346,7 @@ re-baseline note, not an exact target.
 | W53 | 2 | 4 GATE-0 xfails: EP-BPTT cosine < 0.5 in deep networks | the settle's target/error channel is not carried to the input layer | LOOP/RULE parity work on the deep path | cosine > 0.5 at the declared depth, or a recorded scope refusal |
 | W54 | 2 | 7 xfails are capability boundaries | deep settle at 100 steps; vision transpose feedback (needs FA or a learned inverse); no JVP scale; primitive capability 0.122; no ladder point clears the near-chance band; ternary substrate severs the forward graph; tile mesh projects 614k params over the 150k ceiling | each names the primitive that closes it (FA arm, JVP-scale knob, input compression for the mesh, ternary gradient path) | fixed (a capability) or filed as a gap with its cost |
 | W55 | 1 | 2 xfails are wrong test assumptions | Hopfield energy "can be negative" is legal; the scale-free test hits numerical precision | fix the assertion or its tolerance | 2 xfails flip |
-| W56 | 3 | pyright: 3240 errors / 15 warnings, of which `docs/archive` is 680 | archived UI code imports PyQt6/pyqtgraph/bioplausible and is not shipped; the 15 warnings are 8 wildcard library imports, 4 unused expressions, 1 `docker` source, 1 single-use `TypeVar`, 1 archived `__new__` | decide the archive scope once, then fix the 15 warnings | count moves once by the decision; the 15 are gone |
+| W56 | 3 | pyright 3240 / 15 warnings | **DONE** (session 11): `docs/archive` held 680 of the 3244 errors (the baseline was already 4 stale) and is excluded once; the 15 warnings are fixed at their causes (one execution-environment row for the 8 stability wildcard adapters, a named `docker` rule, a deleted dead factory and its typing-only import, a deleted `shutil` re-export) | the decision is one config line, recorded in the commit | **2564 errors / 0 warnings**, ratchet re-baselined |
 | W57 | 3 | ruff 473 (was 499) | PLW1514 retired this session (21 sites named their encoding); next groups: E402 56, RUF105 43, complexity 119 (C901 36, PLR0912 16, PLR0915 20, PLR1702 17, PLR0914 29), PLW0717 36, F841 20, S110 20, PLW2901 14 | one pass per named group, `BASELINE` lowered and the rules named; Register C migrates the 43 `# ruff: ignore` directives and enables RUF105 | `BASELINE` < 473 per pass |
 | W58 | 3 | the site build has no gate | **DONE** (session 9): the outputs are gitignored, so `--check` exited 1 on a fresh clone for an artifact that cannot exist | `--check` compares only an artifact that exists; a missing one prints "not built" and exits 0 | 0 with the artifact, 0 without it, 1 on real drift; recorded in the builder's docstring |
 | W59 | 3 | the 0.277 registration was committed after the first seed | the mtimes prove the order; the commit does not | commit the registration before the launch on the next claim rung | the commit order proves the box |
@@ -362,12 +384,12 @@ re-baseline note, not an exact target.
       because the suite mocks CuPy (environment refusal, D2).
 - [x] The `input_dim` and `compute_loss` contracts are locked both ways
       (W48, W49).
-- [ ] ruff < 473, with the retired rules named in the ratchet's docstring;
+- [ ] ruff < 472, with the retired rules named in the ratchet's docstring;
       Register C's 43 directives migrated and RUF105 enabled (W57). The
-      measured count is **473** (baseline 473; session 9 retired PLW1514's
-      21 sites).
-- [ ] pyright < 3240 errors or a recorded archive-scope decision, and 0
-      warnings (W56).
+      measured count is **472** (baseline 472; session 9 retired PLW1514's
+      21 sites, session 11 removed one typing-only import).
+- [x] pyright < 3240 errors with the archive-scope decision recorded, and
+      0 warnings (W56): **2564 / 0**, re-baselined 2026-11-28.
 - [x] The site-build decision is written where the gate lives (W58: a
       missing artifact is "not built", not stale). The pre-registration
       order (W59) is proved on the next claim rung.
@@ -403,11 +425,10 @@ re-baseline note, not an exact target.
    `COVERAGE=1` before the next re-baseline; the fast wall is 89.91 s, so
    the `< 60 s` clause in W63 stays open (the 2500-test schedule, not one
    test).
-2. **P3 — static debt** (W56, W57). Ruff is 473 with the baseline at 473:
-   the next pass retires a named group (E402 56, complexity 119, RUF105 43
-   via Register C, PLW0717 36, F841 20, S110 20) and lowers `BASELINE` in
-   the same commit. W56 still owes the one-time `docs/archive` scope
-   decision for pyright (680 of its 3240 errors) and the 15 warnings.
+2. **P3 — static debt** (W57). W56 is closed (2564 pyright errors, 0
+   warnings). Ruff is 472 with the baseline at 472: the next pass retires a
+   named group (E402 56, complexity 119, RUF105 43 via Register C, PLW0717
+   36, F841 20, S110 20) and lowers `BASELINE` in the same commit.
 3. **P4 — decisions** (W59): W58 is closed; the registration-before-launch
    order is proved on the next claim rung (commit the registration before
    the first seed runs).
