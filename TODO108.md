@@ -287,6 +287,27 @@ locked; four bugs fixed.**
 | analysis/science | one lock alone | `_analysis.py` 23%, `_science.py` 22% |
 | campaign | one lock alone | `_campaign.py` 18% |
 
+## Progress 2026-11-28 (session 14)
+
+**P2/W64 — the settling step and the documentation generators are locked.**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W64k | settling step path | **PARTIAL** | `test_settling_step_lock.py`, 12 tests: momentum is the running gradient and the state moves by `lr` times it; an unused state is untouched; a NaN energy is refused by name; adaptive settling restores and decays on a rise, does not grow right after a restore, and caps growth at 10× the base lr; the convergence counter is absolute or relative, resets on a rise and stops at patience; a constant energy stops at patience; an overshooting adaptive step still recovers. Measured alone: `settling.py` **30%**, **48%** with the existing `test_settling.py` (the step path was uncovered). |
+| W64l | documentation generators | **PARTIAL** | `test_documentation_cli_lock.py`, 9 tests: the FAQ lists a category, searches, shows an entry, refuses an unknown id and generates every entry to a file; the catalog lists the store's runs, searches its records and exports to a file; a method card is the registry's primitive (class name and module), the list covers an axis, and generation writes a document. Measured alone: the package **58%** (catalog 65%, FAQ 81%, method cards 61%). |
+
+**Session 14 end state.**
+
+| Gate | Command | State |
+|---|---|---|
+| property | `pytest tests/property -q` | **3164 passed, 9 skipped** (349.89 s) |
+| fast | `scripts/run_fast_gates.sh` | **2682 passed, 75 skipped**, 101.41 s |
+| ruff | `ruff check .` | **472** (baseline 472; no new finding) |
+| format | `ruff format --check .` | green (1732 files) |
+| pyright | the two new lock files | clean |
+| settling | one lock alone | `settling.py` **30%** (48% with `test_settling.py`) |
+| documentation | one lock alone | package **58%** |
+
 ## Coverage and test-time strategy (session 7)
 
 The release population measured once with `--cov-context=test`: **38,318 of
@@ -406,7 +427,7 @@ re-baseline note, not an exact target.
 | W61 | 1 | `test_trainer_async_dataloading` failed ~1 run in 8; the first batch was read mid-copy | the wait was enqueued on the default stream, but `train_step` runs under `with torch.cuda.stream(compute_stream)`, so the reader never awaited the load stream | `compute_stream.wait_stream(load_stream)` before consuming the buffer | **12/12 runs pass**; the spy sees batch 0 again |
 | W62 | 2 | coverage was a snapshot, not a direction | no ratchet, and no single population | `COVERAGE=1` adds the flags to the release's own pytest calls; `check_coverage_ratchet.py` holds 38,318 with slack 150 and names the files that lost lines | baseline recorded; a drop fails the step |
 | W63 | 2 | one test sets the fast suite's and the unit shard's wall (178.3 s) | the cosine-similarity test trains two MLPs at a budget larger than its assertion needs | trim its epochs/batches to the smallest that still fails on a broken claim; measure before/after | fast suite wall < 60 s; the assertion still fails when the claim breaks |
-| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | **PARTIAL** (sessions 9-13): runners 0% → 45-56%, report 49% → **60%** (three locks), local_learning 40%, `_commands.py` 9% → 38%, `_stats.py` 5% → 64%, `_registry.py` 5% → 42%, `_analysis.py` 6% → 23%, `_science.py` 4% → 22%, `_campaign.py` 6% → 18%; 108 new tests in ten files. Still uncovered: the report's HTML-v2 path, the deep command bodies (`_repro.py` 9%), `settling.py`, `deployments` and `documentation` |
+| W64 | 2 | 63.65% overall: surface 44.4%, local_learning 45.1%, wave 37.7%, runners **0%**, deployments 49.1%, documentation 38.0% | the uncovered mass is CLI/report branches and two modules no test imports | contract tests on public behavior (a report from a record, a wave decision, a refusal by name), no copied outputs (D6) | **PARTIAL** (sessions 9-14): runners 0% → 45-56%, report 49% → **60%** (three locks), local_learning 48% (settling step locked), `_commands.py` 9% → 38%, `_stats.py` 5% → 64%, `_registry.py` 5% → 42%, `_analysis.py` 6% → 23%, `_science.py` 4% → 22%, `_campaign.py` 6% → 18%, documentation 38% → **58%**; 129 new tests in twelve files. Still uncovered: `deployments` (537), the report's HTML-v2 path, and the deep `_repro.py` bodies |
 | W65 | 1 | 113 of 342 files cover no unique line; the demo shard is 777-817 s | demos are artifact producers; capability tests certify floors | keep both out of the fast suite and in the release; do not delete — they answer a different question than coverage | fast suite unchanged; the release keeps the artifacts |
 | W67 | 2 | LaTeX output doubled its own escape characters | **DONE** (session 12): `escape_latex` applied the map sequentially, so the final backslash pass escaped the `\&`/`\_` the earlier passes had written | one pass over the source characters, backslash mapped first | `run_a&b` renders as `run\_a\&b`; the export lock asserts it |
 | W68 | 2 | `comp status --format json` crashed on a run list | **DONE** (session 12): the multi-run branch serialized `started_at` without `default=str` (the single-run branch had it) | `default=str` on the runs payload | `status --format json` lists runs; the store lock asserts it |
@@ -451,25 +472,25 @@ re-baseline note, not an exact target.
 - [x] The site-build decision is written where the gate lives (W58: a
       missing artifact is "not built", not stale). The pre-registration
       order (W59) is proved on the next claim rung.
-- [x] The fast suite is green in **≤ 2.5 min** (**96.89 s** with 2661
-      passed / 75 skipped; session 13 added the three new lock files),
+- [x] The fast suite is green in **≤ 2.5 min** (**101.41 s** with 2682
+      passed / 75 skipped; session 14 added the two new lock files),
       reaches **≥ 90%** of the release's covered statements (90.7%), and a
       moved test file does not fail it (W60). The 138.01 s session-8 figure
       was not reproduced on this host.
 - [ ] `COVERAGE=1` holds 38,318 covered statements (63.65%) or rises with a
       re-baseline in the same commit (W62). Not re-measured this session.
 - [ ] The 178 s long pole is trimmed (**8.07 s** standalone), but the fast
-      suite's wall is **96.89 s**, not **< 60 s** (W63). The remaining
-      wall is the schedule of 2661 tests, not one test.
+      suite's wall is **101.41 s**, not **< 60 s** (W63). The remaining
+      wall is the schedule of 2682 tests, not one test.
 - [ ] The named coverage gaps (surface/report, wave, runners,
       local_learning) have contract tests, each named in its change (W64).
       **Runners, wave pricing, the report front, render, export and
-      stability surfaces, the local-learning credit/task rules, the
-      store-reading CLI commands, and the registry/analysis/science/
-      campaign dry runs are locked** (sessions 9-13, 108 tests); the deep
-      command bodies (`_repro.py`), `settling.py`, `deployments` and
-      `documentation` paths remain. Re-measure `COVERAGE=1` before the next
-      re-baseline.
+      stability surfaces, the local-learning credit/task and settling
+      steps, the store-reading CLI commands, the registry/analysis/science/
+      campaign dry runs, and the documentation generators are locked**
+      (sessions 9-14, 129 tests); `deployments` (537), the report's
+      HTML-v2 path and the deep `_repro.py` bodies remain. Re-measure
+      `COVERAGE=1` before the next re-baseline.
 
 ## Remaining work (in order)
 
@@ -488,12 +509,14 @@ re-baseline note, not an exact target.
    and the campaign inventory (5 tests; `_campaign.py` 18%), and fixed the
    stability-plasticity hyperparameter names (W69), the dataset tag filter
    (W70), dataset metadata export (W71) and the environment verify exit
-   (W72). Still open, in the order they buy lines: the deep command bodies
-   (`_repro.py` 9%, `_campaign.py` runs), `core/local_learning`'s
-   `settling.py` step path, `deployments` (537) and `documentation` (499).
-   Re-measure the coverage ratchet with `COVERAGE=1` before the next
-   re-baseline; the fast wall is 96.89 s, so the `< 60 s` clause in W63
-   stays open (the 2661-test schedule, not one test).
+   (W72). Session 14 locked the settling step path (12 tests; `settling.py`
+   30% alone, 48% with its property tests) and the documentation
+   generators (9 tests; package 58%). Still open, in the order they buy
+   lines: `deployments` (537), the report's HTML-v2 path and the deep
+   `_repro.py` bodies. Re-measure the coverage ratchet with `COVERAGE=1`
+   before the next re-baseline; the fast wall is 101.41 s, so the
+   `< 60 s` clause in W63 stays open (the 2682-test schedule, not one
+   test).
 2. **P3 — static debt** (W57). W56 is closed (2564 pyright errors, 0
    warnings). Ruff is 472 with the baseline at 472: the next pass retires a
    named group (E402 56, complexity 119, RUF105 43 via Register C, PLW0717
