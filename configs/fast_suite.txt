@@ -225,3 +225,5 @@ tests/property/test_surface_cli_store_lock.py
 tests/property/test_surface_cli_registry_lock.py
 tests/property/test_surface_cli_science_lock.py
 tests/property/test_surface_cli_campaign_lock.py
+tests/property/test_settling_step_lock.py
+tests/property/test_documentation_cli_lock.py
