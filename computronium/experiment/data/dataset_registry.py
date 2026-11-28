@@ -266,7 +266,7 @@ class DatasetRegistry:
 
         if tag_filter:
             for key, value in tag_filter.items():
-                query += " AND json_extract(tags, ?) = ?"
+                query += " AND json_extract_string(tags, ?) = ?"
                 params.extend([f"$.{key}", value])
 
         query += " ORDER BY created_at DESC LIMIT ?"
@@ -350,6 +350,7 @@ class DatasetRegistry:
                     "source_hash": version_obj.source_hash,
                 },
                 indent=2,
+                default=str,
             ),
             encoding="utf-8",
         )

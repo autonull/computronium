@@ -248,18 +248,18 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         return Domain(lo=min(vals), hi=max(vals), scale=scale)
 
     hyperparameters = {
-        "rho": _make_domain(rho_vals, Scale.LOG),
-        "feedback_scale": _make_domain(feedback_scale_vals, Scale.LOG),
-        "precision": Domain(members=precision_vals),
-        "noise_level": _make_domain(noise_level_vals, Scale.LOG),
-        "convergence_start": _make_domain(
+        "dynamics.rho": _make_domain(rho_vals, Scale.LOG),
+        "credit.feedback_scale": _make_domain(feedback_scale_vals, Scale.LOG),
+        "substrate.precision": Domain(members=precision_vals),
+        "substrate.noise_level": _make_domain(noise_level_vals, Scale.LOG),
+        "dynamics.convergence_start": _make_domain(
             convergence_start_vals, Scale.LINEAR, is_int=True
         ),
         # Constrain hidden_dim to respect param_budget for recurrent geometry
         # With param_budget=200000 and 25% tolerance, max params = 250000
         # For recurrent: 64*H + H + (L-1)*(H*H + H) + H*10 + 10
         # Max at L=4: 3*H^2 + 85*H + 10 <= 250000 => H <= ~270
-        "hidden_dim": Domain(lo=32.0, hi=256.0, scale=Scale.LOG),
+        "geometry.hidden_dim": Domain(lo=32.0, hi=256.0, scale=Scale.LOG),
     }
 
     # Gate is a categorical sweep - we'll handle it via the grid

@@ -216,6 +216,7 @@ def _cmd_dataset(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struc
                             "source_hash": version.source_hash,
                         },
                         indent=2,
+                        default=str,
                     )
                 )
             else:
@@ -259,6 +260,7 @@ def _cmd_dataset(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struc
                             for v in versions
                         ],
                         indent=2,
+                        default=str,
                     )
                 )
             else:
@@ -274,7 +276,7 @@ def _cmd_dataset(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struc
             if args.format == "json":
                 import json
 
-                print(json.dumps(result, indent=2))
+                print(json.dumps(result, indent=2, default=str))
             else:
                 print(f"Dataset: {args.dataset_id}@{args.version}")
                 print(f"  Overall valid: {result['valid']}")
@@ -364,7 +366,7 @@ def _cmd_environment(args: argparse.Namespace) -> int:  # ruff: ignore[complex-s
                         print(
                             f"    Git commit: expected {m['expected'][:12]}, got {m['actual'][:12]}"
                         )
-            return 0 if result["matches"] else 1
+        return 0 if result["matches"] else 1
 
     elif cmd == "docker-build":
         if not shutil.which("docker"):
