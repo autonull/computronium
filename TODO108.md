@@ -12,16 +12,17 @@ release.
 This ticket is the work TODO107 queued, plus the defects its audits
 surfaced. The priorities, in the order a session takes them:
 
-1. **P0 — the 30 xfails.** They name two shapes: bugs/test mismatches (fix
+1. **P0 — the xfails.** They name two shapes: bugs/test mismatches (fix
    and remove the marker) and capability boundaries (name the primitive that
    closes the gap). An xfail is a named defect, so its marker is the defect's
-   record until the test passes.
-2. **P1 — locks that do not cover their declared population.** 35 skips are
-   either an empty population or a config the lock cannot build; two
-   contracts added in session 6 have no lock at all.
+   record until the test passes. 16 retired in session 7; 11 remain (W53 4,
+   W54 7).
+2. **P1 — locks that do not cover their declared population.** DONE in
+   session 7 (W46-W48); the 35 skips are retired and both contracts are
+   locked.
 3. **P2 — coverage and test time.** 63.65% of statements, four tiers, and a
-   fast suite whose wall is one 178 s test; the map and the brittleness rule
-   are in the strategy section.
+   fast suite whose 178 s long pole is trimmed to 8.07 s (wall 82.43 s); the
+   map and the brittleness rule are in the strategy section.
 4. **P3 — static debt.** ruff 499 findings (named groups below) and pyright
    3240 errors / 15 warnings, with one pending scope decision.
 5. **P4 — decisions and practice.** The site-build gate, the directive
@@ -55,6 +56,46 @@ The 37 skips at handoff are exactly: 31 composer task-arg configs (W47),
 4 legality tests on an empty engine (W46), 2 declared-infeasible
 `complex_substrate_real_compute` cells (no work).
 
+## Progress 2026-11-27 (session 7)
+
+**P0 — 16 xfails retired; 11 remain (4 GATE-0, 7 capability).**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W50 | test/implementation mismatches | **DONE** | 8 cases. The Muon test calls `_orthogonalize` and certifies the exact SVD polar factor (`ortho_steps=0`, `‖GᵀG−I‖_F < 1e-4`) plus the Newton–Schulz condition-number drop; the EWC test calls `consolidate(params, old_params)` and derives Fisher from the anchor drift. 14 passed in the U-axis group. |
+| W51 | library bugs | **DONE** | 7 cases. The adapter no longer mutates the frozen config: distillation and the single-step fallback build a `dataclasses.replace` copy (4); `compute_stdp_window` reads the pair lag Δt = post − pre (3: sign, antisymmetry up to a₊/a₋, decay). |
+| W52 | missing APIs | **DONE** | 2 cases. The joint test composes `NullPlasticity`, not a config; Adaptive FA is implemented as `B_i ← B_i + feedback_lr·δ_{i+1}ᵀ a_i`, gated by `config.adaptive_feedback` and exposed by `create_native_fa_adaptive`. |
+| W55 | wrong test assumptions | **DONE** | 2 cases. The scale-free property is checked normwise + directionally (per-entry relative bounds are unstable at float32 noise); the Hopfield energy is unbounded below, so the nudged-phase row asserts finiteness and the overall trend. |
+| W53 | 4 GATE-0 xfails | **OPEN** | biology EP (2) raise a 200-vs-205 tensor-size mismatch inside TileEP; scaling deep-settle and Control-Lyapunov monotonicity fail on the semantics their markers name. Primitive: LOOP/RULE parity on the deep path. Family: deep EqProp credit. |
+| W54 | 7 capability boundaries | **OPEN** | grpc tile-mesh output width (target out of bounds); Triton eqprop shared memory 294912/557056 B over the 101376 B limit (2); CuPy zero-copy empty tensor; ternary kernel-vs-reference 9.9e-3; tile-mesh 614k params; `PredictiveSettlingDynamics` stub. Primitives: output-width projection, smaller Triton block, non-empty copy, one quantization boundary, input-compression projection, predictive-coding loop. |
+
+**P1 — both populations and both contracts are locked.**
+
+| # | Block | State | Evidence |
+|---|---|---|---|
+| W46 | legality population | **DONE** | `engine_from_registry` is the one builder; `ConstraintSpec.proof_kind` is the proof, so the parallel proof table is deleted. 8 passed, no skips. |
+| W47 | composer population | **DONE** | the hand-maintained skip sets are gone; every row composes from the canonical `(1, 28, 28)` task shape, with graph/lattice args only where that family supplies them. 75 passed (31 formerly skipped). |
+| W48 | `input_dim` contract | **DONE** | `test_input_dim_contract_lock.py`: width/shape/list reductions, refusals, and `resolve_task` width = `math.prod` on 6 families. 9 passed. |
+| W49 | `compute_loss` branch | **DONE** | `test_loss_dispatch_lock.py`: the custom-protocol branch, CE, and MSE with stub tasks. 3 passed. |
+
+**P2 — the long pole is trimmed; the wall fell 38%.**
+
+- W63: `test_cosine_similarity_reasonable` 20 → 5 seeded batches (mean cosine 0.7093 ≥ 0.62, sign 0.7203 ≥ 0.65; 8.07 s standalone vs 25.32 s). Fast suite 133.19 s → **82.43 s** (2548 passed / 75 skipped / 6 xfailed). The `< 60 s` clause is not met; the remaining wall is the 2500-test schedule, not one test.
+- W60/W62 unchanged from `c677afea` (90.7% of covered statements; ratchet 38,318).
+
+**Session 7 end state.**
+
+| Gate | Command | State |
+|---|---|---|
+| property | `pytest tests/property -q` | **3026 passed, 9 skipped, 11 xfailed** (282.87 s) |
+| invariants | readiness store + `--experiment-db` | 7 passed (11.71 s) |
+| composer/legality locks | the two lock files | 75 + 8 passed |
+| fast | `scripts/run_fast_gates.sh` | **82.43 s**, 2548 passed / 75 skipped / 6 xfailed |
+| xfails | AST scan of `tests/**/test_*.py` | **11** (4 GATE-0, 7 capability) |
+
+The 9 property skips are 2 declared-infeasible complex-substrate cells and
+7 experiment-invariant rows that run against the readiness store.
+
 ## Coverage and test-time strategy (session 7)
 
 The release population measured once with `--cov-context=test`: **38,318 of
@@ -68,7 +109,7 @@ the import-only lines are not.
 | tier | command | measured | coverage | question |
 |---|---|---|---|---|
 | affected | `uv run python scripts/select_affected_tests.py` then `pytest <files>` | 122 files for the domain change | the changed module's reach | did my change break its own contracts? |
-| fast | `scripts/run_fast_gates.sh` | **133.19 s**, 2509 passed / 110 skipped / 12 xfailed | 34,756 statements = **90.7% of the release's covered statements** | is the machine still coherent? |
+| fast | `scripts/run_fast_gates.sh` | **82.43 s**, 2548 passed / 75 skipped / 6 xfailed | 34,756 statements = **90.7% of the release's covered statements** | is the machine still coherent? |
 | release | `scripts/run_local_gates.sh` | ~62 min | 63.65% | may this tree be released? |
 | coverage | `COVERAGE=1 scripts/run_local_gates.sh` | release + ~40% | ratchet | did coverage fall? |
 
@@ -195,12 +236,14 @@ re-baseline note, not an exact target.
 
 - [ ] `scripts/run_local_gates.sh` exits 0 once on the final tree, and the log
       is named in the closing commit.
-- [ ] **0 xfails**: each flipped to a pass with its marker removed, or filed
-      as a capability gap with the primitive, its cost, and the task family
-      it unlocks (W50-W55).
-- [ ] **2 skips** remain: the declared-infeasible complex-substrate cells.
-      The 31 composer rows and the 4 legality rows run (W46, W47).
-- [ ] The `input_dim` and `compute_loss` contracts are locked both ways
+- [ ] **0 xfails**: 16 retired in session 7 (W50-W52, W55); 11 remain.
+      W53's 4 GATE-0 rows name the deep-path parity primitive; W54's 7
+      capability rows are in the progress table with primitive and family.
+- [x] **2 skips** remain: the declared-infeasible complex-substrate cells.
+      The 31 composer rows and the 4 legality rows run (W46, W47). The
+      other 7 property skips are the experiment-invariant rows, which run
+      against the readiness store (7 passed).
+- [x] The `input_dim` and `compute_loss` contracts are locked both ways
       (W48, W49).
 - [ ] ruff < 499, with the retired rules named in the ratchet's docstring;
       Register C's 43 directives migrated and RUF105 enabled (W57).
@@ -208,29 +251,31 @@ re-baseline note, not an exact target.
       warnings (W56).
 - [ ] The site-build and pre-registration decisions are written where the
       gate lives (W58, W59).
-- [ ] The fast suite is green in **≤ 2.5 min**, reaches **≥ 90%** of the
-      release's covered statements, and a moved test file does not fail it
-      (W60).
+- [x] The fast suite is green in **≤ 2.5 min** (**82.43 s**), reaches
+      **≥ 90%** of the release's covered statements (90.7%), and a moved
+      test file does not fail it (W60).
 - [ ] `COVERAGE=1` holds 38,318 covered statements (63.65%) or rises with a
-      re-baseline in the same commit (W62).
-- [ ] The 178 s long pole is trimmed or marked, and the fast suite's wall is
-      **< 60 s** (W63).
+      re-baseline in the same commit (W62). Not re-measured this session.
+- [ ] The 178 s long pole is trimmed (**8.07 s** standalone), but the fast
+      suite's wall is **82.43 s**, not **< 60 s** (W63). The remaining wall
+      is the schedule of 2500 tests, not one test.
 - [ ] The named coverage gaps (surface/report, wave, runners, local_learning)
       have contract tests, each named in its change (W64).
 
 ## Remaining work (in order)
 
-1. **P0 — the 30 xfails** (W50-W55). Start with the 8 test/implementation
-   mismatches (W50) and the 7 library bugs (W51): 15 markers removed, no new
-   capability needed. Then the 2 missing APIs (W52), the 4 GATE-0 drift
-   xfails (W53), the 2 wrong test assumptions (W55), and the 7 capability
-   boundaries (W54) — each either fixed or filed with its primitive and cost.
-2. **P1 — the two population locks** (W46, W47), then the two new contracts
-   (W48, W49). This is the block that makes the property shard's numbers mean
-   what they say.
-3. **P2 — coverage and test time** (W60, W63, W64, W65). Start with the 178 s
-   long pole: it is half the fast suite's wall and the whole unit shard's
-   floor. Then the named gaps, as contract tests.
+1. **P0a — W53's 4 GATE-0 rows.** First the TileEP 200-vs-205 tensor-size
+   mismatch: align the BPTT and EP parameter sets in the test (or in
+   TileEP), then re-check the deep-settle cosine. The deep-settle and
+   Control-Lyapunov rows need the tracked quantity and the claim to agree;
+   a scope refusal is legal only with that disagreement named.
+2. **P0b — W54's 7 capability rows.** Start with the cheapest: the grpc
+   tile-mesh output width (one projection) and the ternary kernel boundary
+   (one quantization). The Triton shared-memory rows are a GPU-only ceiling,
+   not a CPU defect: record the block-size limit or pick a smaller launch.
+3. **P2 — coverage and test time** (W63, W64, W65). The 178 s pole is
+   trimmed; the fast wall is 82.43 s. The named gaps (surface/report, wave,
+   runners, local_learning) are still contract-test work.
 4. **P3 — static debt** (W56, W57). One scope decision for `docs/archive`,
    then the 15 warnings; ruff one group per pass, Register C alongside.
 5. **P4 — decisions** (W58, W59).
