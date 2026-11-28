@@ -18,6 +18,10 @@ readable without a browser, a script, or a server.
 Usage::
 
     uv run python docs/build_site.py [--check]
+
+``--check`` compares the artifact with the sources only when the artifact
+exists; both outputs are gitignored, so a fresh clone reports "not built" and
+exits 0. Generating the site is an on-demand step, not a release gate.
 """
 
 from __future__ import annotations
@@ -787,10 +791,20 @@ def main(argv: list[str] | None = None) -> int:
     rendered_html = build_site()
     rendered_md = build_index_md()
     if args.check:
+        # ``index.html`` and ``index.md`` are gitignored generated files, so a
+        # fresh clone has none: there is nothing to be stale. ``--check``
+        # reports drift only for an artifact that exists, and says so for one
+        # that does not. A gate that fails on a fresh clone is not a gate.
         stale = False
         for path, rendered in ((OUTPUT_HTML, rendered_html), (OUTPUT_MD, rendered_md)):
-            current = path.read_text(encoding="utf-8") if path.exists() else ""
-            if current != rendered:
+            if not path.exists():
+                print(
+                    f"{path.relative_to(REPO)} is not built; "
+                    "run `uv run python docs/build_site.py` to generate it",
+                    file=sys.stderr,
+                )
+                continue
+            if path.read_text(encoding="utf-8") != rendered:
                 print(
                     f"{path.relative_to(REPO)} is stale; run "
                     "`uv run python docs/build_site.py`",
