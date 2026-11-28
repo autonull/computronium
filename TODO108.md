@@ -18,7 +18,7 @@ surfaced. The priorities, in the order a session takes them:
    record until the test passes. 16 retired in session 7; 11 remain (W53 4,
    W54 7).
 2. **P1 — locks that do not cover their declared population.** DONE in
-   session 7 (W46-W48); the 35 skips are retired and both contracts are
+   session 7 (W46-W49); the 35 skips are retired and both contracts are
    locked.
 3. **P2 — coverage and test time.** 63.65% of statements, four tiers, and a
    fast suite whose 178 s long pole is trimmed to 8.07 s (wall 82.43 s); the
@@ -91,10 +91,15 @@ The 37 skips at handoff are exactly: 31 composer task-arg configs (W47),
 | invariants | readiness store + `--experiment-db` | 7 passed (11.71 s) |
 | composer/legality locks | the two lock files | 75 + 8 passed |
 | fast | `scripts/run_fast_gates.sh` | **82.43 s**, 2548 passed / 75 skipped / 6 xfailed |
+| unit | `pytest tests/unit` | 955 passed, 1 xfailed (220.38 s); a later run OOM'd when a foreign `cml codec` job held 9.4 GiB of the 10 GiB device |
 | xfails | AST scan of `tests/**/test_*.py` | **11** (4 GATE-0, 7 capability) |
 
 The 9 property skips are 2 declared-infeasible complex-substrate cells and
 7 experiment-invariant rows that run against the readiness store.
+
+The primitives shard was not re-run this session: a foreign `cml codec`
+job held 9.4 GiB of the 10 GiB device. Run `pytest tests/primitives`
+(863 s at handoff) when the device is idle, before the release gate.
 
 ## Coverage and test-time strategy (session 7)
 
