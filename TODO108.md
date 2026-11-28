@@ -131,7 +131,7 @@ job held 9.4 GiB of the 10 GiB device. Run `pytest tests/primitives`
 | pyright | changed files | legacy noise only; no new class beyond Triton `constexpr` annotations |
 | xfails | marker scan | **0**; one body `pytest.xfail` remains in `test_primitive_capability.py` (fires only when composition fails) |
 | grpc | full file | 43 passed; 3 subprocess tests fail with `gRPC proto not available` (pre-existing environment) |
-| primitives | `pytest tests/primitives` | queued on the idle device (863 s at handoff) |
+| primitives | `pytest tests/primitives` | **780 passed, 135 skipped** (1035.84 s; the handoff row was 863.39 s) |
 
 The fast wall is 138 s with 2553 tests: the 6 formerly-xfailed tests now run,
 and the GPU kernel tests add a few seconds. The 82.43 s record was measured
