@@ -46,6 +46,15 @@ def get_activations(geometry, substrate, x) -> list[Tensor]:
 # ============================================================
 
 
+@pytest.fixture(autouse=True)
+def _highest_matmul_precision():
+    """Another module's test may lower the matmul precision; pin it here."""
+    previous = torch.get_float32_matmul_precision()
+    torch.set_float32_matmul_precision("highest")
+    yield
+    torch.set_float32_matmul_precision(previous)
+
+
 @pytest.fixture
 def device():
     return torch.device("cpu")
