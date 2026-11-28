@@ -127,7 +127,7 @@ job held 9.4 GiB of the 10 GiB device. Run `pytest tests/primitives`
 | property | `pytest tests/property -q` | **3035 passed, 9 skipped** (317.97 s; the one failure was the lint ratchet, caused by the new probe files and fixed) |
 | fast | `scripts/run_fast_gates.sh` | **2553 passed, 75 skipped** (138.01 s) |
 | affected | kernel/substrate/energy/biology/ladder/pilot/dynamics | 116 passed, 1 skipped |
-| ruff | `ruff check .` | **499 findings** (baseline held; the new probes lint clean) |
+| ruff | `ruff check .` | **496 findings** (baseline 499; the new probes lint clean) |
 | pyright | changed files | legacy noise only; no new class beyond Triton `constexpr` annotations |
 | xfails | marker scan | **0**; one body `pytest.xfail` remains in `test_primitive_capability.py` (fires only when composition fails) |
 | grpc | full file | 43 passed; 3 subprocess tests fail with `gRPC proto not available` (pre-existing environment) |
@@ -288,7 +288,7 @@ re-baseline note, not an exact target.
       (W48, W49).
 - [ ] ruff < 499, with the retired rules named in the ratchet's docstring;
       Register C's 43 directives migrated and RUF105 enabled (W57). The
-      measured count is **499** (baseline held; session 8 adds none).
+      measured count is **496** (baseline 499; session 8 adds none).
 - [ ] pyright < 3240 errors or a recorded archive-scope decision, and 0
       warnings (W56).
 - [ ] The site-build and pre-registration decisions are written where the
@@ -313,7 +313,7 @@ re-baseline note, not an exact target.
    local_learning) are still contract-test work; the coverage ratchet is
    not re-measured since session 7.
 2. **P3 — static debt** (W56, W57). One scope decision for `docs/archive`,
-   then the 15 warnings; the ruff count is at the 499 baseline, so W57's
+   then the 15 warnings; the measured ruff count is 496 against the 499 baseline, so W57's
    next pass must retire a named group (complexity 119, E402 56, RUF105 43)
    and lower `BASELINE` in the same commit. Register C alongside.
 3. **P4 — decisions** (W58, W59): the site-build gate and the
