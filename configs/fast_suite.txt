@@ -220,3 +220,5 @@ tests/property/test_wave_pricing_lock.py
 tests/property/test_report_front_lock.py
 tests/property/test_local_learning_contracts.py
 tests/property/test_report_render_lock.py
+tests/property/test_report_export_lock.py
+tests/property/test_surface_cli_store_lock.py

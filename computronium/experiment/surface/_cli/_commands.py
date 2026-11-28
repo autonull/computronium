@@ -554,7 +554,7 @@ def _cmd_status(args: argparse.Namespace) -> int:  # ruff: ignore[complex-struct
                         "promoted_count": run.promoted_count,
                         "started_at": run.started_at,
                     })
-                output = json.dumps({"runs": runs_data}, indent=2)
+                output = json.dumps({"runs": runs_data}, default=str, indent=2)
             else:
                 lines = []
                 for run in runs:
