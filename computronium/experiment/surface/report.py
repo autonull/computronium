@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import json
+import threading
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -119,6 +120,30 @@ class ExportBundle:
     metadata: dict[str, Any]
 
 
+_objectives_seeded: list[bool] = [False]
+_seed_lock = threading.Lock()
+
+
+def _ensure_objective_registry() -> None:
+    """Seed the registry the report reads its objectives and directions from.
+
+    A store built by a run seeds it as a side effect of validation; a store
+    opened read-only, or a run with no records, does not — and an unseeded
+    registry raises ``KeyError`` in ``optimizes`` while ``objective_metric``
+    reports every objective unknown. Every other surface entry point seeds; the
+    report did not. Guarded because a dashboard builds a generator per poll.
+    """
+    if _objectives_seeded[0]:
+        return
+    with _seed_lock:
+        if _objectives_seeded[0]:
+            return
+        from computronium.experiment.schema.seed_registries import seed_all_registries
+
+        seed_all_registries()
+        _objectives_seeded[0] = True
+
+
 def _maximizes(metric_key: str) -> bool:
     """Whether a payload key is maximized, per the objective that measures it.
 
@@ -126,7 +151,10 @@ def _maximizes(metric_key: str) -> bool:
     treats it as a cost rather than silently reading a bigger number as better.
     """
     name = objective_name(metric_key)
-    return optimizes(name) if name is not None else False
+    if name is None:
+        return False
+    _ensure_objective_registry()
+    return optimizes(name)
 
 
 def _numeric_vector(
@@ -543,6 +571,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         spec = self._spec(run_id)
         if spec is None:
             return ()
+        _ensure_objective_registry()
         metrics: list[str] = []
         for name in spec.objectives:
             try:
