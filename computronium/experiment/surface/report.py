@@ -2843,23 +2843,23 @@ def _generate_latex_report(
     axis_frontiers = generator.axis_frontiers(run_id)
     significance = generator.significance(run_id)
 
-    # Escape LaTeX special characters
+    # Escape LaTeX special characters in one pass: a sequential replace would
+    # escape the backslashes the earlier replacements introduced.
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+
     def escape_latex(text: str) -> str:
-        replacements = {
-            "&": r"\&",
-            "%": r"\%",
-            "$": r"\$",
-            "#": r"\#",
-            "_": r"\_",
-            "{": r"\{",
-            "}": r"\}",
-            "~": r"\textasciitilde{}",
-            "^": r"\textasciicircum{}",
-            "\\": r"\textbackslash{}",
-        }
-        for char, replacement in replacements.items():
-            text = text.replace(char, replacement)
-        return text
+        return "".join(replacements.get(char, char) for char in text)
 
     lines = [
         r"\documentclass[11pt,a4paper]{article}",
