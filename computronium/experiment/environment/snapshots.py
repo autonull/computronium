@@ -364,7 +364,7 @@ class ContainerManager:
     def _init_docker(self) -> None:
         """Initialize Docker client."""
         try:
-            import docker
+            import docker  # pyright: ignore[reportMissingModuleSource]
 
             self._client = docker.from_env()
         except Exception as e:

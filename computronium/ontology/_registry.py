@@ -15,9 +15,11 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from collections import defaultdict
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 
@@ -167,8 +169,3 @@ class ImplementationRegistry[T]:
         """Clear all registrations (mainly for testing)."""
         self._backends.clear()
         self._discovered = False
-
-
-def create_registry[T](name: str) -> ImplementationRegistry[T]:
-    """Factory function to create a typed registry."""
-    return ImplementationRegistry[T](name)

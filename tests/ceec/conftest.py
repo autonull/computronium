@@ -1,5 +1,3 @@
-import shutil
-
 import pytest
 
 from ceec import CEECStore, models
@@ -51,6 +49,3 @@ def link_belief(store, scope):
         return belief_id
 
     return _link
-
-
-shutil  # re-exported for tests that clean artifact dirs

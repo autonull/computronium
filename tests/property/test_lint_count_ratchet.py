@@ -81,7 +81,9 @@ block exists, and ``test_lazy_export_surface_lock.py`` keeps the declared
 surface honest.
 
 Lowered 2026-11-28 from 499 to the measured 473 (ruff unchanged at 0.17.5) by
-the W57 ``PLW1514`` pass: all 21 ``unspecified-encoding`` findings now name
+the W57 ``PLW1514`` pass (474 measured after the W56 types pass removed
+``_registry.py``'s typing-only ``Callable``; that file's count moved with the
+work in the same batch): all 21 ``unspecified-encoding`` findings now name
 ``encoding="utf-8"`` on the ``Path.read_text``/``write_text``/``open`` call
 they annotate — two library sites (``monitoring/alerts.py``, ``sec_watch.py``),
 one notebook cell, and the scripts. The other two findings left with the W64
@@ -95,7 +97,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 473
+BASELINE = 472
 RUFF_VERSION = "0.17.5"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")
