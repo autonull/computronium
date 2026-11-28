@@ -278,9 +278,6 @@ class TestGRPCSeamSubprocess:
 
     @pytest.mark.asyncio
     @pytest.mark.cpu_only
-    @pytest.mark.xfail(
-        reason="DistributedSystemTrainer single-node output projection issue with TileGeometry"
-    )
     async def test_distributed_train_step_parity(
         self, test_batch: tuple[torch.Tensor, torch.Tensor], device: torch.device
     ) -> None:
@@ -358,9 +355,11 @@ class TestGRPCSeamSubprocess:
         # Verify metrics are returned
         assert "loss" in metrics
         assert "energy" in metrics
-        assert "accuracy" in metrics
+        assert "free_accuracy" in metrics
         assert metrics["loss"] >= 0
-        assert metrics["energy"] >= 0
+        # The Hopfield energy is unbounded below, so finiteness is the contract.
+        assert torch.isfinite(torch.tensor(metrics["energy"]))
+        assert 0.0 <= metrics["free_accuracy"] <= 1.0
 
     @pytest.mark.asyncio
     @pytest.mark.cpu_only

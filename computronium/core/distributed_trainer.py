@@ -598,20 +598,29 @@ class DistributedSystemTrainer:
             if step >= self.system.dynamics.config.convergence_start:
                 pass  # Convergence check omitted for brevity
 
-        # Collect final activations
-        acts: list[Tensor] = []
+        # Collect the block layout [x, z_0..z_{L-1}, output] the credit laws
+        # read; per-tile activities are concatenated per layer.
+        blocks: list[Tensor] = []
+        if state.x is not None:
+            blocks.append(state.x.flatten(1) if state.x.dim() > 2 else state.x)
         for layer_tiles in geometry._graph.layer_ids:
+            acts: list[Tensor] = []
             for tid in layer_tiles:
-                if self._assign_tile_to_node(tid) == self.config.node_id:
-                    act = geometry._graph.tiles[tid].activity
-                    if act is not None:
-                        acts.append(act)
+                act = geometry._graph.tiles[tid].activity
+                if act is None:
+                    act = await self._fetch_remote_activation(tid)
+                if act is not None:
+                    acts.append(act)
+            if len(acts) == len(layer_tiles):
+                blocks.append(torch.cat(acts, dim=1))
+        if blocks:
+            blocks.append(geometry._output_projection(blocks[-1]))
 
         if target is None:
-            state.free_state = acts
+            state.free_state = blocks
         else:
-            state.nudged_state = acts
-        state.activations = acts
+            state.nudged_state = blocks
+        state.activations = blocks
         return state
 
     def _identify_lost_workers(self) -> list[str]:
@@ -715,27 +724,30 @@ class DistributedSystemTrainer:
                 pass
         return torch.device("cpu")
 
-    @staticmethod
-    def _compute_loss(state: SystemState, y: Tensor) -> Tensor:
-        """Compute task loss from final state."""
+    def _output_logits(self, state: SystemState) -> Tensor | None:
+        """Read the task-shaped logits from a settled state."""
         acts = state.activations
         if acts is None:
+            return None
+        return acts[-1] if isinstance(acts, list) else acts
+
+    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
+        """Compute task loss from final state."""
+        logits = self._output_logits(state)
+        if logits is None:
             return torch.tensor(0.0, device=y.device)
-        logits = acts[-1] if isinstance(acts, list) else acts
         return torch.nn.functional.cross_entropy(logits, y)
 
-    @staticmethod
-    def _accuracy_from_state(state: SystemState) -> float:
+    def _accuracy_from_state(self, state: SystemState) -> float:
         """Target-free accuracy from the state's output activations.
 
         ``state.metrics["accuracy"]`` is only written by ``task_loss``, which
         the distributed settle path never calls — reading it silently
         returned 0.0 for every batch (imp-46 census).
         """
-        acts = state.activations
-        if acts is None:
+        logits = self._output_logits(state)
+        if logits is None:
             return 0.0
-        logits = acts[-1] if isinstance(acts, list) else acts
         return float((logits.argmax(dim=-1) == state.y).float().mean().item())
 
     def validate(self) -> dict[str, float]:
