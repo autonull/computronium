@@ -109,11 +109,10 @@ def test_an_arm_trains_the_system_it_is_bound_to(name: str) -> None:
     """
     system = build(name, backend="auto")
     backend = getattr(system, "_kernel_backend", None)
-    if backend is None:
-        pytest.xfail(
-            f"unimplemented: {name} has no arm (close: a backend class that "
-            "binds this factory's system and moves its own parameters)"
-        )
+    assert backend is not None, (
+        f"{name} has no arm: a backend class that binds this factory's "
+        "system and moves its own parameters"
+    )
 
     torch.manual_seed(0)
     before = {key: value.clone() for key, value in system.geometry.params.items()}

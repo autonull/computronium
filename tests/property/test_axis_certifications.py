@@ -971,15 +971,12 @@ class TestSAxisSubstrateCertification:
 
         from computronium.ontology import BackpropCredit
 
-        if substrate_name == "ternary":
-            pytest.xfail(
-                "ternary substrate quantizes substrate-owned latent weights: "
-                "the forward graph is severed from the geometry parameters "
-                "by design, so no autograd gradient can reach them "
-                "(GradientCredit fail-loud, R11.2). Ternary learning routes "
-                "through the substrate update operator instead; pairing it "
-                "with gradient credit was only ever silent zeros."
-            )
+        # Ternary quantization severs the forward graph from the geometry
+        # parameters by design: no autograd gradient can reach them
+        # (GradientCredit fail-loud, R11.2). The pairing must return no
+        # pseudo-gradient rather than silent zeros. Ternary learning routes
+        # through the substrate update operator instead.
+        severed = substrate_name == "ternary"
 
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
         sys, geometry, _substrate, _dynamics, _ = _make_system_for_credit(
@@ -994,6 +991,15 @@ class TestSAxisSubstrateCertification:
 
         free_state = _run_free_phase(sys, x, y)
         nudged_state = _run_nudged_phase(sys, x, y)
+
+        if severed:
+            with pytest.raises(RuntimeError, match="no gradient reached"):
+                credit.compute_pseudo_gradient(
+                    phase_states(free=free_state, nudged=nudged_state),
+                    nudged_state.loss,
+                    geometry,
+                )
+            return
 
         pseudo_grads = credit.compute_pseudo_gradient(
             phase_states(free=free_state, nudged=nudged_state),

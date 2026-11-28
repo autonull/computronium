@@ -316,47 +316,15 @@ def test_a_box_overrun_fits_its_family_ceiling(
     assert cell.param_count <= schedule.param_budget
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "a tile mesh projects the task's whole input into its input tiles, so "
-        "a 784-input task's input projection alone is 614,656 parameters over "
-        "the 150k family ceiling; close: an input compression (a projection "
-        "narrower than input_dim) so the mesh fits the box"
-    ),
-)
-def test_a_tile_mesh_fits_its_family_ceiling() -> None:
-    """The missing capability: a tile mesh whose input projection fits the box."""
-    from computronium.experiment.kernel.evaluate import (
-        _compose_cell,
-        _task,
-        _task_shape,
-    )
-
-    schedule = base_schedule("mnist")
-    assert schedule is not None
-    coordinate = sec_loop._coordinate({
-        **sec_loop._base_axes("mnist"),
-        "geometry": "tile",
-    })
-    task_object = _task("mnist", "cpu")
-    cell = _compose_cell(
-        coordinate,
-        None,
-        _task_shape(task_object),
-        schedule.param_budget,
-        task_object,
-    )
-
-    assert cell.param_count <= schedule.param_budget
-
-
 def test_a_box_that_cannot_shrink_is_unimplemented() -> None:
     """A cell whose tightest sizing overruns its box is unimplemented, not a defect.
 
     The screen reads the floor by composing at a one-parameter ceiling: a cell
     with a width shrinks, a tile mesh (no width; its input projection is the
-    floor) keeps its count, so its row is a box statement.
+    floor) keeps its count, so its row is a box statement. Measured at the L0
+    vision box: 628,280 parameters against a 150,000 budget. The closing
+    primitive is an input compression (a projection narrower than input_dim),
+    so the mesh fits the box.
     """
     from computronium.experiment.kernel.evaluate import (
         _compose_cell,

@@ -188,32 +188,25 @@ def test_every_near_chance_row_in_the_map_carries_a_record() -> None:
 
 
 def _ladder_params() -> list[object]:
-    """The map's near-chance rows: strict xfail while unimplemented."""
+    """The map's near-chance rows: every record's verdict is checked."""
     if not MAP.exists():
         return []
     document = json.loads(MAP.read_text(encoding="utf-8"))
-    params = []
-    for spec_id, _row, _chance in ladder_rows(document):
-        record = document["ladders"][spec_id]
-        if record["verdict"] == "unimplemented":
-            params.append(
-                pytest.param(
-                    spec_id,
-                    id=spec_id,
-                    marks=pytest.mark.xfail(
-                        strict=True, reason=str(record["close_condition"])
-                    ),
-                )
-            )
-        else:
-            params.append(pytest.param(spec_id, id=spec_id))
-    return params
+    return [
+        pytest.param(spec_id, id=spec_id)
+        for spec_id, _row, _chance in ladder_rows(document)
+    ]
 
 
 @_RUNS
 @pytest.mark.parametrize("spec_id", _ladder_params())
-def test_an_unimplemented_ladder_clears_its_band(spec_id: str) -> None:
-    """An unimplemented ladder names the primitive that would clear the band."""
+def test_a_ladder_record_matches_its_band(spec_id: str) -> None:
+    """An unimplemented ladder stays in the band and names its closing primitive.
+
+    A ``tuned`` record clears the band. The test asserts the verdict and the
+    measured rungs agree, so a row that is re-tuned (or a claim that is
+    rescued) fails here and forces the record to be updated.
+    """
     document = json.loads(MAP.read_text(encoding="utf-8"))
     record = document["ladders"][spec_id]
     row = document["primitives"][spec_id]
@@ -231,10 +224,19 @@ def test_an_unimplemented_ladder_clears_its_band(spec_id: str) -> None:
     assert values, "the ladder recorded no measured point"
 
     band = near_chance_band(chance)
-    assert max(values) > band, (
-        f"best {max(values):.3f} is inside the band {band:.3f}: "
-        f"{record['close_condition']}"
-    )
+    if record["verdict"] == "unimplemented":
+        assert max(values) <= band, (
+            f"best {max(values):.3f} cleared the band {band:.3f} but the "
+            "record says unimplemented — re-record the ladder"
+        )
+        assert record["close_condition"], (
+            "an unimplemented ladder must name the primitive that closes it"
+        )
+    else:
+        assert max(values) > band, (
+            f"best {max(values):.3f} is inside the band {band:.3f}: "
+            f"{record['close_condition']}"
+        )
 
 
 @pytest.mark.parametrize(

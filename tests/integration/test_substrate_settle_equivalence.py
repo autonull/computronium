@@ -30,6 +30,8 @@ from computronium.ontology.substrate import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.ontology.substrate import Substrate
 
 
@@ -51,11 +53,21 @@ def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positio
     velocity: list[Tensor] | None,
     step_size: float,
     momentum: float,
+    quantize: Callable[[Tensor], Tensor] | None = None,
 ) -> tuple[list[Tensor], list[Tensor] | None]:
     """Pure-torch reference implementation of the legacy EqProp step.
 
     Uses F.linear (fused matmul+bias) exactly like the original _settle_step.
+    ``quantize`` mirrors the kernel's physical routing: bottom-up and output
+    passes go through the substrate operator (quantized weights), while the
+    top-down and recurrent passes use the raw weights.
     """
+
+    def _forward_weight(idx: int) -> Tensor:
+        if quantize is None:
+            return weights[idx]
+        return quantize(weights[idx])  # type: ignore[operator]
+
     num_hidden = len(all_acts) - 2
     new_acts = [all_acts[0]]
     new_velocity: list[Tensor] | None = (
@@ -63,7 +75,7 @@ def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positio
     )
 
     for i in range(num_hidden):
-        pre = torch.nn.functional.linear(all_acts[i], weights[i], biases[i])
+        pre = torch.nn.functional.linear(all_acts[i], _forward_weight(i), biases[i])
 
         if recurrent_weight is not None and i == num_hidden - 1:
             pre = pre + all_acts[i + 1] @ recurrent_weight.T  # ruff: ignore[non-augmented-assignment]
@@ -81,7 +93,9 @@ def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positio
 
         new_acts.append(h_new)
 
-    out = torch.nn.functional.linear(new_acts[-1], weights[-1], biases[-1])
+    out = torch.nn.functional.linear(
+        new_acts[-1], _forward_weight(len(weights) - 1), biases[-1]
+    )
 
     if beta > 0 and target is not None:
         if target.dim() == 1:
@@ -107,6 +121,7 @@ def _reference_settle(  # ruff: ignore[too-many-arguments, too-many-positional-a
     max_steps: int,
     step_size: float,
     momentum: float,
+    quantize: Callable[[Tensor], Tensor] | None = None,
     convergence_threshold: float = 1e-3,
     convergence_start: int = 0,
 ) -> list[Tensor]:
@@ -131,6 +146,7 @@ def _reference_settle(  # ruff: ignore[too-many-arguments, too-many-positional-a
             velocity,
             step_size,
             momentum,
+            quantize,
         )
 
         if step >= convergence_start:
@@ -366,11 +382,13 @@ class TestSubstrateSettleTernaryRouting:
                     or unique[1] == 0
                 ), f"Unexpected values: {unique}"
 
-    @pytest.mark.xfail(
-        reason="Ternary quantization uses TWN-style thresholding, reference must match substrate",
-    )
     def test_ternary_equivalence_vs_reference(self):
-        """Kernel settle on TernarySubstrate matches reference with same quantization."""
+        """Kernel settle on TernarySubstrate matches reference with same quantization.
+
+        The kernel routes bottom-up and output passes through the substrate
+        forward operator (quantized weights) and top-down/recurrent passes
+        through raw weights; the reference mirrors that split.
+        """
         geometry = _create_test_geometry()
         substrate = TernarySubstrate(SubstrateConfig.ternary(noise_level=0.0))
         kernel = _build_kernel_from_geometry(geometry, substrate)
@@ -381,25 +399,18 @@ class TestSubstrateSettleTernaryRouting:
         params = extract_layered_params(geometry)
         assert params is not None
 
-        # Use substrate's quantization for reference to match kernel
-        q_weights = tuple(substrate.quantize_weights(w) for w in params.weights)
-        q_recurrent = (
-            substrate.quantize_weights(params.recurrent_weight)
-            if params.recurrent_weight is not None
-            else None
-        )
-
         ref_acts = _reference_settle(
             init_acts=init_acts,
-            weights=q_weights,
+            weights=params.weights,
             biases=params.biases,
             activations=params.activations,
-            recurrent_weight=q_recurrent,
+            recurrent_weight=params.recurrent_weight,
             beta=0.0,
             target=None,
             max_steps=20,
             step_size=kernel.step_size,
             momentum=kernel.momentum,
+            quantize=substrate.quantize_weights,
         )
 
         max_diff = (kernel_acts[-1] - ref_acts[-1]).abs().max().item()
