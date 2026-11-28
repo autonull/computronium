@@ -4,195 +4,113 @@ This test enforces the legality boundary from feedback #9:
 - Constraints with origin=DECLARED (or SYSTEM_CONFIG, i.e., from SystemConfig.validate)
   may ONLY exclude logically/experimentally invalid configurations (voids).
 - They may never encode "we don't expect this to work" — that belongs in PRIORS.
-- Every DECLARED constraint must have a machine-checkable infeasibility proof:
+- Every DECLARED constraint must carry a machine-checkable proof kind:
   type mismatch, resource violation, or logical contradiction.
 - No heuristic exclusions allowed in DECLARED constraints.
 
-This is a CI gate for WP3.
+The registry seeded by ``seed_all_registries`` is the population; the
+``ConstraintSpec.proof_kind`` field is the proof, so one table owns both the
+row and its justification.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
-
-import pytest
-
 from computronium.experiment.legality.classify import (
     DEFECT_REGISTRY,
 )
-from computronium.experiment.legality.dsl import (
-    Const,
-    Eq,
-    Var,
-    const,
-    eq,
-    var,
-)
 from computronium.experiment.legality.engine import (
-    Constraint,
     ConstraintEnforcement,
-    ConstraintKind,
     ConstraintOrigin,
     ConstraintScope,
-    LegalityEngine,
-    create_constraint,
+    engine_from_registry,
+)
+from computronium.experiment.schema.registries import (
+    CONSTRAINTS_REGISTRY,
+    PRIORS_REGISTRY,
+    ConstraintSpec,
+    PriorSpec,
+)
+from computronium.experiment.schema.registries import (
+    ConstraintKind as RegistryConstraintKind,
+)
+from computronium.experiment.schema.seed_registries import seed_all_registries
+
+_HEURISTIC_KEYWORDS = (
+    "expected",
+    "recommended",
+    "preferred",
+    "likely",
+    "may work",
+    "should work",
+    "performance",
+    "accuracy",
+    "loss",
+    "converge",
+    "better",
+    "worse",
+    "optimal",
+    "suboptimal",
+)
+_PERFORMANCE_KEYWORDS = (
+    "accuracy",
+    "loss",
+    "score",
+    "metric",
+    "performance",
+    "converge",
+    "diverge",
+    "speed",
+    "throughput",
+    "latency",
 )
 
-_TEST_ENGINE = LegalityEngine()
+
+def _declared_specs() -> list[ConstraintSpec]:
+    """The registry's DECLARED rows, seeded the way a run seeds them."""
+    seed_all_registries()
+    return [s for s in CONSTRAINTS_REGISTRY.values() if s.origin == "DECLARED"]
 
 
-class ProofKind(StrEnum):
-    """Kinds of machine-checkable infeasibility proofs."""
-
-    TYPE_MISMATCH = (
-        "type_mismatch"  # e.g., substrate requires digital, geometry requires analog
-    )
-    RESOURCE_VIOLATION = "resource_violation"  # e.g., memory > budget, compute > limit
-    LOGICAL_CONTRADICTION = "logical_contradiction"  # e.g., A and not A
-
-
-@dataclass(frozen=True, slots=True)
-class InfeasibilityProof:
-    """A machine-checkable proof of infeasibility for a DECLARED constraint."""
-
-    proof_kind: ProofKind
-    description: str
-    # The expression that constitutes the proof
-    proof_expr: Eq | Var | Const
-    # Axes/values involved
-    axes: tuple[str, ...]
-    values: tuple[str, ...]
-
-
-# Registry of infeasibility proofs for DECLARED constraints
-# Each DECLARED constraint MUST have an entry here
-DECLARED_INFEASIBILITY_PROOFS: dict[str, InfeasibilityProof] = {}
-
-
-def register_declared_proof(
-    constraint_id: str,
-    proof: InfeasibilityProof,
-) -> None:
-    """Register an infeasibility proof for a DECLARED constraint."""
-    DECLARED_INFEASIBILITY_PROOFS[constraint_id] = proof
-
-
-def _get_declared_constraints(
-    engine: LegalityEngine = _TEST_ENGINE,
-) -> list[Constraint]:
-    """Get all constraints with DECLARED origin (SYSTEM_CONFIG in current impl)."""
-    return [
-        c
-        for c in engine.all_constraints()
-        if c.origin
-        in {
-            ConstraintOrigin.SYSTEM_CONFIG,
-            ConstraintOrigin.DYNAMICS_COMPAT,
-            ConstraintOrigin.CREDIT_COMPAT,
-        }
-    ]
-
-
-def _has_machine_checkable_proof(constraint: Constraint) -> tuple[bool, str | None]:
-    """Check if a constraint has a registered machine-checkable proof."""
-    if constraint.constraint_id in DECLARED_INFEASIBILITY_PROOFS:
-        return True, None
-    return (
-        False,
-        f"No infeasibility proof registered for constraint {constraint.constraint_id} ({constraint.description})",
-    )
-
-
-def _is_heuristic_exclusion(constraint: Constraint) -> tuple[bool, str | None]:
-    """Detect if a constraint appears to be a heuristic exclusion rather than a void.
-
-    Heuristic exclusions typically:
-    - Use soft constraints to express preferences
-    - Reference performance metrics (accuracy, loss, etc.)
-    - Use vague language like "expected to work", "recommended", "preferred"
-    """
-    desc = constraint.description.lower()
-    expr_str = str(constraint.expr).lower()
-
-    # Keywords that suggest heuristic/preference rather than logical infeasibility
-    heuristic_keywords = [
-        "expected",
-        "recommended",
-        "preferred",
-        "likely",
-        "may work",
-        "should work",
-        "performance",
-        "accuracy",
-        "loss",
-        "converge",
-        "better",
-        "worse",
-        "optimal",
-        "suboptimal",
-    ]
-
-    for kw in heuristic_keywords:
-        if kw in desc or kw in expr_str:
-            return (
-                True,
-                f"Heuristic language detected: '{kw}' in constraint {constraint.constraint_id}",
-            )
-
-    return False, None
+def _first_keyword(spec: ConstraintSpec, keywords: tuple[str, ...]) -> str | None:
+    text = f"{spec.description} {spec.predicate}".lower()
+    return next((kw for kw in keywords if kw in text), None)
 
 
 class TestLegalityBoundary:
     """Tests enforcing the legality boundary for DECLARED constraints."""
 
     def test_declared_constraints_have_infeasibility_proofs(self) -> None:
-        """Every DECLARED constraint must have a machine-checkable infeasibility proof."""
-        declared = _get_declared_constraints()
+        """Every DECLARED constraint must carry a machine-checkable proof kind."""
+        declared = _declared_specs()
+        assert declared, "the registry declares no constraints"
 
-        if not declared:
-            pytest.skip("declared: no DECLARED constraints registered yet")
-
-        missing_proofs = []
-        for constraint in declared:
-            has_proof, reason = _has_machine_checkable_proof(constraint)
-            if not has_proof:
-                missing_proofs.append(f"{constraint.constraint_id}: {reason}")
-
-        if missing_proofs:
-            pytest.fail(
-                "DECLARED constraints missing infeasibility proofs:\n"
-                + "\n".join(missing_proofs)
-                + "\n\nEvery DECLARED constraint must have a registered proof "
-                "in DECLARED_INFEASIBILITY_PROOFS with ProofKind "
-                "(TYPE_MISMATCH, RESOURCE_VIOLATION, or LOGICAL_CONTRADICTION)."
-            )
+        missing = [spec.name for spec in declared if spec.proof_kind is None]
+        assert not missing, (
+            "DECLARED constraints missing a proof_kind: "
+            + ", ".join(missing)
+            + "; every DECLARED row must be a TYPE_MISMATCH, RESOURCE, or "
+            "LOGICAL contradiction"
+        )
 
     def test_declared_constraints_are_not_heuristic(self) -> None:
         """DECLARED constraints must not encode heuristic preferences."""
-        declared = _get_declared_constraints()
+        declared = _declared_specs()
+        assert declared, "the registry declares no constraints"
 
-        if not declared:
-            pytest.skip("declared: no DECLARED constraints registered yet")
-
-        heuristic_violations = []
-        for constraint in declared:
-            is_heuristic, reason = _is_heuristic_exclusion(constraint)
-            if is_heuristic:
-                heuristic_violations.append(f"{constraint.constraint_id}: {reason}")
-
-        if heuristic_violations:
-            pytest.fail(
-                "DECLARED constraints contain heuristic exclusions (should be in PRIORS):\n"
-                + "\n".join(heuristic_violations)
-            )
+        violations = [
+            f"{spec.name}: {keyword}"
+            for spec in declared
+            if (keyword := _first_keyword(spec, _HEURISTIC_KEYWORDS)) is not None
+        ]
+        assert not violations, (
+            "DECLARED constraints contain heuristic exclusions (should be PRIORS):\n"
+            + "\n".join(violations)
+        )
 
     def test_void_patterns_have_proofs(self) -> None:
         """Every registered void pattern must have a corresponding infeasibility proof."""
-        # This ensures that the void patterns in DEFECT_REGISTRY are backed by proofs
         void_patterns = list(DEFECT_REGISTRY._void_patterns.keys())
 
-        # For now, we verify the patterns exist and are bidirectional
         for key1 in void_patterns:
             key2 = (key1[1], key1[0])
             assert key2 in DEFECT_REGISTRY._void_patterns, (
@@ -201,179 +119,67 @@ class TestLegalityBoundary:
 
     def test_no_declared_constraint_on_performance(self) -> None:
         """DECLARED constraints must not reference performance metrics."""
-        declared = _get_declared_constraints()
+        declared = _declared_specs()
+        assert declared, "the registry declares no constraints"
 
-        if not declared:
-            pytest.skip("declared: no DECLARED constraints registered yet")
-
-        performance_keywords = [
-            "accuracy",
-            "loss",
-            "score",
-            "metric",
-            "performance",
-            "converge",
-            "diverge",
-            "speed",
-            "throughput",
-            "latency",
+        violations = [
+            f"{spec.name}: references {keyword}"
+            for spec in declared
+            if (keyword := _first_keyword(spec, _PERFORMANCE_KEYWORDS)) is not None
         ]
-
-        violations = []
-        for constraint in declared:
-            desc = constraint.description.lower()
-            expr_str = str(constraint.expr).lower()
-            for kw in performance_keywords:
-                if kw in desc or kw in expr_str:
-                    violations.append(
-                        f"{constraint.constraint_id}: references '{kw}' "
-                        f"(performance metric in DECLARED constraint)"
-                    )
-
-        if violations:
-            pytest.fail(
-                "DECLARED constraints reference performance metrics "
-                "(should be in PRIORS or soft constraints):\n" + "\n".join(violations)
-            )
+        assert not violations, (
+            "DECLARED constraints reference performance metrics "
+            "(should be PRIORS or soft constraints):\n" + "\n".join(violations)
+        )
 
     def test_declared_constraints_are_hard_or_void(self) -> None:
-        """DECLARED constraints must be HARD kind (voids) or BUDGET, never SOFT."""
-        declared = _get_declared_constraints()
+        """DECLARED constraints must never be SOFT."""
+        declared = _declared_specs()
+        assert declared, "the registry declares no constraints"
 
-        if not declared:
-            pytest.skip("declared: no DECLARED constraints registered yet")
-
-        soft_violations = []
-        for constraint in declared:
-            if constraint.kind == ConstraintKind.SOFT:
-                soft_violations.append(
-                    f"{constraint.constraint_id}: DECLARED constraint is SOFT kind "
-                    "(should be HARD for voids or BUDGET for resource limits)"
-                )
-
-        if soft_violations:
-            pytest.fail(
-                "DECLARED constraints with SOFT kind (must be HARD or BUDGET):\n"
-                + "\n".join(soft_violations)
-            )
+        soft = [
+            spec.name for spec in declared if spec.kind is RegistryConstraintKind.SOFT
+        ]
+        assert not soft, (
+            "DECLARED constraints with SOFT kind (must be VOID or HARD):\n"
+            + "\n".join(soft)
+        )
 
     def test_system_config_validator_constraints_are_voids(self) -> None:
-        """Constraints from SystemConfig.validate() must correspond to void patterns."""
-        # This test will be populated when SystemConfig.validate() constraints are migrated
-        # For now, it serves as a placeholder for the migration work
-        engine = _TEST_ENGINE
+        """System-config rows are structural voids at CELL scope."""
+        seed_all_registries()
+        engine = engine_from_registry(
+            enforcement=ConstraintEnforcement.S4_EXPANSION,
+            params=False,
+            void_only=True,
+        )
         system_config_constraints = [
             c
             for c in engine.all_constraints()
             if c.origin == ConstraintOrigin.SYSTEM_CONFIG
         ]
+        assert system_config_constraints, "the S4 engine built no declared rows"
 
-        # When constraints are migrated from SystemConfig.validate(), they must
-        # all map to known void patterns in DEFECT_REGISTRY
-        # This is a structural test - actual validation happens when constraints are added
-
-        # Verify that if we have SYSTEM_CONFIG constraints, they align with void patterns
-        if system_config_constraints:
-            # Each should correspond to a void reason
-            for constraint in system_config_constraints:
-                # The constraint should be a HARD constraint at CELL scope
-                assert constraint.kind == ConstraintKind.HARD, (
-                    f"SYSTEM_CONFIG constraint {constraint.constraint_id} must be HARD"
-                )
-                assert constraint.scope == ConstraintScope.CELL, (
-                    f"SYSTEM_CONFIG constraint {constraint.constraint_id} must be CELL scope"
-                )
+        for constraint in system_config_constraints:
+            assert constraint.scope == ConstraintScope.CELL, (
+                f"SYSTEM_CONFIG constraint {constraint.constraint_id} must be CELL scope"
+            )
 
     def test_priors_not_in_declared_constraints(self) -> None:
         """PRIORS (preferences) must not be encoded as DECLARED constraints."""
-        # This is a design-time check - PRIORS registry should be separate from
-        # CONSTRAINTS registry. The test verifies separation of concerns.
-
-        from computronium.experiment.schema import (
-            CONSTRAINTS_REGISTRY,
-            PRIORS_REGISTRY,
-            PriorSpec,
-        )
-
-        # PRIORS and CONSTRAINTS should be separate registries
         assert PRIORS_REGISTRY is not CONSTRAINTS_REGISTRY
 
-        # PRIORS should not contain Constraint objects
         for spec in PRIORS_REGISTRY.values():
-            assert not isinstance(spec, Constraint), (
-                f"PRIORS registry contains Constraint: {spec}"
+            assert isinstance(spec, PriorSpec), (
+                f"PRIORS registry contains a non-PriorSpec: {spec}"
             )
 
-        # CONSTRAINTS should not contain PriorSpec objects
         for spec in CONSTRAINTS_REGISTRY.values():
-            assert not isinstance(spec, PriorSpec), (
-                f"CONSTRAINTS registry contains PriorSpec: {spec}"
+            assert isinstance(spec, ConstraintSpec), (
+                f"CONSTRAINTS registry contains a non-ConstraintSpec: {spec}"
             )
 
     def test_constraint_origin_enum_has_declared(self) -> None:
         """ConstraintOrigin should have a DECLARED variant for explicit void constraints."""
-        # The plan mentions DECLARED origin; currently we have SYSTEM_CONFIG
-        # This test documents the expected enum value
         origins = [o.value for o in ConstraintOrigin]
-
-        # For now, SYSTEM_CONFIG serves as the DECLARED origin
-        # In the future, a dedicated DECLARED origin may be added
         assert "system_config" in origins
-
-
-class TestConstraintProofRegistration:
-    """Tests for the proof registration mechanism."""
-
-    def test_proof_registration_works(self) -> None:
-        """Test that proof registration works correctly."""
-        # Create a test constraint
-        expr = eq(var("substrate"), const("digital"))
-        constraint = create_constraint(
-            expr=expr,
-            origin=ConstraintOrigin.SYSTEM_CONFIG,
-            scope=ConstraintScope.CELL,
-            enforcement=ConstraintEnforcement.ALWAYS,
-            kind=ConstraintKind.HARD,
-            description="Test constraint for proof registration",
-            engine=_TEST_ENGINE,
-        )
-
-        # Register a proof
-        proof = InfeasibilityProof(
-            proof_kind=ProofKind.TYPE_MISMATCH,
-            description="Substrate must be digital for this geometry",
-            proof_expr=expr,
-            axes=("substrate", "geometry"),
-            values=("digital", "crossbar"),
-        )
-        register_declared_proof(constraint.constraint_id, proof)
-
-        # Verify
-        assert constraint.constraint_id in DECLARED_INFEASIBILITY_PROOFS
-        registered = DECLARED_INFEASIBILITY_PROOFS[constraint.constraint_id]
-        assert registered.proof_kind == ProofKind.TYPE_MISMATCH
-
-        # Clean up
-        del DECLARED_INFEASIBILITY_PROOFS[constraint.constraint_id]
-        _TEST_ENGINE.remove_constraint(constraint.constraint_id)
-
-    def test_proof_kinds_are_exhaustive(self) -> None:
-        """All proof kinds should be used somewhere."""
-        # This test ensures we don't have unused proof kinds
-        all_kinds = set(ProofKind)
-
-        # At minimum, we should have examples of each kind once constraints are seeded
-        # For now, just verify the enum is well-formed
-        assert len(all_kinds) == 3
-        assert ProofKind.TYPE_MISMATCH in all_kinds
-        assert ProofKind.RESOURCE_VIOLATION in all_kinds
-        assert ProofKind.LOGICAL_CONTRADICTION in all_kinds
-
-
-# Re-export for external use
-__all__ = [
-    "DECLARED_INFEASIBILITY_PROOFS",
-    "InfeasibilityProof",
-    "ProofKind",
-    "register_declared_proof",
-]

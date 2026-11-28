@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import pytest
 
+from computronium.core.plasticity import plasticity_from_config
 from computronium.core.system_trainer.joint import _credit_from_config
+from computronium.experiment.kernel.compose import build_geometry_config
 from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
 from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.ontology import (
     DYNAMICS_REGISTRY,
     CreditAssignmentConfig,
-    GeometryConfig,
     ParameterUpdateConfig,
     PlasticityConfig,
     StateDynamicsConfig,
@@ -39,48 +40,11 @@ def _get_primitives_for_axis(axis: StructuralAxis) -> list[str]:
     return sorted(AXES_REGISTRIES[axis].keys())
 
 
-# Geometry primitives that require required arguments (task-specific)
-# These are tested in integration tests with actual task dimensions
-_GEOMETRY_REQUIRES_ARGS = {
-    "feedforward",
-    "routing",
-    "recurrent",
-    "causal_transformer",
-    "attention",
-    "conv",
-    "graph",
-    "nca",
-    "ntm",
-    "tile",
-    "tile_mesh",
-    "spatial_lattice",
-}
-
-# Plasticity primitives that require required arguments
-_PLASTICITY_REQUIRES_ARGS = {
-    "routing",
-    "fast_weights",
-    "substrate_coupled",
-    "rule_state",
-    "temporal_psi",
-    "conflict_adaptive",
-    "closed_form_ridge",
-}
-
-# Update primitives that require required arguments
-_UPDATE_REQUIRES_ARGS = {
-    "role_split",
-    "natural_gradient",
-    "elastic_consolidation",
-    "mean_norm",
-    "spectral_constrained",
-    "riemannian_orthogonal",
-    "ortho_adam",
-    "local_adam",
-    "lion",
-    "muon",
-    "adam",
-    "euclidean",
+# The task-derived arguments a topology's own task family supplies; the
+# canonical image shape covers every other builder.
+_GEOMETRY_TASK_ARGS: dict[str, dict[str, object]] = {
+    "graph": {"edge_index": [[0, 1], [1, 0]]},
+    "spatial_lattice": {"lattice_dims": [2, 4, 4]},
 }
 
 
@@ -119,39 +83,30 @@ def test_every_substrate_registry_key_composes(name: str):
 
 @pytest.mark.parametrize("name", _get_primitives_for_axis(StructuralAxis.GEOMETRY))
 def test_every_geometry_registry_key_composes(name: str):
-    """Each geometry primitive the registry declares has a valid config classmethod."""
-    # Geometries requiring task-specific args are tested in integration tests
-    if name in _GEOMETRY_REQUIRES_ARGS:
-        pytest.skip(f"declared: geometry {name} config requires task args")
-    config = getattr(GeometryConfig, name)()
-    assert config is not None
+    """Each geometry primitive the registry declares composes from the task shape."""
+    config = build_geometry_config(
+        dict(_GEOMETRY_TASK_ARGS.get(name, {})),
+        topology=name,
+        input_shape=(1, 28, 28),
+        output_dim=10,
+    )
     assert config.topology_type == name
-    instance = geometry_from_config(config)
-    assert instance is not None
+    assert geometry_from_config(config) is not None
 
 
 @pytest.mark.parametrize("name", _get_primitives_for_axis(StructuralAxis.PLASTICITY))
 def test_every_plasticity_registry_key_composes(name: str):
     """Each plasticity primitive the registry declares has a valid config classmethod."""
-    # Plasticity primitives requiring args are tested in integration tests
-    if name in _PLASTICITY_REQUIRES_ARGS:
-        pytest.skip(f"declared: plasticity {name} config requires args")
     config = getattr(PlasticityConfig, name)()
     assert config is not None
     assert config.plasticity_type == name
-    # Note: _plasticity_from_config requires full PlasticityConfig with all fields
-    # This test verifies the config classmethod exists
-    # Full instantiation tested in integration tests
+    assert plasticity_from_config(config) is not None
 
 
 @pytest.mark.parametrize("name", _get_primitives_for_axis(StructuralAxis.UPDATE))
 def test_every_update_registry_key_composes(name: str):
     """Each update primitive the registry declares has a valid config classmethod."""
-    # Update primitives requiring args are tested in integration tests
-    if name in _UPDATE_REQUIRES_ARGS:
-        pytest.skip(f"declared: update {name} config requires args")
     config = getattr(ParameterUpdateConfig, name)()
     assert config is not None
     assert config.update_type == name
-    instance = update_from_config(config)
-    assert instance is not None
+    assert update_from_config(config) is not None

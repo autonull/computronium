@@ -400,6 +400,68 @@ def create_constraint(
     return constraint
 
 
+_ORIGIN_BY_NAME = {
+    "DECLARED": ConstraintOrigin.SYSTEM_CONFIG,
+    "TASK_FENCE": ConstraintOrigin.TASK_FENCE,
+    "APPLY_CONSTRAINTS": ConstraintOrigin.APPLY_CONSTRAINTS,
+}
+_SCOPE_BY_KIND = {
+    "void": ConstraintScope.CELL,
+    "hard": ConstraintScope.MEASUREMENT,
+    "fairness": ConstraintScope.MEASUREMENT,
+    "operating_point": ConstraintScope.MEASUREMENT,
+}
+_CONSTRAINT_KIND_BY_REGISTRY_KIND = {
+    "void": ConstraintKind.HARD,
+    "hard": ConstraintKind.HARD,
+    "fairness": ConstraintKind.HARD,
+    "operating_point": ConstraintKind.HARD,
+}
+
+
+def engine_from_registry(
+    *,
+    enforcement: ConstraintEnforcement,
+    params: bool | None = None,
+    void_only: bool = False,
+) -> LegalityEngine:
+    """Seed a fresh engine from the registry's constraint specs.
+
+    The registry is the single source: ``params`` selects the hyperparameter
+    reads (True for S5 compose, False to skip them at S4 expansion, None for
+    both), and ``void_only`` keeps the structural gate's void rows.
+    """
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    from computronium.experiment.schema.registries import (
+        ConstraintKind as RegistryConstraintKind,
+    )
+
+    engine = LegalityEngine()
+    for spec in CONSTRAINTS_REGISTRY.values():
+        predicate = spec.predicate
+        if predicate is None or (
+            void_only and spec.kind is not RegistryConstraintKind.VOID
+        ):
+            continue
+        reads_params = references_params(predicate)
+        if params is True and not reads_params:
+            continue
+        if params is False and reads_params:
+            continue
+        create_constraint(
+            expr=predicate,
+            origin=_ORIGIN_BY_NAME.get(spec.origin, ConstraintOrigin.SYSTEM_CONFIG),
+            scope=_SCOPE_BY_KIND.get(spec.kind.value, ConstraintScope.CELL),
+            enforcement=enforcement,
+            kind=_CONSTRAINT_KIND_BY_REGISTRY_KIND.get(
+                spec.kind.value, ConstraintKind.HARD
+            ),
+            description=spec.description,
+            engine=engine,
+        )
+    return engine
+
+
 __all__ = [
     "Constraint",
     "ConstraintEnforcement",
@@ -410,5 +472,6 @@ __all__ = [
     "LegalityEngine",
     "VoidRule",
     "create_constraint",
+    "engine_from_registry",
     "void_rules",
 ]

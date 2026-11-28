@@ -38,6 +38,7 @@ from computronium.state import PlasticityConfig
 
 _ROOT = Path(__file__).resolve().parents[2]
 _STAGES = _ROOT / "computronium/experiment/execution/stages_impl.py"
+_ENGINE = _ROOT / "computronium/experiment/legality/engine.py"
 
 
 def _nca(credit: str, dynamics: str = "instantaneous") -> SystemConfig:
@@ -98,13 +99,25 @@ def test_references_params_is_the_only_traversal() -> None:
     ]
     assert local == [], "a local _references_params copy is a second rule"
 
-    imported = 0
+    engine_tree = ast.parse(_ENGINE.read_text())
+    calls = [
+        node
+        for node in ast.walk(engine_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "references_params"
+    ]
+    assert calls, "the legality engine must own the references_params traversal"
+
+    builders = 0
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == (
-            "computronium.experiment.legality.dsl"
+            "computronium.experiment.legality.engine"
         ):
-            imported += sum(alias.name == "references_params" for alias in node.names)
-    assert imported >= 2, "S4 Gate and S5 Compose must both import the dsl helper"
+            builders += sum(
+                alias.name == "engine_from_registry" for alias in node.names
+            )
+    assert builders >= 2, "S4 Gate and S5 Compose must both use the one builder"
 
     assert references_params(var("output_dim"))
     assert references_params(has_key(var("params"), const("residual")))

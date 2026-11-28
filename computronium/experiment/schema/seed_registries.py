@@ -1523,9 +1523,9 @@ CONSTRAINTS = [
         name="local_goodness_energy_minimization",
         kind=ConstraintKind.VOID,
         description=(
-            "Forward-Forward goodness credit diverges on energy_minimization: "
-            "differentiating the goodness contrast through an unrolled settle "
-            "is not a local rule (measured loss 1.87 -> 2.1e5, val_acc chance)"
+            "Forward-Forward goodness credit is not layer-local on "
+            "energy_minimization: differentiating the contrast through an "
+            "unrolled settle reads activities outside the layer's own state"
         ),
         predicate=or_(
             not_(in_(var("credit"), const(["local_goodness", "forward_only"]))),

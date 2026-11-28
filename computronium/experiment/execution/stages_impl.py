@@ -470,70 +470,18 @@ class GateStage:
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce legality constraints on proposals."""
         from computronium.experiment.execution.stage import Fragment
-        from computronium.experiment.legality.dsl import references_params
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
-            ConstraintKind,
-            ConstraintOrigin,
-            ConstraintScope,
-            LegalityEngine,
-            create_constraint,
+            engine_from_registry,
         )
-        from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
         logger.info("S4 Gate: Enforcing legality constraints")
 
-        # Create and seed legality engine with constraints from registry
-        engine = LegalityEngine()
-        for spec in CONSTRAINTS_REGISTRY.values():
-            if spec.predicate is not None:
-                # Use ALL void constraints at gate time
-                # Resource constraints (max_hidden_dim, etc.) need hyperparameters
-                # that are only resolved at compose time - they have kind=RESOURCE
-                # and are filtered out here since we only want VOID kind
-                if spec.kind.value != "void":
-                    continue
-                # Skip constraints that reference params (hyperparameters) - those
-                # are evaluated at compose time (S5) when params are available
-                if references_params(spec.predicate):
-                    continue
-
-                # Map registry constraint to engine constraint
-                origin_map = {
-                    "DECLARED": ConstraintOrigin.SYSTEM_CONFIG,
-                    "TASK_FENCE": ConstraintOrigin.TASK_FENCE,
-                    "APPLY_CONSTRAINTS": ConstraintOrigin.APPLY_CONSTRAINTS,
-                }
-                scope_map = {
-                    "void": ConstraintScope.CELL,
-                    "hard": ConstraintScope.MEASUREMENT,
-                    "fairness": ConstraintScope.MEASUREMENT,
-                    "operating_point": ConstraintScope.MEASUREMENT,
-                }
-                kind_map = {
-                    "void": ConstraintKind.HARD,
-                    "hard": ConstraintKind.HARD,
-                    "fairness": ConstraintKind.HARD,
-                    "operating_point": ConstraintKind.HARD,
-                }
-                enforcement_map = {
-                    "void": ConstraintEnforcement.S4_EXPANSION,
-                    "hard": ConstraintEnforcement.S4_EXPANSION,
-                    "fairness": ConstraintEnforcement.S4_EXPANSION,
-                    "operating_point": ConstraintEnforcement.S4_EXPANSION,
-                }
-
-                create_constraint(
-                    expr=spec.predicate,
-                    origin=origin_map.get(spec.origin, ConstraintOrigin.SYSTEM_CONFIG),
-                    scope=scope_map.get(spec.kind.value, ConstraintScope.CELL),
-                    enforcement=enforcement_map.get(
-                        spec.kind.value, ConstraintEnforcement.S4_EXPANSION
-                    ),
-                    kind=kind_map.get(spec.kind.value, ConstraintKind.HARD),
-                    description=spec.description,
-                    engine=engine,
-                )
+        engine = engine_from_registry(
+            enforcement=ConstraintEnforcement.S4_EXPANSION,
+            params=False,
+            void_only=True,
+        )
 
         # Use pending_proposals which are Proposal objects
         filtered = []
@@ -620,66 +568,17 @@ class ComposeStage:
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce resource constraints on proposals with resolved hyperparameters."""
         from computronium.experiment.execution.stage import Fragment
-        from computronium.experiment.legality.dsl import references_params
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
-            ConstraintKind,
-            ConstraintOrigin,
-            ConstraintScope,
-            LegalityEngine,
-            create_constraint,
+            engine_from_registry,
         )
-        from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
         logger.info("S5 Compose: Enforcing resource constraints with hyperparameters")
 
-        # Create and seed legality engine with params.* constraints
-        engine = LegalityEngine()
-        for spec in CONSTRAINTS_REGISTRY.values():
-            if spec.predicate is None:
-                continue
-            # Only evaluate constraints that reference params (hyperparameters)
-            # These are the resource constraints deferred from S4 Gate
-            if not references_params(spec.predicate):
-                continue
-
-            # Map registry constraint to engine constraint
-            origin_map = {
-                "DECLARED": ConstraintOrigin.SYSTEM_CONFIG,
-                "TASK_FENCE": ConstraintOrigin.TASK_FENCE,
-                "APPLY_CONSTRAINTS": ConstraintOrigin.APPLY_CONSTRAINTS,
-            }
-            scope_map = {
-                "void": ConstraintScope.CELL,
-                "hard": ConstraintScope.MEASUREMENT,
-                "fairness": ConstraintScope.MEASUREMENT,
-                "operating_point": ConstraintScope.MEASUREMENT,
-            }
-            kind_map = {
-                "void": ConstraintKind.HARD,
-                "hard": ConstraintKind.HARD,
-                "fairness": ConstraintKind.HARD,
-                "operating_point": ConstraintKind.HARD,
-            }
-            # Resource constraints with params enforced at S5 compose
-            enforcement_map = {
-                "void": ConstraintEnforcement.S5_COMPOSE,
-                "hard": ConstraintEnforcement.S5_COMPOSE,
-                "fairness": ConstraintEnforcement.S5_COMPOSE,
-                "operating_point": ConstraintEnforcement.S5_COMPOSE,
-            }
-
-            create_constraint(
-                expr=spec.predicate,
-                origin=origin_map.get(spec.origin, ConstraintOrigin.SYSTEM_CONFIG),
-                scope=scope_map.get(spec.kind.value, ConstraintScope.CELL),
-                enforcement=enforcement_map.get(
-                    spec.kind.value, ConstraintEnforcement.S5_COMPOSE
-                ),
-                kind=kind_map.get(spec.kind.value, ConstraintKind.HARD),
-                description=spec.description,
-                engine=engine,
-            )
+        engine = engine_from_registry(
+            enforcement=ConstraintEnforcement.S5_COMPOSE,
+            params=True,
+        )
 
         # Evaluate each proposal against resource constraints
         filtered = []
