@@ -277,7 +277,7 @@ def emit_alerts(alerts: list[Alert], output_path: str | None = None) -> None:
 
     if output_path:
         Path(output_path).write_text(
-            json.dumps([a.to_dict() for a in alerts], indent=2)
+            json.dumps([a.to_dict() for a in alerts], indent=2), encoding="utf-8"
         )
         print(f"Alerts written to {output_path}")
 

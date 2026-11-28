@@ -79,6 +79,14 @@ TYPE_CHECKING imports. No rule was suppressed to buy the count: the one
 ``# ruff: ignore[runtime-import-in-type-checking-block]`` names why the
 block exists, and ``test_lazy_export_surface_lock.py`` keeps the declared
 surface honest.
+
+Lowered 2026-11-28 from 499 to the measured 473 (ruff unchanged at 0.17.5) by
+the W57 ``PLW1514`` pass: all 21 ``unspecified-encoding`` findings now name
+``encoding="utf-8"`` on the ``Path.read_text``/``write_text``/``open`` call
+they annotate — two library sites (``monitoring/alerts.py``, ``sec_watch.py``),
+one notebook cell, and the scripts. The other two findings left with the W64
+refactor: ``replay.py``'s ``Mapping``/``Sequence`` imports moved into its
+``TYPE_CHECKING`` block. No rule was suppressed to buy it.
 """
 
 from __future__ import annotations
@@ -87,7 +95,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 499
+BASELINE = 473
 RUFF_VERSION = "0.17.5"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

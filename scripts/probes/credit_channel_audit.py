@@ -70,7 +70,9 @@ def main() -> None:
         }
         print(f"{dynamics}|{credit}: bp_cosine={cos}")
 
-    with pathlib.Path("artifacts/credit_channel_audit.json").open("w") as fh:
+    with pathlib.Path("artifacts/credit_channel_audit.json").open(
+        "w", encoding="utf-8"
+    ) as fh:
         json.dump(report, fh, indent=2)
     print("written: artifacts/credit_channel_audit.json")
 

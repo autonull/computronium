@@ -40,7 +40,9 @@ from computronium.experiment.sec_parts import (  # ruff: ignore[module-import-no
 # Load meta-SEC best params. An invalid study (objective never above 0) already
 # carries its declared defaults, so the driver never treats a zero-value optimum
 # as tuned (TODO104 A7).
-with Path("/home/me/computronium/configs/meta_sec_best.json").open("r") as f:
+with Path("/home/me/computronium/configs/meta_sec_best.json").open(
+    "r", encoding="utf-8"
+) as f:
     meta = json.load(f)
 
 if not meta.get("valid", False):

@@ -144,7 +144,7 @@ def main():
     total_claims = 0
     for result_file in result_files:
         print(f"\nProcessing {result_file.name}...")
-        with Path(result_file).open() as f:
+        with Path(result_file).open(encoding="utf-8") as f:
             result = json.load(f)
 
         # Extract task_id from filename

@@ -226,7 +226,7 @@ def main():
 
     # Save results
     output_path = Path(args.output)
-    output_path.write_text(json.dumps(results, indent=2))
+    output_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"\nResults saved to {output_path}")
 
     # Summary

@@ -20,7 +20,7 @@ def get_git_commit() -> str:
 
 def load_results(path: str) -> dict[str, Any]:
     """Load benchmark results from JSON file."""
-    with Path(path).open() as f:
+    with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -88,7 +88,7 @@ def main():
                     change = "N/A"
                 lines.append(f"| {key} | {base:.4g} | {curr:.4g} | {change} |")
 
-        Path(args.output).write_text("\n".join(lines))
+        Path(args.output).write_text("\n".join(lines), encoding="utf-8")
         print(f"Comparison report written to {args.output}")
         return 0
 
@@ -100,7 +100,7 @@ def main():
     # Load history
     history = {}
     if Path(args.history).exists():
-        with Path(args.history).open() as f:
+        with Path(args.history).open(encoding="utf-8") as f:
             history = json.load(f)
 
     # Add current commit
@@ -111,7 +111,7 @@ def main():
     }
 
     # Save history
-    with Path(args.history).open("w") as f:
+    with Path(args.history).open("w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
     # Generate dashboard
@@ -145,7 +145,7 @@ def main():
                 row += f" {val} |"
         lines.append(row)
 
-    Path(args.output).write_text("\n".join(lines))
+    Path(args.output).write_text("\n".join(lines), encoding="utf-8")
     print(f"Dashboard written to {args.output}")
     return 0
 

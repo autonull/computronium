@@ -42,7 +42,7 @@ def update_spec_file(algo_name: str, new_family: str) -> bool:
         print(f"  WARNING: {spec_path} not found")
         return False
 
-    content = spec_path.read_text()
+    content = spec_path.read_text(encoding="utf-8")
 
     # Find and replace the family line
     import re
@@ -57,7 +57,7 @@ def update_spec_file(algo_name: str, new_family: str) -> bool:
         print(f"  WARNING: No change made to {spec_path}")
         return False
 
-    spec_path.write_text(new_content)
+    spec_path.write_text(new_content, encoding="utf-8")
     print(f"  Updated {algo_name}: family -> {new_family}")
     return True
 
@@ -77,7 +77,7 @@ def main():
     kernel_backend_path = Path(
         "/home/me/computronium/computronium/acceleration/kernel_backend.py"
     )
-    content = kernel_backend_path.read_text()
+    content = kernel_backend_path.read_text(encoding="utf-8")
 
     # Add PCALM to AlgorithmFamily enum
     if "PCALM = " not in content:
@@ -88,7 +88,7 @@ def main():
         replacement = r'PCALM = "pcalm"\n    \1'
         new_content = re.sub(pattern, replacement, content)
         if new_content != content:
-            kernel_backend_path.write_text(new_content)
+            kernel_backend_path.write_text(new_content, encoding="utf-8")
             print("  Added PCALM to AlgorithmFamily enum")
         else:
             print("  WARNING: Could not add PCALM to AlgorithmFamily enum")
@@ -97,7 +97,7 @@ def main():
 
     # Update families.py to add PCALM binding
     families_path = Path("/home/me/computronium/computronium/acceleration/families.py")
-    content = families_path.read_text()
+    content = families_path.read_text(encoding="utf-8")
 
     if "AlgorithmFamily.PCALM" not in content:
         # Add PCALM binding after PC binding
@@ -112,7 +112,7 @@ def main():
     \1"""
         new_content = re.sub(pattern, replacement, content)
         if new_content != content:
-            families_path.write_text(new_content)
+            families_path.write_text(new_content, encoding="utf-8")
             print("  Added PCALM binding to families.py")
         else:
             print("  WARNING: Could not add PCALM binding to families.py")

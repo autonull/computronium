@@ -9,7 +9,7 @@ from typing import Any
 
 def load_results(path: str) -> dict[str, Any]:
     """Load benchmark results from JSON file."""
-    with Path(path).open() as f:
+    with Path(path).open(encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -135,7 +135,7 @@ def main():
     comparison = compare_results(baseline, current)
     report = generate_markdown_report(comparison, args.baseline, args.current)
 
-    Path(args.output).write_text(report)
+    Path(args.output).write_text(report, encoding="utf-8")
     print(f"Comparison report written to {args.output}")
 
     # Print summary

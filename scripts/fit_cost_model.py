@@ -21,7 +21,7 @@ def load_cells_from_results(results_dir: Path) -> pd.DataFrame:
     all_cells = []
     for cells_file in results_dir.glob("**/cells.jsonl"):
         try:
-            with Path(cells_file).open() as f:
+            with Path(cells_file).open(encoding="utf-8") as f:
                 for line in f:
                     cell = json.loads(line)
                     screen = cell.get("screen", {})

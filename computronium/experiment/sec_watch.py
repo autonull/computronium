@@ -62,7 +62,7 @@ class WatchHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         if path.exists():
-            lines = path.read_text().strip().split("\n")
+            lines = path.read_text(encoding="utf-8").strip().split("\n")
             data = [json.loads(line) for line in lines if line.strip()]
             self.wfile.write(json.dumps(data).encode())
         else:
