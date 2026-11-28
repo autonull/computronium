@@ -187,13 +187,11 @@ class TestInstantaneousDynamics:
 class TestPredictiveSettlingDynamics:
     """Tests for PredictiveSettlingDynamics correctness."""
 
-    @pytest.mark.xfail(
-        reason="PredictiveSettlingDynamics is a stub implementation; proper predictive coding not yet ported"
-    )
     def test_prediction_error_decreases(self, substrate, device):
         """Prediction error decreases overall and in first 20 steps.
 
-        Uses FeedforwardGeometry as in the audit script (not RecurrentGeometry).
+        The tracked history is the total prediction-error energy V per step,
+        so consecutive entries compare the same quantity at successive times.
         """
         n_passed = 0
         for trial in range(5):

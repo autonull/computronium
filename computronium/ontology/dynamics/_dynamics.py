@@ -1987,9 +1987,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             step_energy = 0.0
             if self.config.track_free_energy_per_iter and layer_free_energy is not None:
                 for error in errors:
-                    fe = error.pow(2).sum().item()
-                    layer_free_energy.append(fe)
-                    step_energy += fe
+                    step_energy += error.pow(2).sum().item()
+                layer_free_energy.append(step_energy)
 
             if on_step is not None:
                 on_step(step, step_energy)
